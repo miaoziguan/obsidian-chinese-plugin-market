@@ -25,8 +25,18 @@ function applyElInfo(el: HTMLElement, o?: DomElementInfo | string) {
 
 const g = globalThis as unknown as Record<string, unknown> & {
 	document?: Document;
+	Element?: { prototype: object };
 	HTMLElement?: { prototype: object };
 };
+
+// 补齐 Obsidian 在 Element 上挂载的跨窗口 instanceOf 方法（源码 toHTMLElement 用它做类型守卫），
+// 测试环境用标准 instanceof 实现。
+if (typeof g.Element !== "undefined" && !("instanceOf" in (g.Element.prototype as object))) {
+	(g.Element.prototype as unknown as { instanceOf: (c: new () => unknown) => boolean }).instanceOf =
+		function (this: Element, c: new () => unknown) {
+			return this instanceof c;
+		};
+}
 
 if (typeof g.HTMLElement !== "undefined" && !("setCssStyles" in (g.HTMLElement.prototype as object))) {
 	const proto = g.HTMLElement.prototype as unknown as {

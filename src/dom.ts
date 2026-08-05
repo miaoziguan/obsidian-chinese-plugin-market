@@ -58,8 +58,8 @@ export function toHTMLElement<T extends HTMLElement = HTMLElement>(
 	el: Element | null,
 	ctor?: new (...args: never[]) => T
 ): T | null {
-	if (el instanceof HTMLElement && (!ctor || el instanceof ctor)) {
-		// instanceof 运行时校验后收窄：HTMLElement → T（T 为具体子类，无法静态推导，需显式断言）
+	if (el && el.instanceOf(HTMLElement) && (!ctor || el.instanceOf(ctor))) {
+		// Obsidian instanceOf 跨窗口安全类型检查后收窄：HTMLElement → T（T 为具体子类，无法静态推导，需显式断言）
 		return el as T;
 	}
 	return null;
