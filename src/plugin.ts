@@ -670,7 +670,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 优先：按文件夹精确读取（不枚举全 vault，避免 Vault Enumeration 提示）。
 		// getAbstractFileByPath 在部分环境下对中文路径返回 null，此时回退到
 		// getMarkdownFiles 枚举 + 路径前缀过滤（曾导致 folderFile 取不到而 tmApproved 为空）。
-		const files = await this.collectTMFiles(folder);
+		const files = this.collectTMFiles(folder);
 		// 进度：准备阶段（即使空文件夹也标记 done，避免加载页永远停在旧文案）
 		this.tmProgress = { phase: "resolving", current: 0, total: files.length };
 		if (files.length === 0) {
