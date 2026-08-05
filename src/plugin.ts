@@ -6,7 +6,7 @@
  * 视图本身由 translator-view.ts 的 ChinesePluginMarketView 承载。
  */
 
-import { Plugin, Notice, TFile } from "obsidian";
+import { Plugin, Notice, TFile, TFolder } from "obsidian";
 import { logger } from "./logger";
 import { Translator, type PluginInfo } from "./translator";
 import { type PluginStat } from "./stats";
@@ -628,6 +628,35 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	}
 
 	/**
+	 * 收集 TM 文件夹下的 markdown 文件。
+	 * 优先用 getAbstractFileByPath 精确取文件夹并递归遍历（不枚举全 vault，避免 Vault Enumeration）；
+	 * 若对中文路径返回 null（部分环境 bug），回退到 getMarkdownFiles 枚举 + 路径前缀过滤。
+	 */
+	private collectTMFiles(folder: string): TFile[] {
+		const folderObj = this.app.vault.getAbstractFileByPath(folder);
+		if (folderObj instanceof TFolder) {
+			return this.collectMarkdownRecursive(folderObj);
+		}
+		const prefix = folder + "/";
+		return this.app.vault
+			.getMarkdownFiles()
+			.filter((f) => f.path === folder || f.path.startsWith(prefix));
+	}
+
+	/** 递归收集 TFolder 下的所有 markdown 文件 */
+	private collectMarkdownRecursive(folder: TFolder): TFile[] {
+		const out: TFile[] = [];
+		for (const child of folder.children) {
+			if (child instanceof TFile) {
+				if (child.extension === "md") out.push(child);
+			} else if (child instanceof TFolder) {
+				out.push(...this.collectMarkdownRecursive(child));
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * 启动双向回灌：把「插件翻译记忆库/」里 status=approved 的笔记解析回 tmApproved 索引。
 	 * vault 笔记是权威，用户手编更新以笔记为准覆盖内存索引。
 	 *
@@ -638,12 +667,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 */
 		private async scanVaultTM(): Promise<void> {
 		const folder = TM_FOLDER; // "插件翻译记忆库"（vault 根相对路径）
-		// 用 getMarkdownFiles 枚举全 vault 的 md 文件并过滤路径前缀，
-		// 绕开 getAbstractFileByPath / getFolderByPath 在部分环境下对中文/特定路径返回 null 的问题
-		// （曾导致 folderFile 取不到而直接 return，tmApproved 始终为空 → 重启后大量插件回到英文）。
-		const prefix = folder + "/";
-		const all = this.app.vault.getMarkdownFiles();
-		const files = all.filter((f) => f.path === folder || f.path.startsWith(prefix));
+		// 优先：按文件夹精确读取（不枚举全 vault，避免 Vault Enumeration 提示）。
+		// getAbstractFileByPath 在部分环境下对中文路径返回 null，此时回退到
+		// getMarkdownFiles 枚举 + 路径前缀过滤（曾导致 folderFile 取不到而 tmApproved 为空）。
+		const files = await this.collectTMFiles(folder);
 		// 进度：准备阶段（即使空文件夹也标记 done，避免加载页永远停在旧文案）
 		this.tmProgress = { phase: "resolving", current: 0, total: files.length };
 		if (files.length === 0) {
