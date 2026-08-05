@@ -107,8 +107,11 @@ function bm25RecallScores(
 	if (queryTokens.length === 0) return out;
 
 	const { docTokensById, df, N, avgdl } = index;
+	// 预计算 query term 频次（qtf 只依赖 query，批量打分每文档复用，避免重复重建 Map）
+	const qtf = new Map<string, number>();
+	for (const t of queryTokens) qtf.set(t, (qtf.get(t) ?? 0) + 1);
 	for (const [id, docTokens] of docTokensById) {
-		const score = bm25Score(queryTokens, docTokens, df, N, avgdl);
+		const score = bm25Score(queryTokens, docTokens, df, N, avgdl, 1.5, 0.75, qtf);
 		if (score > 0) out.set(id, score);
 	}
 	return out;

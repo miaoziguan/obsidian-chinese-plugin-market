@@ -79,14 +79,19 @@ export function bm25Score(
 	N: number,
 	avgdl: number,
 	k1 = 1.5,
-	b = 0.75
+	b = 0.75,
+	precomputedQtf?: Map<string, number>
 ): number {
 	if (queryTokens.length === 0 || docTokens.length === 0) return 0;
 	const docLen = docTokens.length;
 
-	// query term 出现次数（叠词加权）
-	const qtf = new Map<string, number>();
-	for (const t of queryTokens) qtf.set(t, (qtf.get(t) ?? 0) + 1);
+	// query term 出现次数（叠词加权）。qtf 只依赖 query，不随文档变——
+	// 批量打分时由调用方预计算一次传入（precomputedQtf），避免每文档重建。
+	const qtf = precomputedQtf ?? (() => {
+		const m = new Map<string, number>();
+		for (const t of queryTokens) m.set(t, (m.get(t) ?? 0) + 1);
+		return m;
+	})();
 
 	// 文档 term 频率
 	const tf = new Map<string, number>();
