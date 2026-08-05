@@ -186,7 +186,7 @@ function computeFeaturedIds(ctx: ViewContext): { ids: string[]; engineDriven: bo
 		plugins: ctx.plugins,
 		recommendScores: ctx.recommendScores ?? null,
 		installedIds: ctx.installedIds,
-		curatedIds: ctx.getRecommendedIds() as Set<string>,
+		curatedIds: ctx.getRecommendedIds(),
 		allTags: tagService ? tagService.getAllTags() : null,
 	});
 }

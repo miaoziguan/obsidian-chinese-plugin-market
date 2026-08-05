@@ -206,7 +206,7 @@ export class AISearcher {
 		let vectorScores: Map<string, number> | null = null;
 		if (useVector) {
 			try {
-				vectorScores = await this.vectorRecallScores(query, allPlugins, embCfg!, onPhase, filterCategories);
+				vectorScores = await this.vectorRecallScores(query, allPlugins, embCfg, onPhase, filterCategories);
 			} catch (e: unknown) {
 				logger.warn("[Chinese Plugin Market] 向量召回失败，降级到纯关键词：", e);
 				vectorScores = null;
@@ -302,7 +302,7 @@ export class AISearcher {
 		let vectorScores: Map<string, number> | null = null;
 		if (useVector) {
 			try {
-				vectorScores = await this.vectorRecallScores(query, allPlugins, embCfg!, undefined, filterCategories);
+				vectorScores = await this.vectorRecallScores(query, allPlugins, embCfg, undefined, filterCategories);
 			} catch (e: unknown) {
 				logger.warn("[Chinese Plugin Market] 本地语义：向量召回失败，降级关键词+标题：", e);
 				vectorScores = null;

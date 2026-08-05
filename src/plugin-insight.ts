@@ -97,7 +97,7 @@ export async function fetchManifest(
 			tags: Array.isArray(json.tags) ? json.tags.filter((t: unknown) => typeof t === "string") : undefined,
 			dependencies:
 				json.dependencies && typeof json.dependencies === "object"
-					? (json.dependencies as Record<string, string>)
+					? json.dependencies
 					: undefined,
 			main: typeof json.main === "string" ? json.main : undefined,
 		};

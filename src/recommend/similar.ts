@@ -278,7 +278,7 @@ function makeSignals(
 	}
 
 	if (sourceTag?.tags && candidateTag?.tags) {
-		const shared = sourceTag.tags.filter((t) => candidateTag.tags!.includes(t));
+		const shared = sourceTag.tags.filter((t) => candidateTag.tags.includes(t));
 		sig.sharedTags = shared.length;
 		sig.sharedTagNames = shared.sort();
 	}

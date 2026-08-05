@@ -428,7 +428,7 @@ export class LLMClient {
 				);
 			}
 
-			const content = extractLLMContent(response.json as unknown);
+			const content = extractLLMContent(response.json);
 			this.breaker.recordSuccess();
 			return content;
 		} catch (e: unknown) {

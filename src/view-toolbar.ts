@@ -290,7 +290,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			item.setAttribute("data-sort", value);
 			if (value === ctx.sortBy) item.classList.add("pt-sort-menu-item--active");
 			item.addEventListener("click", () => {
-				ctx.sortBy = value as SortBy;
+				ctx.sortBy = value;
 				ctx.sortFavoritesFirst = false; // 选普通排序时关闭「收藏优先」叠层
 				ctx.settings.sortBy = ctx.sortBy;
 				ctx.track(`sort:${ctx.sortBy}`);
