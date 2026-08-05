@@ -125,7 +125,7 @@ export function restoreMarkdown(translated: string, blocks: string[]): string {
  */
 function translateOnce(text: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const requireFn = (globalThis as unknown as { require?: NodeRequire }).require;
+		const requireFn = (globalThis as unknown as { require?: NodeJS.Require }).require;
 		if (!requireFn) {
 			reject(new Error("当前运行环境不支持子进程调用"));
 			return;
