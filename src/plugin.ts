@@ -643,12 +643,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			.filter((f) => f.path === folder || f.path.startsWith(prefix));
 	}
 
-	/** 递归收集 TFolder 下的所有 markdown 文件 */
+	/** 递归收集 TFolder 下的所有 markdown 文件（按路径后缀判断，兼容 TFile 无 extension 的环境） */
 	private collectMarkdownRecursive(folder: TFolder): TFile[] {
 		const out: TFile[] = [];
 		for (const child of folder.children) {
 			if (child instanceof TFile) {
-				if (child.extension === "md") out.push(child);
+				if (child.path.endsWith(".md")) out.push(child);
 			} else if (child instanceof TFolder) {
 				out.push(...this.collectMarkdownRecursive(child));
 			}
