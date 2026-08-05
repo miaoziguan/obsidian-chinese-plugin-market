@@ -92,3 +92,59 @@ npm test         # 运行测试
 ## 📄 许可证
 
 MIT —— 自由使用，自由改造。
+
+---
+
+# 🀄 Chinese Market (English)
+
+**Chinese Market** is an Obsidian community-plugin search and translation tool built for Chinese-speaking users. It tears down the language barrier of the default (English-only) community plugin browser so you can **search in Chinese, read in Chinese, and install with confidence**.
+
+## Why it exists
+
+Obsidian's community plugin store lists **5,000+ plugins with English names** — `dataview`, `templater-obsidian`, `obsidian-linter`… Finding a "mind-map" plugin can take half an hour of guessing. Chinese Market flips that: search by Chinese keyword, see translated cards, install in one click.
+
+## Features
+
+- **🔍 Chinese search, one step.** Type "思维导图 / mind map", "日历 / calendar", "同步 / sync" and get translated plugin cards instantly. Three search modes:
+  - **Keyword** — search Chinese name, original name, or author, with advanced syntax.
+  - **Local semantic** — on-device vector recall, offline, no API key, ranked by relevance.
+  - **AI semantic** — describe your need in natural language ("a plugin for mind maps"); AI recalls and ranks.
+- **🌐 Full-card translation.** Plugin names, descriptions, and feature notes are all translated into Chinese.
+- **🎛️ Smart filters.** Filter by source, category, author, and install state. Active filters stay visible and are cleared with a single ✕.
+- **⚖️ Compare mode.** Put several similar plugins side by side; AI helps with a deep comparison so decisions aren't guesses.
+- **🍎 macOS system translation** (macOS desktop only). One-click system translation that renders an entire plugin README into Chinese.
+- **📌 Favorites & recommendations.** Bookmark plugins you use often and discover editor picks to build your own Chinese plugin toolbox.
+
+## Installation
+
+**Option 1 — Community plugin browser (recommended).**
+1. Obsidian → Settings → Community plugins → Browse.
+2. Search **"Chinese Market"**.
+3. Click Install and enable.
+
+**Option 2 — Manual install.**
+1. Download the latest `main.js`, `manifest.json`, and `styles.css` from [Releases](https://github.com/miaoziguan/obsidian-chinese-plugin-market/releases).
+2. Put them in `<your vault>/.obsidian/plugins/chinese-plugin-market/`.
+3. Enable "Chinese Market" under Settings → Community plugins.
+
+## Usage
+
+1. Open the command palette or sidebar entry to launch **Chinese Market**.
+2. Type what you're looking for in the search box (Chinese is fine!).
+3. Click a card to view details, translate its README, or compare with similar plugins.
+4. Found the one? Jump straight to its repository to install.
+
+## Development
+
+```bash
+npm install      # install dependencies
+npm run dev      # dev build
+npm run build    # type-check + production build
+npm test         # run tests
+```
+
+Issues and PRs are welcome — let's make the Chinese plugin ecosystem better together.
+
+## License
+
+MIT — free to use and modify.
