@@ -275,6 +275,9 @@ export function jaroWinkler(a: string, b: string): number {
  * @param top 最多保留多少条
  * @param minScore 相似度下限（默认 0.55，比 vault-curate 的 0.7 更宽松以兜住短名）
  */
+/** 小写名缓存：插件 name 固定，避免每次模糊搜索对每插件重复 toLowerCase（O(N) 字符串分配） */
+const lowerNameCache = new Map<string, string>();
+
 export function fuzzyTitleScores(
 	query: string,
 	allPlugins: RecallCandidate[],
@@ -284,9 +287,29 @@ export function fuzzyTitleScores(
 	const q = query.toLowerCase().trim();
 	if (!q) return new Map();
 	const out: Array<[string, number]> = [];
+	// 字符粗筛用的 q 字符集（只算一次，避免每插件重建）
+	const qChars = q.length > 0 ? new Set(q) : null;
 	for (const p of allPlugins) {
-		const title = (p.name || "").toLowerCase();
+		const raw = p.name || "";
+		if (!raw) continue;
+		let title = lowerNameCache.get(raw);
+		if (title === undefined) {
+			title = raw.toLowerCase();
+			lowerNameCache.set(raw, title);
+		}
 		if (!title) continue;
+		// 快速否决：q 中 >=2 个字符在 title 中不存在 → 匹配字符数太少，Jaro 分数必低于阈值，跳过完整 Jaro-Winkler。
+		// （对短 name/边界情况保守，不改召回——Jaro 对零/极少公共字符必然低分；fuzzy.test 锁定行为）
+		if (qChars) {
+			let missing = 0;
+			for (const ch of qChars) {
+				if (title.indexOf(ch) === -1) {
+					missing++;
+					if (missing >= 2) break;
+				}
+			}
+			if (missing >= 2) continue;
+		}
 		const score = jaroWinkler(q, title);
 		if (score >= minScore) out.push([p.id, score]);
 	}

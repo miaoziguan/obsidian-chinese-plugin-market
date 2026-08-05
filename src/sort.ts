@@ -44,6 +44,10 @@ export interface SortOptions<T extends SortablePlugin = SortablePlugin> {
 
 /**
  * 按维度排序，返回新数组（不修改入参）。稳定排序。
+ *
+ * 性能：decorate-sort-undecorate——先一趟 O(n) 预提取每个元素的排序 key
+ * （Map.get / displayNameOf / 属性读取只做一次），比较器只比较已提取的 key，
+ * 避免快排 O(n log n) 次比较中反复查表/回调。name 排序收益最大（原每次比较都调 displayNameOf）。
  */
 export function sortPlugins<T extends SortablePlugin>(
 	list: T[],
@@ -51,73 +55,80 @@ export function sortPlugins<T extends SortablePlugin>(
 	options: SortOptions<T> = {}
 ): T[] {
 	if (!list.length) return [];
-	const arr = list.map((p, i) => ({ p, i }));
-
 	const byOriginal = (a: { i: number }, b: { i: number }) => a.i - b.i;
 
 	switch (sortBy) {
-		case "downloads":
+		case "downloads": {
+			const arr = list.map((p, i) => ({ p, i, key: p.downloads ?? 0 }));
 			arr.sort((a, b) => {
-				const d = (b.p.downloads ?? 0) - (a.p.downloads ?? 0);
+				const d = b.key - a.key;
 				return d !== 0 ? d : byOriginal(a, b);
 			});
-			break;
-		case "updated":
+			return arr.map((x) => x.p);
+		}
+		case "updated": {
+			const arr = list.map((p, i) => ({ p, i, key: p.updated ?? -Infinity }));
 			arr.sort((a, b) => {
-				const av = a.p.updated ?? -Infinity;
-				const bv = b.p.updated ?? -Infinity;
-				const d = bv - av;
+				const d = b.key - a.key;
 				return d !== 0 ? d : byOriginal(a, b);
 			});
-			break;
-		case "published":
+			return arr.map((x) => x.p);
+		}
+		case "published": {
+			const arr = list.map((p, i) => ({ p, i, key: p.listIndex ?? -Infinity }));
 			arr.sort((a, b) => {
-				const av = a.p.listIndex ?? -Infinity;
-				const bv = b.p.listIndex ?? -Infinity;
-				const d = bv - av;
+				const d = b.key - a.key;
 				return d !== 0 ? d : byOriginal(a, b);
 			});
-			break;
-		case "name":
+			return arr.map((x) => x.p);
+		}
+		case "name": {
+			const arr = list.map((p, i) => ({
+				p,
+				i,
+				key: options.displayNameOf ? options.displayNameOf(p) : (p.displayName ?? p.name),
+			}));
 			arr.sort((a, b) => {
-				const da = options.displayNameOf ? options.displayNameOf(a.p) : (a.p.displayName ?? a.p.name);
-				const db = options.displayNameOf ? options.displayNameOf(b.p) : (b.p.displayName ?? b.p.name);
-				const d = da.localeCompare(db, "zh");
+				const d = a.key.localeCompare(b.key, "zh");
 				return d !== 0 ? d : byOriginal(a, b);
 			});
-			break;
-		case "popular":
+			return arr.map((x) => x.p);
+		}
+		case "popular": {
+			const arr = list.map((p, i) => ({
+				p,
+				i,
+				installed: options.installedIds?.has(p.id) ? 1 : 0,
+				downloads: p.downloads ?? 0,
+				updated: p.updated ?? -Infinity,
+			}));
 			arr.sort((a, b) => {
-				const ai = options.installedIds?.has(a.p.id) ? 1 : 0;
-				const bi = options.installedIds?.has(b.p.id) ? 1 : 0;
-				if (ai !== bi) return ai - bi;
-				const d = (b.p.downloads ?? 0) - (a.p.downloads ?? 0);
+				if (a.installed !== b.installed) return a.installed - b.installed;
+				const d = b.downloads - a.downloads;
 				if (d !== 0) return d;
-				const av = a.p.updated ?? -Infinity;
-				const bv = b.p.updated ?? -Infinity;
-				return bv - av !== 0 ? bv - av : byOriginal(a, b);
+				const u = b.updated - a.updated;
+				return u !== 0 ? u : byOriginal(a, b);
 			});
-			break;
-		case "trending":
+			return arr.map((x) => x.p);
+		}
+		case "trending": {
+			const arr = list.map((p, i) => ({ p, i, key: options.trendingScores?.get(p.id) ?? 0 }));
 			arr.sort((a, b) => {
-				const sa = options.trendingScores?.get(a.p.id) ?? 0;
-				const sb = options.trendingScores?.get(b.p.id) ?? 0;
-				const d = sb - sa;
+				const d = b.key - a.key;
 				return d !== 0 ? d : byOriginal(a, b);
 			});
-			break;
-		case "recommended":
+			return arr.map((x) => x.p);
+		}
+		case "recommended": {
+			const arr = list.map((p, i) => ({ p, i, key: options.recommendScores?.get(p.id) ?? 0 }));
 			arr.sort((a, b) => {
-				const sa = options.recommendScores?.get(a.p.id) ?? 0;
-				const sb = options.recommendScores?.get(b.p.id) ?? 0;
-				const d = sb - sa;
+				const d = b.key - a.key;
 				return d !== 0 ? d : byOriginal(a, b);
 			});
-			break;
+			return arr.map((x) => x.p);
+		}
 		case "relevance":
 		default:
-			break;
+			return list.slice();
 	}
-
-	return arr.map((x) => x.p);
 }
