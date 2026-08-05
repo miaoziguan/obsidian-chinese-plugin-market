@@ -108,5 +108,5 @@ export async function writeTMNote(app: App, e: TMEntry): Promise<void> {
 /** 删除单条 vault 笔记 */
 export async function removeTMNote(app: App, id: string): Promise<void> {
 	const file = app.vault.getAbstractFileByPath(tmNotePath(id));
-	if (file instanceof TFile) await app.vault.trash(file, false);
+	if (file instanceof TFile) await app.fileManager.trashFile(file);
 }
