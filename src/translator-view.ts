@@ -265,7 +265,7 @@ export class ChinesePluginMarketView extends ItemView {
 
 	async onOpen() {
 		// 标记所属 leaf（替代 :has 选择器），供 CSS 隐藏该 leaf 的 view-header
-		this.containerEl.closest(".workspace-leaf-content")?.addClass("pt-pt-view-leaf");
+		this.containerEl.closest?.(".workspace-leaf-content")?.addClass("pt-pt-view-leaf");
 		// 卡片池化骨架构建上下文：类型需满足 CardRenderContext（骨架只用 t + onDescToggle，其余为占位）。
 		// 集合字段用 getter 透传：installedIds/enabledIds 在数据刷新时会被整体替换（新 Set），
 		// 值拷贝快照会让池化新卡引用陈旧集合（L2 埋雷）。
