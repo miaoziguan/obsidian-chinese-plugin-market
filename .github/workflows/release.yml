@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   id-token: write # 用于 actions/attest 生成构建来源证明（OIDC/sigstore）
+  attestations: write # 用于将证明持久化到仓库（GitHub Artifact Attestations）
 
 jobs:
   release:
