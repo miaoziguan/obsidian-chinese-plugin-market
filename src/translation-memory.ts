@@ -67,7 +67,7 @@ export function parseTMNote(content: string): TMEntry | null {
 			(v.startsWith("'") && v.endsWith("'"))
 		) {
 			try {
-				v = JSON.parse(v);
+				v = JSON.parse(v) as string;
 			} catch {
 				/* 保留原值 */
 			}

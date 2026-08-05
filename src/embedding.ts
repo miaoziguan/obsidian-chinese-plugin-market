@@ -151,7 +151,10 @@ export class ApiEmbeddingProvider implements EmbeddingProvider {
 		if (response.status < 200 || response.status >= 300) {
 			let detail = "";
 			try {
-				const errJson = response.json;
+				const errJson = response.json as {
+					error?: { message?: string };
+					message?: string;
+				} | null;
 				detail = errJson?.error?.message || errJson?.message || "";
 			} catch {
 				detail = (response.text || "").slice(0, 120);
@@ -161,7 +164,11 @@ export class ApiEmbeddingProvider implements EmbeddingProvider {
 			);
 		}
 
-		const data = response.json?.data;
+		interface EmbeddingDataItem {
+			index?: number;
+			embedding?: unknown;
+		}
+		const data = (response.json as { data?: EmbeddingDataItem[] | null })?.data;
 		if (!Array.isArray(data)) {
 			throw new Error("Embedding 响应格式异常（缺少 data 数组）");
 		}

@@ -371,12 +371,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 清理已移除的 locale 字段（旧版本遗留，避免脏数据残留在 data.json）
 		if ("locale" in data) delete data.locale;
 		// 来源筛选已移除「自定义」选项，旧设置迁移回「全部」
-		if ((data as any).sourceFilter === "custom") {
-			(data as any).sourceFilter = "all";
+		const legacyData = data as Record<string, unknown> & { sourceFilter?: string };
+		if (legacyData.sourceFilter === "custom") {
+			legacyData.sourceFilter = "all";
 		}
 		// 批量/在线/AI 三个来源已合并为「已翻译」，旧设置迁移
-		if (["bulk", "online", "ai"].includes((data as any).sourceFilter)) {
-			(data as any).sourceFilter = "translated";
+		if (["bulk", "online", "ai"].includes(legacyData.sourceFilter ?? "")) {
+			legacyData.sourceFilter = "translated";
 		}
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 		// 本地模型名迁移：旧默认值（all-MiniLM-L6-v2，面向通用中英）已升级为

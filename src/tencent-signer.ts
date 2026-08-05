@@ -154,7 +154,13 @@ export async function tencentTranslate(
 		body: payload,
 	});
 
-	const json = response.json;
+	interface TencentTranslateResponse {
+		Response?: {
+			Error?: { Code: string; Message: string };
+			TargetText?: string;
+		};
+	}
+	const json = response.json as TencentTranslateResponse;
 
 	if (json.Response?.Error) {
 		throw new Error(

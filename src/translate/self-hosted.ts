@@ -95,7 +95,7 @@ export class DeepLXClient implements SelfHostedTranslator {
 			8000,
 			"DeepLX"
 		);
-		const json = resp.json;
+		const json = resp.json as { translations?: Array<{ text?: string }> };
 		if (resp.status < 200 || resp.status >= 300) {
 			throw new Error(`DeepLX HTTP ${resp.status}：${(resp.text || "").slice(0, 120)}`);
 		}
@@ -169,7 +169,7 @@ export class LibreTranslateClient implements SelfHostedTranslator {
 			8000,
 			"LibreTranslate"
 		);
-		const json = resp.json;
+		const json = resp.json as { translatedText?: string };
 		if (resp.status < 200 || resp.status >= 300) {
 			throw new Error(`LibreTranslate HTTP ${resp.status}：${(resp.text || "").slice(0, 120)}`);
 		}

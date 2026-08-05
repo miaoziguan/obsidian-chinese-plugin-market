@@ -151,11 +151,11 @@ export class MyMemoryClient {
 			MYMEMORY_TIMEOUT,
 			"MyMemory"
 		);
-		const json = response.json;
+		const json = response.json as MyMemoryResponse;
 		if (!json || typeof json !== "object") {
 			throw new Error("MyMemory 返回非 JSON 响应");
 		}
-		const parsed = json as MyMemoryResponse;
+		const parsed = json;
 
 		if (parsed.responseStatus === 200 && parsed.responseData?.translatedText) {
 			const translated = parsed.responseData.translatedText;
@@ -287,13 +287,13 @@ export class GoogleClient {
 			GOOGLE_TIMEOUT,
 			"Google 翻译"
 		);
-		const json = response.json;
+		const json = response.json as unknown[][];
 		if (!Array.isArray(json) || !Array.isArray(json[0])) {
 			throw new Error("Google 返回非预期结构");
 		}
 		// 拼接所有片段的译文（json[0][i][0]）
 		const pieces: string[] = [];
-		for (const seg of json[0] as unknown[]) {
+		for (const seg of json[0]) {
 			if (Array.isArray(seg) && typeof seg[0] === "string") pieces.push(seg[0]);
 		}
 		const translated = pieces.join("");
@@ -414,7 +414,10 @@ export class LLMClient {
 			if (response.status < 200 || response.status >= 300) {
 				let detail = "";
 				try {
-					const errJson = response.json;
+					const errJson = response.json as {
+						error?: { message?: string };
+						message?: string;
+					} | null;
 					detail = errJson?.error?.message || errJson?.message || "";
 				} catch {
 					detail = (response.text || "").slice(0, 120);
@@ -425,7 +428,7 @@ export class LLMClient {
 				);
 			}
 
-			const content = extractLLMContent(response.json);
+			const content = extractLLMContent(response.json as unknown);
 			this.breaker.recordSuccess();
 			return content;
 		} catch (e) {
