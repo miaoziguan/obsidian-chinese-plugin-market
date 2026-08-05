@@ -1078,7 +1078,7 @@ button.pt-facet-letter-btn.is-active {
 .pt-search.pt-search-ai .pt-search-clear { right: 44px; }
 
 /* AI 搜索进行时：整个组合框边框高亮 + 输入区流光反馈 */
-.pt-search:has(.pt-search-input.ai-loading) {
+.pt-search.pt-search--ai-loading {
 	border-color: var(--pt-accent);
 	background: var(--pt-surface);
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--pt-accent) 14%, transparent);
@@ -1195,9 +1195,10 @@ button.pt-facet-letter-btn.is-active {
 	   用 --pt-space-md（12px）让两方向视觉权重平衡。 */
 	row-gap: var(--pt-space-md);
 	column-gap: var(--pt-space-md);
-	/* P0 滚动根治：行高由 CSS 锁死，grid 行高同步钉死 → 与 JS 均匀前缀和严格对齐，
-	   即使卡片内部区块(信号/统计/AI理由)显隐，行距恒定，虚拟滚动退化为固定网格。 */
-	grid-auto-rows: var(--pt-card-h, 200px);
+	/* P0 滚动根治：卡片锁死固定高度(var(--pt-card-h))，行高由卡片实际高度决定。
+	   行高 auto：普通卡片仍为 200px（.pt-card 显式 height），空态/错误态(.pt-empty/.pt-error)
+	   自动按内容撑开（无需 :has 特殊规则）。JS 虚拟滚动按 --pt-card-h 计算行高，不受影响。 */
+	grid-auto-rows: auto;
 	/* 去掉顶部 padding：translateY 从 0 起算、offsets 不含该 padding，
 	   否则所有卡片相对基准下移 xs，造成系统性错位。左右/底留白保留。 */
 	padding: 0 var(--pt-space-xs) 0;
@@ -1871,11 +1872,6 @@ button.pt-card-install-btn--installed {
 	padding: clamp(40px, 8vh, 96px) var(--pt-space-xl);
 	color: var(--pt-text-muted);
 }
-/* 空状态/错误不应受卡片固定行高 200px 限制，否则会被截断 */
-.pt-list-layer:has(> .pt-empty),
-.pt-list-layer:has(> .pt-error) {
-	grid-auto-rows: auto;
-}
 .pt-empty-icon {
 	width: 44px;
 	height: 44px;
@@ -2127,8 +2123,8 @@ button.pt-card-install-btn--installed {
 
 /* 隐藏本视图自带的 Obsidian view-header（标签名 + 右侧按钮），
    因为我们的搜索框已紧贴其下，且标题与 tab 重复。
-   仅作用于挂载了 .pt-view 的 leaf，不影响其他视图。 */
-.workspace-leaf-content:has(.pt-view) .view-header {
+   仅作用于挂载了本视图的 leaf（onOpen 时打 pt-pt-view-leaf 标记），不影响其他视图。 */
+.workspace-leaf-content.pt-pt-view-leaf .view-header {
 	display: none;
 }
 
@@ -3002,17 +2998,6 @@ button.pt-card-install-btn--installed {
 }
 .pt-settings-details-body .setting-item .setting-item-description {
 	font-size: var(--pt-text-sm);
-}
-
-/* ── 词典条目列表 ── */
-.pt-settings-section .setting-item:has(.dict-edit-row) {
-	background: transparent;
-}
-.dict-edit-row input {
-	height: 30px;
-	font-size: var(--font-small, 13px);
-	padding: 0 8px;
-	border-radius: 6px;
 }
 
 /* 设置页提示文案 */
@@ -4205,7 +4190,7 @@ button.pt-card-install-btn--installed {
 }
 
 /* 搜索框闪亮反馈（示例词点击触发）——作用于整个组合框外框 */
-.pt-search:has(.pt-search-input.pt-search-flash) {
+.pt-search.pt-search--flash {
 	animation: pt-search-flash-anim 0.6s var(--pt-ease);
 }
 @keyframes pt-search-flash-anim {
