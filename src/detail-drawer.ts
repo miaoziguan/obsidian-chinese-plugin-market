@@ -29,6 +29,7 @@ import type { SimilarCandidate } from "./recommend/similar";
 import { asAppInternals } from "./obsidian-internals";
 import { openInsightModal } from "./view-cards";
 import { isMacOS, macosSystemTranslate, protectMarkdown, restoreMarkdown } from "./translate/macos-shortcuts";
+import { appendSVG, appendIconText } from "./dom";
 
 /**
  * Drawer 宿主插件的最小端口（P2-2 收尾：切断对 plugin 完整形状的依赖）。
@@ -405,7 +406,7 @@ export class PluginDetailDrawer {
 			cls: "pt-drawer-close",
 			attr: { "aria-label": this.t("detail.drawer.close"), type: "button" },
 		});
-		closeBtn.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`);
+		appendSVG(closeBtn, `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`);
 		closeBtn.addEventListener("click", () => this.close());
 
 		// ── 正文主栏（元数据/描述/操作/README）：窄屏单栏，宽屏与右栏并排 ──
@@ -423,7 +424,7 @@ export class PluginDetailDrawer {
 		const addMeta = (labelKey: I18nKey, value: string, icon: string) => {
 			if (!value) return;
 			const row = meta.createEl("div", { cls: "pt-detail-meta-row" });
-			row.createEl("span", { cls: "pt-detail-meta-icon" }).insertAdjacentHTML("beforeend", icon);
+			appendSVG(row.createEl("span", { cls: "pt-detail-meta-icon" }), icon);
 			row.createEl("span", { cls: "pt-detail-meta-label", text: this.t(labelKey) });
 			row.createEl("span", { cls: "pt-detail-meta-value", text: value });
 		};
@@ -506,15 +507,16 @@ export class PluginDetailDrawer {
 					rel: "noopener noreferrer",
 				},
 			});
-			repoBtn.insertAdjacentHTML("beforeend", `${repoSvg} ${this.t("card.repo")}`);
+			appendIconText(repoBtn, repoSvg, this.t("card.repo"));
 		}
 
 		// 收藏切换
 		const favBtn = actions.createEl("button", { cls: "pt-detail-btn" });
 		const updateFavIcon = (isOn: boolean) => {
-			favBtn.insertAdjacentHTML("beforeend", isOn
-				? `<svg viewBox="0 0 24 24" width="14" height="14" fill="#d99a1c" stroke="#d99a1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ${this.t("card.favorite")}`
-				: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ${this.t("card.favorite")}`);
+			favBtn.empty();
+			appendIconText(favBtn, isOn
+				? `<svg viewBox="0 0 24 24" width="14" height="14" fill="#d99a1c" stroke="#d99a1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
+				: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`, this.t("card.favorite"));
 		};
 		updateFavIcon(this.plugin.settings.favorites.includes(p.id));
 		favBtn.addEventListener("click", () => {
@@ -526,12 +528,13 @@ export class PluginDetailDrawer {
 		const copyBtn = actions.createEl("button", {
 			cls: "pt-detail-btn",
 		});
-		copyBtn.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> ${this.t("card.copy")}`);
+		appendIconText(copyBtn, `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`, this.t("card.copy"));
 		copyBtn.addEventListener("click", () => {
 			navigator.clipboard?.writeText(p.id).catch(() => {
 				new Notice(this.t("card.copy.fail"));
 			});
-			copyBtn.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--pt-color-success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ${this.t("card.copy.done")}`);
+			copyBtn.empty();
+			appendIconText(copyBtn, `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--pt-color-success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`, this.t("card.copy.done"));
 			const prevTimer = (copyBtn as any)._restoreTimer;
 			if (prevTimer) window.clearTimeout(prevTimer);
 			(copyBtn as any)._restoreTimer = window.setTimeout(() => {
@@ -540,7 +543,8 @@ export class PluginDetailDrawer {
 			}, 1200);
 		});
 		const updateCopyBtnContent = () => {
-			copyBtn.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> ${this.t("card.copy")}`);
+			copyBtn.empty();
+			appendIconText(copyBtn, `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`, this.t("card.copy"));
 		};
 
 		// ── README 区（懒加载） ──
@@ -658,7 +662,7 @@ export class PluginDetailDrawer {
 			// 行4：下载量
 			if (sim.downloads != null) {
 				const dl = card.createEl("div", { cls: "pt-detail-similar-meta" });
-				dl.insertAdjacentHTML("beforeend", `↓ ${formatDownloads(sim.downloads)}`);
+				dl.textContent = `↓ ${formatDownloads(sim.downloads)}`;
 			}
 
 			// 键盘可点击

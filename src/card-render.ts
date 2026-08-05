@@ -11,6 +11,7 @@ import { Notice } from "obsidian";
 import type { PluginInfo, TranslateResult, AISearchResult } from "./translator";
 import type { I18nKey } from "./i18n";
 import { cleanChineseSpaces } from "./utils";
+import { appendSVG } from "./dom";
 import { isMacOS, macosSystemTranslate } from "./translate/macos-shortcuts";
 import { formatDownloads, formatUpdated } from "./stats";
 import type { SignalId } from "./smart-signal";
@@ -168,7 +169,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		cls: "pt-meta-chip pt-meta-chip--author",
 		attr: { "data-action": "author" },
 	});
-	authorSpan.createEl("span", { cls: "pt-author-icon" }).insertAdjacentHTML("beforeend", ICON_PERSON);
+	appendSVG(authorSpan.createEl("span", { cls: "pt-author-icon" }), ICON_PERSON);
 	const authorName = authorSpan.createEl("span", { cls: "pt-author-name" });
 	const installedMeta = metaInfo.createEl("span", { cls: "pt-card-installed" });
 	installedMeta.setCssStyles({ display: "none" });
@@ -253,11 +254,11 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const statline = card.createEl("div", { cls: "pt-card-statline" });
 	statline.setCssStyles({ display: "none" });
 	const dlChip = statline.createEl("span", { cls: "pt-stat-chip" });
-	dlChip.createEl("span", { cls: "pt-stat-icon" }).insertAdjacentHTML("beforeend", ICON_DOWNLOAD);
+	appendSVG(dlChip.createEl("span", { cls: "pt-stat-icon" }), ICON_DOWNLOAD);
 	const dlText = dlChip.createEl("span");
 	dlChip.setCssStyles({ display: "none" });
 	const clkChip = statline.createEl("span", { cls: "pt-stat-chip" });
-	clkChip.createEl("span", { cls: "pt-stat-icon" }).insertAdjacentHTML("beforeend", ICON_CLOCK);
+	appendSVG(clkChip.createEl("span", { cls: "pt-stat-icon" }), ICON_CLOCK);
 	const clkText = clkChip.createEl("span");
 	clkChip.setCssStyles({ display: "none" });
 
@@ -274,18 +275,18 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	// ── 操作图标组（静态 SVG，常驻） ──
 	const actionsRow = card.createEl("div", { cls: "pt-card-actions-row" });
 	const insightBtn = makeIconBtn("pt-icon-btn pt-card-insight", "insight", ctx.t("card.insight"), ctx);
-	insightBtn.insertAdjacentHTML("beforeend", ICON_INSIGHT);
+	appendSVG(insightBtn, ICON_INSIGHT);
 	const compareBtn = makeIconBtn("pt-icon-btn pt-card-compare", "compare", ctx.t("card.compare"), ctx);
-	compareBtn.insertAdjacentHTML("beforeend", ICON_COMPARE);
+	appendSVG(compareBtn, ICON_COMPARE);
 	const favBtn = makeIconBtn("pt-icon-btn pt-card-favorite", "favorite", ctx.t("card.favorite"), ctx);
-	favBtn.insertAdjacentHTML("beforeend", ICON_FAVORITE);
+	appendSVG(favBtn, ICON_FAVORITE);
 	actionsRow.append(insightBtn, compareBtn, favBtn);
 
 	// macOS 系统翻译（按需按钮，仅 macOS 桌面端渲染）
 	let macosBtn: HTMLElement | null = null;
 	if (isMacOS()) {
 		macosBtn = makeIconBtn("pt-icon-btn pt-card-sys-translate", "sys-translate", ctx.t("card.sysTranslate"), ctx);
-		macosBtn.insertAdjacentHTML("beforeend", ICON_SYS_TRANSLATE);
+		appendSVG(macosBtn, ICON_SYS_TRANSLATE);
 		macosBtn.addEventListener("click", (e: MouseEvent) => {
 			e.stopPropagation();
 			void handleCardSysTranslate(card, ctx);
