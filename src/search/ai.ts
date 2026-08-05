@@ -10,7 +10,7 @@
  * 所有 LLM 调用统一走 LLMClient，不再耦合 Translator 状态。
  */
 
-import { parseJSON, parseRecallCandidates, fuzzyTitleScores, rrfFuse, topNFused, type RecallCandidate } from "../utils";
+import { parseJSON, parseRecallCandidates, fuzzyTitleScores, rrfFuse, topNFused } from "../utils";
 import { logger } from "../logger";
 import { tokenizeForBM25, bm25Score } from "../bm25";
 import { t2sForEmbed } from "../t2s";
@@ -207,7 +207,7 @@ export class AISearcher {
 		if (useVector) {
 			try {
 				vectorScores = await this.vectorRecallScores(query, allPlugins, embCfg!, onPhase, filterCategories);
-			} catch (e) {
+			} catch (e: unknown) {
 				logger.warn("[Chinese Plugin Market] 向量召回失败，降级到纯关键词：", e);
 				vectorScores = null;
 			}
@@ -218,7 +218,7 @@ export class AISearcher {
 		const localScores = bm25RecallScores(query, this.getBm25Index(allPlugins));
 
 		// 标题模糊匹配（第三路）：兜住「用户只记得名字大概」的场景
-		const fuzzyScores = fuzzyTitleScores(query, allPlugins as RecallCandidate[]);
+		const fuzzyScores = fuzzyTitleScores(query, allPlugins);
 
 		// RRF 融合：向量 + 关键词 + 标题模糊 三路名次融合（异构分数量纲不同，RRF 只看名次，
 		// 比「并集取前 N」更稳；多路都命中的候选自然靠前，减少 LLM 精排负担）。
@@ -303,7 +303,7 @@ export class AISearcher {
 		if (useVector) {
 			try {
 				vectorScores = await this.vectorRecallScores(query, allPlugins, embCfg!, undefined, filterCategories);
-			} catch (e) {
+			} catch (e: unknown) {
 				logger.warn("[Chinese Plugin Market] 本地语义：向量召回失败，降级关键词+标题：", e);
 				vectorScores = null;
 			}
@@ -311,7 +311,7 @@ export class AISearcher {
 
 		// 关键词召回（CJK 三元组 BM25，替代简单重叠）+ 标题模糊
 		const localScores = bm25RecallScores(query, this.getBm25Index(allPlugins));
-		const fuzzyScores = fuzzyTitleScores(query, allPlugins as RecallCandidate[]);
+		const fuzzyScores = fuzzyTitleScores(query, allPlugins);
 
 		// RRF 融合（与 AI 模式召回一致；向量不可用时退化为关键词+标题）
 		let fusedIds: string[];
@@ -365,7 +365,7 @@ export class AISearcher {
 			"## 选品建议\n（针对不同使用场景/工作流，给出该选哪个的实操建议；若功能高度重叠，给出该如何取舍的判据）";
 		try {
 			return await this.llm.call(system, user, 4000, false);
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn(`[Chinese Plugin Market] AI 对比失败:`, e);
 			throw e;
 		}
@@ -646,7 +646,7 @@ ${candidateLines}
 				`[Chinese Plugin Market] AI 精排完成：候选=${candidates.length} → 命中=${r.rankedIds.length}（LLM 精排成功）`
 			);
 			return r;
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn(
 				"[Chinese Plugin Market] AI 精排失败，降级到本地召回排序（向量∪关键词）：",
 				e
