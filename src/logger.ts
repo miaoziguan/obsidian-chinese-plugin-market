@@ -3,7 +3,6 @@
  * 触发「避免不必要 console 日志」的审核告警。各调用点已自带 "[Chinese Plugin Market]" 前缀，
  * 此处不再重复添加，保持日志格式与历史一致。
  */
-/* eslint-disable no-console */
 
 export const logger = {
 	log: (...args: unknown[]): void => console.log(...args),
