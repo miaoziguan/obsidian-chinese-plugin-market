@@ -20,7 +20,7 @@ export function appendSVG(parent: HTMLElement, svg: string): void {
 		`<svg xmlns="http://www.w3.org/2000/svg">${svg}</svg>`,
 		"image/svg+xml",
 	);
-	const frag = document.createDocumentFragment();
+	const frag = createFragment();
 	for (const node of Array.from(doc.documentElement.childNodes)) {
 		frag.appendChild(document.importNode(node, true));
 	}

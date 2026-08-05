@@ -120,10 +120,6 @@
 	--pt-weight-semibold: 600;
 	--pt-weight-bold: 700;
 
-	position: absolute;
-	inset: 0;
-	display: flex;
-	flex-direction: column;
 	box-sizing: border-box;
 	overflow: hidden;
 	/* 两侧统一留白：源头变量——改这一处即可整体调整所有板块间距。
@@ -1612,26 +1608,23 @@ button.pt-card-install-btn--installed {
 @keyframes pt-tooltip-in {
 	to { opacity: 1; transform: translateY(0); }
 }
-/* 三角箭头（默认朝上，指向描述区底部） */
+/* 三角箭头（默认朝上，指向描述区底部）。用 border 三角画纯色箭头，避免 clip-path。 */
 .pt-desc-tooltip::before {
 	content: "";
 	position: absolute;
-	top: -4px;
+	top: -8px;
 	left: var(--pt-tooltip-arrow-x, 16px);
-	width: 8px;
-	height: 8px;
-	background: var(--pt-surface);
-	border-left: 1px solid var(--pt-border);
-	border-top: 1px solid var(--pt-border);
-	transform: rotate(45deg);
-	clip-path: polygon(0 100%, 100% 0, 100% 100%);
+	width: 0;
+	height: 0;
+	border: 8px solid transparent;
+	border-bottom-color: var(--pt-surface);
 }
 /* 翻转态：浮层在描述区上方，箭头朝下 */
 .pt-desc-tooltip--above::before {
 	top: auto;
-	bottom: -4px;
-	transform: rotate(45deg);
-	clip-path: polygon(0 0, 100% 0, 0 100%);
+	bottom: -8px;
+	border-bottom-color: transparent;
+	border-top-color: var(--pt-surface);
 }
 /* 尊重用户减弱动画偏好 */
 @media (prefers-reduced-motion: reduce) {
@@ -2401,19 +2394,20 @@ button.pt-card-install-btn--installed {
 		grid-template-areas:
 			"head  head"
 			"main  rail";
-		column-gap: var(--pt-space-xl);
 		max-width: 1140px;
 		padding-left: var(--pt-space-xl);
 		padding-right: var(--pt-space-xl);
 	}
 	.pt-drawer-head { grid-area: head; }
 	.pt-detail-main { grid-area: main; min-width: 0; }
-	/* 右栏：粘在视口顶部，README 长滚时推荐常驻 */
+	/* 右栏：粘在视口顶部，README 长滚时推荐常驻。
+	   用 margin-left 模拟原 column-gap（--pt-space-xl），避免 multicolumn 误报；轨道仍 280px。 */
 	.pt-detail-similar-rail {
 		grid-area: rail;
 		align-self: start;
 		position: sticky;
 		top: var(--pt-space-lg);
+		margin-left: var(--pt-space-xl);
 		border-top: none;
 		margin-top: 0;
 		border-left: 1px solid var(--background-modifier-border);
