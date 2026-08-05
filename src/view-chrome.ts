@@ -23,22 +23,22 @@ export function showSearchGuide(ctx: ViewContext) {
 
 		layer.empty();
 		// 模式引导行：渲染在列表区顶部（而非 header 中），避免与工具栏视觉混淆
-		ctx.guidanceEl = layer.createEl("div", { cls: "pt-mode-guidance pt-mode-guidance--in-list" });
+		ctx.guidanceEl = layer.createDiv({ cls: "pt-mode-guidance pt-mode-guidance--in-list" });
 		ctx.updateGuidance();
-		const empty = layer.createEl("div", { cls: "pt-empty pt-search-guide" });
-		empty.createEl("div", { cls: "pt-empty-icon" });
-		empty.createEl("div", {
+		const empty = layer.createDiv({ cls: "pt-empty pt-search-guide" });
+		empty.createDiv({ cls: "pt-empty-icon" });
+		empty.createDiv({
 			cls: "pt-empty-title",
 			text: ctx.t("guide.title"),
 		});
-		empty.createEl("div", {
+		empty.createDiv({
 			cls: "pt-empty-hint",
 			text: ctx.t("guide.hint"),
 		});
 		// 示例词：点击即填入搜索框并触发搜索，降低首屏冷启动门槛
 		const examples = ["思维导图", "日历", "同步", "日程", "图表"];
-		const chips = empty.createEl("div", { cls: "pt-guide-examples" });
-		chips.createEl("span", { cls: "pt-guide-examples-label", text: ctx.t("guide.examples") });
+		const chips = empty.createDiv({ cls: "pt-guide-examples" });
+		chips.createSpan({ cls: "pt-guide-examples-label", text: ctx.t("guide.examples") });
 		for (const ex of examples) {
 			const chip = chips.createEl("button", {
 				cls: "pt-guide-chip",
@@ -57,7 +57,7 @@ export function showSearchGuide(ctx: ViewContext) {
 			});
 		}
 		// 对比功能发现提示（一次性引导后仍可在此处看到入口提示）
-		empty.createEl("div", {
+		empty.createDiv({
 			cls: "pt-guide-compare-hint",
 			text: ctx.t("compare.discover"),
 		});
@@ -71,20 +71,20 @@ export function showAIPendingHint(ctx: ViewContext) {
 		setListState(ctx, "aiPending");
 
 		layer.empty();
-		const hint = layer.createEl("div", { cls: "pt-empty pt-ai-pending" });
-		hint.createEl("div", { cls: "pt-empty-icon" });
-		hint.createEl("div", {
+		const hint = layer.createDiv({ cls: "pt-empty pt-ai-pending" });
+		hint.createDiv({ cls: "pt-empty-icon" });
+		hint.createDiv({
 			cls: "pt-empty-title",
 			text: ctx.t("ai.pending.title"),
 		});
-		hint.createEl("div", {
+		hint.createDiv({
 			cls: "pt-empty-hint",
 			text: ctx.t("ai.pending.hint"),
 		});
 		// 3b: AI 模式示例词——点击即填入并触发 AI 语义搜索，降低冷启动门槛
 		const aiExamples = ["做思维导图的插件", "管理日程和待办", "同步笔记到云端", "美化界面主题"];
-		const aiChips = hint.createEl("div", { cls: "pt-guide-examples" });
-		aiChips.createEl("span", { cls: "pt-guide-examples-label", text: ctx.t("guide.examples") });
+		const aiChips = hint.createDiv({ cls: "pt-guide-examples" });
+		aiChips.createSpan({ cls: "pt-guide-examples-label", text: ctx.t("guide.examples") });
 		for (const ex of aiExamples) {
 			const chip = aiChips.createEl("button", { cls: "pt-guide-chip", text: ex });
 			chip.addEventListener("click", () => {
@@ -110,15 +110,15 @@ export function showAIConfigGuide(ctx: ViewContext, reason: "disabled" | "noKey"
 		setListState(ctx, "aiConfig");
 
 		layer.empty();
-		const guide = layer.createEl("div", { cls: "pt-empty pt-ai-config-guide" });
-		guide.createEl("div", { cls: "pt-empty-icon" });
-		guide.createEl("div", {
+		const guide = layer.createDiv({ cls: "pt-empty pt-ai-config-guide" });
+		guide.createDiv({ cls: "pt-empty-icon" });
+		guide.createDiv({
 			cls: "pt-empty-title",
 			text: reason === "disabled"
 				? "AI 语义搜索未开启"
 				: "未配置 API Key",
 		});
-		guide.createEl("div", {
+		guide.createDiv({
 			cls: "pt-empty-hint",
 			text: reason === "disabled"
 				? "请在插件设置 → 高级设置 → AI 智能搜索 中开启「启用 AI 智能搜索」，即可用自然语言搜索插件。"
@@ -142,10 +142,10 @@ export function showLoadingState(ctx: ViewContext, message: string) {
 		setListState(ctx, "loading");
 
 		layer.empty();
-		const loading = layer.createEl("div", { cls: "pt-empty pt-loading" });
-		loading.createEl("div", { cls: "pt-loading-spinner" });
-		loading.createEl("div", { cls: "pt-empty-title", text: ctx.t("app.loading") });
-		loading.createEl("div", { cls: "pt-empty-hint", text: message });
+		const loading = layer.createDiv({ cls: "pt-empty pt-loading" });
+		loading.createDiv({ cls: "pt-loading-spinner" });
+		loading.createDiv({ cls: "pt-empty-title", text: ctx.t("app.loading") });
+		loading.createDiv({ cls: "pt-empty-hint", text: message });
 	
 }
 
@@ -156,7 +156,7 @@ export function updateStats(ctx: ViewContext) {
 		stats.setCssStyles({ display: "" });
 	const total = ctx.plugins.length;
 	stats.empty();
-	stats.createEl("span", { cls: "pt-stat", text: `共 ${total}` });
+	stats.createSpan({ cls: "pt-stat", text: `共 ${total}` });
 	
 }
 
@@ -230,7 +230,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 	// 懒创建容器：插在搜索行之后、高级筛选面板之前
 	let box = q(ctx.contentEl, ".pt-active-filters") as HTMLElement | null;
 	if (!box) {
-		box = header.createEl("div", { cls: "pt-active-filters" });
+		box = header.createDiv({ cls: "pt-active-filters" });
 		const anchor = q(ctx.contentEl, ".pt-advanced");
 		if (anchor && anchor !== box) header.insertBefore(box, anchor);
 	}
@@ -301,10 +301,10 @@ export function renderActiveFilters(ctx: ViewContext) {
 		return;
 	}
 	box.setCssStyles({ display: "" });
-	box.createEl("span", { cls: "pt-active-filters-label", text: ctx.t("filter.active.label") });
+	box.createSpan({ cls: "pt-active-filters-label", text: ctx.t("filter.active.label") });
 	for (const c of chips) {
-		const chip = box.createEl("span", { cls: "pt-active-chip" });
-		chip.createEl("span", { cls: "pt-active-chip-text", text: c.text });
+		const chip = box.createSpan({ cls: "pt-active-chip" });
+		chip.createSpan({ cls: "pt-active-chip-text", text: c.text });
 		const x = chip.createEl("button", {
 			cls: "pt-active-chip-clear",
 			text: "✕",
@@ -385,17 +385,17 @@ export async function loadAndRender(ctx: ViewContext) {
 	const { searchInput } = buildToolbar(ctx, toolbarState);
 
 		// ARIA live 状态播报区（屏幕阅读器专用，视觉隐藏）
-		const ariaLive = container.createEl("div", {
+		const ariaLive = container.createDiv({
 			cls: "pt-sr-only",
 			attr: { "aria-live": "polite", "aria-atomic": "true" },
 		});
 		ariaLive.setAttribute("role", "status");
 
 		// 插件列表容器（原生滚动视口）
-		const listContainer = container.createEl("div", { cls: "pt-list pt-list-viewport" });
+		const listContainer = container.createDiv({ cls: "pt-list pt-list-viewport" });
 		ctx.scrollViewport = listContainer;
 		// 卡片内容层（正常流 grid，原生滚动 + content-visibility 接管窗口化）
-		const cardLayer = listContainer.createEl("div", { cls: "pt-list-layer" });
+		const cardLayer = listContainer.createDiv({ cls: "pt-list-layer" });
 		ctx.scrollCardLayer = cardLayer;
 		// S6 虚拟列表 ARIA：屏上只有窗口内卡片，用 list/listitem + posinset/setsize
 		// 告知读屏器"这是长列表的第 x/n 项"，而非只有十几项
@@ -426,7 +426,7 @@ export async function loadAndRender(ctx: ViewContext) {
 		ctx.scrollBottomBtn = scrollBottom;
 
 		// S7: 滚动位置指示徽标（滚动中显示「第 x / 共 n」，滚停 800ms 淡出）
-		const scrollPos = container.createEl("div", {
+		const scrollPos = container.createDiv({
 			cls: "pt-scroll-pos",
 			attr: { "aria-hidden": "true" },
 		});

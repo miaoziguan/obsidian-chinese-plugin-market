@@ -124,19 +124,19 @@ export function renderFeaturedSection(ctx: ViewContext) {
 export function ensureFeaturedSection(ctx: ViewContext) {
 
 		if (ctx.featuredSectionEl) return;
-		const section = ctx.containerEl.createEl("div", { cls: "pt-featured" });
-		const head = section.createEl("div", { cls: "pt-featured-head" });
+		const section = ctx.containerEl.createDiv({ cls: "pt-featured" });
+		const head = section.createDiv({ cls: "pt-featured-head" });
 		// 关键对齐属性已由 styles.css 中以 !important 锁定（head/title/toggle），
 		// 彻底绕开 Obsidian 主题对 flex 方向/对齐的干扰，无需在 JS 内联 setProperty。
 
-		head.createEl("span", {
+		head.createSpan({
 			cls: "pt-featured-title",
 			text: ctx.recommendedTitle || ctx.t("recommend.title"),
 		});
 
 		// 副标题「羽鳞君 · 出品」已按需求移除
 		// 用 <span role="button"> 而非 <button>：避开 Obsidian 主题对 <button> 的默认盒模型覆盖。
-		const toggle = head.createEl("span", {
+		const toggle = head.createSpan({
 			cls: "pt-featured-toggle",
 			attr: {
 				role: "button",
@@ -161,7 +161,7 @@ export function ensureFeaturedSection(ctx: ViewContext) {
 				toggle.click();
 			}
 		});
-		const grid = section.createEl("div", { cls: "pt-featured-grid" });
+		const grid = section.createDiv({ cls: "pt-featured-grid" });
 		grid.addEventListener("click", (ev) => ctx.onCardClick(ev));
 		// 放到滚动视口之前：始终可见，作为「推荐」强曝光区。
 		// 注意：scrollViewport 是 ctx.contentEl 的直接子节点，而 ctx.containerEl

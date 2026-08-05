@@ -21,6 +21,17 @@ beforeAll(() => {
 			this.append(document.createTextNode(s));
 		};
 	}
+	// 补齐 createDiv/createSpan/createFragment（源码现已改用这些 Obsidian 助手）
+	const proto = HTMLElement.prototype as any;
+	if (!proto.createDiv) {
+		proto.createDiv = function (o?: any) { return this.createEl("div", o); };
+	}
+	if (!proto.createSpan) {
+		proto.createSpan = function (o?: any) { return this.createEl("span", o); };
+	}
+	if (!proto.createFragment) {
+		proto.createFragment = function () { return document.createDocumentFragment(); };
+	}
 });
 
 function mkCtx(over: Partial<CardRenderContext> = {}): CardRenderContext {

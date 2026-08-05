@@ -52,7 +52,7 @@ export class FilterCache {
 		return {
 			lastFiltered: this._list,
 			lastFilterQuery: this._query,
-			lastFilterSource: this._source as SourceFilter,
+			lastFilterSource: this._source,
 			lastFilterAuthor: this._author,
 			lastFilterInstall: this._install,
 			lastFilterRecommendedOnly: this._recommendedOnly,

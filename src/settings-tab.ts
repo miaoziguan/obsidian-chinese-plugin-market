@@ -202,7 +202,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		// 腾讯翻译折叠（大多数用户用不到，默认收起）
 		const tencentDetails = engineSec.createEl("details", { cls: "pt-settings-details" });
 		tencentDetails.createEl("summary", { text: this.t("settings.tencent.title") });
-		const tencentBody = tencentDetails.createEl("div", { cls: "pt-settings-details-body" });
+		const tencentBody = tencentDetails.createDiv({ cls: "pt-settings-details-body" });
 		new Setting(tencentBody)
 			.setName(this.t("settings.tencent.secretId"))
 			.setDesc(this.t("settings.tencent.secretId.desc"))
@@ -246,7 +246,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		// ── AI 能力（折叠，默认收起） ──
 		const aiDetails = engineSec.createEl("details", { cls: "pt-settings-details" });
 		aiDetails.createEl("summary", { text: this.t("settings.ai.title") });
-		const aiBody = aiDetails.createEl("div", { cls: "pt-settings-details-body" });
+		const aiBody = aiDetails.createDiv({ cls: "pt-settings-details-body" });
 		new Setting(aiBody)
 			.setName(this.t("settings.ai.enable"))
 			.setDesc(this.t("settings.ai.enable.desc"))
@@ -323,24 +323,24 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		// ── 自托管翻译源（DeepLX / LibreTranslate，可选增强，默认折叠）──
 		const shDetails = engineSec.createEl("details", { cls: "pt-settings-details" });
 		shDetails.createEl("summary", { text: this.t("settings.selfHosted.title") });
-		const shBody = shDetails.createEl("div", { cls: "pt-settings-details-body" });
+		const shBody = shDetails.createDiv({ cls: "pt-settings-details-body" });
 		shBody.createEl("p", {
 			cls: "pt-settings-hint",
 			text: this.t("settings.selfHosted.desc"),
 		});
-		const shList = shBody.createEl("div", { cls: "pt-selfhosted-list" });
+		const shList = shBody.createDiv({ cls: "pt-selfhosted-list" });
 		const renderSelfHosted = () => {
 			shList.empty();
 			const items = this.plugin.settings.selfHostedTranslators;
 			if (items.length === 0) {
-				shList.createEl("div", {
+				shList.createDiv({
 					cls: "pt-selfhosted-empty",
 					text: this.t("settings.selfHosted.empty"),
 				});
 				return;
 			}
 			items.forEach((item, idx) => {
-				const row = shList.createEl("div", { cls: "pt-selfhosted-row" });
+				const row = shList.createDiv({ cls: "pt-selfhosted-row" });
 				const sel = row.createEl("select", { cls: "pt-selfhosted-type" }) as HTMLSelectElement;
 				(["deeplx", "libretranslate"] as const).forEach((tp) => {
 					const opt = sel.createEl("option", {
@@ -407,7 +407,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		// ── 检索召回（Embedding / 关键词，默认折叠；大多数用户无需配置，保留"关键词"即可）──
 		const embDetails = engineSec.createEl("details", { cls: "pt-settings-details" });
 		embDetails.createEl("summary", { text: this.t("settings.embedding.title") });
-		const embInner = embDetails.createEl("div", { cls: "pt-settings-details-body" });
+		const embInner = embDetails.createDiv({ cls: "pt-settings-details-body" });
 		new Setting(embInner)
 			.setName(this.t("settings.embedding.mode"))
 			.setDesc(this.t("settings.embedding.mode.desc"))

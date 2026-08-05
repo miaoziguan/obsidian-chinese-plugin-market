@@ -342,10 +342,10 @@ class InsightModal extends Modal {
 		contentEl.addClass("pt-insight-modal");
 		const t = this.host.t;
 
-		contentEl.createEl("div", { cls: "pt-insight-title", text: this.plugin.name });
-		contentEl.createEl("div", { cls: "pt-insight-sub", text: t("insight.descHint") });
+		contentEl.createDiv({ cls: "pt-insight-title", text: this.plugin.name });
+		contentEl.createDiv({ cls: "pt-insight-sub", text: t("insight.descHint") });
 
-		const body = contentEl.createEl("div", { cls: "pt-insight-body" });
+		const body = contentEl.createDiv({ cls: "pt-insight-body" });
 		const rendered = this.host.translator.getInsight(this.plugin.id);
 		if (rendered) {
 			body.textContent = rendered;
@@ -359,10 +359,10 @@ class InsightModal extends Modal {
 		const translator = this.host.translator;
 		if (!translator.aiConfig?.apiKey) {
 			body.textContent = this.plugin.description || t("insight.noContent");
-			body.createEl("div", { cls: "pt-insight-warn", text: t("insight.noAI") });
+			body.createDiv({ cls: "pt-insight-warn", text: t("insight.noAI") });
 			return;
 		}
-		const loading = body.createEl("div", { cls: "pt-insight-loading", text: t("insight.loading") });
+		const loading = body.createDiv({ cls: "pt-insight-loading", text: t("insight.loading") });
 		try {
 			const mirror = this.host.mirrorConfig();
 			// 先拉 manifest（main.js 入口依赖其中的 main 字段），再并行拉 README + main.js 信号
@@ -384,7 +384,7 @@ class InsightModal extends Modal {
 			// 降级：回退到官方描述
 			body.textContent = this.plugin.description || t("insight.noContent");
 			const msg = e instanceof Error ? e.message : String(e);
-			body.createEl("div", { cls: "pt-insight-warn", text: `${t("insight.failed")}：${msg}` });
+			body.createDiv({ cls: "pt-insight-warn", text: `${t("insight.failed")}：${msg}` });
 		}
 	}
 

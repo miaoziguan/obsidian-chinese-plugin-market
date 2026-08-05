@@ -326,11 +326,11 @@ export class PluginDetailDrawer {
 
 		// 遮罩层（仅浮层模式）
 		if (overlay) {
-			this.backdropEl = this.container.createEl("div", { cls: "pt-drawer-backdrop" });
+			this.backdropEl = this.container.createDiv({ cls: "pt-drawer-backdrop" });
 		}
 
 		// Drawer 主体
-		this.drawerEl = this.container.createEl("div", { cls: "pt-drawer" });
+		this.drawerEl = this.container.createDiv({ cls: "pt-drawer" });
 		this.drawerEl.setAttribute("role", "dialog");
 		this.drawerEl.setAttribute("aria-modal", "true");
 		this.drawerEl.setAttribute("aria-label", this.info.name);
@@ -349,7 +349,7 @@ export class PluginDetailDrawer {
 
 		// 触发 reflow 后添加打开动画（仅浮层模式；页面模式由 CSS 直接铺满）
 		if (overlay) {
-			this.backdropEl?.offsetHeight;
+			void this.backdropEl?.offsetHeight;
 			this.backdropEl?.classList.add("pt-drawer-backdrop--open");
 			this.drawerEl?.classList.add("pt-drawer--open");
 		}
@@ -369,12 +369,12 @@ export class PluginDetailDrawer {
 		const displayName = cleanChineseSpaces(this.result?.translatedName || p.name);
 
 		// ── 滚动容器（承载 max-width 内容） ──
-		const scroll = this.drawerEl.createEl("div", { cls: "pt-detail-page-scroll" });
-		const inner = scroll.createEl("div", { cls: "pt-detail-page-inner" });
+		const scroll = this.drawerEl.createDiv({ cls: "pt-detail-page-scroll" });
+		const inner = scroll.createDiv({ cls: "pt-detail-page-inner" });
 
 		// ── 头部：关闭按钮 + 标题 + back ──
-		const head = inner.createEl("div", { cls: "pt-drawer-head" });
-		const headLeft = head.createEl("div", { cls: "pt-drawer-head-left" });
+		const head = inner.createDiv({ cls: "pt-drawer-head" });
+		const headLeft = head.createDiv({ cls: "pt-drawer-head-left" });
 
 		// 后退按钮（从相似推荐跳转后可用）
 		if (this._history.length > 0) {
@@ -396,10 +396,10 @@ export class PluginDetailDrawer {
 			});
 		}
 
-		const titleBlock = headLeft.createEl("div", { cls: "pt-drawer-title-block" });
-		titleBlock.createEl("div", { cls: "pt-drawer-title", text: displayName });
+		const titleBlock = headLeft.createDiv({ cls: "pt-drawer-title-block" });
+		titleBlock.createDiv({ cls: "pt-drawer-title", text: displayName });
 		if (displayName !== p.name) {
-			titleBlock.createEl("div", { cls: "pt-drawer-subtitle", text: p.name });
+			titleBlock.createDiv({ cls: "pt-drawer-subtitle", text: p.name });
 		}
 
 		const closeBtn = head.createEl("button", {
@@ -410,10 +410,10 @@ export class PluginDetailDrawer {
 		closeBtn.addEventListener("click", () => this.close());
 
 		// ── 正文主栏（元数据/描述/操作/README）：窄屏单栏，宽屏与右栏并排 ──
-		const main = inner.createEl("div", { cls: "pt-detail-main" });
+		const main = inner.createDiv({ cls: "pt-detail-main" });
 
 		// ── 元数据区（图标 + 标签 + 值） ──
-		const meta = main.createEl("div", { cls: "pt-detail-meta" });
+		const meta = main.createDiv({ cls: "pt-detail-meta" });
 		const iconAuthor = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
 		const iconId = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
 		const iconDownload = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
@@ -423,10 +423,10 @@ export class PluginDetailDrawer {
 
 		const addMeta = (labelKey: I18nKey, value: string, icon: string) => {
 			if (!value) return;
-			const row = meta.createEl("div", { cls: "pt-detail-meta-row" });
-			appendSVG(row.createEl("span", { cls: "pt-detail-meta-icon" }), icon);
-			row.createEl("span", { cls: "pt-detail-meta-label", text: this.t(labelKey) });
-			row.createEl("span", { cls: "pt-detail-meta-value", text: value });
+			const row = meta.createDiv({ cls: "pt-detail-meta-row" });
+			appendSVG(row.createSpan({ cls: "pt-detail-meta-icon" }), icon);
+			row.createSpan({ cls: "pt-detail-meta-label", text: this.t(labelKey) });
+			row.createSpan({ cls: "pt-detail-meta-value", text: value });
 		};
 		addMeta("detail.author", p.author, iconAuthor);
 		addMeta("detail.id", p.id, iconId);
@@ -447,14 +447,14 @@ export class PluginDetailDrawer {
 		}
 
 		// ── 描述（含来源信息 chip） ──
-		const descSection = main.createEl("div", { cls: "pt-detail-desc-section" });
+		const descSection = main.createDiv({ cls: "pt-detail-desc-section" });
 		const desc = cleanChineseSpaces(this.result?.translatedDesc || p.description);
 		if (desc) {
-			descSection.createEl("div", { cls: "pt-detail-desc", text: desc });
+			descSection.createDiv({ cls: "pt-detail-desc", text: desc });
 		}
 
 		// ── 操作按钮 ──
-		const actions = main.createEl("div", { cls: "pt-detail-actions" });
+		const actions = main.createDiv({ cls: "pt-detail-actions" });
 
 		// 安装状态：区分未安装 / 已安装(未启用) / 已启用
 		let isInstalled = false;
@@ -468,7 +468,7 @@ export class PluginDetailDrawer {
 		} catch { /* 半官方 API，容错忽略 */ }
 
 		if (isEnabled) {
-			actions.createEl("span", {
+			actions.createSpan({
 				cls: "pt-detail-btn pt-detail-btn--enabled",
 				text: `✓ ${this.t("card.installed.on")}`,
 			});
@@ -549,10 +549,10 @@ export class PluginDetailDrawer {
 		};
 
 		// ── README 区（懒加载） ──
-		const readmeWrap = main.createEl("div", { cls: "pt-detail-readme" });
-		const readmeHeader = readmeWrap.createEl("div", { cls: "pt-detail-section-head" });
-		readmeHeader.createEl("span", { cls: "pt-detail-section-dot" });
-		readmeHeader.createEl("span", {
+		const readmeWrap = main.createDiv({ cls: "pt-detail-readme" });
+		const readmeHeader = readmeWrap.createDiv({ cls: "pt-detail-section-head" });
+		readmeHeader.createSpan({ cls: "pt-detail-section-dot" });
+		readmeHeader.createSpan({
 			cls: "pt-detail-readme-title",
 			text: this.t("detail.readme"),
 		});
@@ -593,23 +593,23 @@ export class PluginDetailDrawer {
 			});
 		}
 
-		const readmeBody = readmeWrap.createEl("div", { cls: "pt-detail-readme-body" });
+		const readmeBody = readmeWrap.createDiv({ cls: "pt-detail-readme-body" });
 		this.readmeBodyEl = readmeBody;
 		void this.loadReadme(readmeBody);
 
 		// ── 相似推荐面板（宽屏右侧栏 / 窄屏底部区块） ──
-		const similarWrap = inner.createEl("div", { cls: "pt-detail-similar pt-detail-similar-rail" });
+		const similarWrap = inner.createDiv({ cls: "pt-detail-similar pt-detail-similar-rail" });
 		this.similarWrapEl = similarWrap;
-		const similarHeader = similarWrap.createEl("div", { cls: "pt-detail-section-head" });
-		similarHeader.createEl("span", { cls: "pt-detail-section-dot" });
-		similarHeader.createEl("span", {
+		const similarHeader = similarWrap.createDiv({ cls: "pt-detail-section-head" });
+		similarHeader.createSpan({ cls: "pt-detail-section-dot" });
+		similarHeader.createSpan({
 			cls: "pt-detail-similar-title",
 			text: this.t("detail.similar"),
 		});
 		if (this._similarPending) {
 			// 计算尚未完成：渲染轻量骨架占位，宿主稍后 setSimilar 回填
-			const sk = similarWrap.createEl("div", { cls: "pt-detail-similar-skeleton" });
-			for (let i = 0; i < 3; i++) sk.createEl("div", { cls: "pt-detail-similar-skeleton-card" });
+			const sk = similarWrap.createDiv({ cls: "pt-detail-similar-skeleton" });
+			for (let i = 0; i < 3; i++) sk.createDiv({ cls: "pt-detail-similar-skeleton-card" });
 		} else {
 			this.renderSimilarPanelInto(similarWrap);
 		}
@@ -619,7 +619,7 @@ export class PluginDetailDrawer {
 		const t = this.t;
 
 		if (this.similar.length === 0) {
-			parent.createEl("div", {
+			parent.createDiv({
 				cls: "pt-detail-similar-empty",
 				text: t("detail.similar.none"),
 			});
@@ -627,24 +627,24 @@ export class PluginDetailDrawer {
 		}
 
 		// 面板级引导语：降低用户信任门槛
-		parent.createEl("div", {
+		parent.createDiv({
 			cls: "pt-detail-similar-hint",
 			text: t("detail.similar.hint"),
 		});
 
 		for (const sim of this.similar) {
-			const card = parent.createEl("div", {
+			const card = parent.createDiv({
 				cls: "pt-detail-similar-card",
 				attr: { tabindex: "0", role: "button", "aria-label": sim.translatedName },
 			});
 
 		// 行1：译名（+ 已安装 tag）
-		const row = card.createEl("div", { cls: "pt-detail-similar-card-row" });
-		row.createEl("span", { cls: "pt-detail-similar-name", text: sim.translatedName });
+		const row = card.createDiv({ cls: "pt-detail-similar-card-row" });
+		row.createSpan({ cls: "pt-detail-similar-name", text: sim.translatedName });
 
 			// 已安装标签（绿色小 tag，紧跟译名后）
 			if (this.installedIds.has(sim.id)) {
-				row.createEl("span", {
+				row.createSpan({
 					cls: "pt-detail-similar-installed-tag",
 					text: t("detail.similar.installed"),
 				});
@@ -652,17 +652,17 @@ export class PluginDetailDrawer {
 
 			// 行2：原名
 			if (sim.translatedName !== sim.name) {
-				card.createEl("div", { cls: "pt-detail-similar-original", text: sim.name });
+				card.createDiv({ cls: "pt-detail-similar-original", text: sim.name });
 			}
 
 			// 行3：推荐理由
 			if (sim.reason) {
-				card.createEl("div", { cls: "pt-detail-similar-reason", text: sim.reason });
+				card.createDiv({ cls: "pt-detail-similar-reason", text: sim.reason });
 			}
 
 			// 行4：下载量
 			if (sim.downloads != null) {
-				const dl = card.createEl("div", { cls: "pt-detail-similar-meta" });
+				const dl = card.createDiv({ cls: "pt-detail-similar-meta" });
 				dl.textContent = `↓ ${formatDownloads(sim.downloads)}`;
 			}
 
@@ -684,7 +684,7 @@ export class PluginDetailDrawer {
 		this.readmeRaw = null;
 		this.readmeTranslated = false;
 		if (!p.repo) {
-			container.createEl("div", {
+			container.createDiv({
 				cls: "pt-detail-readme-empty",
 				text: this.t("detail.readme.noRepo"),
 			});
@@ -695,14 +695,14 @@ export class PluginDetailDrawer {
 			customBase: this.plugin.settings.mirrorCustomBase,
 		});
 		if (!url) {
-			container.createEl("div", {
+			container.createDiv({
 				cls: "pt-detail-readme-empty",
 				text: this.t("detail.readme.noUrl"),
 			});
 			return;
 		}
 
-		const loading = container.createEl("div", {
+		const loading = container.createDiv({
 			cls: "pt-detail-readme-loading",
 			text: this.t("detail.readme.loading"),
 		});
@@ -713,7 +713,7 @@ export class PluginDetailDrawer {
 			const md = resp.text || "";
 			loading.remove();
 			if (!md.trim()) {
-				container.createEl("div", {
+				container.createDiv({
 					cls: "pt-detail-readme-empty",
 					text: this.t("detail.readme.empty"),
 				});
@@ -727,17 +727,17 @@ export class PluginDetailDrawer {
 			if (!this.drawerEl) return; // 已关闭，跳过错误渲染
 			loading.remove();
 			const info = classifyNetworkError(e);
-			const box = container.createEl("div", { cls: "pt-detail-readme-error" });
+			const box = container.createDiv({ cls: "pt-detail-readme-error" });
 			// 被墙/访问受限时明确提示切换镜像源（国内用户最常见场景）
 			const hint = info.suggestMirror
 				? `${this.t("error.title")} README：${info.message}（当前直连 GitHub 受限，可在设置中切换镜像源后重试）`
 				: `${this.t("error.title")} README：${info.message}`;
-			box.createEl("div", {
+			box.createDiv({
 				cls: "pt-detail-readme-empty",
 				text: hint,
 			});
 			// 操作区：重试 +（受限时）跳转设置切换镜像源，避免用户面对错误无路可走
-			const actions = box.createEl("div", { cls: "pt-detail-readme-error-actions" });
+			const actions = box.createDiv({ cls: "pt-detail-readme-error-actions" });
 			const retryBtn = actions.createEl("button", {
 				cls: "pt-detail-btn",
 				text: this.t("error.retry"),

@@ -48,20 +48,20 @@ export function alignFacetLabels(scope: HTMLElement) {
 
 export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInput: HTMLInputElement } {
 	const container = ctx.contentEl;
-		const header = container.createEl("div", { cls: "pt-header" });
+		const header = container.createDiv({ cls: "pt-header" });
 
 		// ── 单行头部：搜索框(flex:1) + 模式下拉 + ⚙折叠 + ↻刷新 ──
 		let facetContainer: HTMLElement | null = null;
-		const headerRow = header.createEl("div", { cls: "pt-header-row" });
+		const headerRow = header.createDiv({ cls: "pt-header-row" });
 
 		// 搜索框容器：组合输入（segmented）——左段=搜索模式选择器，右段=内容输入区，
 		// 二者共享一个外框并以竖分隔线连体，让用户一眼看出「选模式 + 输入内容」而非误认作排序标签。
-		const searchBar = headerRow.createEl("div", { cls: "pt-search" });
+		const searchBar = headerRow.createDiv({ cls: "pt-search" });
 
 	// ── 左段：搜索模式选择器（内嵌于搜索框，替代原孤立的右侧下拉，强化可发现性）──
 	// 用 .pt-mode-wrap 包裹 select + 真实 caret 节点：<select> 在 WebKit 下不渲染
 	// ::after 伪元素（mask SVG 与 "▾" 文字均不显示），箭头必须是真实 DOM 节点。
-	const modeWrap = searchBar.createEl("div", { cls: "pt-mode-wrap" });
+	const modeWrap = searchBar.createDiv({ cls: "pt-mode-wrap" });
 	const modeSelect = modeWrap.createEl("select", { cls: "pt-mode-select pt-search-mode" });
 	modeSelect.setAttribute("aria-label", "搜索模式");
 	modeSelect.setAttribute("title", "切换搜索模式：关键词 / AI 语义");
@@ -72,10 +72,10 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	modeSelect.value = ctx.searchMode;
 	// 真实 DOM 箭头元素（绝不用伪元素，WebKit 不渲染 <select> 伪元素）；
 	// span 不放文本，箭头由 CSS border 画（一致、清晰、可控大小）。
-	modeWrap.createEl("span", { cls: "pt-mode-caret" });
+	modeWrap.createSpan({ cls: "pt-mode-caret" });
 
 		// ── 右段：内容输入区（放大镜 + 输入框 + 清除 + AI 徽章，独立定位上下文）──
-		const searchField = searchBar.createEl("div", { cls: "pt-search-field" });
+		const searchField = searchBar.createDiv({ cls: "pt-search-field" });
 		const searchInput = searchField.createEl("input", {
 			type: "text",
 			placeholder: ctx.t(SEARCH_MODES[0].placeholder),
@@ -92,7 +92,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		
 		// AI 搜索状态徽章（仅语义模式显示）：展示「按 Enter 触发」契约 + 未配置 Key 引导。
 		// 关键词模式隐藏；语义模式下文案直接告知用户需按 Enter，避免「输入即搜」习惯导致以为搜索失效。
-		const aiBadge = searchField.createEl("span", { cls: "pt-ai-badge pt-ai-off" });
+		const aiBadge = searchField.createSpan({ cls: "pt-ai-badge pt-ai-off" });
 		const updateModeBadge = () => {
 			if (!isAIMode(ctx) && !isLocalMode(ctx)) {
 				aiBadge.setCssStyles({ display: "none" });
@@ -206,13 +206,13 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 
 		// ── 结果计数（margin-left:auto 推到右侧，与排序/筛选组成搜索行右侧簇） ──
-		const resultCountText = headerRow.createEl("span", { cls: "pt-result-count" });
+		const resultCountText = headerRow.createSpan({ cls: "pt-result-count" });
 		ctx.resultCountEl = resultCountText;
 		// 挂载后立即按当前 listState 同步可见性（仅 list 态显示）
 		setListState(ctx, ctx.listState);
 
 		// ── 排序按钮（仅图标，点击展开排序菜单） ──
-		const sortWrap = headerRow.createEl("div", { cls: "pt-sort-wrap" });
+		const sortWrap = headerRow.createDiv({ cls: "pt-sort-wrap" });
 
 		// AI 一键翻译（纯图标按钮，置于排序↕与刷新↻之间；无待翻译项时自动隐藏）
 		ctx.aiTranslateBtnEl = headerRow.createEl("button", {
@@ -220,7 +220,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			attr: { "aria-label": ctx.t("action.aiTranslate"), type: "button" },
 		});
 		setIcon(ctx.aiTranslateBtnEl, "sparkles");
-		ctx.aiProgressEl = headerRow.createEl("span", { cls: "pt-ai-progress" });
+		ctx.aiProgressEl = headerRow.createSpan({ cls: "pt-ai-progress" });
 		ctx.aiProgressEl.setCssStyles({ display: "none" });
 		ctx.aiTranslateBtnEl.addEventListener("click", () => {
 			if (ctx.aiTranslateRunning) return;
@@ -268,7 +268,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 		setIcon(sortBtn, "arrow-up-down");
 
-		const sortMenu = sortWrap.createEl("div", { cls: "pt-sort-menu" });
+		const sortMenu = sortWrap.createDiv({ cls: "pt-sort-menu" });
 
 		const sortDefs: [SortBy, string][] = [
 			["relevance", "按相关度"],
@@ -422,24 +422,24 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 
 		// 可折叠高级区：来源 + 统计 + 分类 + 作者 + 安装 统一收进「筛选 ▾」面板（默认收起，点 ▾ 展开）
-		const advanced = header.createEl("div", { cls: "pt-advanced" });
-		const advancedInner = advanced.createEl("div", { cls: "pt-advanced-inner" });
+		const advanced = header.createDiv({ cls: "pt-advanced" });
+		const advancedInner = advanced.createDiv({ cls: "pt-advanced-inner" });
 
 		// 面板内区分标题，让折叠时用户知道里面有什么
-		const advancedHeading = advancedInner.createEl("div", {
+		const advancedHeading = advancedInner.createDiv({
 			cls: "pt-advanced-heading",
 		});
 		// 左：标题 + 统计（贴在一起）；右：重置按钮
-		const titleGroup = advancedHeading.createEl("span", { cls: "pt-advanced-title-group" });
-		titleGroup.createEl("span", { text: "筛选与统计" });
-		titleGroup.createEl("span", { cls: "pt-stat-sep", text: "·" });
-		const stats = titleGroup.createEl("span", { cls: "pt-stats" });
-		stats.createEl("span", { cls: "pt-stat", text: ctx.t("app.loading") + "..." });
+		const titleGroup = advancedHeading.createSpan({ cls: "pt-advanced-title-group" });
+		titleGroup.createSpan({ text: "筛选与统计" });
+		titleGroup.createSpan({ cls: "pt-stat-sep", text: "·" });
+		const stats = titleGroup.createSpan({ cls: "pt-stats" });
+		stats.createSpan({ cls: "pt-stat", text: ctx.t("app.loading") + "..." });
 
 		// ── 来源筛选胶囊（随高级区收起，点「筛选 ▾」展开） ──
-		const sourceRow = advancedInner.createEl("div", { cls: "pt-facet-row" });
-		sourceRow.createEl("span", { cls: "pt-facet-label", text: "翻译" });
-		const sourceFilters = sourceRow.createEl("div", { cls: "pt-source-filters" });
+		const sourceRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+		sourceRow.createSpan({ cls: "pt-facet-label", text: "翻译" });
+		const sourceFilters = sourceRow.createDiv({ cls: "pt-source-filters" });
 		const filterDefs: [string, string][] = [
 			["all", "全部"],
 			["translated", "已翻译"],
@@ -474,23 +474,23 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 	// 用法 B：分类 facet 筛选器（多选分类，支持 AI/关键字模式全局发现维度）
 	// AI/keyword 模式均可见；分类数据可能晚于初始渲染（懒加载），切换模式时按最新 pluginTags 重建 chips。
-	facetContainer = advancedInner.createEl("div", {
+	facetContainer = advancedInner.createDiv({
 		cls: "pt-ai-facets",
 	});
 	facetContainer.setCssStyles({ display: isAIMode(ctx) ? "" : "none" });
 	ctx.facetContainerEl = facetContainer;
 	// 分类行：AI/keyword 模式可见（标签离线预生成覆盖全量，作为全局发现维度）
-	const catRow = facetContainer.createEl("div", { cls: "pt-facet-row" });
+	const catRow = facetContainer.createDiv({ cls: "pt-facet-row" });
 	ctx.catRowEl = catRow;
-	catRow.createEl("span", { cls: "pt-facet-label", text: ctx.t("facet.category") });
-		const catChips = catRow.createEl("div", { cls: "pt-facet-chips" });
+	catRow.createSpan({ cls: "pt-facet-label", text: ctx.t("facet.category") });
+		const catChips = catRow.createDiv({ cls: "pt-facet-chips" });
 		let catExpanded = false;
 		const renderChips = () => {
 			const tagService = ctx.translator.tagService;
 			const categories = tagService ? tagService.getAllCategories() : [];
 			if (categories.length === 0) {
 				catChips.empty();
-				catChips.createEl("span", {
+				catChips.createSpan({
 					cls: "pt-facet-empty-hint",
 					text: ctx.t("facet.noData"),
 				});
@@ -527,19 +527,19 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.refreshFacets = renderChips;
 		// 作者行：多插件作者（作品数≥2）作为快捷筛选；keyword/ai 模式均可见，长尾单插件作者不进 facet。
 		// 卡片作者名钻取与作者 facet 共用 authorFilter 状态。
-		const authorRow = facetContainer.createEl("div", { cls: "pt-facet-row" });
+		const authorRow = facetContainer.createDiv({ cls: "pt-facet-row" });
 		ctx.authorRowEl = authorRow;
-		authorRow.createEl("span", { cls: "pt-facet-label", text: ctx.t("facet.author") });
-		const authorChips = authorRow.createEl("div", { cls: "pt-facet-chips" });
+		authorRow.createSpan({ cls: "pt-facet-label", text: ctx.t("facet.author") });
+		const authorChips = authorRow.createDiv({ cls: "pt-facet-chips" });
 		ctx.authorFacetEl = authorChips;
 		ctx.renderAuthorFacet();
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 
 		// ── 安装筛选（仅显示已安装），收进面板统一筛选入口 ──
-		const installRow = advancedInner.createEl("div", { cls: "pt-facet-row" });
-		installRow.createEl("span", { cls: "pt-facet-label", text: "安装" });
-		const installChips = installRow.createEl("div", { cls: "pt-facet-chips" });
+		const installRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+		installRow.createSpan({ cls: "pt-facet-label", text: "安装" });
+		const installChips = installRow.createDiv({ cls: "pt-facet-chips" });
 		const uninstalledToggle = installChips.createEl("button", {
 			cls: "pt-filter pt-toggle-uninstalled",
 			text: "仅显示已安装",

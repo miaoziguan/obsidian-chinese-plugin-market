@@ -195,8 +195,8 @@ export function buildSelfHostedTranslators(
 		.filter((t) => t.baseUrl && t.baseUrl.trim())
 		.map((t) => {
 			const base = t.baseUrl.trim().replace(/\/+$/, "");
-			if (t.type === "deeplx") return new DeepLXClient(base) as SelfHostedTranslator;
-			return new LibreTranslateClient(base) as SelfHostedTranslator;
+			if (t.type === "deeplx") return new DeepLXClient(base);
+			return new LibreTranslateClient(base);
 		})
 		.sort((a, b) => rank[a.provider] - rank[b.provider]);
 }

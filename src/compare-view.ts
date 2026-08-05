@@ -29,7 +29,7 @@ interface ComponentHolder extends HTMLElement {
 	_ptComp?: Component;
 }
 function getCompHolder(el: HTMLElement): ComponentHolder {
-	return el as ComponentHolder;
+	return el;
 }
 
 export function disposeComparePage(container: HTMLElement) {
@@ -71,13 +71,13 @@ export function renderComparePage(
 	);
 
 	// -- 顶部导航栏 --
-	const nav = container.createEl("div", { cls: "pt-compare-nav" });
+	const nav = container.createDiv({ cls: "pt-compare-nav" });
 	const backBtn = nav.createEl("button", {
 		cls: "pt-compare-back-btn",
 		text: t("compare.nav.back"),
 	});
 	backBtn.addEventListener("click", options.onBack);
-	nav.createEl("span", {
+	nav.createSpan({
 		cls: "pt-compare-nav-title",
 		text: t("compare.title", { n: String(plugins.length) }),
 	});
@@ -88,13 +88,13 @@ export function renderComparePage(
 	addBtn.addEventListener("click", options.onAdd);
 
 	// 导出下拉按钮
-	const exportGroup = nav.createEl("div", { cls: "pt-compare-export" });
+	const exportGroup = nav.createDiv({ cls: "pt-compare-export" });
 	const exportToggle = exportGroup.createEl("button", {
 		cls: "pt-compare-export-toggle",
 		attr: { "aria-label": t("compare.export.md"), "aria-expanded": "false" },
 	});
 	appendSVG(exportToggle, `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`);
-	const exportMenu = exportGroup.createEl("div", { cls: "pt-compare-export-menu" });
+	const exportMenu = exportGroup.createDiv({ cls: "pt-compare-export-menu" });
 	exportMenu.setCssStyles({ display: "none" });
 	const mdItem = exportMenu.createEl("button", {
 		cls: "pt-compare-export-item",
@@ -120,15 +120,15 @@ export function renderComparePage(
 	comp.register(() => document.removeEventListener("click", closeMenu));
 
 	// -- 插件卡片网格 --
-	const grid = container.createEl("div", { cls: "pt-compare-grid" });
+	const grid = container.createDiv({ cls: "pt-compare-grid" });
 
 	for (const vm of vms) {
-		const card = grid.createEl("div", { cls: "pt-compare-card" });
+		const card = grid.createDiv({ cls: "pt-compare-card" });
 
 		// 卡片头部：名称 + 操作
-		const head = card.createEl("div", { cls: "pt-compare-card-head" });
-		head.createEl("span", { cls: "pt-compare-card-name", text: vm.name });
-		const actions = head.createEl("div", { cls: "pt-compare-card-actions" });
+		const head = card.createDiv({ cls: "pt-compare-card-head" });
+		head.createSpan({ cls: "pt-compare-card-name", text: vm.name });
+		const actions = head.createDiv({ cls: "pt-compare-card-actions" });
 		// 仓库链接
 		if (vm.info.repo) {
 			actions.createEl("a", {
@@ -145,7 +145,7 @@ export function renderComparePage(
 		const installed = installedIds.has(vm.id);
 		const enabled = enabledIds.has(vm.id);
 		if (installed) {
-			actions.createEl("span", {
+			actions.createSpan({
 				cls: "pt-compare-card-status pt-compare-card-status--installed",
 				text: enabled ? t("compare.installed.on") : t("compare.installed.off"),
 			});
@@ -165,17 +165,17 @@ export function renderComparePage(
 		removeBtn.addEventListener("click", () => options.onRemove(vm.id));
 
 		// 卡片内容区
-		const body = card.createEl("div", { cls: "pt-compare-card-body" });
+		const body = card.createDiv({ cls: "pt-compare-card-body" });
 
 		// 作者
-		body.createEl("div", { cls: "pt-compare-card-row" }).createEl("span", {
+		body.createDiv({ cls: "pt-compare-card-row" }).createSpan({
 			cls: "pt-compare-card-label",
 			text: `${t("detail.author")}: ${vm.info.author || t("compare.unknown")}`,
 		});
 
 		// 分类
 		if (vm.tag) {
-			body.createEl("div", { cls: "pt-compare-card-row" }).createEl("span", {
+			body.createDiv({ cls: "pt-compare-card-row" }).createSpan({
 				cls: "pt-compare-card-label",
 				text: `${t("compare.category")}: ${vm.tag.category}`,
 			});
@@ -183,7 +183,7 @@ export function renderComparePage(
 
 		// 下载量
 		const dl = vm.info.downloads ?? 0;
-		body.createEl("div", { cls: "pt-compare-card-row" }).createEl("span", {
+		body.createDiv({ cls: "pt-compare-card-row" }).createSpan({
 			cls: "pt-compare-card-label",
 			text: `${t("compare.downloads")}: ${formatDownloads(dl)}`,
 		});
@@ -193,7 +193,7 @@ export function renderComparePage(
 			const date = new Date(vm.info.updated);
 			const daysSince = Math.floor((Date.now() - vm.info.updated) / 86400000);
 			const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-			body.createEl("div", { cls: "pt-compare-card-row" }).createEl("span", {
+			body.createDiv({ cls: "pt-compare-card-row" }).createSpan({
 				cls: "pt-compare-card-label",
 				text: `${t("compare.updated")}: ${dateStr}\uff08${t("compare.daysAgo", { n: String(daysSince) })}\uff09`,
 			});
@@ -201,15 +201,15 @@ export function renderComparePage(
 
 		// 描述
 		if (vm.desc) {
-			body.createEl("div", { cls: "pt-compare-card-desc", text: vm.desc });
+			body.createDiv({ cls: "pt-compare-card-desc", text: vm.desc });
 		}
 
 		// 功能标签
 		const tags = vm.tag?.tags ?? [];
 		if (tags.length > 0) {
-			const tagsRow = body.createEl("div", { cls: "pt-compare-card-tags" });
+			const tagsRow = body.createDiv({ cls: "pt-compare-card-tags" });
 			for (const tag of tags) {
-				tagsRow.createEl("span", { cls: "pt-compare-card-tag", text: tag });
+				tagsRow.createSpan({ cls: "pt-compare-card-tag", text: tag });
 			}
 		}
 	}
@@ -240,17 +240,17 @@ export function renderComparePage(
 	const overlapDup = suggestion ? signals.some(s => s === suggestion) : false;
 
 	if (signals.length > 0 || suggestion) {
-		const insight = container.createEl("div", { cls: "pt-compare-insight" });
-		insight.createEl("div", { cls: "pt-compare-insight-title", text: t("compare.insight.title") });
+		const insight = container.createDiv({ cls: "pt-compare-insight" });
+		insight.createDiv({ cls: "pt-compare-insight-title", text: t("compare.insight.title") });
 
 		for (const sig of signals) {
-			insight.createEl("div", { cls: "pt-compare-insight-signal", text: sig });
+			insight.createDiv({ cls: "pt-compare-insight-signal", text: sig });
 		}
 
 		if (suggestion && !overlapDup) {
-			const sugRow = insight.createEl("div", { cls: "pt-compare-insight-suggest" });
-			sugRow.createEl("span", { cls: "pt-compare-insight-suggest-label", text: t("compare.insight.suggest") });
-			sugRow.createEl("span", { cls: "pt-compare-insight-suggest-text", text: suggestion });
+			const sugRow = insight.createDiv({ cls: "pt-compare-insight-suggest" });
+			sugRow.createSpan({ cls: "pt-compare-insight-suggest-label", text: t("compare.insight.suggest") });
+			sugRow.createSpan({ cls: "pt-compare-insight-suggest-text", text: suggestion });
 		}
 
 		// 更新时间风险提示
@@ -260,7 +260,7 @@ export function renderComparePage(
 		});
 		if (staleVms.length > 0) {
 			const names = staleVms.map(vm => vm.name).join("\u3001");
-			insight.createEl("div", {
+			insight.createDiv({
 				cls: "pt-compare-insight-warn",
 				text: `\u26a0 ${t("compare.warn.stale", { names })}`,
 			});
@@ -355,24 +355,24 @@ function renderAIArea(
 	t: TFunc,
 	comp: Component,
 ) {
-	const sec = container.createEl("div", { cls: "pt-compare-sec pt-compare-ai" });
+	const sec = container.createDiv({ cls: "pt-compare-sec pt-compare-ai" });
 	// 区域标签（弱化 section label，不再用大 h4，避免与按钮文案重复）
-	const label = sec.createEl("div", { cls: "pt-compare-ai-label" });
+	const label = sec.createDiv({ cls: "pt-compare-ai-label" });
 	label.createSpan({ cls: "pt-compare-ai-label-text", text: t("compare.ai.title") });
 	if (!translator.hasAI()) {
 		label.createSpan({ cls: "pt-compare-ai-label-badge", text: t("compare.ai.noKey") });
 	}
 
 	// 主体卡片：说明（左）+ 主按钮（右）横向排布，说明作为模块 intro 不再孤立即
-	const card = sec.createEl("div", { cls: "pt-compare-ai-card" });
-	const intro = card.createEl("div", { cls: "pt-compare-ai-intro" });
-	intro.createEl("div", { cls: "pt-compare-ai-intro-text", text: t("compare.ai.hint") });
+	const card = sec.createDiv({ cls: "pt-compare-ai-card" });
+	const intro = card.createDiv({ cls: "pt-compare-ai-intro" });
+	intro.createDiv({ cls: "pt-compare-ai-intro-text", text: t("compare.ai.hint") });
 
 	const btn = card.createEl("button", {
 		cls: "pt-compare-ai-btn",
 		text: t("compare.ai.start"),
 	});
-	const out = sec.createEl("div", { cls: "pt-compare-ai-out" });
+	const out = sec.createDiv({ cls: "pt-compare-ai-out" });
 
 	if (!translator.hasAI()) {
 		btn.disabled = true;
@@ -397,8 +397,8 @@ function renderAIArea(
 
 		btn.disabled = true;
 		out.empty();
-		const loadingText = out.createEl("div", { cls: "pt-compare-ai-loading-row" });
-		loadingText.createEl("span", { text: t("compare.ai.loading") });
+		const loadingText = out.createDiv({ cls: "pt-compare-ai-loading-row" });
+		loadingText.createSpan({ text: t("compare.ai.loading") });
 		const cancelBtn = loadingText.createEl("button", {
 			cls: "pt-compare-ai-cancel",
 			text: t("compare.ai.cancel"),
@@ -439,7 +439,7 @@ function renderAIArea(
 			if (signal.aborted) {
 				// 用户取消：恢复按钮状态，显示取消提示
 				out.empty();
-				out.createEl("div", { cls: "pt-compare-ai-cancelled", text: t("compare.ai.cancelled") });
+				out.createDiv({ cls: "pt-compare-ai-cancelled", text: t("compare.ai.cancelled") });
 				btn.textContent = t("compare.ai.retry");
 				loading = false;
 				return;
@@ -454,8 +454,8 @@ function renderAIArea(
 			if (signal.aborted) return;
 			lastError = (e as Error).message || "";
 			out.empty();
-			const errorBox = out.createEl("div", { cls: "pt-compare-ai-error" });
-			errorBox.createEl("div", { cls: "pt-compare-ai-error-text", text: `${t("compare.ai.fail")}：${lastError}` });
+			const errorBox = out.createDiv({ cls: "pt-compare-ai-error" });
+			errorBox.createDiv({ cls: "pt-compare-ai-error-text", text: `${t("compare.ai.fail")}：${lastError}` });
 			const retryBtn = errorBox.createEl("button", {
 				cls: "pt-compare-ai-retry",
 				text: t("compare.ai.retry"),
@@ -559,15 +559,15 @@ function enrichCommandsSignal(
 		}
 		if (!signalText) return;
 
-		const block = container.createEl("div", { cls: "pt-compare-commands-signal" });
-		block.createEl("div", { cls: "pt-compare-insight-signal", text: signalText });
+		const block = container.createDiv({ cls: "pt-compare-commands-signal" });
+		block.createDiv({ cls: "pt-compare-insight-signal", text: signalText });
 		// 展开命令明细（可折叠，默认收起）
 		const detail = block.createEl("details", { cls: "pt-compare-commands-detail" });
 		detail.createEl("summary", { text: t("compare.commands.detail") });
 		vms.forEach((vm, i) => {
-			const row = detail.createEl("div", { cls: "pt-compare-commands-row" });
-			row.createEl("span", { cls: "pt-compare-commands-name", text: vm.name });
-			row.createEl("span", {
+			const row = detail.createDiv({ cls: "pt-compare-commands-row" });
+			row.createSpan({ cls: "pt-compare-commands-name", text: vm.name });
+			row.createSpan({
 				cls: "pt-compare-commands-list",
 				text: commandsPer[i].join("、") || t("compare.commands.none"),
 			});

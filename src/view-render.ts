@@ -343,15 +343,15 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 			// AI 搜索进行中：显示醒目加载提示（P2-4：提升空态可见性）
 			if (ctx.aiSearchPending) {
 				layer.empty();
-				const loading = layer.createEl("div", { cls: "pt-empty pt-ai-loading-state" });
-				loading.createEl("div", { cls: "pt-empty-icon" });
-				loading.createEl("div", { cls: "pt-empty-title", text: ctx.t("notice.ai.analyzing") });
-				loading.createEl("div", { cls: "pt-empty-hint", text: ctx.t("notice.ai.analyzing.hint") });
+				const loading = layer.createDiv({ cls: "pt-empty pt-ai-loading-state" });
+				loading.createDiv({ cls: "pt-empty-icon" });
+				loading.createDiv({ cls: "pt-empty-title", text: ctx.t("notice.ai.analyzing") });
+				loading.createDiv({ cls: "pt-empty-hint", text: ctx.t("notice.ai.analyzing.hint") });
 				return;
 			}
 			layer.empty();
-			const empty = layer.createEl("div", { cls: "pt-empty" });
-			empty.createEl("div", { cls: "pt-empty-icon" });
+			const empty = layer.createDiv({ cls: "pt-empty" });
+			empty.createDiv({ cls: "pt-empty-icon" });
 			const hasQuery = !!ctx.searchQuery;
 			// 空态文案与「清除筛选」按钮可见性委托给 filter.ts 的纯函数（含 bug #3 回归锁死）
 			const emptyState = resolveEmptyState({
@@ -363,8 +363,8 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 				hasAIKey: ctx.settings.aiSearchEnabled && !!ctx.settings.aiSearchApiKey,
 				_query: ctx.searchQuery,
 			});
-			empty.createEl("div", { cls: "pt-empty-title", text: ctx.t(emptyState.titleKey) });
-			empty.createEl("div", { cls: "pt-empty-hint", text: ctx.t(emptyState.hintKey) });
+			empty.createDiv({ cls: "pt-empty-title", text: ctx.t(emptyState.titleKey) });
+			empty.createDiv({ cls: "pt-empty-hint", text: ctx.t(emptyState.hintKey) });
 			// UX: 空状态提供「清除筛选」快捷恢复按钮
 			if (emptyState.showClearAction) {
 				const clearAction = empty.createEl("button", {
