@@ -14,7 +14,7 @@ import { PluginStorage } from "./plugin-storage";
 import { makeT } from "./i18n";
 import { setScrollDebug } from "./view-render";
 import { TranslatorSettingTab } from "./settings-tab";
-import { debounce } from "./utils";
+import { debounce, mapWithConcurrency } from "./utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "./embedding";
 import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS } from "./translator-view";
 import { VIEW_TYPE } from "./constants";
@@ -602,12 +602,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	private async flushTMVault(): Promise<void> {
 		// 写成功才从脏标记清除：若 vault 写入因锁定/卸载竞态失败，标记保留到下次 flush 重试，
 		// 避免「脏标记已清空但笔记未落盘」导致的人工校正/flagged 标记静默丢失（T2/#2）。
+		// 并发批量写盘（BATCH=20）：晋升/校正大批量时提速数倍；writeTMNote 的 createFolder
+		// 已有并发竞态容错（translation-memory.ts 注释），worker 内独立 try/catch 保证单条失败不中断池。
 		const dirty = this.translator.peekTMDirty();
-		for (const id of dirty) {
+		await mapWithConcurrency(dirty, 20, async (id) => {
 			const e = this.translator.tmApproved[id];
 			if (!e) {
 				this.translator.clearTMDirty(id);
-				continue;
+				return;
 			}
 			try {
 				await writeTMNote(this.app, e);
@@ -615,16 +617,16 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			} catch (err: unknown) {
 				logger.warn("[Chinese Plugin Market] 写入 TM 笔记失败，已保留待重试：", id, err);
 			}
-		}
+		});
 		const removed = this.translator.peekTMRemoved();
-		for (const id of removed) {
+		await mapWithConcurrency(removed, 20, async (id) => {
 			try {
 				await removeTMNote(this.app, id);
 				this.translator.clearTMRemoved(id);
 			} catch (err: unknown) {
 				logger.warn("[Chinese Plugin Market] 删除 TM 笔记失败，已保留待重试：", id, err);
 			}
-		}
+		});
 	}
 
 	/**

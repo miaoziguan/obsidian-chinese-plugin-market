@@ -795,8 +795,9 @@ export class Translator {
 	}
 
 	if (needOnline.length > 0) {
-			// 并发=3：平衡速度与 API 限流（MyMemory 免费层建议 ≤5 QPS）
-			const CONCURRENCY = 3;
+			// 并发=2：每插件发 name+desc 2 请求，2 并发=4 QPS，贴合 MyMemory 免费层建议（≤5 QPS）
+			// （3 并发=6 QPS 已超标，易触发 429/熔断 → 批量翻译被配额打断）
+			const CONCURRENCY = 2;
 			let idx = 0;
 			const translateOne = async (): Promise<void> => {
 				while (idx < needOnline.length) {
