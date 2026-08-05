@@ -258,6 +258,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 				ctx.contentEl.querySelectorAll(".pt-source-filters .pt-filter").forEach((el) => {
 					el.setAttribute("aria-pressed", (el as HTMLElement).dataset.value === "all" ? "true" : "false");
 				});
+				ctx.updateFacetVisibility();
 				ctx.renderPluginList();
 			},
 		});
@@ -273,6 +274,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 					t.setAttribute("aria-pressed", "false");
 					t.textContent = "仅显示已安装";
 				}
+				ctx.updateFacetVisibility();
 				ctx.renderPluginList();
 			},
 		});
@@ -286,6 +288,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 				if (idx >= 0) ctx.selectedCategories.splice(idx, 1);
 				const chip = q(ctx.contentEl, `.pt-facet-chip[data-cat="${CSS.escape(cat)}"]`);
 				if (chip) chip.setAttribute("aria-pressed", "false");
+				ctx.updateFacetVisibility();
 				ctx.renderPluginList(true);
 			},
 		});
