@@ -1,0 +1,31 @@
+node_modules/
+*.log
+.DS_Store
+
+# 翻译批处理中间产物（可选保留，默认忽略）
+_batches/
+_merge.ts
+
+# 本地 embedding 模型权重缓存
+models/
+*.onnx
+
+# CI 构建产物
+scripts/check-dict-delta.mjs
+dict-delta-report.json
+
+# 生产构建生成的 sourcemap（仅本地排查用，Obsidian 不加载，不纳入分发）
+main.js.map
+
+# IDE/调试临时产物
+.playwright-repro/
+.trae-html-share-packages/
+.trae-tmp-*
+compare-screenshot.png
+
+# Playwright E2E 产物（*.bundle.js 由 scripts/build-e2e.mjs 生成）
+test/e2e/bundle.js
+test/e2e/*.bundle.js
+test-results/
+playwright-report/
+playwright/.cache/

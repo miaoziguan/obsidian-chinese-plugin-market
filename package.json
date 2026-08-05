@@ -1,0 +1,35 @@
+{
+	"name": "chinese-plugin-market",
+	"version": "1.9.4",
+	"description": "中文区 Obsidian 社区插件搜索：输入关键词即可检索并展示翻译后的插件卡片，支持 AI 语义 / 名称 / 作者搜索。默认不加载列表，搜索时才出结果。",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "vitest run",
+		"build:e2e": "node scripts/build-e2e.mjs",
+		"test:e2e": "node scripts/build-e2e.mjs && npx playwright test",
+		"sync": "./sync.sh",
+		"gen-tags": "esbuild scripts/gen-tags.ts --bundle --platform=node --format=esm --outfile=scripts/gen-tags.mjs && node scripts/gen-tags.mjs",
+		"check-dict": "esbuild scripts/check-dict-delta.ts --bundle --platform=node --format=esm --outfile=scripts/check-dict-delta.mjs && node scripts/check-dict-delta.mjs"
+	},
+	"keywords": [],
+	"author": "羽鳞君",
+	"license": "MIT",
+	"devDependencies": {
+		"@playwright/test": "^1.61.1",
+		"@types/node": "^20.11.0",
+		"esbuild": "^0.20.0",
+		"jsdom": "^24.1.3",
+		"obsidian": "^1.4.11",
+		"playwright": "^1.61.1",
+		"tslib": "^2.6.2",
+		"typescript": "^5.3.3",
+		"vitest": "^1.6.1"
+	},
+	"dependencies": {
+		"@huggingface/transformers": "^4.2.0",
+		"@types/sql.js": "^1.4.11",
+		"sql.js": "^1.14.1"
+	}
+}

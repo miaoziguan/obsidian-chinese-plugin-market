@@ -1,0 +1,885 @@
+/**
+ * 数据获取与状态。
+ *
+ * 拉取社区插件列表、stats 合并、分页/增量加载与视图级缓存状态管理。
+ */
+
+import { Notice, requestUrl } from "obsidian";
+import { cleanChineseSpaces, isListStale, computePluginDelta } from "./utils";
+import { type PluginInfo, type TranslateResult } from "./translator";
+import { resolveUrl, classifyNetworkError, buildMirrorOrder, type MirrorConfig } from "./mirror";
+import { fetchPluginStats, PLUGIN_STATS_URL } from "./stats";
+import { formatRelativeTime, type I18nKey } from "./i18n";
+import { computeCoverage } from "./dictionary";
+import { createStrong, q } from "./dom";
+import { buildSearchBlob } from "./filter";
+import { renderFacetChips } from "./facetChips";
+import { groupAuthorsByName } from "./pinyin-init";
+import { setListState } from "./list-state";
+import { isAIMode } from "./search-mode";
+import type { ViewContext } from "./view-context";
+import { LAYOUT, PLUGINS_URL } from "./constants";
+import { asAppInternals } from "./obsidian-internals";
+
+// 插件 id → PluginInfo 查表缓存：消除 refreshCardTranslation 内 ctx.plugins.find 的 O(n) 线性扫描
+// （翻译 5617 张卡时，每次 find 都扫全表 → O(n²) ≈ 3200 万次扫描）。
+// 挂在 ctx（per-view）上，以 pluginsRev（数据被替换/合并时自增的版本号）为失效键，
+// 避免依赖数组引用身份——原地 sort/splice 不替换引用会导致引用判断失效、缓存陈旧。
+function getPluginMap(ctx: ViewContext): Map<string, PluginInfo> {
+	if (ctx.pluginMapSrc !== ctx.pluginsRev || !ctx.pluginMap) {
+		ctx.pluginMap = new Map(ctx.plugins.map((p) => [p.id, p]));
+		ctx.pluginMapSrc = ctx.pluginsRev;
+	}
+	return ctx.pluginMap;
+}
+
+/**
+ * 卸载时清理当前视图的插件查表缓存（含 5617 条映射，per-view）。
+ * 该缓存以 ctx.plugins 引用为键，视图销毁后若不清会滞留大对象，
+ * 下次打开新视图设置 ctx.plugins 时会自动重建。
+ */
+export function disposeViewDataCache(ctx: ViewContext): void {
+	ctx.pluginMap = null;
+	ctx.pluginMapSrc = null;
+}
+
+export function applySearchInput(ctx: ViewContext) {
+
+		const input = ctx.contentEl.querySelector(
+			".pt-search-input"
+		) as HTMLInputElement | null;
+		if (!input) return;
+		// 同步清除按钮可见性（与即时 input 事件一致）
+		const clearBtn = ctx.contentEl.querySelector(
+			".pt-search-clear"
+		) as HTMLElement | null;
+		if (clearBtn) {
+			clearBtn.style.display = input.value.length > 0 ? "" : "none";
+		}
+		const value = input.value.trim().toLowerCase();
+		ctx.searchQuery = value;
+		if (!value) {
+			ctx.aiSearchResult = null;
+			ctx.aiSearchQueryCache = "";
+			// 空查询 → 回到全量列表
+			ctx.renderPluginList();
+			return;
+		}
+		if (!isAIMode(ctx)) {
+			ctx.aiSearchResult = null;
+			ctx.aiSearchQueryCache = "";
+		} else {
+			// AI 语义模式：输入过程中保留上一次检索结果（不再每次按键清空列表），
+			// 仅提示「按 Enter 重新检索」，使两种模式的输入体验不再割裂。
+			ctx.showAIPendingHint();
+			return;
+		}
+		void ctx.ensureDataLoaded().then((ok) => {
+			if (ok) ctx.scheduleRender();
+		}).catch((e) => console.warn("[Chinese Plugin Market] 搜索时数据加载失败：", e));
+	
+}
+
+/** 根据 plugin.tmProgress 刷新加载提示文案，展示 TM 回灌实时进度。 */
+function updateTMProgressHint(ctx: ViewContext, hint: HTMLElement | null) {
+	if (!hint) return;
+	const p = ctx.plugin.tmProgress;
+	if (!p) {
+		hint.textContent = ctx.t("loading.translating");
+		return;
+	}
+	if (p.phase === "done") {
+		hint.textContent = ctx.t("loading.tm.done", { total: String(p.total) });
+		return;
+	}
+	if (p.phase === "resolving") {
+		hint.textContent = ctx.t("loading.tm.resolving");
+		return;
+	}
+	hint.textContent = ctx.t(`loading.tm.${p.phase}` as I18nKey, {
+		current: String(p.current),
+		total: String(p.total),
+	});
+}
+
+export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
+
+		if (ctx.dataLoaded) {
+			// 会话内 TTL 自动失效：列表快照超期则静默重拉（不清空已渲染结果，避免闪烁）。
+			// 用户每次搜索都能逐步看到新上架插件，无需重启 Obsidian。
+			if (isListStale(ctx.lastListFetchAt, Date.now(), LAYOUT.LIST_TTL_MS)) {
+				ctx.dataLoaded = false;
+			} else {
+				return true;
+			}
+		}
+		if (ctx.dataLoading) {
+			// 正在加载中：等待其完成（轮询标志）
+			await new Promise<void>((resolve) => {
+				const tick = () => {
+					if (ctx.dataLoaded || !ctx.dataLoading) resolve();
+					else window.setTimeout(tick, 60);
+				};
+				tick();
+			});
+			return ctx.dataLoaded;
+		}
+
+		ctx.dataLoading = true;
+		const stats = q(ctx.containerEl, ".pt-stats");
+		if (stats) {
+			stats.style.display = "";
+			stats.empty();
+			stats.createEl("span", { cls: "pt-stat", text: ctx.t("app.loading") + "..." });
+		}
+		// 用户体验：首搜拉取 1 万条 + 逐条翻译可能耗时数秒，
+		// 必须把进度直接渲染到列表区（不要藏在折叠的统计区），否则用户以为卡死。
+		ctx.showLoadingState(ctx.t("stats.fetching"));
+		// UX: 分阶段进度文案，减少等待焦虑
+		const progressHint = ctx.scrollCardLayer
+			? q(ctx.scrollCardLayer, ".pt-empty-hint")
+			: null;
+		try {
+			// 首屏默认走 jsDelivr，但仍可能因网络/版本受限失败。
+			// 失败时按优先级自动探测其它镜像（jsDelivr→ghproxy→github），命中即用。
+			let data = await ctx.fetchPluginsWithFallback();
+			// 拉取成功后缓存到本地（离线重启时秒开，不受网络影响）
+			// 性能：写独立文件而非内嵌 data.json（1.6MB 大对象曾拖慢每一次防抖保存）
+		void ctx.savePluginListCache(data);
+		ctx.plugins = data;
+		ctx.buildAuthorFacet();
+		// 拉取成功：更新列表拉取时间戳（用于 TTL 判断）。
+		// plugin 级字段在 translator-view 的 ensureDataLoaded 落盘钩子里回写，
+		// 这里只更新 ctx 内存值；避免直接依赖 plugin 完整形状（DrawerHostPlugin 最小端口）。
+		ctx.lastListFetchAt = Date.now();
+	
+			ctx.applyAIConfig();
+			// UX: 拉取完成，进入翻译阶段
+			if (progressHint) progressHint.textContent = ctx.t("loading.translating");
+			// 等待 vault 翻译记忆回灌完成（scanVaultTM→tmApproved），
+			// 否则下面的 computeCoverage / mergeOffline 会在 tmApproved 为空时兜底，
+			// 命中不到已采纳译名（表现为「卡片没加载库里的翻译数据」）。
+			// 同时实时轮询 tmProgress 刷新加载提示（即使回灌在视图打开前已完成，
+			// 也保留一段最小可见时长，让用户看到数据处理动态而非一闪而过）。
+			// 200ms 足够让人眼感知「在处理」，又不会让实际已完成的回灌空等多余时间。
+			const minVisibleUntil = Date.now() + 200;
+			const tmProgressTimer = window.setInterval(() => {
+				updateTMProgressHint(ctx, progressHint);
+			}, 100);
+			try {
+				// 安全阀：即便 tmApprovedReady 因底层 IO 卡死未 resolve，也最多等 15s，
+				// 超时即降级继续（无 vault 译名兜底），杜绝首屏永久停留在加载页。
+				await Promise.race([
+					ctx.plugin.tmApprovedReady,
+					new Promise<void>((r) => window.setTimeout(r, 15_000)),
+				]);
+				const waitMore = minVisibleUntil - Date.now();
+				if (waitMore > 0) await new Promise((r) => window.setTimeout(r, waitMore));
+			} finally {
+				window.clearInterval(tmProgressTimer);
+			}
+			if (progressHint) progressHint.textContent = ctx.t("loading.translating");
+			// 计算并记录覆盖率快照（趋势追踪：跨版本对比）。
+			// 已采纳译名（tmApproved，含原批量词典沉淀的 vault 笔记）作为开箱即用覆盖统计来源。
+			const td = ctx.translator.getData();
+			const covStat = computeCoverage(new Set(data.map((p) => p.id)), ctx.translator.tmApproved, td.cache);
+			ctx.translator.recordCoverage(covStat, ctx.manifest.version);
+			await ctx.saveTranslatorData();
+
+			// 同步合并已缓存的 stats（首屏不空白）并快照已安装状态
+			ctx.mergeStatsFromCache();
+			ctx.snapshotInstalled();
+
+			// 懒翻译（产品改进 #9）：首搜只【同步合并离线命中】立即出结果（毫秒级），
+			// 未命中项先给原文兜底渲染，真正的在线翻译推迟到「当前结果集可见时」按需进行。
+			const { results: offline } = ctx.translator.mergeOffline(data);
+			ctx.translatedResults = offline;
+			// 离线命中（bulk/user）已写入 cache，落盘一次供下次秒开
+			await ctx.saveTranslatorData();
+
+		// 新增插件翻译增量感知：本地 diff「本次新冒出的插件」并提示（产品改进 #16）
+		ctx.reportNewPluginDelta(data, ctx.translatedResults);
+		// 把刚更新的「已见插件」集合落盘，跨会话重启后增量提示仍准确
+		await ctx.saveTranslatorData();
+
+		if (stats) {
+			stats.empty();
+			const s1 = stats.createEl("span", { cls: "pt-stat" });
+			s1.append(ctx.t("stats.plugins") + " ", createStrong(String(data.length)));
+			if (td.cache && Object.keys(td.cache).length > 0) {
+				const s2 = stats.createEl("span", { cls: "pt-stat" });
+				s2.append(ctx.t("stats.cache") + " ", createStrong(
+					String(Object.keys(td.cache).length)
+				));
+			}
+		}
+
+			ctx.dataLoaded = true;
+			// 记录本次成功拉取时间，供 TTL 自动失效判断（保证看到新上架插件）
+			ctx.lastListFetchAt = Date.now();
+			// A+B 预建：若用户已选「本地 embedding」且尚未建索引，数据就绪后后台自动预建一次
+			// （仅对显式选了本地语义的用户生效，避免给默认 keyword/AI 用户强塞 110MB 模型）
+			if (ctx.settings.embeddingSource === "local") {
+				void ctx.buildLocalIndex(false).catch(() => {});
+				// 预热本地模型：即使索引已从 SQLite 加载（buildLocalIndex 幂等跳过），
+				// 也提前加载模型，让首次搜索免冷启动
+				ctx.warmupLocalEmbedding();
+			}
+			ctx.updateRefreshTooltip();
+			// 预计算搜索索引（小写 blob），供后续过滤复用
+			ctx.buildSearchIndex();
+		// 数据已就绪：重渲染作者 facet 并按当前模式刷新显隐
+		ctx.renderAuthorFacet();
+		ctx.updateFacetVisibility();
+
+		// 数据已就绪，立即渲染列表（含官方推荐 featured 区），不依赖后续 stats 网络请求
+		ctx.scheduleRender();
+
+		// 异步非阻塞刷新最新 stats（失败记录日志，不阻断主列表；回来再 render 一次合并）
+		void ctx.fetchStatsAndMerge()
+			.then(() => ctx.scheduleRender())
+			.catch((e2) => console.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e2));
+
+		return true;
+		} catch (e) {
+			// 网络失败时尝试从本地缓存恢复（离线应急，不阻断使用）
+			const cachedData = await ctx.tryLoadCachedPluginList();
+			if (cachedData && cachedData.length > 0) {
+				ctx.plugins = cachedData;
+				ctx.buildAuthorFacet();
+			ctx.applyAIConfig();
+			if (progressHint) progressHint.textContent = "（使用本地缓存）";
+			console.warn("[Chinese Plugin Market] 网络不可用，已从本地缓存恢复插件列表（%d 个）。", cachedData.length);
+			// 等待 vault 翻译记忆回灌完成（同在线路径，避免 tmApproved 为空时兜底）
+			const minVisibleUntilOffline = Date.now() + 200;
+			const tmProgressTimerOffline = window.setInterval(() => {
+				updateTMProgressHint(ctx, progressHint);
+			}, 100);
+			try {
+				await ctx.plugin.tmApprovedReady;
+				const waitMoreOffline = minVisibleUntilOffline - Date.now();
+				if (waitMoreOffline > 0) await new Promise((r) => window.setTimeout(r, waitMoreOffline));
+			} finally {
+				window.clearInterval(tmProgressTimerOffline);
+			}
+			if (progressHint) progressHint.textContent = "（使用本地缓存）";
+		const td = ctx.translator.getData();
+			const covStat = computeCoverage(new Set(cachedData.map((p: PluginInfo) => p.id)), ctx.translator.tmApproved, td.cache);
+				ctx.translator.recordCoverage(covStat, ctx.manifest.version);
+				await ctx.saveTranslatorData();
+				ctx.mergeStatsFromCache();
+				ctx.snapshotInstalled();
+				const { results: offline } = ctx.translator.mergeOffline(cachedData);
+				ctx.translatedResults = offline;
+				await ctx.saveTranslatorData();
+				ctx.reportNewPluginDelta(cachedData, ctx.translatedResults);
+				await ctx.saveTranslatorData();
+			ctx.dataLoaded = true;
+			ctx.buildSearchIndex();
+			ctx.renderAuthorFacet();
+			ctx.updateFacetVisibility();
+			// 立即渲染（不依赖 stats 网络请求）
+			ctx.scheduleRender();
+			void ctx.fetchStatsAndMerge()
+				.then(() => ctx.scheduleRender())
+				.catch((e2) => console.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e2));
+			return true;
+			}
+
+			// 无缓存可用 → 显示错误
+			if (ctx.scrollCardLayer) {
+				ctx.scrollCardLayer.empty();
+				setListState(ctx, "error");
+				const err = ctx.scrollCardLayer.createEl("div", { cls: "pt-error" });
+				err.createEl("div", { cls: "pt-empty-title", text: ctx.t("error.title") });
+				const info = classifyNetworkError(e);
+				err.createEl("div", {
+					cls: "pt-empty-hint",
+					text: `${ctx.t("error.fetch")}${info.message}`,
+				});
+				// 提供明确的可恢复入口：重试按钮 + 回搜索引导
+				const actions = err.createEl("div", { cls: "pt-error-actions" });
+				const retryBtn = actions.createEl("button", {
+					cls: "pt-guide-chip pt-error-retry",
+					text: ctx.t("error.retry"),
+				});
+				retryBtn.addEventListener("click", () => {
+					// 重置加载锁，复用当前搜索词重新发起
+					ctx.dataLoaded = false;
+					ctx.dataLoading = false;
+					void ctx.ensureDataLoaded().then((ok) => {
+						if (ok) ctx.scheduleRender();
+					}).catch((e) => console.warn("[Chinese Plugin Market] 重试数据加载失败：", e));
+				});
+				// 被墙/访问受限场景：一键切镜像后重试
+				if (info.suggestMirror) {
+					const mirrorBtn = actions.createEl("button", {
+						cls: "pt-guide-chip pt-error-mirror",
+						text: ctx.t("error.mirror"),
+					});
+					mirrorBtn.addEventListener("click", async () => {
+						const cur = ctx.settings.mirrorSource;
+						ctx.settings.mirrorSource =
+							cur === "github" ? "jsdelivr" : "github";
+						await ctx.flushSaveSettings();
+						new Notice(
+							`${ctx.t("notice.mirror.switched")} ${ctx.settings.mirrorSource === "jsdelivr" ? ctx.t("settings.mirror.jsdelivr") : ctx.t("settings.mirror.github")}${ctx.t("notice.mirror.retry")}`
+						);
+						ctx.dataLoaded = false;
+						ctx.dataLoading = false;
+						void ctx.ensureDataLoaded().then((ok) => {
+							if (ok) ctx.scheduleRender();
+						}).catch((e) => console.warn("[Chinese Plugin Market] 切镜像后数据加载失败：", e));
+					});
+				}
+				const guideBtn = actions.createEl("button", {
+					cls: "pt-guide-chip pt-error-guide",
+					text: ctx.t("error.guide"),
+				});
+				guideBtn.addEventListener("click", () => {
+					ctx.dataLoaded = false;
+					ctx.dataLoading = false;
+					// Bug fix: 加载失败后 dataLoaded=false 且 plugins 为空，renderPluginList 会提前 return
+					// 导致点击无反应；改为直接渲染搜索引导（含示例词，点击可重试加载）。
+					ctx.showSearchGuide();
+				});
+			}
+			return false;
+		} finally {
+			ctx.dataLoading = false;
+		}
+	
+}
+
+export async function fetchPluginsWithFallback(ctx: ViewContext) : Promise<PluginInfo[]> {
+		const order = buildMirrorOrder(ctx.settings.mirrorSource);
+		let lastErr: unknown;
+		for (const src of order) {
+			try {
+				const url = resolveUrl(PLUGINS_URL, {
+					source: src,
+					customBase: ctx.settings.mirrorCustomBase,
+				});
+				const response = await Promise.race([
+					requestUrl({ url, method: "GET" }),
+					new Promise<never>((_, reject) =>
+						setTimeout(() => reject(new Error("timeout")), 4000)
+					),
+				]) as { json: unknown };
+				// 探测命中：若与用户设置不同，静默同步设置，下次直接命中
+				if (src !== ctx.settings.mirrorSource) {
+					ctx.settings.mirrorSource = src;
+					void ctx.saveSettings();
+					new Notice(ctx.t("notice.mirror.auto") + ctx.t(`settings.mirror.${src}`));
+				}
+				const arr = response.json as PluginInfo[];
+			// 注入清单数组下标：官方把新插件追加到尾部，下标越大越新；
+			// 「最新发布」排序据此倒序（与官方「New」标签一致）。
+			return arr.map((p, i) => ({ ...p, listIndex: i }));
+			} catch (e) {
+				const info = classifyNetworkError(e);
+				// 仅网络/访问受限类错误才继续探测，解析等错误直接抛出
+				if (!info.suggestMirror && info.kind !== "timeout" && info.kind !== "dns") {
+					throw e;
+				}
+				lastErr = e;
+			}
+		}
+		throw lastErr;
+	
+}
+
+export async function refreshData(ctx: ViewContext) : Promise<void> {
+
+		// Bug fix: 初始加载（ensureDataLoaded）未完成时点刷新会并发两个拉取，
+		// 二者都写 ctx.plugins/translatedResults 造成竞态，这里直接忽略。
+		if (!ctx.refreshBtn || ctx.refreshBtn.disabled || ctx.dataLoading) return;
+		ctx.refreshBtn.disabled = true;
+		ctx.refreshBtn.addClass("pt-refreshing");
+		try {
+			// 手动刷新同样走镜像容错探测，避免用户手动刷新时卡死在某镜像
+			const data = await ctx.fetchPluginsWithFallback();
+			ctx.plugins = data;
+			ctx.buildAuthorFacet();
+	
+			ctx.applyAIConfig();
+			const td = ctx.translator.getData();
+			const covStat = computeCoverage(
+				new Set(data.map((p) => p.id)),
+				ctx.translator.tmApproved,
+				td.cache
+			);
+			ctx.translator.recordCoverage(covStat, ctx.manifest.version);
+			await ctx.saveTranslatorData();
+
+			ctx.mergeStatsFromCache();
+			ctx.snapshotInstalled();
+			const { results: offline } = ctx.translator.mergeOffline(data);
+			ctx.translatedResults = offline;
+			await ctx.saveTranslatorData();
+
+			// 新增插件翻译增量感知：本地 diff「本次新冒出的插件」并提示（产品改进 #16）
+		ctx.reportNewPluginDelta(data, ctx.translatedResults);
+		// 把刚更新的「已见插件」集合落盘，跨会话重启后增量提示仍准确
+		await ctx.saveTranslatorData();
+
+		ctx.dataLoaded = true;
+			ctx.lastListFetchAt = Date.now();
+			ctx.updateRefreshTooltip();
+			ctx.buildSearchIndex();
+			// 数据已就绪：重渲染作者 facet 并按当前模式刷新显隐
+			ctx.renderAuthorFacet();
+			ctx.updateFacetVisibility();
+
+			// 异步刷新最新 stats（下载量/更新时间），失败记录日志
+			void ctx.fetchStatsAndMerge()
+				.then(() => ctx.scheduleRender())
+				.catch((e) => console.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e));
+
+			ctx.scheduleRender();
+			new Notice(ctx.t("action.refresh.done"));
+		} catch (e) {
+			const info = classifyNetworkError(e);
+			new Notice(`${ctx.t("action.refresh")}：${info.message}`);
+			// 失败：保留当前已加载数据，仅复位锁以便下次重试
+			ctx.dataLoaded = ctx.plugins.length > 0;
+		} finally {
+			if (ctx.refreshBtn) {
+				ctx.refreshBtn.disabled = false;
+				ctx.refreshBtn.removeClass("pt-refreshing");
+			}
+		}
+	
+}
+
+export function updateRefreshTooltip(ctx: ViewContext) {
+
+		if (!ctx.refreshBtn) return;
+		const base = ctx.t("action.refresh");
+		if (!ctx.lastListFetchAt) {
+			ctx.refreshBtn.setAttribute("title", base);
+			return;
+		}
+		ctx.refreshBtn.setAttribute(
+			"title",
+			`${base} · ${ctx.t("stats.updatedAt")} ${ctx.relativeTime(ctx.lastListFetchAt)}`
+		);
+	
+}
+
+export function relativeTime(ctx: ViewContext, ts: number) : string {
+
+		return formatRelativeTime(ts, Date.now(), ctx.t);
+	
+}
+
+export function reportNewPluginDelta(ctx: ViewContext, current: PluginInfo[], results: Record<string, TranslateResult>) {
+
+		const currentIds = new Set(current.map((p) => p.id));
+		// 集合 diff 委托给 utils.ts 的纯函数（Notice 文案拼装与 seen 集合更新留在本方法）
+		const delta = computePluginDelta(
+			currentIds,
+			ctx.seenPluginIds,
+			(id) => results[id]?.source ?? "original"
+		);
+		// 更新 seen 集合为本轮全集（差量已提取，下次以本轮为基线）
+		ctx.seenPluginIds = currentIds;
+
+		// 首次加载或无新增：不弹增量提示
+		if (delta.isFirstLoad || delta.newIds.length === 0) return;
+
+		const parts = [
+			ctx.t("refresh.newPlugins", { n: String(delta.newIds.length) }),
+		];
+		if (delta.translated > 0) parts.push(ctx.t("refresh.newTranslated", { n: String(delta.translated) }));
+		if (delta.untranslated > 0) parts.push(ctx.t("refresh.newUntranslated", { n: String(delta.untranslated) }));
+		new Notice(parts.join("，"));
+	
+}
+
+export function mirrorConfig(ctx: ViewContext) : MirrorConfig {
+
+		return {
+			source: ctx.settings.mirrorSource,
+			customBase: ctx.settings.mirrorCustomBase,
+		};
+	
+}
+
+export async function fetchStatsAndMerge(ctx: ViewContext) : Promise<void> {
+
+		try {
+			const url = resolveUrl(PLUGIN_STATS_URL, ctx.mirrorConfig());
+			const map = await fetchPluginStats(url);
+			ctx.statsMap = map;
+			ctx.mergeStatsIntoPlugins();
+			void ctx.saveStatsCache(map);
+		} catch (e) {
+			console.warn("[Chinese Plugin Market] 拉取 stats 失败，复用缓存/旧值：", e);
+		}
+	
+}
+
+export function mergeStatsIntoPlugins(ctx: ViewContext) {
+
+		for (const p of ctx.plugins) {
+			const s = ctx.statsMap.get(p.id);
+			if (s) {
+				p.downloads = s.downloads;
+				if (s.updated != null) p.updated = s.updated;
+			}
+		}
+		// 下载量 / 更新时间被就地更新，智能信号（基于 downloads/updated）需失效重算
+		ctx.pluginsRev++;
+	
+}
+
+export function mergeStatsFromCache(ctx: ViewContext) {
+
+		if (ctx.cachedStats) {
+			ctx.statsMap = ctx.cachedStats;
+		}
+		ctx.mergeStatsIntoPlugins();
+	
+}
+
+export function snapshotInstalled(ctx: ViewContext) {
+
+		try {
+			const plugins = asAppInternals(ctx.app).plugins;
+			if (!plugins) return;
+			if (plugins.manifests) {
+				const next = new Set(Object.keys(plugins.manifests));
+				// H2：安装集合内容变化（装/卸插件）会改变「仅已安装」筛选的匹配集，
+				// 前缀缓存只减不增，必须失效，否则新装插件在带搜索词时不出现。
+				// 精化：installedIds 仅参与 installFilter==="installed" 的成员判定
+				// （搜索 blob 不含安装态，排序不走缓存），当前筛选为 "all" 时
+				// 集合变化不影响缓存正确性，跳过 reset 保留前缀复用。
+				if (
+					ctx.installFilter === "installed" &&
+					(next.size !== ctx.installedIds.size ||
+						[...next].some((id) => !ctx.installedIds.has(id)))
+				) {
+					ctx.filterCache.reset();
+				}
+				ctx.installedIds = next;
+			}
+			if (plugins.enabledPlugins && typeof plugins.enabledPlugins.forEach === "function") {
+				ctx.enabledIds = new Set(plugins.enabledPlugins as Set<string>);
+			}
+		} catch (e) {
+			console.warn("[Chinese Plugin Market] 读取已安装插件失败：", e);
+		}
+	
+}
+
+export function buildSearchIndex(ctx: ViewContext, ids?: Set<string>) {
+
+		// 增量模式：仅更新「本次译出」的条目（ids 非空时），避免每次落盘都全量重建 5617 条 blob。
+		if (ids && ids.size > 0) {
+			const map = getPluginMap(ctx);
+			for (const id of ids) {
+				const p = map.get(id);
+				if (p) ctx.searchIndex.set(id, buildSearchBlob(p, ctx.translatedResults[id]));
+			}
+			return;
+		}
+		ctx.searchIndex.clear();
+		for (const p of ctx.plugins) {
+			ctx.searchIndex.set(p.id, buildSearchBlob(p, ctx.translatedResults[p.id]));
+		}
+
+}
+
+export function buildAuthorFacet(ctx: ViewContext) {
+
+		// 插件集合刚被替换（数据重载 / 缓存加载 / 手动刷新），标记智能信号缓存失效
+		ctx.pluginsRev++;
+		const counts = new Map<string, number>();
+		for (const p of ctx.plugins) {
+			counts.set(p.author, (counts.get(p.author) ?? 0) + 1);
+		}
+		// 保存全量计数（含单插件作者），供 author banner 显示真实作品数
+		ctx.authorCounts = counts;
+		const multi = Array.from(counts.entries())
+			.filter(([, c]) => c >= 2)
+			.map(([name, count]) => ({ name, count }));
+		ctx.authorFacetList = groupAuthorsByName(multi);
+	
+}
+
+export function renderAuthorFacet(ctx: ViewContext) {
+
+	if (!ctx.authorFacetEl) return;
+	const selected = ctx.authorFilter ? [ctx.authorFilter] : [];
+	ctx.authorFacetEl.empty();
+
+	// 单层字母索引（A-Z + #），纯文本形态，与同级内容左对齐。
+	// 只有存在作者的字母才显示，避免空字母占位。
+	const letterSet = new Set(ctx.authorFacetList.map((g) => g.letter));
+	const baseLetters = [
+		"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+		"N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "#",
+	];
+	const letters = baseLetters.filter((l) => letterSet.has(l));
+	if (letters.length === 0) return;
+
+	const strip = ctx.authorFacetEl.createEl("div", { cls: "pt-facet-letter-strip" });
+	for (const letter of letters) {
+		const isActive = ctx.activeAuthorLetter === letter;
+		const el = strip.createEl("button", {
+			cls: "pt-facet-letter-btn" + (isActive ? " is-active" : ""),
+			text: letter,
+		});
+		el.addEventListener("click", () => {
+			ctx.activeAuthorLetter = ctx.activeAuthorLetter === letter ? null : letter;
+			ctx.renderAuthorFacet();
+		});
+	}
+
+	// 展开选中字母组的作者 chips（与字母索引同一左缘，不加缩进）
+	if (ctx.activeAuthorLetter) {
+		const group = ctx.authorFacetList.find((g) => g.letter === ctx.activeAuthorLetter);
+		if (group) {
+			const row = ctx.authorFacetEl.createEl("div", { cls: "pt-facet-chips" });
+			renderFacetChips(
+				row,
+				group.authors,
+				selected,
+				(a) => {
+					ctx.toggleAuthorFilter(a);
+				},
+				{
+					maxVisible: 12,
+					expanded: ctx.authorExpanded,
+					onToggleExpand: () => {
+						ctx.authorExpanded = !ctx.authorExpanded;
+						ctx.renderAuthorFacet();
+					},
+				}
+			);
+		}
+	}
+
+	
+}
+
+export function toggleAuthorFilter(ctx: ViewContext, author: string) {
+
+		ctx.authorFilter = ctx.authorFilter === author ? null : author;
+		ctx.renderAuthorFacet();
+		ctx.updateFacetVisibility();
+		ctx.renderPluginList(true);
+		ctx.updateAuthorBanner();
+	
+}
+
+export function updateAuthorBanner(ctx: ViewContext) {
+
+		if (!ctx.authorFilter) {
+			if (ctx.authorBannerEl) {
+				ctx.authorBannerEl.remove();
+				ctx.authorBannerEl = null;
+			}
+			return;
+		}
+		const count = ctx.authorCounts.get(ctx.authorFilter) ?? 0;
+		if (!ctx.authorBannerEl) {
+			const header = q(ctx.containerEl, ".pt-header");
+			if (!header) return;
+			const banner = header.createEl("div", { cls: "pt-author-banner" });
+			banner.setAttribute("role", "status");
+			banner.setAttribute("aria-live", "polite");
+			banner.createEl("span", { cls: "pt-author-banner-text" });
+			const clearBtn = banner.createEl("button", {
+				cls: "pt-author-banner-clear",
+				text: ctx.t("author.filter.clear"),
+			});
+			clearBtn.addEventListener("click", () => {
+				ctx.authorFilter = null;
+				ctx.updateAuthorBanner();
+				ctx.renderAuthorFacet();
+				ctx.updateFacetVisibility();
+				ctx.renderPluginList();
+			});
+			ctx.authorBannerEl = banner;
+		}
+		const textSpan = q(ctx.authorBannerEl!, ".pt-author-banner-text");
+		if (textSpan) {
+			textSpan.textContent = ctx.t("author.filter.active", {
+				author: ctx.authorFilter,
+				n: String(count),
+			});
+		}
+	
+}
+
+export function updateAiTranslateButton(ctx: ViewContext) {
+
+		const btn = ctx.aiTranslateBtnEl;
+		if (!btn) return;
+
+		// 未译计数：用 for 循环累加，避免 .filter() 每次渲染都新建一个 5617 元素的临时数组。
+		// （此处不宜做缓存：计数会随每张卡译出而持续变化，缓存需随每次翻译失效=照样重算，
+		// 唯一可省的是 .filter 的临时数组分配，循环计数即可规避。）
+		let untranslatedCount = 0;
+		for (const p of ctx.visibleList) {
+			if (!ctx.isTranslated(p)) untranslatedCount++;
+		}
+
+		// 重置「有待翻译」的高亮态，后续按当前情形重新判定
+		btn.classList.remove("pt-ai-icon-btn--ready");
+
+		if (ctx.sourceFilter === "original") {
+			// 已处于「未翻译」筛选态：按钮作为该态的重跑入口（常态化显示 + 高亮态）
+			btn.style.display = "";
+			btn.style.opacity = "1";
+			btn.classList.add("pt-ai-icon-btn--ready");
+			if (ctx.aiTranslateRunning) {
+				btn.disabled = true;
+				btn.title = ctx.t("ai.translate.running");
+				return;
+			}
+			const s = ctx.settings;
+			const hasKey = s.aiSearchEnabled && !!s.aiSearchApiKey;
+			// 无论是否配置 AI Key 都启用：有 Key 优先用 AI，无 Key 自动降级到免费引擎混合翻译。
+			btn.disabled = false;
+			btn.title = hasKey ? ctx.t("ai.translate.rerun") : ctx.t("ai.translate.free");
+		} else if (untranslatedCount > 0) {
+			// 有待翻译：按钮常态化显示 + 染主题色，暗示「有事可做」
+			btn.style.display = "";
+			btn.style.opacity = "1";
+			btn.classList.add("pt-ai-icon-btn--ready");
+			btn.disabled = false;
+			btn.title = ctx.t("ai.translate.hint", { n: String(untranslatedCount) });
+		} else {
+			// 全部已翻译：按钮仍常驻显示，但置灰禁用，避免有效插件消失带来的定位困扰
+			btn.style.display = "";
+			btn.style.opacity = "1";
+			btn.disabled = true;
+			btn.title = ctx.t("ai.translate.none");
+		}
+
+}
+
+export async function aiTranslateAllPending(ctx: ViewContext) {
+
+		const s = ctx.settings;
+		// 不再强制要求 AI Key：有 Key 时优先用 AI 翻译，未配置则自动降级到
+		// Google/MyMemory/腾讯免费引擎混合翻译（底层 translatePluginOnce 按优先级链处理）。
+		if (ctx.aiTranslateRunning) {
+			console.debug("[Chinese Plugin Market] 智能混合翻译：正在运行中，跳过本次点击");
+			return;
+		}
+		const data = ctx.translator.getData();
+		const pending = ctx.visibleList.filter((p) => !ctx.isTranslated(p));
+		console.debug(`[Chinese Plugin Market] 智能混合翻译：visibleList=${ctx.visibleList.length} · pending=${pending.length} · aiEnabled=${s.aiSearchEnabled} · hasKey=${!!s.aiSearchApiKey}`);
+		if (pending.length === 0) {
+			ctx.setAIProgressDone(0);
+			return;
+		}
+		ctx.aiTranslateRunning = true;
+		ctx.updateAiTranslateButton();
+		if (ctx.aiProgressEl) {
+			ctx.aiProgressEl.style.display = "";
+			ctx.aiProgressEl.setText(
+				ctx.t("ai.translate.progress", { done: "0", total: String(pending.length) })
+			);
+		}
+		// 已刷新过的卡片去重，避免重复闪烁
+		const handled = new Set<string>();
+		const refreshDone = () => {
+			for (const p of ctx.visibleList) {
+				if (handled.has(p.id)) continue;
+				const r = data.cache[p.id];
+				if (r && r.source !== "original") {
+					handled.add(p.id);
+					ctx.translatedResults[p.id] = r;
+					ctx.refreshCardTranslation(p.id, r);
+					// 本次会话主动翻译计数（懒翻译已移除，历史缓存命中不计入；这里 batch 翻的全是新的）
+					ctx.translatedThisSession++;
+				}
+			}
+			ctx.updateStats();
+		};
+		try {
+			await ctx.translator.translateBatchIncremental(
+				ctx.visibleList,
+				(done: number, total: number) => {
+					refreshDone();
+					if (ctx.aiProgressEl) {
+						ctx.aiProgressEl.setText(
+							ctx.t("ai.translate.progress", { done: String(done), total: String(total) })
+						);
+					}
+				}
+			);
+			console.debug("[Chinese Plugin Market] 智能混合翻译：translateBatchIncremental 完成");
+		} catch (e) {
+			console.error("[Chinese Plugin Market] 智能混合翻译：异常", e);
+	} finally {
+		ctx.aiTranslateRunning = false;
+		refreshDone();
+		ctx.buildSearchIndex();
+		// 立即落盘（无防抖）：确保本次翻译结果（含 TM 已采纳 vault 笔记）在按钮流程结束时
+		// 立刻写出，不依赖 800ms 防抖定时器——否则重载插件时定时器未触发会导致数据静默丢失，
+		// 下次启动大量插件回到英文（本次实测 CJ vault 的 tmApproved/cache 均为 0 即此因）。
+		await ctx.flushTranslatorData();
+		ctx.setAIProgressDone(handled.size);
+		ctx.updateAiTranslateButton();
+	}
+	
+}
+
+export function setAIProgressDone(ctx: ViewContext, n: number) {
+
+		const el = ctx.aiProgressEl;
+		if (!el) return;
+		if (n === 0) {
+			el.style.display = "none";
+			return;
+		}
+		el.setText(ctx.t("ai.translate.done", { n: String(n) }));
+		ctx.announceStatus(ctx.t("ai.translate.done", { n: String(n) }));
+		el.addClass("pt-ai-progress--done");
+		window.setTimeout(() => {
+			if (el) {
+				el.style.display = "none";
+				el.removeClass("pt-ai-progress--done");
+			}
+		}, 4000);
+	
+}
+
+export function refreshCardTranslation(ctx: ViewContext, id: string, result: TranslateResult) {
+
+		// 架构重构：卡片固定高度，译文就地更新不改变行高，无需滚动冻结。
+		const layer = ctx.scrollCardLayer;
+		if (!layer) return;
+		const card = layer.querySelector(
+			`.pt-card[data-plugin-id="${CSS.escape(id)}"]`
+		) as HTMLElement | null;
+		if (!card) return;
+		const plugin = getPluginMap(ctx).get(id);
+		if (!plugin) return;
+			const nameEl = q(card, ".pt-card-name");
+			const descEl = q(card, ".pt-card-desc");
+		if (nameEl) nameEl.setText(cleanChineseSpaces(result.translatedName));
+		if (descEl) {
+			descEl.setText(cleanChineseSpaces(result.translatedDesc));
+			descEl.classList.remove("pt-desc-pending"); // S4：译文到位，撤掉微光占位态
+		}
+		// 副标：在线翻译完成后同步状态，使其从「未翻译」翻转为「在线翻译」
+		const subEl = q(card, ".pt-card-original-name");
+		if (subEl) {
+			if (result.source === "original") {
+				subEl.textContent = ctx.t("card.original.hint");
+				subEl.className = "pt-card-original-name pt-card-untranslated-hint";
+			} else {
+				subEl.textContent = plugin.name;
+				subEl.className = "pt-card-original-name";
+			}
+		}
+	
+}
+
