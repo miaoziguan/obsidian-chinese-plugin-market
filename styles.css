@@ -973,9 +973,10 @@ button.pt-facet-letter-btn.is-active {
    边框加深 + 光环，无第二条框）。焦点色跟随 Obsidian 主题（interactive-accent），
    不再使用浏览器默认紫色 outline。
    注意：不切换 background，避免 <select> 因 UA 原生绘画而无法跟随父级色变。 */
+/* 焦点表现：去掉 border 变色（避免与外扩 box-shadow 形成视觉上的「双层框」），
+   仅保留 box-shadow 作为唯一焦点环（segmented input 注释里说的「整框焦点统一」）。 */
 .pt-search:focus-within {
-	border-color: var(--pt-accent);
-	box-shadow: var(--pt-focus-ring);
+	box-shadow: var(--pt-focus-ring-strong);
 }
 /* 彻底干掉主题 / UA 加在搜索框内部元素上的独立边框、轮廓、光环、外边距——
    这是聚焦时「左灰右绿」脱节，以及子元素间残留 2px 缝隙（UA 默认 margin）的根因。
