@@ -4,7 +4,7 @@ import { setListState, type ListStateHost } from "./list-state";
 function makeHost(): ListStateHost {
 	return {
 		listState: "guide",
-		resultCountEl: { style: {} as CSSStyleDeclaration } as HTMLElement,
+		resultCountEl: document.createElement("div"),
 	};
 }
 

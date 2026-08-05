@@ -299,7 +299,7 @@ export function measureLayout(ctx: ViewContext) {
 	ctx.cachedRowH = cardH + (gapVal || ctx.rowGap || 0);
 	ctx.colCount = cols;
 	const tmpl = `repeat(${cols}, 1fr)`;
-	if (layer.style.gridTemplateColumns !== tmpl) layer.style.gridTemplateColumns = tmpl;
+	if (layer.style.gridTemplateColumns !== tmpl) layer.setCssStyles({ gridTemplateColumns: tmpl });
 	if (ratio > 0) {
 		requestAnimationFrame(() => {
 			if (viewport && viewport.scrollHeight > 0) {
@@ -392,7 +392,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 					toggle.textContent = "仅显示已安装";
 				}
 					const clearBtn = q(ctx.contentEl, ".pt-search-clear");
-					if (clearBtn) clearBtn.style.display = "none";
+					if (clearBtn) clearBtn.setCssStyles({ display: "none" });
 					ctx.renderPluginList();
 				});
 			}

@@ -62,7 +62,7 @@ export function renderFeaturedSection(ctx: ViewContext) {
 			ctx.featuredSectionEl
 		) {
 			// 内容不变：复用既有卡片，仅按折叠态同步显隐
-			ctx.featuredSectionEl.style.display = ctx.featuredCollapsed ? "none" : "";
+			ctx.featuredSectionEl.setCssStyles({ display: ctx.featuredCollapsed ? "none" : "" });
 			ctx.featuredSectionEl.classList.toggle("pt-featured--collapsed", ctx.featuredCollapsed);
 			return;
 		}
@@ -115,7 +115,7 @@ export function renderFeaturedSection(ctx: ViewContext) {
 			});
 			grid.appendChild(card);
 		}
-		section.style.display = "";
+		section.setCssStyles({ display: "" });
 		section.classList.toggle("pt-featured--collapsed", ctx.featuredCollapsed);
 		featuredCache.set(ctx, { contentSig, ids, installSig: computeInstallSig(ids, ctx.installedIds) });
 
@@ -192,7 +192,7 @@ export function ensureFeaturedSection(ctx: ViewContext) {
 
 export function hideFeaturedSection(ctx: ViewContext) {
 
-		if (ctx.featuredSectionEl) ctx.featuredSectionEl.style.display = "none";
+		if (ctx.featuredSectionEl) ctx.featuredSectionEl.setCssStyles({ display: "none" });
 	
 }
 

@@ -22,6 +22,6 @@ export interface ListStateHost {
 export function setListState(ctx: ListStateHost, state: ListState): void {
 	ctx.listState = state;
 	if (ctx.resultCountEl) {
-		ctx.resultCountEl.style.display = state === "list" ? "" : "none";
+		ctx.resultCountEl.setCssStyles({ display: state === "list" ? "" : "none" });
 	}
 }

@@ -181,9 +181,7 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 				// 仅看收藏模式下取消收藏：从列表中移除该卡片（带过渡动画）
 				const card = actionEl.closest(".pt-card") as HTMLElement | null;
 				if (card) {
-					card.style.transition = "opacity 200ms ease, transform 200ms ease";
-					card.style.opacity = "0";
-					card.style.transform = "scale(0.95)";
+					card.setCssStyles({ transition: "opacity 200ms ease, transform 200ms ease", opacity: "0", transform: "scale(0.95)" });
 					window.setTimeout(() => {
 						ctx.renderPluginList(true);
 					}, 200);

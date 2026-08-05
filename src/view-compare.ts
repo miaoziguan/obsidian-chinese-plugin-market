@@ -76,13 +76,13 @@ export function enterCompareMode(ctx: ViewContext) {
 		// 隐藏官方推荐区域（对比模式下不展示推荐内容）
 		const featuredEl = q(ctx.contentEl, ".pt-featured");
 		if (featuredEl) {
-			featuredEl.style.display = "none";
+			featuredEl.setCssStyles({ display: "none" });
 		}
 
 		// 隐藏虚拟滚动层：display:none 彻底移出 flex 流，让对比容器独占全高。
 		// 仅 visibility:hidden 仍占 flex 空间，会与 .pt-compare-container(flex:1) 各占一半，
 		// 导致对比页可见区被压成半高、长内容看起来"被截断"。
-		if (ctx.scrollViewport) ctx.scrollViewport.style.display = "none";
+		if (ctx.scrollViewport) ctx.scrollViewport.setCssStyles({ display: "none" });
 
 		// 创建或复用对比容器（使用 contentEl 确保在正确的 DOM 层级内）
 		let compareContainer = q(ctx.contentEl, ".pt-compare-container");
@@ -96,11 +96,10 @@ export function enterCompareMode(ctx: ViewContext) {
 				ctx.contentEl.appendChild(compareContainer);
 			}
 		}
-		compareContainer.style.display = "";
+		compareContainer.setCssStyles({ display: "" });
 		// 触发 reflow 后淡入
 		compareContainer.offsetHeight; // force reflow
-		compareContainer.style.opacity = "1";
-		compareContainer.style.visibility = "visible";
+		compareContainer.setCssStyles({ opacity: "1", visibility: "visible" });
 
 		// 隐藏对比托盘（进入对比模式后不再需要）
 		ctx.removeCompareTray();
@@ -170,7 +169,7 @@ export function exitCompareMode(ctx: ViewContext) {
 		// 恢复官方推荐区域
 		const featuredEl = q(ctx.contentEl, ".pt-featured");
 		if (featuredEl) {
-			featuredEl.style.display = "";
+			featuredEl.setCssStyles({ display: "" });
 		}
 
 		// 淡出对比容器，恢复虚拟滚动层；同时卸载对比页生命周期资源
@@ -178,19 +177,16 @@ export function exitCompareMode(ctx: ViewContext) {
 		const compareContainer = q(ctx.contentEl, ".pt-compare-container");
 		if (compareContainer) {
 			disposeComparePage(compareContainer);
-			compareContainer.style.opacity = "0";
-			compareContainer.style.visibility = "hidden";
+			compareContainer.setCssStyles({ opacity: "0", visibility: "hidden" });
 		}
 
 		// 恢复虚拟滚动层：display 复位后从 opacity:0 起播过渡淡入。
 		// display:none→空 不会触发表层过渡，需在 display 复位后强制 reflow
 		// 再设 opacity:1，使 CSS transition 能捕获起始帧。
 		if (ctx.scrollViewport) {
-			ctx.scrollViewport.style.display = "";
-			ctx.scrollViewport.style.visibility = "visible";
-			ctx.scrollViewport.style.opacity = "0";
+			ctx.scrollViewport.setCssStyles({ display: "", visibility: "visible", opacity: "0" });
 			void ctx.scrollViewport.offsetHeight; // force reflow，捕获 opacity:0 为起始帧
-			ctx.scrollViewport.style.opacity = "1";
+			ctx.scrollViewport.setCssStyles({ opacity: "1" });
 		}
 
 		// 恢复对比托盘

@@ -267,7 +267,7 @@ export class ChinesePluginMarketView extends ItemView {
 		// 卡片池化骨架构建上下文：类型需满足 CardRenderContext（骨架只用 t + onDescToggle，其余为占位）。
 		// 集合字段用 getter 透传：installedIds/enabledIds 在数据刷新时会被整体替换（新 Set），
 		// 值拷贝快照会让池化新卡引用陈旧集合（L2 埋雷）。
-		// eslint-disable-next-line @typescript-eslint/no-this-alias
+		// eslint-disable-next-line @typescript-eslint/no-this-alias -- 池化骨架的卡片渲染上下文需用 getter 透传 this，闭包内无法用箭头函数替代（getter 依赖实例字段随刷新整体替换）
 		const self = this;
 		this.cardPoolCtx = {
 			t: this.t,
@@ -440,21 +440,19 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	/** 进入详情页模式：隐藏列表（scrollViewport + featured），让详情抽屉整页铺满 */
 	public enterDetailMode = () => {
 		this.contentEl.addClass("pt-detail-mode");
-		if (this.scrollViewport) this.scrollViewport.style.display = "none";
+		if (this.scrollViewport) this.scrollViewport.setCssStyles({ display: "none" });
 		const featuredEl = this.contentEl.querySelector(".pt-featured") as HTMLElement | null;
-		if (featuredEl) featuredEl.style.display = "none";
+		if (featuredEl) featuredEl.setCssStyles({ display: "none" });
 	};
 
 	/** 退出详情页模式：恢复列表，清理抽屉引用 */
 	public exitDetailMode = () => {
 		this.contentEl.removeClass("pt-detail-mode");
 		if (this.scrollViewport) {
-			this.scrollViewport.style.display = "";
-			this.scrollViewport.style.visibility = "visible";
-			this.scrollViewport.style.opacity = "1";
+			this.scrollViewport.setCssStyles({ display: "", visibility: "visible", opacity: "1" });
 		}
 		const featuredEl = this.contentEl.querySelector(".pt-featured") as HTMLElement | null;
-		if (featuredEl) featuredEl.style.display = "";
+		if (featuredEl) featuredEl.setCssStyles({ display: "" });
 		this.activeDrawer = null;
 		// 关闭丝滑优化：列表 DOM 在详情态只是 display:none 藏着，恢复显示是瞬时的；
 		// 强制重渲（过滤管线 + 全量渲染）推迟到下一帧，避免与关闭点击挤同一帧。
