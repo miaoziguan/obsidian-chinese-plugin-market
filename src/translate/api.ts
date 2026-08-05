@@ -100,7 +100,7 @@ export class MyMemoryClient {
 			}
 			const reason: unknown =
 				nameR.status === "rejected" ? nameR.reason : (descR as PromiseRejectedResult).reason;
-			throw reason ?? new Error("name and description both failed");
+			throw reason instanceof Error ? reason : new Error("name and description both failed");
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			if (/429|quota|mymemory warning|配额|额度|rate.?limit/i.test(msg)) {
@@ -221,7 +221,7 @@ export class GoogleClient {
 			if (nameR.status === "rejected" || descR.status === "rejected") {
 				const reason: unknown =
 					nameR.status === "rejected" ? nameR.reason : (descR as PromiseRejectedResult).reason;
-				throw reason ?? new Error("name and description both failed");
+				throw reason instanceof Error ? reason : new Error("name and description both failed");
 			}
 
 			const nameRes = nameR.value;

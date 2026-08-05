@@ -29,7 +29,7 @@ import type { SimilarCandidate } from "./recommend/similar";
 import { asAppInternals } from "./obsidian-internals";
 import { openInsightModal } from "./view-cards";
 import { isMacOS, macosSystemTranslate, protectMarkdown, restoreMarkdown } from "./translate/macos-shortcuts";
-import { appendSVG, appendIconText } from "./dom";
+import { appendSVG, appendIconText, toHTMLElement } from "./dom";
 
 /**
  * Drawer 宿主插件的最小端口（P2-2 收尾：切断对 plugin 完整形状的依赖）。
@@ -196,7 +196,7 @@ export class PluginDetailDrawer {
 		} else if (this.triggerCard) {
 			const pid = this.triggerCard.getAttribute("data-plugin-id");
 			const fallback = pid
-				? (document.querySelector(`.pt-card[data-plugin-id="${pid}"]`) as HTMLElement | null)
+				? toHTMLElement(document.querySelector(`.pt-card[data-plugin-id="${pid}"]`))
 				: null;
 			fallback?.focus();
 		}

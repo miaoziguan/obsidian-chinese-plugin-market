@@ -9,6 +9,7 @@ import {
 	ItemView,
 	WorkspaceLeaf,
 } from "obsidian";
+import { toHTMLElement } from "./dom";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "./translator";
 import { type MirrorSource } from "./mirror";
 import { type PluginStat } from "./stats";
@@ -305,7 +306,7 @@ export class ChinesePluginMarketView extends ItemView {
 		// 卸载对比页生命周期资源（document click 监听器 / in-flight AI 请求），
 		// 视图直接关闭时 exitCompareMode 不会被走到
 		{
-			const cc = this.contentEl.querySelector(".pt-compare-container") as HTMLElement | null;
+			const cc = toHTMLElement(this.contentEl.querySelector(".pt-compare-container"));
 			if (cc) disposeComparePage(cc);
 		}
 		// 关闭详情 Drawer
@@ -371,7 +372,7 @@ public updateCompareTray = () => updateCompareTray(this._ctx);
 	public refreshCompareHighlights() {
 		const cards = this.contentEl.querySelectorAll(".pt-card-compare");
 		cards.forEach((el) => {
-			const card = el.closest(".pt-card") as HTMLElement | null;
+			const card = toHTMLElement(el.closest(".pt-card"));
 			const pid = card?.getAttribute("data-plugin-id");
 			el.classList.toggle("is-compare-on", !!pid && this.compareSet.has(pid));
 		});
@@ -443,7 +444,7 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public enterDetailMode = () => {
 		this.contentEl.addClass("pt-detail-mode");
 		if (this.scrollViewport) this.scrollViewport.setCssStyles({ display: "none" });
-		const featuredEl = this.contentEl.querySelector(".pt-featured") as HTMLElement | null;
+		const featuredEl = toHTMLElement(this.contentEl.querySelector(".pt-featured"));
 		if (featuredEl) featuredEl.setCssStyles({ display: "none" });
 	};
 
@@ -453,7 +454,7 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 		if (this.scrollViewport) {
 			this.scrollViewport.setCssStyles({ display: "", visibility: "visible", opacity: "1" });
 		}
-		const featuredEl = this.contentEl.querySelector(".pt-featured") as HTMLElement | null;
+		const featuredEl = toHTMLElement(this.contentEl.querySelector(".pt-featured"));
 		if (featuredEl) featuredEl.setCssStyles({ display: "" });
 		this.activeDrawer = null;
 		// 关闭丝滑优化：列表 DOM 在详情态只是 display:none 藏着，恢复显示是瞬时的；
