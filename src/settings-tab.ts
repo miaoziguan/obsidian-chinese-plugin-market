@@ -538,7 +538,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			.addButton((btn) =>
 				btn
 					.setButtonText(this.t("settings.cache.clear"))
-					.setDestructive()
+					.setWarning()
 					.onClick(() => {
 						void (async () => {
 							this.plugin.translator.clearCache();
@@ -556,7 +556,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			.addButton((btn) =>
 				btn
 					.setButtonText(this.t("settings.aidict.clear"))
-					.setDestructive()
+					.setWarning()
 					.onClick(() => {
 						void (async () => {
 							this.plugin.translator.clearAIDict();
@@ -573,7 +573,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			.addButton((btn) =>
 				btn
 					.setButtonText(this.t("settings.tm.clearApproved"))
-					.setDestructive()
+					.setWarning()
 					.onClick(() => void this.plugin.clearApprovedTM())
 			);
 	}
@@ -818,7 +818,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							setting.addButton((btn) =>
 								btn
 									.setButtonText(this.t("settings.cache.clear"))
-									.setDestructive()
+									.setWarning()
 									.onClick(() => void this.clearCache())
 							);
 						},
@@ -830,7 +830,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							setting.addButton((btn) =>
 								btn
 									.setButtonText(this.t("settings.aidict.clear"))
-									.setDestructive()
+									.setWarning()
 									.onClick(() => void this.clearAIDict())
 							);
 						},
@@ -849,7 +849,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							setting.addButton((btn) =>
 								btn
 									.setButtonText(this.t("settings.tm.clearApproved"))
-									.setDestructive()
+									.setWarning()
 									.onClick(() => void this.plugin.clearApprovedTM())
 							);
 						},
