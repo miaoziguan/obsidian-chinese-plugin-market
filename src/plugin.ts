@@ -7,6 +7,7 @@
  */
 
 import { Plugin, Notice, TFile } from "obsidian";
+import { logger } from "./logger";
 import { Translator, type PluginInfo } from "./translator";
 import { type PluginStat } from "./stats";
 import { PluginStorage } from "./plugin-storage";
@@ -116,7 +117,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		try {
 			loaded = (await this.loadData()) || {};
 		} catch (e) {
-			console.warn(
+			logger.warn(
 				"[Chinese Plugin Market] data.json 解析失败，已回退空白状态（原文件可能损坏）：",
 				e,
 			);
@@ -156,7 +157,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		};
 		window.setTimeout(() => {
 			if (tmApprovedSettled) return; // 回灌已正常完成，不误报
-			console.warn(
+			logger.warn(
 				"[Chinese Plugin Market] tmApprovedReady 兜底超时（30s）：视图已降级继续，vault 译名可能未回灌。",
 			);
 			this._resolveTmApprovedReady();
@@ -164,7 +165,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 		this.app.workspace.onLayoutReady(() => {
 			void this.initDeferredLoad().catch((e) =>
-				console.error("[Chinese Plugin Market] 延迟初始化失败：", e),
+				logger.error("[Chinese Plugin Market] 延迟初始化失败：", e),
 			);
 		});
 
@@ -219,7 +220,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					rootHeight: rcs?.height ?? "(无)",
 					canScroll: vp.scrollHeight > vp.clientHeight + 1,
 				};
-				console.table(info);
+				logger.table(info);
 				const msg =
 					`列表高度=${info.viewportClientH}px | 内容总高=${info.viewportScrollH}px | 可滚动=${info.canScroll}\n` +
 					`viewport: display=${info.viewportDisplay} position=${info.viewportPosition} overflowY=${info.viewportOverflowY}\n` +
@@ -300,7 +301,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.cachedTrendingHistory = await this.storage.loadTrendingHistory();
 		// 后台异步加载插件分类索引（不阻塞视图启动，加载完成后同步更新 pluginTagMap）
 		this.loadPluginTags().catch((e) =>
-			console.warn("[Chinese Plugin Market] 后台加载分类索引失败：", e),
+			logger.warn("[Chinese Plugin Market] 后台加载分类索引失败：", e),
 		);
 		// 官方推荐清单（体量小，同步加载以保推荐区首屏完整）
 		await this.loadPluginRecommend();
@@ -332,7 +333,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				if (pendingSettings) await this._saveSettingsImmediate();
 				if (pendingTranslator) await this._saveTranslatorDataImmediate();
 			})().catch((e) =>
-				console.warn("[Chinese Plugin Market] 卸载时落盘失败：", e)
+				logger.warn("[Chinese Plugin Market] 卸载时落盘失败：", e)
 			);
 		}
 		// 关闭所有翻译视图
@@ -478,7 +479,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				this.onPluginTagsLoaded?.();
 			}
 		} catch (e) {
-			console.warn(`[Chinese Plugin Market] 加载分类索引失败，已跳过：`, e);
+			logger.warn(`[Chinese Plugin Market] 加载分类索引失败，已跳过：`, e);
 		}
 	}
 
@@ -505,7 +506,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				}
 			}
 		} catch (e) {
-			console.warn(`[Chinese Plugin Market] 读取推荐清单失败，回退内置清单：`, e);
+			logger.warn(`[Chinese Plugin Market] 读取推荐清单失败，回退内置清单：`, e);
 		}
 		// 兜底：用编译进包的清单，保证首页「官方推荐」区始终可用
 		this.recommendedIds = new Set(ChinesePluginMarketPlugin.FALLBACK_RECOMMENDED_IDS);
@@ -607,7 +608,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				await writeTMNote(this.app, e);
 				this.translator.clearTMDirty(id);
 			} catch (err) {
-				console.warn("[Chinese Plugin Market] 写入 TM 笔记失败，已保留待重试：", id, err);
+				logger.warn("[Chinese Plugin Market] 写入 TM 笔记失败，已保留待重试：", id, err);
 			}
 		}
 		const removed = this.translator.peekTMRemoved();
@@ -616,7 +617,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				await removeTMNote(this.app, id);
 				this.translator.clearTMRemoved(id);
 			} catch (err) {
-				console.warn("[Chinese Plugin Market] 删除 TM 笔记失败，已保留待重试：", id, err);
+				logger.warn("[Chinese Plugin Market] 删除 TM 笔记失败，已保留待重试：", id, err);
 			}
 		}
 	}
@@ -661,12 +662,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// ── 增量核对：只处理变化的文件 ──
 		const snapMtimes = snapshot?.mtimes ?? {};
 		const pending: TFile[] = [];
-		let unchanged = 0;
+		let unchangedCount = 0;
 		for (const f of files) {
 			const prev = snapMtimes[f.path];
 			if (prev !== undefined && prev === f.stat?.mtime) {
 				// mtime 未变：信任快照，跳过（占绝大多数）
-				unchanged++;
+				unchangedCount++;
 			} else {
 				pending.push(f); // 新增 / 修改 → 需重扫
 			}
@@ -692,13 +693,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				// 有快照：译名已灌入 tmApproved，重扫放后台，不阻塞首屏（避免加载页久留）
 				void rescan
 					.catch((e) =>
-						console.error("[Chinese Plugin Market] TM 增量重扫失败（不影响已灌入译名）：", e),
+						logger.error("[Chinese Plugin Market] TM 增量重扫失败（不影响已灌入译名）：", e),
 					);
 			} else {
 				// 首次无快照：必须同步等重扫完成，否则 tmApproved 为空（无兜底译名）
 				await rescan;
 			}
 		}
+		logger.debug(`[Chinese Plugin Market] TM 快速路径：信任快照跳过 ${unchangedCount} 个未变文件`);
 		return;
 	}
 
@@ -757,6 +759,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				total: pending.length,
 			};
 		}
+
+		logger.debug(
+			`[Chinese Plugin Market] TM 增量重扫：回退读盘 ${diskReads} 篇、待处理 ${pending.length} 篇`
+		);
 
 		// 落盘新快照（后台，不阻塞首屏）
 		await this.saveTMApprovedSnapshot(newMtimes);
@@ -823,7 +829,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			}
 			return { version: 1, mtimes, idsByPath, entries };
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 读取 TM 快照失败，将全量重扫：", e);
+			logger.warn("[Chinese Plugin Market] 读取 TM 快照失败，将全量重扫：", e);
 			return null;
 		}
 	}
@@ -940,7 +946,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				JSON.stringify({ mtimesPatch, idsByPathPatch, entriesPatch, removed })
 			);
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 写入 TM 快照失败（不影响翻译，下次全量重扫）：", e);
+			logger.warn("[Chinese Plugin Market] 写入 TM 快照失败（不影响翻译，下次全量重扫）：", e);
 		}
 	}
 
@@ -991,14 +997,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	private async ensureVectorStore(): Promise<SqliteVectorStore | null> {
 		if (this.vectorStore) return this.vectorStore;
 		if (this.vectorStoreInitFailed) return null; // 已失败过：本会话不再重试/刷屏
-		console.time("[Chinese Plugin Market] ensureVectorStore 总耗时");
+		logger.time("[Chinese Plugin Market] ensureVectorStore 总耗时");
 		const tWasmLoad = Date.now();
 		try {
 			const adapter = this.app.vault.adapter;
 			if (!(await adapter.exists(this.sqlWasmFilePath))) {
 				this.vectorStoreInitFailed = true;
-				console.timeEnd("[Chinese Plugin Market] ensureVectorStore 总耗时");
-				console.warn(
+				logger.timeEnd("[Chinese Plugin Market] ensureVectorStore 总耗时");
+				logger.warn(
 					"[Chinese Plugin Market] SQLite WASM 缺失（sql-wasm.wasm 未随插件分发），向量库禁用，回退内存索引。"
 				);
 				return null;
@@ -1006,13 +1012,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			// 用 Obsidian adapter 读 wasm 字节（app:// 下无法直接 fetch 本地文件，绕开 CORS）
 			const wasmBuf = await adapter.readBinary(this.sqlWasmFilePath);
 			const wasm = new Uint8Array(wasmBuf);
-			console.debug(`[Chinese Plugin Market] 探针：wasm 字节读取 ${wasm.length}B，耗时 ${Date.now() - tWasmLoad}ms`);
+			logger.debug(`[Chinese Plugin Market] 探针：wasm 字节读取 ${wasm.length}B，耗时 ${Date.now() - tWasmLoad}ms`);
 			// Obsidian 沙箱可能无法 `import("sql.js")`（CJS 包无 ESM 导出）。失败即降级，
 			// 不阻塞主功能；本会话不再重试。
 			const tInit = Date.now();
 			const sqlMod = await import("sql.js");
 			const sql = await initSqlJsStatic(wasm, sqlMod);
-			console.debug(`[Chinese Plugin Market] 探针：initSqlJs 实例化耗时 ${Date.now() - tInit}ms`);
+			logger.debug(`[Chinese Plugin Market] 探针：initSqlJs 实例化耗时 ${Date.now() - tInit}ms`);
 			const persist: PersistAdapter = {
 				exists: (p) => adapter.exists(p),
 				read: async (p) => new Uint8Array(await adapter.readBinary(p)),
@@ -1024,13 +1030,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			};
 			const tOpen = Date.now();
 			this.vectorStore = await SqliteVectorStore.open(persist, this.vectorStoreFilePath, sql);
-			console.debug(`[Chinese Plugin Market] 探针：SqliteVectorStore.open（读库+建表）耗时 ${Date.now() - tOpen}ms`);
-			console.timeEnd("[Chinese Plugin Market] ensureVectorStore 总耗时");
+			logger.debug(`[Chinese Plugin Market] 探针：SqliteVectorStore.open（读库+建表）耗时 ${Date.now() - tOpen}ms`);
+			logger.timeEnd("[Chinese Plugin Market] ensureVectorStore 总耗时");
 			return this.vectorStore;
 		} catch (e) {
 			this.vectorStoreInitFailed = true;
 			// 明确提示这是沙箱/打包限制（不是同步遗漏），且只提示一次
-			console.warn(
+			logger.warn(
 				"[Chinese Plugin Market] 初始化 SQLite 向量库失败，回退内存索引（本地语义搜索将降级；" +
 					"这是 Obsidian 沙箱无法加载 sql.js 所致，非同步遗漏）：",
 				(e as Error)?.message || e
@@ -1077,11 +1083,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				// getShared 复用：与搜索共用同一 worker，预热后搜索直接命中
 				const provider = new LocalEmbeddingProvider(undefined, model, this.settings.embeddingLocalWasmPaths || undefined);
 				await provider.warmup();
-				console.debug("[Chinese Plugin Market] 本地 embedding 已预热（worker + 模型就绪）");
+				logger.debug("[Chinese Plugin Market] 本地 embedding 已预热（worker + 模型就绪）");
 			} catch (e) {
 				// 预热失败：重置标记，允许下次再试（不永久禁用）
 				this.localWarmupDone = false;
-				console.debug("[Chinese Plugin Market] 本地 embedding 预热跳过：", (e as Error)?.message || e);
+				logger.debug("[Chinese Plugin Market] 本地 embedding 预热跳过：", (e as Error)?.message || e);
 			}
 		})();
 	}
@@ -1115,7 +1121,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			if (this.localIndexState.status !== "done") {
 				this.localIndexState = { status: "idle", progress: 0, total: 0 };
 			}
-			console.warn("[Chinese Plugin Market] 预建本地索引：暂无插件数据（需先打开插件市场视图加载列表）。");
+			logger.warn("[Chinese Plugin Market] 预建本地索引：暂无插件数据（需先打开插件市场视图加载列表）。");
 			return;
 		}
 		if (!force && this.translator.getVectorIndex()?.ids.length === plugins.length) return; // 幂等
@@ -1171,7 +1177,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			done("done");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
-			console.warn("[Chinese Plugin Market] 预建本地向量索引失败：", e);
+			logger.warn("[Chinese Plugin Market] 预建本地向量索引失败：", e);
 			done("error", msg);
 		}
 	}
@@ -1192,18 +1198,18 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				}
 			}
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 读取旧版向量索引失败，将重建：", e);
+			logger.warn("[Chinese Plugin Market] 读取旧版向量索引失败，将重建：", e);
 		}
 		return null;
 	}
 
 	async loadVectorIndex() {
-		console.time("[Chinese Plugin Market] loadVectorIndex 总耗时");
+		logger.time("[Chinese Plugin Market] loadVectorIndex 总耗时");
 		try {
 			const store = await this.ensureVectorStore();
 			if (store) {
 				const vecs = store.getAllVecs();
-				console.debug(`[Chinese Plugin Market] loadVectorIndex 反量化 ${vecs.size} 条向量`);
+				logger.debug(`[Chinese Plugin Market] loadVectorIndex 反量化 ${vecs.size} 条向量`);
 				if (vecs.size > 0) {
 					const ids = Array.from(vecs.keys());
 					// 直接复用 Float32Array，不再 Array.from 转 number[]（消除二次转换，节省 6000×512 次分配）
@@ -1244,10 +1250,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			const legacy = await this.loadLegacyVectorIndex();
 			this.translator.setVectorIndex(legacy);
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 加载向量索引失败，将重建：", e);
+			logger.warn("[Chinese Plugin Market] 加载向量索引失败，将重建：", e);
 			this.translator.setVectorIndex(null);
 		} finally {
-			console.timeEnd("[Chinese Plugin Market] loadVectorIndex 总耗时");
+			logger.timeEnd("[Chinese Plugin Market] loadVectorIndex 总耗时");
 		}
 	}
 
@@ -1299,7 +1305,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			await store.flush();
 		} catch (e) {
 			// 写盘失败不影响搜索功能，仅无法跨会话复用
-			console.warn("[Chinese Plugin Market] 保存向量索引失败：", e);
+			logger.warn("[Chinese Plugin Market] 保存向量索引失败：", e);
 		}
 	}
 

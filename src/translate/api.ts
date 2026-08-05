@@ -9,6 +9,7 @@
  */
 
 import { requestUrl } from "obsidian";
+import { logger } from "../logger";
 import { tencentTranslate, type TencentApiConfig } from "../tencent-signer";
 import type { TranslateResult, PluginInfo } from "../translator";
 import { parseJSON, extractLLMContent, supportsJsonMode, normalizeBaseUrl } from "../utils";
@@ -106,14 +107,14 @@ export class MyMemoryClient {
 				if (!this.blocked) {
 					this.blocked = true;
 					this.blockedDate = todayStr();
-					console.warn(
+					logger.warn(
 						"[Chinese Plugin Market] MyMemory 额度已耗尽（429/配额），今日内不再调用 MyMemory，未译插件将走其他来源或原文兜底（跨天自动恢复）。"
 					);
 				}
 			} else {
 				// 非配额类（含弱网/超时）→ 计入瞬时熔断
 				this.netBreaker.recordFailure(isFatalError(e));
-				console.warn(`[Chinese Plugin Market] MyMemory 翻译失败 (${plugin.id}):`, e);
+				logger.warn(`[Chinese Plugin Market] MyMemory 翻译失败 (${plugin.id}):`, e);
 			}
 			return null;
 		}
@@ -228,7 +229,7 @@ export class GoogleClient {
 			// 只有当 name 和 description 都完全未变（Google 一个都没翻出来）时，才视为无效，走 MyMemory 兜底。
 			// 否则接受「部分未变」：例如插件名是专有名词，Google 返回原文，但描述已翻译——仍比完全 fallback 要好。
 			if (nameRes.unchanged && descRes.unchanged) {
-				console.debug(`[Chinese Plugin Market] Google 翻译未变化（${plugin.id}），走 MyMemory 兜底`);
+				logger.debug(`[Chinese Plugin Market] Google 翻译未变化（${plugin.id}），走 MyMemory 兜底`);
 				throw new Error("Google 翻译结果未变化");
 			}
 
@@ -245,7 +246,7 @@ export class GoogleClient {
 				if (!this.blocked) {
 					this.blocked = true;
 					this.blockedDate = todayStr();
-					console.warn(
+					logger.warn(
 						"[Chinese Plugin Market] Google 翻译触发限流，今日内不再调用 Google，未译插件将走 MyMemory / 原文兜底（跨天自动恢复）。"
 					);
 				}
@@ -253,7 +254,7 @@ export class GoogleClient {
 				// 正常 fallback 路径，不算硬失败：不记熔断、不打 warn
 			} else {
 				this.netBreaker.recordFailure(isFatalError(e));
-				console.warn(`[Chinese Plugin Market] Google 翻译失败 (${plugin.id}):`, e);
+				logger.warn(`[Chinese Plugin Market] Google 翻译失败 (${plugin.id}):`, e);
 			}
 			return null;
 		}
@@ -478,7 +479,7 @@ export async function callAITranslate(
 			source: "ai",
 		};
 	} catch (e) {
-		console.warn(`[Chinese Plugin Market] AI 翻译失败 (${plugin.id}):`, e);
+		logger.warn(`[Chinese Plugin Market] AI 翻译失败 (${plugin.id}):`, e);
 		return null;
 	}
 }

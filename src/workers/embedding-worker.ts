@@ -72,7 +72,7 @@ async function handleInit(msg: InitMsg): Promise<void> {
 	});
 	// 同时屏蔽 globalThis.process（部分构建引用它）
 	try {
-		Object.defineProperty(globalThis, "process", {
+		Object.defineProperty(self, "process", {
 			get: () => undefined,
 			configurable: true,
 		});
@@ -130,7 +130,7 @@ async function handleInit(msg: InitMsg): Promise<void> {
 				})
 				.catch((e) => {
 					window.clearTimeout(timer);
-					reject(e);
+					reject(e instanceof Error ? e : new Error(String(e)));
 				});
 		});
 

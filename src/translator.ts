@@ -9,6 +9,7 @@
  */
 
 import { mapWithConcurrency } from "./utils";
+import { logger } from "./logger";
 import { type TencentApiConfig } from "./tencent-signer";
 import {
 	MyMemoryClient,
@@ -935,7 +936,7 @@ export class Translator {
 
 	private logTencentError(pluginId: string, error: unknown) {
 		const msg = error instanceof Error ? error.message : String(error);
-		console.warn(`[Chinese Plugin Market] 腾讯翻译失败 (${pluginId}):`, msg);
+		logger.warn(`[Chinese Plugin Market] 腾讯翻译失败 (${pluginId}):`, msg);
 	}
 
 	// ══════════════════════════════════════════════════

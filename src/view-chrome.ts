@@ -6,6 +6,7 @@
  */
 
 import { type I18nKey } from "./i18n";
+import { logger } from "./logger";
 import { setListState } from "./list-state";
 import { isAIMode, isKeywordMode } from "./search-mode";
 import { q, appendSVG } from "./dom";
@@ -495,7 +496,7 @@ export async function loadAndRender(ctx: ViewContext) {
 				// 首屏渲染后同步滚动快捷按钮的可见性（首次打开即显示「一键置底」）
 				ctx.updateScrollButtons();
 			}
-		}).catch((e) => console.warn("[Chinese Plugin Market] 初始化数据加载失败：", e));
+		}).catch((e) => logger.warn("[Chinese Plugin Market] 初始化数据加载失败：", e));
 	
 }
 

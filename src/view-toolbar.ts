@@ -380,42 +380,44 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// Enter 键：AI 模式下触发 AI 搜索；其余模式立即刷新本地过滤
 		// （若数据尚未加载，先懒加载再渲染，避免首次直接 Enter 出现空结果）
-		searchInput.addEventListener("keydown", async (e) => {
-			// Esc 清空搜索框（符合输入控件直觉）
-			if (e.key === "Escape") {
-				if (searchInput.value) {
-					searchInput.value = "";
-					ctx.searchQuery = "";
-					ctx.aiSearchResult = null;
-					ctx.aiSearchQueryCache = "";
-					// Esc 仅清搜索，不重置筛选
-					syncClearBtn();
-					searchInput.focus();
-					ctx.renderPluginList();
-				} else if (ctx.authorFilter) {
-					// 搜索框为空但处于作者筛选态：Esc 退出作者筛选
-					ctx.authorFilter = null;
-					ctx.updateAuthorBanner();
-					ctx.renderAuthorFacet();
-					ctx.updateFacetVisibility();
-					ctx.renderPluginList();
+		searchInput.addEventListener("keydown", (e) => {
+			void (async () => {
+				// Esc 清空搜索框（符合输入控件直觉）
+				if (e.key === "Escape") {
+					if (searchInput.value) {
+						searchInput.value = "";
+						ctx.searchQuery = "";
+						ctx.aiSearchResult = null;
+						ctx.aiSearchQueryCache = "";
+						// Esc 仅清搜索，不重置筛选
+						syncClearBtn();
+						searchInput.focus();
+						ctx.renderPluginList();
+					} else if (ctx.authorFilter) {
+						// 搜索框为空但处于作者筛选态：Esc 退出作者筛选
+						ctx.authorFilter = null;
+						ctx.updateAuthorBanner();
+						ctx.renderAuthorFacet();
+						ctx.updateFacetVisibility();
+						ctx.renderPluginList();
+					} else {
+						searchInput.blur();
+					}
+					return;
+				}
+				if (e.key !== "Enter") return;
+				e.preventDefault();
+				if (isAIMode(ctx) || isLocalMode(ctx)) {
+					// 语义模式（AI / 本地）由 Enter 触发检索：AI 走 LLM 精排，本地走 RRF 融合排序
+					await ctx.runAISearch(searchInput, aiBadge);
 				} else {
-					searchInput.blur();
+					if (!ctx.dataLoaded && ctx.plugins.length === 0) {
+						const ok = await ctx.ensureDataLoaded();
+						if (!ok) return;
+					}
+					ctx.scheduleRender();
 				}
-			return;
-		}
-			if (e.key !== "Enter") return;
-			e.preventDefault();
-			if (isAIMode(ctx) || isLocalMode(ctx)) {
-				// 语义模式（AI / 本地）由 Enter 触发检索：AI 走 LLM 精排，本地走 RRF 融合排序
-				await ctx.runAISearch(searchInput, aiBadge);
-			} else {
-				if (!ctx.dataLoaded && ctx.plugins.length === 0) {
-					const ok = await ctx.ensureDataLoaded();
-					if (!ok) return;
-				}
-				ctx.scheduleRender();
-			}
+			})();
 		});
 
 

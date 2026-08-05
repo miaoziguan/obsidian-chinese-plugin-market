@@ -11,6 +11,7 @@
  */
 
 import { parseJSON, parseRecallCandidates, fuzzyTitleScores, rrfFuse, topNFused, type RecallCandidate } from "../utils";
+import { logger } from "../logger";
 import { tokenizeForBM25, bm25Score } from "../bm25";
 import { t2sForEmbed } from "../t2s";
 import { expandQuery } from "../synonyms";
@@ -207,7 +208,7 @@ export class AISearcher {
 			try {
 				vectorScores = await this.vectorRecallScores(query, allPlugins, embCfg!, onPhase, filterCategories);
 			} catch (e) {
-				console.warn("[Chinese Plugin Market] 向量召回失败，降级到纯关键词：", e);
+				logger.warn("[Chinese Plugin Market] 向量召回失败，降级到纯关键词：", e);
 				vectorScores = null;
 			}
 		}
@@ -242,7 +243,7 @@ export class AISearcher {
 			}
 		}
 		merged = union;
-		console.debug(
+		logger.debug(
 			`[Chinese Plugin Market] AI 搜索召回：query="${query}" · 向量命中=${vectorScores?.size ?? 0} · ` +
 				`关键词命中=${localScores.size} · 标题模糊命中=${fuzzyScores.size} · ` +
 				`RRF 融合后候选=${merged.length}（${Date.now() - tStart}ms）`
@@ -303,7 +304,7 @@ export class AISearcher {
 			try {
 				vectorScores = await this.vectorRecallScores(query, allPlugins, embCfg!, undefined, filterCategories);
 			} catch (e) {
-				console.warn("[Chinese Plugin Market] 本地语义：向量召回失败，降级关键词+标题：", e);
+				logger.warn("[Chinese Plugin Market] 本地语义：向量召回失败，降级关键词+标题：", e);
 				vectorScores = null;
 			}
 		}
@@ -326,7 +327,7 @@ export class AISearcher {
 			).map((x) => x.id);
 		}
 
-		console.debug(
+		logger.debug(
 			`[Chinese Plugin Market] 本地语义搜索：query="${query}" · 向量命中=${vectorScores?.size ?? 0} · ` +
 				`关键词命中=${localScores.size} · 标题模糊命中=${fuzzyScores.size} · ` +
 				`融合后=${fusedIds.length}（${Date.now() - tStart}ms）`
@@ -365,7 +366,7 @@ export class AISearcher {
 		try {
 			return await this.llm.call(system, user, 4000, false);
 		} catch (e) {
-			console.warn(`[Chinese Plugin Market] AI 对比失败:`, e);
+			logger.warn(`[Chinese Plugin Market] AI 对比失败:`, e);
 			throw e;
 		}
 	}
@@ -413,7 +414,7 @@ export class AISearcher {
 			this.vectorIndex.categorySchemaVersion !== this.tagService.getSchemaVersion();
 
 		// 探针：打印 needBuild 各判定分支，便于定位「每次搜索都重建」的根因
-		console.debug(
+		logger.debug(
 			`[Chinese Plugin Market] 探针：needBuild 判定 → ` +
 				`vectorIndex空=${!this.vectorIndex} · model(${this.vectorIndex?.model}≠${indexModel})=${this.vectorIndex?.model !== indexModel} · ` +
 				`ids长度(${this.vectorIndex?.ids.length}≠${allPlugins.length})=${this.vectorIndex?.ids.length !== allPlugins.length} · ` +
@@ -439,7 +440,7 @@ export class AISearcher {
 		const tRecall = Date.now();
 		const scored = await vectorRecallScores(provider, anchoredQuery, this.vectorIndex, VECTOR_RECALL_CAP, VECTOR_MIN_SCORE);
 		const recallMs = Date.now() - tRecall;
-		console.debug(
+		logger.debug(
 			`[Chinese Plugin Market] 向量召回性能：needBuild=${needBuild} · 索引构建/复用=${buildMs}ms · query embed+余弦=${recallMs}ms · 插件数=${allPlugins.length}`
 		);
 		if (!scored) return null;
@@ -483,9 +484,9 @@ export class AISearcher {
 		}
 
 		if (batchResults.length === 0) {
-			console.error(`[Chinese Plugin Market] AI 搜索：${failedCount}/${settled.length} 批召回全部失败`);
+			logger.error(`[Chinese Plugin Market] AI 搜索：${failedCount}/${settled.length} 批召回全部失败`);
 			settled.forEach((r, i) => {
-				if (r.status === "rejected") console.error(`  - 第 ${i + 1} 批:`, r.reason);
+				if (r.status === "rejected") logger.error(`  - 第 ${i + 1} 批:`, r.reason);
 			});
 			const reasonMsg =
 				firstReason instanceof Error ? firstReason.message : firstReason ? String(firstReason) : "";
@@ -641,18 +642,18 @@ ${candidateLines}
 	): Promise<AISearchResult> {
 		try {
 			const r = await this.rankTop(query, candidates, showReason, onPhase);
-			console.debug(
+			logger.debug(
 				`[Chinese Plugin Market] AI 精排完成：候选=${candidates.length} → 命中=${r.rankedIds.length}（LLM 精排成功）`
 			);
 			return r;
 		} catch (e) {
-			console.warn(
+			logger.warn(
 				"[Chinese Plugin Market] AI 精排失败，降级到本地召回排序（向量∪关键词）：",
 				e
 			);
 			// 混合召回顺序：向量命中的语义相关项在前，关键词命中补在后，
 			// 本身就是合理的「相关度降序」，无需任何网络调用。
-			console.debug(
+			logger.debug(
 				`[Chinese Plugin Market] AI 精排降级：候选=${candidates.length} → 回退本地召回序`
 			);
 			return { rankedIds: candidates.map((c) => c.id), rankFallback: true };

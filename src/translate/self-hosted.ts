@@ -11,6 +11,7 @@
  */
 
 import type { PluginInfo, TranslateResult } from "../translator";
+import { logger } from "../logger";
 import { netRequest } from "../net";
 import { withTimeout, CircuitBreaker } from "./guard";
 
@@ -73,7 +74,7 @@ export class DeepLXClient implements SelfHostedTranslator {
 			};
 		} catch (e) {
 			this.breaker.recordFailure(false);
-			console.warn(`[Chinese Plugin Market] DeepLX 翻译失败 (${plugin.id}):`, e);
+			logger.warn(`[Chinese Plugin Market] DeepLX 翻译失败 (${plugin.id}):`, e);
 			return null;
 		}
 	}
@@ -146,7 +147,7 @@ export class LibreTranslateClient implements SelfHostedTranslator {
 			};
 		} catch (e) {
 			this.breaker.recordFailure(false);
-			console.warn(`[Chinese Plugin Market] LibreTranslate 翻译失败 (${plugin.id}):`, e);
+			logger.warn(`[Chinese Plugin Market] LibreTranslate 翻译失败 (${plugin.id}):`, e);
 			return null;
 		}
 	}

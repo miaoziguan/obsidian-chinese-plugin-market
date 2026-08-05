@@ -1,4 +1,4 @@
-import { PluginSettingTab, Setting, Notice, requestUrl } from "obsidian";
+import { PluginSettingTab, Setting, Notice, requestUrl, type App } from "obsidian";
 import type ChinesePluginMarket from "./main";
 import { makeT, type I18nKey } from "./i18n";
 import { normalizeBaseUrl } from "./utils";
@@ -8,7 +8,7 @@ import type { SourceFilter } from "./filter";
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
 
-	constructor(app: any, plugin: ChinesePluginMarket) {
+	constructor(app: App, plugin: ChinesePluginMarket) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -70,10 +70,13 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				}),
 				throw: false,
 			});
-			const latency = Date.now() - startTime;
-			if (response.status === 200) {
-				const respModel = response.json?.model || model;
-				const tokensUsed = response.json?.usage?.total_tokens;
+		const latency = Date.now() - startTime;
+		if (response.status === 200) {
+			const json = response.json as
+				| { model?: string; usage?: { total_tokens?: number } }
+				| undefined;
+			const respModel = json?.model || model;
+			const tokensUsed = json?.usage?.total_tokens;
 				const tokenInfo = tokensUsed ? ` · 消耗 ${tokensUsed} tokens` : "";
 				new Notice(
 					`✓ ${this.t("settings.ai.test.ok")} · ${respModel} · ${latency}ms${tokenInfo}`,
@@ -346,43 +349,50 @@ export class TranslatorSettingTab extends PluginSettingTab {
 					});
 					if (tp === item.type) opt.selected = true;
 				});
-				sel.addEventListener("change", async () => {
+			sel.addEventListener("change", () => {
+				void (async () => {
 					this.plugin.settings.selfHostedTranslators[idx].type = sel.value as
 						| "deeplx"
 						| "libretranslate";
 					await this.plugin.flushSaveSettings();
 					this.syncSelfHosted();
-				});
-				const txt = row.createEl("input", {
-					cls: "pt-selfhosted-url",
-					type: "text",
-					placeholder: "http://localhost:1188",
-				}) as HTMLInputElement;
-				txt.value = item.baseUrl;
-				txt.addEventListener("change", async () => {
+				})();
+			});
+			const txt = row.createEl("input", {
+				cls: "pt-selfhosted-url",
+				type: "text",
+				placeholder: "http://localhost:1188",
+			}) as HTMLInputElement;
+			txt.value = item.baseUrl;
+			txt.addEventListener("change", () => {
+				void (async () => {
 					this.plugin.settings.selfHostedTranslators[idx].baseUrl = txt.value.trim();
 					await this.plugin.flushSaveSettings();
 					this.syncSelfHosted();
-				});
-				const del = row.createEl("button", {
-					cls: "pt-selfhosted-del",
-					text: "✕",
-				});
-				del.addEventListener("click", async () => {
+				})();
+			});
+			const del = row.createEl("button", {
+				cls: "pt-selfhosted-del",
+				text: "✕",
+			});
+			del.addEventListener("click", () => {
+				void (async () => {
 					this.plugin.settings.selfHostedTranslators.splice(idx, 1);
 					await this.plugin.flushSaveSettings();
 					this.syncSelfHosted();
 					this.display();
-				});
+				})();
 			});
-		};
-		renderSelfHosted();
-		new Setting(shBody)
-			.setName(this.t("settings.selfHosted.add"))
-			.addButton((btn) =>
-				btn
-					.setButtonText(this.t("settings.selfHosted.addBtn"))
-					.onClick(async () => {
+		});
+	};
+	renderSelfHosted();
+	new Setting(shBody)
+		.setName(this.t("settings.selfHosted.add"))
+		.addButton((btn) =>
+			btn
+				.setButtonText(this.t("settings.selfHosted.addBtn"))
+				.onClick(() => {
+					void (async () => {
 						this.plugin.settings.selfHostedTranslators.push({
 							type: "deeplx",
 							baseUrl: "",
@@ -390,7 +400,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 						await this.plugin.flushSaveSettings();
 						this.syncSelfHosted();
 						this.display();
-					})
+					})();
+				})
 			);
 
 		// ── 检索召回（Embedding / 关键词，默认折叠；大多数用户无需配置，保留"关键词"即可）──
@@ -551,12 +562,14 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			.addButton((btn) =>
 				btn
 					.setButtonText(this.t("settings.cache.clear"))
-					.setWarning()
-					.onClick(async () => {
-						this.plugin.translator.clearCache();
-						await this.plugin.saveTranslatorData();
-						new Notice(this.t("notice.cacheCleared"));
-						this.display();
+					.setDestructive()
+					.onClick(() => {
+						void (async () => {
+							this.plugin.translator.clearCache();
+							this.plugin.saveTranslatorData();
+							new Notice(this.t("notice.cacheCleared"));
+							this.display();
+						})();
 					})
 			);
 		new Setting(cacheSec)
@@ -567,12 +580,14 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			.addButton((btn) =>
 				btn
 					.setButtonText(this.t("settings.aidict.clear"))
-					.setWarning()
-					.onClick(async () => {
-						this.plugin.translator.clearAIDict();
-						await this.plugin.saveTranslatorData();
-						new Notice(this.t("notice.aiDictCleared"));
-						this.display();
+					.setDestructive()
+					.onClick(() => {
+						void (async () => {
+							this.plugin.translator.clearAIDict();
+							this.plugin.saveTranslatorData();
+							new Notice(this.t("notice.aiDictCleared"));
+							this.display();
+						})();
 					})
 			);
 		// ── 翻译记忆库 (TM) ──
@@ -583,7 +598,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			.addButton((btn) =>
 				btn
 					.setButtonText(this.t("settings.tm.clearApproved"))
-					.setWarning()
+					.setDestructive()
 					.onClick(() => void this.plugin.clearApprovedTM())
 			);
 	}

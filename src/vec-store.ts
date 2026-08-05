@@ -15,6 +15,7 @@
  * 对插件市场这种「写入低频（索引重建时）、读取频繁（搜索时）」的模式很合适。
  */
 import type { Database, SqlJsStatic } from "sql.js";
+import { logger } from "./logger";
 import { quantizeVec, dequantizeVec, VectorCodecError } from "./vec-codec";
 
 /** 持久化适配器（由调用方注入，通常是 Obsidian vault.adapter） */
@@ -174,14 +175,14 @@ export class SqliteVectorStore {
 		const res = this.db.exec("SELECT id, vec FROM plugins");
 		const sqlMs = Date.now() - tSql;
 		if (res.length === 0) {
-			console.debug(`[Chinese Plugin Market] 探针：getAllVecs SQL 查询 ${sqlMs}ms（空库）`);
+			logger.debug(`[Chinese Plugin Market] 探针：getAllVecs SQL 查询 ${sqlMs}ms（空库）`);
 			return out;
 		}
 		const tDeq = Date.now();
 		for (const row of res[0].values) {
 			out.set(row[0] as string, dequantizeVec(row[1] as Uint8Array));
 		}
-		console.debug(`[Chinese Plugin Market] 探针：getAllVecs SQL=${sqlMs}ms · 反量化 ${out.size} 条=${Date.now() - tDeq}ms`);
+		logger.debug(`[Chinese Plugin Market] 探针：getAllVecs SQL=${sqlMs}ms · 反量化 ${out.size} 条=${Date.now() - tDeq}ms`);
 		return out;
 	}
 

@@ -5,6 +5,7 @@
  */
 
 import { Notice, requestUrl } from "obsidian";
+import { logger } from "./logger";
 import { cleanChineseSpaces, isListStale, computePluginDelta } from "./utils";
 import { type PluginInfo, type TranslateResult } from "./translator";
 import { resolveUrl, classifyNetworkError, buildMirrorOrder, type MirrorConfig } from "./mirror";
@@ -76,7 +77,7 @@ export function applySearchInput(ctx: ViewContext) {
 		}
 		void ctx.ensureDataLoaded().then((ok) => {
 			if (ok) ctx.scheduleRender();
-		}).catch((e) => console.warn("[Chinese Plugin Market] 搜索时数据加载失败：", e));
+		}).catch((e) => logger.warn("[Chinese Plugin Market] 搜索时数据加载失败：", e));
 	
 }
 
@@ -184,7 +185,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			const td = ctx.translator.getData();
 			const covStat = computeCoverage(new Set(data.map((p) => p.id)), ctx.translator.tmApproved, td.cache);
 			ctx.translator.recordCoverage(covStat, ctx.manifest.version);
-			await ctx.saveTranslatorData();
+			ctx.saveTranslatorData();
 
 			// 同步合并已缓存的 stats（首屏不空白）并快照已安装状态
 			ctx.mergeStatsFromCache();
@@ -195,12 +196,12 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			const { results: offline } = ctx.translator.mergeOffline(data);
 			ctx.translatedResults = offline;
 			// 离线命中（bulk/user）已写入 cache，落盘一次供下次秒开
-			await ctx.saveTranslatorData();
+			ctx.saveTranslatorData();
 
 		// 新增插件翻译增量感知：本地 diff「本次新冒出的插件」并提示（产品改进 #16）
 		ctx.reportNewPluginDelta(data, ctx.translatedResults);
 		// 把刚更新的「已见插件」集合落盘，跨会话重启后增量提示仍准确
-		await ctx.saveTranslatorData();
+		ctx.saveTranslatorData();
 
 		if (stats) {
 			stats.empty();
@@ -238,7 +239,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 		// 异步非阻塞刷新最新 stats（失败记录日志，不阻断主列表；回来再 render 一次合并）
 		void ctx.fetchStatsAndMerge()
 			.then(() => ctx.scheduleRender())
-			.catch((e2) => console.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e2));
+			.catch((e2) => logger.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e2));
 
 		return true;
 		} catch (e) {
@@ -249,7 +250,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 				ctx.buildAuthorFacet();
 			ctx.applyAIConfig();
 			if (progressHint) progressHint.textContent = "（使用本地缓存）";
-			console.warn("[Chinese Plugin Market] 网络不可用，已从本地缓存恢复插件列表（%d 个）。", cachedData.length);
+			logger.warn("[Chinese Plugin Market] 网络不可用，已从本地缓存恢复插件列表（%d 个）。", cachedData.length);
 			// 等待 vault 翻译记忆回灌完成（同在线路径，避免 tmApproved 为空时兜底）
 			const minVisibleUntilOffline = Date.now() + 200;
 			const tmProgressTimerOffline = window.setInterval(() => {
@@ -266,14 +267,14 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 		const td = ctx.translator.getData();
 			const covStat = computeCoverage(new Set(cachedData.map((p: PluginInfo) => p.id)), ctx.translator.tmApproved, td.cache);
 				ctx.translator.recordCoverage(covStat, ctx.manifest.version);
-				await ctx.saveTranslatorData();
+				ctx.saveTranslatorData();
 				ctx.mergeStatsFromCache();
 				ctx.snapshotInstalled();
 				const { results: offline } = ctx.translator.mergeOffline(cachedData);
 				ctx.translatedResults = offline;
-				await ctx.saveTranslatorData();
+				ctx.saveTranslatorData();
 				ctx.reportNewPluginDelta(cachedData, ctx.translatedResults);
-				await ctx.saveTranslatorData();
+				ctx.saveTranslatorData();
 			ctx.dataLoaded = true;
 			ctx.buildSearchIndex();
 			ctx.renderAuthorFacet();
@@ -282,7 +283,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			ctx.scheduleRender();
 			void ctx.fetchStatsAndMerge()
 				.then(() => ctx.scheduleRender())
-				.catch((e2) => console.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e2));
+				.catch((e2) => logger.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e2));
 			return true;
 			}
 
@@ -309,7 +310,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 					ctx.dataLoading = false;
 					void ctx.ensureDataLoaded().then((ok) => {
 						if (ok) ctx.scheduleRender();
-					}).catch((e) => console.warn("[Chinese Plugin Market] 重试数据加载失败：", e));
+					}).catch((e) => logger.warn("[Chinese Plugin Market] 重试数据加载失败：", e));
 				});
 				// 被墙/访问受限场景：一键切镜像后重试
 				if (info.suggestMirror) {
@@ -317,7 +318,8 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 						cls: "pt-guide-chip pt-error-mirror",
 						text: ctx.t("error.mirror"),
 					});
-					mirrorBtn.addEventListener("click", async () => {
+				mirrorBtn.addEventListener("click", () => {
+					void (async () => {
 						const cur = ctx.settings.mirrorSource;
 						ctx.settings.mirrorSource =
 							cur === "github" ? "jsdelivr" : "github";
@@ -329,8 +331,9 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 						ctx.dataLoading = false;
 						void ctx.ensureDataLoaded().then((ok) => {
 							if (ok) ctx.scheduleRender();
-						}).catch((e) => console.warn("[Chinese Plugin Market] 切镜像后数据加载失败：", e));
-					});
+						}).catch((e) => logger.warn("[Chinese Plugin Market] 切镜像后数据加载失败：", e));
+					})();
+				});
 				}
 				const guideBtn = actions.createEl("button", {
 					cls: "pt-guide-chip pt-error-guide",
@@ -410,18 +413,18 @@ export async function refreshData(ctx: ViewContext) : Promise<void> {
 				td.cache
 			);
 			ctx.translator.recordCoverage(covStat, ctx.manifest.version);
-			await ctx.saveTranslatorData();
+			ctx.saveTranslatorData();
 
 			ctx.mergeStatsFromCache();
 			ctx.snapshotInstalled();
 			const { results: offline } = ctx.translator.mergeOffline(data);
 			ctx.translatedResults = offline;
-			await ctx.saveTranslatorData();
+			ctx.saveTranslatorData();
 
 			// 新增插件翻译增量感知：本地 diff「本次新冒出的插件」并提示（产品改进 #16）
 		ctx.reportNewPluginDelta(data, ctx.translatedResults);
 		// 把刚更新的「已见插件」集合落盘，跨会话重启后增量提示仍准确
-		await ctx.saveTranslatorData();
+		ctx.saveTranslatorData();
 
 		ctx.dataLoaded = true;
 			ctx.lastListFetchAt = Date.now();
@@ -434,7 +437,7 @@ export async function refreshData(ctx: ViewContext) : Promise<void> {
 			// 异步刷新最新 stats（下载量/更新时间），失败记录日志
 			void ctx.fetchStatsAndMerge()
 				.then(() => ctx.scheduleRender())
-				.catch((e) => console.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e));
+				.catch((e) => logger.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e));
 
 			ctx.scheduleRender();
 			new Notice(ctx.t("action.refresh.done"));
@@ -515,7 +518,7 @@ export async function fetchStatsAndMerge(ctx: ViewContext) : Promise<void> {
 			ctx.mergeStatsIntoPlugins();
 			void ctx.saveStatsCache(map);
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 拉取 stats 失败，复用缓存/旧值：", e);
+			logger.warn("[Chinese Plugin Market] 拉取 stats 失败，复用缓存/旧值：", e);
 		}
 	
 }
@@ -568,7 +571,7 @@ export function snapshotInstalled(ctx: ViewContext) {
 				ctx.enabledIds = new Set(plugins.enabledPlugins as Set<string>);
 			}
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 读取已安装插件失败：", e);
+			logger.warn("[Chinese Plugin Market] 读取已安装插件失败：", e);
 		}
 	
 }
@@ -765,12 +768,12 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 		// 不再强制要求 AI Key：有 Key 时优先用 AI 翻译，未配置则自动降级到
 		// Google/MyMemory/腾讯免费引擎混合翻译（底层 translatePluginOnce 按优先级链处理）。
 		if (ctx.aiTranslateRunning) {
-			console.debug("[Chinese Plugin Market] 智能混合翻译：正在运行中，跳过本次点击");
+			logger.debug("[Chinese Plugin Market] 智能混合翻译：正在运行中，跳过本次点击");
 			return;
 		}
 		const data = ctx.translator.getData();
 		const pending = ctx.visibleList.filter((p) => !ctx.isTranslated(p));
-		console.debug(`[Chinese Plugin Market] 智能混合翻译：visibleList=${ctx.visibleList.length} · pending=${pending.length} · aiEnabled=${s.aiSearchEnabled} · hasKey=${!!s.aiSearchApiKey}`);
+		logger.debug(`[Chinese Plugin Market] 智能混合翻译：visibleList=${ctx.visibleList.length} · pending=${pending.length} · aiEnabled=${s.aiSearchEnabled} · hasKey=${!!s.aiSearchApiKey}`);
 		if (pending.length === 0) {
 			ctx.setAIProgressDone(0);
 			return;
@@ -811,9 +814,9 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 					}
 				}
 			);
-			console.debug("[Chinese Plugin Market] 智能混合翻译：translateBatchIncremental 完成");
+			logger.debug("[Chinese Plugin Market] 智能混合翻译：translateBatchIncremental 完成");
 		} catch (e) {
-			console.error("[Chinese Plugin Market] 智能混合翻译：异常", e);
+			logger.error("[Chinese Plugin Market] 智能混合翻译：异常", e);
 	} finally {
 		ctx.aiTranslateRunning = false;
 		refreshDone();
