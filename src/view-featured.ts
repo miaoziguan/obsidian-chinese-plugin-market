@@ -126,29 +126,16 @@ export function ensureFeaturedSection(ctx: ViewContext) {
 		if (ctx.featuredSectionEl) return;
 		const section = ctx.containerEl.createEl("div", { cls: "pt-featured" });
 		const head = section.createEl("div", { cls: "pt-featured-head" });
-		// ── 内联 !important 样式（style.setProperty 的 "important" 优先级）──
-		// 这是 CSS 优先级金字塔顶端，任何外部样式表 / 主题 / !important 都无法覆盖。
-		// 用此把 head/title/toggle 的对齐关键属性写死，彻底绕开 Obsidian 主题干扰。
-		// 关键坑：display:flex 不会重置 flex-direction —— 主题若给 head 设了
-		// flex-direction:column，title/toggle 会垂直堆叠成两行。必须显式锁定 row。
-		head.style.setProperty("display", "flex", "important");
-		head.style.setProperty("flex-direction", "row", "important");
-		head.style.setProperty("flex-wrap", "nowrap", "important");
-		head.style.setProperty("align-items", "center", "important");
-		head.style.setProperty("justify-content", "space-between", "important");
-		head.style.setProperty("gap", "var(--pt-space-md)", "important");
+		// 关键对齐属性已由 styles.css 中以 !important 锁定（head/title/toggle），
+		// 彻底绕开 Obsidian 主题对 flex 方向/对齐的干扰，无需在 JS 内联 setProperty。
 
 		head.createEl("span", {
 			cls: "pt-featured-title",
 			text: ctx.recommendedTitle || ctx.t("recommend.title"),
 		});
-		const titleEl = head.querySelector(".pt-featured-title") as HTMLElement;
-		titleEl.style.setProperty("display", "flex", "important");
-		titleEl.style.setProperty("align-items", "center", "important");
 
 		// 副标题「羽鳞君 · 出品」已按需求移除
-		// 用 <span role="button"> 而非 <button>：彻底避开 Obsidian 主题对 <button> 的默认
-		// 盒模型 / margin / vertical-align 覆盖（即使 !important 也难完全压制某些社区主题）。
+		// 用 <span role="button"> 而非 <button>：避开 Obsidian 主题对 <button> 的默认盒模型覆盖。
 		const toggle = head.createEl("span", {
 			cls: "pt-featured-toggle",
 			attr: {
@@ -158,11 +145,6 @@ export function ensureFeaturedSection(ctx: ViewContext) {
 				title: ctx.t("recommend.section.collapse"),
 			},
 		});
-		// 内联 !important 锁定 toggle 的对齐属性
-		toggle.style.setProperty("display", "flex", "important");
-		toggle.style.setProperty("align-items", "center", "important");
-		toggle.style.setProperty("justify-content", "center", "important");
-		toggle.style.setProperty("flex", "none", "important");
 
 		const syncToggleLabel = () => toggle.setText(
 			ctx.featuredCollapsed ? ctx.t("recommend.section.expand") : ctx.t("recommend.section.collapse")
