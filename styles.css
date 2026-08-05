@@ -994,12 +994,13 @@ button.pt-facet-letter-btn.is-active {
 	box-shadow: none;
 }
 /* 焦点时彻底清掉 input 自身及 Obsidian 全局给 input 的 focus 视觉（绿色内框环来自 Obsidian 全局
-   input 焦点样式，需 !important 压过；焦点统一由 .pt-search:focus-within 的柔和光晕承担）。 */
-.pt-search input:focus,
-.pt-search input:focus-visible {
-	border: none !important;
-	outline: none !important;
-	box-shadow: none !important;
+   input 焦点样式，用 .pt-view 前缀提高特异性压过，避免 !important；焦点统一由
+   .pt-search:focus-within 的柔和光晕承担）。 */
+.pt-view .pt-search input:focus,
+.pt-view .pt-search input:focus-visible {
+	border: none;
+	outline: none;
+	box-shadow: none;
 }
 
 /* 右段：内容输入区（承载放大镜、输入框、清除按钮、AI 徽章的定位上下文） */
