@@ -136,13 +136,13 @@ function makeIconBtn(cls: string, action: string, label: string, _ctx: CardRende
  * 滚入不同插件时仅调用 applyCardState 原地改内容，省掉节点创建与 SVG 重解析。
  */
 export function createCardElement(ctx: CardRenderContext): HTMLElement {
-	const card = createEl("div");
+	const card = createDiv();
 	card.className = "pt-card pt-card--clickable";
 	card.setAttribute("tabindex", "-1"); // 键盘导航：程序化聚焦，不进入 Tab 序
 	card.setAttribute("role", "listitem"); // S6：配合 layer 的 role=list + aria-posinset
 
 	// 官方推荐金色角标（左上角叠加，常驻隐藏，applyCardState 控制显隐）
-	const recommendBadge = createEl("span");
+	const recommendBadge = createSpan();
 	recommendBadge.className = "pt-card-recommend-badge";
 	recommendBadge.textContent = ctx.t("recommend.badge");
 	recommendBadge.setAttribute("title", ctx.t("recommend.badge"));
@@ -150,32 +150,32 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	card.appendChild(recommendBadge);
 
 	// ── 头行：标题区 + 安装按钮 ──
-	const headRow = card.createEl("div", { cls: "pt-card-head-row" });
-	const nameBlock = headRow.createEl("div", { cls: "pt-card-name-block" });
-	const nameSpan = nameBlock.createEl("span", { cls: "pt-card-name" });
-	const originalName = nameBlock.createEl("span", { cls: "pt-card-original-name" });
+	const headRow = card.createDiv({ cls: "pt-card-head-row" });
+	const nameBlock = headRow.createDiv({ cls: "pt-card-name-block" });
+	const nameSpan = nameBlock.createSpan({ cls: "pt-card-name" });
+	const originalName = nameBlock.createSpan({ cls: "pt-card-original-name" });
 	originalName.setCssStyles({ display: "none" });
 
 	// 安装按钮占位（applyCardState 按状态重建并 replaceWith，保持 head Row 的 flex 顺序）
-	const installBtn = createEl("span");
+	const installBtn = createSpan();
 	installBtn.className = "pt-card-install-btn pt-card-install-btn--enabled";
 	installBtn.textContent = ctx.t("card.installed.on");
 	headRow.appendChild(installBtn);
 
 	// ── 底部脚注：元信息 chip 化（作者在前） ──
-	const meta = card.createEl("div", { cls: "pt-card-meta" });
-	const metaInfo = meta.createEl("div", { cls: "pt-card-meta-info" });
-	const authorSpan = metaInfo.createEl("span", {
+	const meta = card.createDiv({ cls: "pt-card-meta" });
+	const metaInfo = meta.createDiv({ cls: "pt-card-meta-info" });
+	const authorSpan = metaInfo.createSpan({
 		cls: "pt-meta-chip pt-meta-chip--author",
 		attr: { "data-action": "author" },
 	});
-	appendSVG(authorSpan.createEl("span", { cls: "pt-author-icon" }), ICON_PERSON);
-	const authorName = authorSpan.createEl("span", { cls: "pt-author-name" });
-	const installedMeta = metaInfo.createEl("span", { cls: "pt-card-installed" });
+	appendSVG(authorSpan.createSpan({ cls: "pt-author-icon" }), ICON_PERSON);
+	const authorName = authorSpan.createSpan({ cls: "pt-author-name" });
+	const installedMeta = metaInfo.createSpan({ cls: "pt-card-installed" });
 	installedMeta.setCssStyles({ display: "none" });
 
 	// ── 描述（固定行数截断，hover 浮层展示完整描述） ──
-	const descEl = card.createEl("div", { cls: "pt-card-desc pt-card-desc--clamped" });
+	const descEl = card.createDiv({ cls: "pt-card-desc pt-card-desc--clamped" });
 	let descTooltip: HTMLElement | null = null;
 	let descTooltipTimer: number | null = null;
 	descEl.addEventListener("mouseenter", () => {
@@ -184,7 +184,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		// 延迟 150ms 显示，避免快速划过时闪烁
 		descTooltipTimer = window.setTimeout(() => {
 			descTooltipTimer = null;
-			descTooltip = createEl("div");
+			descTooltip = createDiv();
 			descTooltip.className = "pt-desc-tooltip";
 			descTooltip.textContent = fullText;
 			const cardRect = card.getBoundingClientRect();
@@ -251,29 +251,29 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	});
 
 	// ── 统计信息行（下载/更新 chip，SVG 常驻） ──
-	const statline = card.createEl("div", { cls: "pt-card-statline" });
+	const statline = card.createDiv({ cls: "pt-card-statline" });
 	statline.setCssStyles({ display: "none" });
-	const dlChip = statline.createEl("span", { cls: "pt-stat-chip" });
-	appendSVG(dlChip.createEl("span", { cls: "pt-stat-icon" }), ICON_DOWNLOAD);
-	const dlText = dlChip.createEl("span");
+	const dlChip = statline.createSpan({ cls: "pt-stat-chip" });
+	appendSVG(dlChip.createSpan({ cls: "pt-stat-icon" }), ICON_DOWNLOAD);
+	const dlText = dlChip.createSpan();
 	dlChip.setCssStyles({ display: "none" });
-	const clkChip = statline.createEl("span", { cls: "pt-stat-chip" });
-	appendSVG(clkChip.createEl("span", { cls: "pt-stat-icon" }), ICON_CLOCK);
-	const clkText = clkChip.createEl("span");
+	const clkChip = statline.createSpan({ cls: "pt-stat-chip" });
+	appendSVG(clkChip.createSpan({ cls: "pt-stat-icon" }), ICON_CLOCK);
+	const clkText = clkChip.createSpan();
 	clkChip.setCssStyles({ display: "none" });
 
 	// ── 离线智能信号（pill 文本，无 SVG，按需填充） ──
-	const signalsRow = card.createEl("div", { cls: "pt-card-signals" });
+	const signalsRow = card.createDiv({ cls: "pt-card-signals" });
 	signalsRow.setCssStyles({ display: "none" });
 
 	// ── AI 排序理由（可选） ──
-	const aiReason = card.createEl("div", { cls: "pt-ai-reason" });
+	const aiReason = card.createDiv({ cls: "pt-ai-reason" });
 	aiReason.setCssStyles({ display: "none" });
-	aiReason.createEl("span", { cls: "pt-ai-reason-icon", text: "AI" });
-	const aiReasonText = aiReason.createEl("span", { cls: "pt-ai-reason-text" });
+	aiReason.createSpan({ cls: "pt-ai-reason-icon", text: "AI" });
+	const aiReasonText = aiReason.createSpan({ cls: "pt-ai-reason-text" });
 
 	// ── 操作图标组（静态 SVG，常驻） ──
-	const actionsRow = card.createEl("div", { cls: "pt-card-actions-row" });
+	const actionsRow = card.createDiv({ cls: "pt-card-actions-row" });
 	const insightBtn = makeIconBtn("pt-icon-btn pt-card-insight", "insight", ctx.t("card.insight"), ctx);
 	appendSVG(insightBtn, ICON_INSIGHT);
 	const compareBtn = makeIconBtn("pt-icon-btn pt-card-compare", "compare", ctx.t("card.compare"), ctx);
@@ -309,7 +309,7 @@ function buildInstallButton(plugin: PluginInfo, ctx: CardRenderContext): HTMLEle
 	const isInstalled = ctx.installedIds.has(plugin.id);
 	const isEnabled = ctx.enabledIds.has(plugin.id);
 	if (isEnabled) {
-		const el = createEl("span");
+		const el = createSpan();
 		el.className = "pt-card-install-btn pt-card-install-btn--enabled";
 		el.textContent = t("card.installed.on");
 		return el;
@@ -463,7 +463,7 @@ export function applyCardState(
 		refs.signalsRow.setCssStyles({ display: "" });
 		refs.signalsRow.replaceChildren();
 		for (const sig of signals) {
-			refs.signalsRow.createEl("span", { cls: "pt-signal-pill", text: SIGNAL_LABELS[sig] });
+			refs.signalsRow.createSpan({ cls: "pt-signal-pill", text: SIGNAL_LABELS[sig] });
 		}
 	} else {
 		refs.signalsRow.setCssStyles({ display: "none" });

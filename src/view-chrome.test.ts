@@ -12,6 +12,10 @@ describe("updateStats 计数口径", () => {
 			captured.push(o?.text ?? "");
 			return document.createElement("span");
 		}) as typeof stats.createEl;
+		// 补齐 createDiv/createSpan（源码已改用 Obsidian 助手；createDiv 在此等同 createEl）
+		const proto = HTMLElement.prototype as any;
+		if (!proto.createDiv) proto.createDiv = function (o?: any) { return this.createEl("div", o); };
+		if (!proto.createSpan) proto.createSpan = function (o?: any) { return this.createEl("span", o); };
 		const containerEl = { querySelector: () => stats } as unknown as HTMLElement;
 		const ctx = makeMockContext({
 			containerEl,

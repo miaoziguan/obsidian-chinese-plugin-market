@@ -36,6 +36,9 @@ describe("renderFacetChips", () => {
 			el.appendChild(child);
 			return child;
 		};
+		// 补齐 createDiv/createSpan（源码已改用这些 Obsidian 助手）
+		(el as any).createDiv = function (o?: Record<string, unknown>) { return (el as any).createEl("div", o); };
+		(el as any).createSpan = function (o?: Record<string, unknown>) { return (el as any).createEl("span", o); };
 		return el;
 	}
 

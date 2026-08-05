@@ -131,7 +131,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 		if (stats) {
 			stats.setCssStyles({ display: "" });
 			stats.empty();
-			stats.createEl("span", { cls: "pt-stat", text: ctx.t("app.loading") + "..." });
+			stats.createSpan({ cls: "pt-stat", text: ctx.t("app.loading") + "..." });
 		}
 		// 用户体验：首搜拉取 1 万条 + 逐条翻译可能耗时数秒，
 		// 必须把进度直接渲染到列表区（不要藏在折叠的统计区），否则用户以为卡死。
@@ -205,10 +205,10 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 
 		if (stats) {
 			stats.empty();
-			const s1 = stats.createEl("span", { cls: "pt-stat" });
+			const s1 = stats.createSpan({ cls: "pt-stat" });
 			s1.append(ctx.t("stats.plugins") + " ", createStrong(String(data.length)));
 			if (td.cache && Object.keys(td.cache).length > 0) {
-				const s2 = stats.createEl("span", { cls: "pt-stat" });
+				const s2 = stats.createSpan({ cls: "pt-stat" });
 				s2.append(ctx.t("stats.cache") + " ", createStrong(
 					String(Object.keys(td.cache).length)
 				));
@@ -291,15 +291,15 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			if (ctx.scrollCardLayer) {
 				ctx.scrollCardLayer.empty();
 				setListState(ctx, "error");
-				const err = ctx.scrollCardLayer.createEl("div", { cls: "pt-error" });
-				err.createEl("div", { cls: "pt-empty-title", text: ctx.t("error.title") });
+				const err = ctx.scrollCardLayer.createDiv({ cls: "pt-error" });
+				err.createDiv({ cls: "pt-empty-title", text: ctx.t("error.title") });
 				const info = classifyNetworkError(e);
-				err.createEl("div", {
+				err.createDiv({
 					cls: "pt-empty-hint",
 					text: `${ctx.t("error.fetch")}${info.message}`,
 				});
 				// 提供明确的可恢复入口：重试按钮 + 回搜索引导
-				const actions = err.createEl("div", { cls: "pt-error-actions" });
+				const actions = err.createDiv({ cls: "pt-error-actions" });
 				const retryBtn = actions.createEl("button", {
 					cls: "pt-guide-chip pt-error-retry",
 					text: ctx.t("error.retry"),
@@ -627,7 +627,7 @@ export function renderAuthorFacet(ctx: ViewContext) {
 	const letters = baseLetters.filter((l) => letterSet.has(l));
 	if (letters.length === 0) return;
 
-	const strip = ctx.authorFacetEl.createEl("div", { cls: "pt-facet-letter-strip" });
+	const strip = ctx.authorFacetEl.createDiv({ cls: "pt-facet-letter-strip" });
 	for (const letter of letters) {
 		const isActive = ctx.activeAuthorLetter === letter;
 		const el = strip.createEl("button", {
@@ -644,7 +644,7 @@ export function renderAuthorFacet(ctx: ViewContext) {
 	if (ctx.activeAuthorLetter) {
 		const group = ctx.authorFacetList.find((g) => g.letter === ctx.activeAuthorLetter);
 		if (group) {
-			const row = ctx.authorFacetEl.createEl("div", { cls: "pt-facet-chips" });
+			const row = ctx.authorFacetEl.createDiv({ cls: "pt-facet-chips" });
 			renderFacetChips(
 				row,
 				group.authors,
@@ -690,10 +690,10 @@ export function updateAuthorBanner(ctx: ViewContext) {
 		if (!ctx.authorBannerEl) {
 			const header = q(ctx.containerEl, ".pt-header");
 			if (!header) return;
-			const banner = header.createEl("div", { cls: "pt-author-banner" });
+			const banner = header.createDiv({ cls: "pt-author-banner" });
 			banner.setAttribute("role", "status");
 			banner.setAttribute("aria-live", "polite");
-			banner.createEl("span", { cls: "pt-author-banner-text" });
+			banner.createSpan({ cls: "pt-author-banner-text" });
 			const clearBtn = banner.createEl("button", {
 				cls: "pt-author-banner-clear",
 				text: ctx.t("author.filter.clear"),

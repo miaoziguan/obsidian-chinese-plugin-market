@@ -98,7 +98,7 @@ export function enterCompareMode(ctx: ViewContext) {
 		}
 		compareContainer.setCssStyles({ display: "" });
 		// 触发 reflow 后淡入
-		compareContainer.offsetHeight; // force reflow
+		void compareContainer.offsetHeight; // force reflow
 		compareContainer.setCssStyles({ opacity: "1", visibility: "visible" });
 
 		// 隐藏对比托盘（进入对比模式后不再需要）

@@ -99,7 +99,7 @@ export function createEmbeddingProvider(spec: EmbeddingProviderSpec): EmbeddingP
 			return new LocalEmbeddingProvider(
 				undefined,
 				spec.localModel,
-				spec.localWasmPaths as unknown as string
+				spec.localWasmPaths
 			);
 		}
 		default:
