@@ -50,7 +50,11 @@ export function showSearchGuide(ctx: ViewContext) {
 				input.value = ex;
 				input.focus();
 				input.classList.add("pt-search-flash");
-				window.setTimeout(() => input.classList.remove("pt-search-flash"), LAYOUT.SEARCH_FLASH_MS);
+				input.closest(".pt-search")?.addClass("pt-search--flash");
+				window.setTimeout(() => {
+					input.classList.remove("pt-search-flash");
+					input.closest(".pt-search")?.removeClass("pt-search--flash");
+				}, LAYOUT.SEARCH_FLASH_MS);
 				// 跳过 200ms debounce，立即触发搜索（含懒加载 + loading 反馈），
 				// 让用户点击示例词后立刻看到"加载中"而非静止 200ms。
 				ctx.applySearchInput();
@@ -93,7 +97,11 @@ export function showAIPendingHint(ctx: ViewContext) {
 				if (!input || !badge) return;
 				input.value = ex;
 				input.classList.add("pt-search-flash");
-				window.setTimeout(() => input.classList.remove("pt-search-flash"), LAYOUT.SEARCH_FLASH_MS);
+				input.closest(".pt-search")?.addClass("pt-search--flash");
+				window.setTimeout(() => {
+					input.classList.remove("pt-search-flash");
+					input.closest(".pt-search")?.removeClass("pt-search--flash");
+				}, LAYOUT.SEARCH_FLASH_MS);
 				ctx.searchQuery = ex;
 				const clearBtn = q(ctx.contentEl, ".pt-search-clear");
 				if (clearBtn) clearBtn.setCssStyles({ display: "" });

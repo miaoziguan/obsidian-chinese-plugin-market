@@ -58,6 +58,7 @@ export async function runAISearch(
 	aiBadge.setText(isLocal ? "本地检索中" : "AI 分析中");
 	aiBadge.setAttribute("title", isLocal ? "本地语义检索中..." : "AI 正在分析排序...");
 	searchInput.addClass("ai-loading");
+	searchInput.closest(".pt-search")?.addClass("pt-search--ai-loading");
 
 	try {
 		const pluginArgs = ctx.plugins.map((p) => ({
@@ -151,6 +152,7 @@ export async function runAISearch(
 	} finally {
 		ctx.aiSearchPending = false;
 		searchInput.removeClass("ai-loading");
+		searchInput.closest(".pt-search")?.removeClass("pt-search--ai-loading");
 		ctx.renderPluginList();
 	}
 }
