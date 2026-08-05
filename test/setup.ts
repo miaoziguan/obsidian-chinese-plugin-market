@@ -61,4 +61,5 @@ if (typeof g.document !== "undefined" && typeof g.createEl !== "function") {
 		applyElInfo(el, o);
 		return el;
 	};
+	g.createFragment = () => g.document!.createDocumentFragment();
 }
