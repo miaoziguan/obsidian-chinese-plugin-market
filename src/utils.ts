@@ -298,17 +298,14 @@ export function fuzzyTitleScores(
 			lowerNameCache.set(raw, title);
 		}
 		if (!title) continue;
-		// 快速否决：q 中 >=2 个字符在 title 中不存在 → 匹配字符数太少，Jaro 分数必低于阈值，跳过完整 Jaro-Winkler。
-		// （对短 name/边界情况保守，不改召回——Jaro 对零/极少公共字符必然低分；fuzzy.test 锁定行为）
+		// 快速否决（严格安全）：q 的所有唯一字符都不在 title → 匹配字符必为 0，Jaro 分数必为 0 < minScore，跳过完整 Jaro-Winkler。
+		// 仅此严格情形可安全跳过（不改召回；任何有公共字符的情况仍跑 Jaro，避免误杀）
 		if (qChars) {
-			let missing = 0;
+			let allMissing = true;
 			for (const ch of qChars) {
-				if (title.indexOf(ch) === -1) {
-					missing++;
-					if (missing >= 2) break;
-				}
+				if (title.indexOf(ch) !== -1) { allMissing = false; break; }
 			}
-			if (missing >= 2) continue;
+			if (allMissing) continue;
 		}
 		const score = jaroWinkler(q, title);
 		if (score >= minScore) out.push([p.id, score]);
