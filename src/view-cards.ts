@@ -27,7 +27,7 @@ export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard
 	// 打开丝滑优化：相似推荐（computeSimilarFor 对热门分类可能给上千候选打分）
 	// 不再阻塞打开帧，先渲染骨架，双 rAF（首帧真正绘制后）再计算回填。
 	const fillSimilar = (drawer: PluginDetailDrawer) => {
-		requestAnimationFrame(() => requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
 			// 若期间用户又跳转/关闭（activeDrawer 已换 / 内容已切换），安全跳过
 			if (ctx.activeDrawer !== drawer) return;
 			if (drawer.currentPluginId !== info.id) return;

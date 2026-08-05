@@ -597,7 +597,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.measureLayout();
 				ctx.fillVisibleWindow();
 				// 展开后强制重新对齐标签列（面板折叠时 offsetWidth 可能为 0，展开后才有真实宽度）
-				if (open) requestAnimationFrame(() => alignFacetLabels(ctx.contentEl));
+				if (open) window.requestAnimationFrame(() => alignFacetLabels(ctx.contentEl));
 			}, 200); // 略大于 --pt-duration-normal(180ms)，确保动画收尾后再测
 		});
 	return { searchInput };

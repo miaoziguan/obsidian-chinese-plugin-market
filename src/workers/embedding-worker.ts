@@ -122,14 +122,14 @@ async function handleInit(msg: InitMsg): Promise<void> {
 	// 探针 embed 学习维度，带超时（部分模型在 WebGPU 上 probe 可能挂起，超时即降级）
 	const probeWithTimeout = (ext: Extractor, ms: number): Promise<{ data: Float32Array; dims: number[] }> =>
 		new Promise((resolve, reject) => {
-			const timer = setTimeout(() => reject(new Error(`probe 超时（${ms / 1000}s）`)), ms);
+			const timer = window.setTimeout(() => reject(new Error(`probe 超时（${ms / 1000}s）`)), ms);
 			ext("_", { pooling: "mean", normalize: true })
 				.then((r) => {
-					clearTimeout(timer);
+					window.clearTimeout(timer);
 					resolve(r);
 				})
 				.catch((e) => {
-					clearTimeout(timer);
+					window.clearTimeout(timer);
 					reject(e);
 				});
 		});

@@ -363,7 +363,7 @@ export async function fetchPluginsWithFallback(ctx: ViewContext) : Promise<Plugi
 				const response = await Promise.race([
 					requestUrl({ url, method: "GET" }),
 					new Promise<never>((_, reject) =>
-						setTimeout(() => reject(new Error("timeout")), 4000)
+						window.setTimeout(() => reject(new Error("timeout")), 4000)
 					),
 				]) as { json: unknown };
 				// 探测命中：若与用户设置不同，静默同步设置，下次直接命中

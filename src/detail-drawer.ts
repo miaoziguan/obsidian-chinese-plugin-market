@@ -354,7 +354,7 @@ export class PluginDetailDrawer {
 		}
 
 		// 聚焦到关闭按钮
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			const closeBtn = this.drawerEl?.querySelector(".pt-drawer-close");
 			if (closeBtn) (closeBtn as HTMLElement).focus();
 		});

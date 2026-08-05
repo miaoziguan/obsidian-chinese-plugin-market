@@ -141,12 +141,12 @@ function tokenizeBigram(text: string): string[] {
 	const tokens: string[] = [];
 
 	// 按标点分割片段
-	const segments = trimmed.split(/[\s,，。；;、!！?？·\[\]()（）""''""'']+/);
+	const segments = trimmed.split(/[\]\s,，。；;、!！?？·\[()（）""''""'']+/);
 
 	for (const seg of segments) {
 		if (!seg) continue;
 
-		if (/^[\w\d\-\.]+$/.test(seg)) {
+		if (/^[\w\d\-.]+$/.test(seg)) {
 			// 英文部分：过滤短词和停用词
 			const lower = seg.toLowerCase();
 			if (lower.length >= 3 && !EN_STOP_WORDS.has(lower)) {

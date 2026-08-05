@@ -456,7 +456,7 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 		this.activeDrawer = null;
 		// 关闭丝滑优化：列表 DOM 在详情态只是 display:none 藏着，恢复显示是瞬时的；
 		// 强制重渲（过滤管线 + 全量渲染）推迟到下一帧，避免与关闭点击挤同一帧。
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			// 视图可能在帧间被卸载/再次进入详情态
 			if (this.activeDrawer || !this.scrollViewport?.isConnected) return;
 			this.renderPluginList(true);

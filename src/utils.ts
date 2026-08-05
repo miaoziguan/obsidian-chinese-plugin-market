@@ -727,24 +727,24 @@ export interface DebounceHandle {
 }
 
 export function debounce(fn: () => void, ms: number): DebounceHandle {
-	let timer: ReturnType<typeof setTimeout> | null = null;
+	let timer: number | null = null;
 	const run = () => {
 		timer = null;
 		fn();
 	};
 	const handle = (() => {
-		if (timer != null) clearTimeout(timer);
-		timer = setTimeout(run, ms);
+		if (timer != null) window.clearTimeout(timer);
+		timer = window.setTimeout(run, ms);
 	}) as DebounceHandle;
 	handle.cancel = () => {
 		if (timer != null) {
-			clearTimeout(timer);
+			window.clearTimeout(timer);
 			timer = null;
 		}
 	};
 	handle.flush = () => {
 		if (timer != null) {
-			clearTimeout(timer);
+			window.clearTimeout(timer);
 			timer = null;
 			fn();
 		}

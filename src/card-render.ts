@@ -121,7 +121,7 @@ const cardCtxMap = new WeakMap<HTMLElement, CardRenderContext>();
 
 /** 构建图标按钮（静态 SVG 由调用方写入 innerHTML，常驻不重解析） */
 function makeIconBtn(cls: string, action: string, label: string, _ctx: CardRenderContext): HTMLButtonElement {
-	const b = document.createElement("button");
+	const b = createEl("button");
 	b.className = cls;
 	b.setAttribute("data-action", action);
 	b.setAttribute("aria-label", label);
@@ -135,13 +135,13 @@ function makeIconBtn(cls: string, action: string, label: string, _ctx: CardRende
  * 滚入不同插件时仅调用 applyCardState 原地改内容，省掉节点创建与 SVG 重解析。
  */
 export function createCardElement(ctx: CardRenderContext): HTMLElement {
-	const card = document.createElement("div");
+	const card = createEl("div");
 	card.className = "pt-card pt-card--clickable";
 	card.setAttribute("tabindex", "-1"); // 键盘导航：程序化聚焦，不进入 Tab 序
 	card.setAttribute("role", "listitem"); // S6：配合 layer 的 role=list + aria-posinset
 
 	// 官方推荐金色角标（左上角叠加，常驻隐藏，applyCardState 控制显隐）
-	const recommendBadge = document.createElement("span");
+	const recommendBadge = createEl("span");
 	recommendBadge.className = "pt-card-recommend-badge";
 	recommendBadge.textContent = ctx.t("recommend.badge");
 	recommendBadge.setAttribute("title", ctx.t("recommend.badge"));
@@ -156,7 +156,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	originalName.setCssStyles({ display: "none" });
 
 	// 安装按钮占位（applyCardState 按状态重建并 replaceWith，保持 head Row 的 flex 顺序）
-	const installBtn = document.createElement("span");
+	const installBtn = createEl("span");
 	installBtn.className = "pt-card-install-btn pt-card-install-btn--enabled";
 	installBtn.textContent = ctx.t("card.installed.on");
 	headRow.appendChild(installBtn);
@@ -176,14 +176,14 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	// ── 描述（固定行数截断，hover 浮层展示完整描述） ──
 	const descEl = card.createEl("div", { cls: "pt-card-desc pt-card-desc--clamped" });
 	let descTooltip: HTMLElement | null = null;
-	let descTooltipTimer: ReturnType<typeof setTimeout> | null = null;
+	let descTooltipTimer: number | null = null;
 	descEl.addEventListener("mouseenter", () => {
 		const fullText = descEl.textContent || "";
 		if (!fullText || descEl.scrollHeight <= descEl.clientHeight + 2) return; // 无截断则不弹
 		// 延迟 150ms 显示，避免快速划过时闪烁
-		descTooltipTimer = setTimeout(() => {
+		descTooltipTimer = window.setTimeout(() => {
 			descTooltipTimer = null;
-			descTooltip = document.createElement("div");
+			descTooltip = createEl("div");
 			descTooltip.className = "pt-desc-tooltip";
 			descTooltip.textContent = fullText;
 			const cardRect = card.getBoundingClientRect();
@@ -220,7 +220,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		}, 150);
 	});
 	descEl.addEventListener("mouseleave", () => {
-		if (descTooltipTimer) { clearTimeout(descTooltipTimer); descTooltipTimer = null; }
+		if (descTooltipTimer) { window.clearTimeout(descTooltipTimer); descTooltipTimer = null; }
 		descTooltip?.remove();
 		descTooltip = null;
 	});
@@ -233,7 +233,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		const orig = nameSpan.dataset.originalName || "";
 		const disp = nameSpan.dataset.displayName || "";
 		nameSpan.setCssStyles({ opacity: "0" });
-		setTimeout(() => {
+		window.setTimeout(() => {
 			nameSpan.textContent = showOrig ? orig : disp;
 			nameSpan.setAttribute("aria-pressed", String(showOrig));
 			nameSpan.title = showOrig ? ctx.t("card.name.toggleBack") : ctx.t("card.name.toggleOriginal");
@@ -308,12 +308,12 @@ function buildInstallButton(plugin: PluginInfo, ctx: CardRenderContext): HTMLEle
 	const isInstalled = ctx.installedIds.has(plugin.id);
 	const isEnabled = ctx.enabledIds.has(plugin.id);
 	if (isEnabled) {
-		const el = document.createElement("span");
+		const el = createEl("span");
 		el.className = "pt-card-install-btn pt-card-install-btn--enabled";
 		el.textContent = t("card.installed.on");
 		return el;
 	}
-	const el = document.createElement("button");
+	const el = createEl("button");
 	el.className = isInstalled ? "pt-card-install-btn pt-card-install-btn--installed" : "pt-card-install-btn";
 	el.setAttribute("data-action", "market");
 	el.setAttribute("data-url", `obsidian://show-plugin?id=${plugin.id}`);
