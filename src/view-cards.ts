@@ -164,7 +164,7 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			ctx.aiSearchQueryCache = "";
 			ctx.renderAuthorFacet();
 			ctx.updateFacetVisibility();
-			ctx.renderPluginList();
+			ctx.scheduleRender();
 		} else if (action === "favorite") {
 			const pid = card?.getAttribute("data-plugin-id") ?? plugin.id;
 			const isOn = ctx.favoritesSet.has(pid);
@@ -183,10 +183,10 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 				if (card) {
 					card.setCssStyles({ transition: "opacity 200ms ease, transform 200ms ease", opacity: "0", transform: "scale(0.95)" });
 					window.setTimeout(() => {
-						ctx.renderPluginList(true);
+						ctx.scheduleRender(true);
 					}, 200);
 				} else {
-					ctx.renderPluginList(true);
+					ctx.scheduleRender(true);
 				}
 			} else {
 				ctx.refreshCardState(pid);

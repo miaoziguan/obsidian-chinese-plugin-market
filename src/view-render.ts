@@ -264,12 +264,12 @@ export function disposeRenderTimers(ctx: ViewContext): void {
 	ctx.cachedRowH = 0;
 }
 
-export function scheduleRender(ctx: ViewContext) {
+export function scheduleRender(ctx: ViewContext, preserveScroll = false) {
 
 		if (ctx.renderRAF) return;
 		ctx.renderRAF = window.requestAnimationFrame(() => {
 			ctx.renderRAF = 0;
-			ctx.renderPluginList();
+			ctx.renderPluginList(preserveScroll);
 		});
 	
 }
@@ -395,7 +395,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 				}
 					const clearBtn = q(ctx.contentEl, ".pt-search-clear");
 					if (clearBtn) clearBtn.setCssStyles({ display: "none" });
-					ctx.renderPluginList();
+					ctx.scheduleRender();
 				});
 			}
 			// 跨模式搜索桥接：当前模式结果为空时建议切换到另一模式

@@ -274,7 +274,7 @@ export interface ViewContext {
 	fillVisibleWindow: () => void;
 	measureLayout: () => void;
 	measureLayoutIfNeeded: () => void;
-	scheduleRender: (opts?: { immediate?: boolean; forceMeasure?: boolean }) => void;
+	scheduleRender: (preserveScroll?: boolean) => void;
 	renderWindow: (opts?: { measure?: boolean }) => void;
 	onCardClick: (ev: MouseEvent) => void;
 	toggleFavorite: (pluginId: string) => boolean;

@@ -195,7 +195,7 @@ export function exitCompareMode(ctx: ViewContext) {
 		// 刷新对比高亮
 		ctx.refreshCompareHighlights();
 
-		// 恢复列表渲染
-		ctx.renderPluginList(true);
+		// 恢复列表渲染（rAF 延迟，退出对比点击不阻塞）
+		ctx.scheduleRender(true);
 	
 }

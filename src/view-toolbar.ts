@@ -182,7 +182,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.renderAuthorFacet();
 			}
 			ctx.updateGuidance();
-			ctx.renderPluginList();
+			ctx.scheduleRender();
 			searchInput.focus();
 		});
 		
@@ -201,8 +201,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			// 仅清空搜索文本，不重置筛选状态（避免破坏用户已设置的筛选条件）
 			syncClearBtn();
 			searchInput.focus();
-			// 清空搜索 → 回到全量列表（不再回引导态）
-			ctx.renderPluginList();
+			// 清空搜索 → 回到全量列表（不再回引导态）；rAF 延迟渲染，清除按钮点击不阻塞
+			ctx.scheduleRender();
 		});
 
 		// ── 结果计数（margin-left:auto 推到右侧，与排序/筛选组成搜索行右侧簇） ──
@@ -235,7 +235,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.contentEl.querySelectorAll(".pt-source-filters .pt-filter").forEach((el) => {
 					el.setAttribute("aria-pressed", el.getAttribute("data-value") === "original" ? "true" : "false");
 				});
-				ctx.renderPluginList();
+				ctx.scheduleRender();
 			}
 			ctx.updateFacetVisibility();
 			void ctx.aiTranslateAllPending();
@@ -300,7 +300,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				);
 				item.classList.add("pt-sort-menu-item--active");
 				sortWrap.classList.remove("pt-sort-wrap--open");
-				ctx.renderPluginList();
+				ctx.scheduleRender();
 			});
 		}
 
@@ -329,7 +329,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				cur?.classList.add("pt-sort-menu-item--active");
 			}
 			sortWrap.classList.remove("pt-sort-wrap--open");
-			ctx.renderPluginList();
+			ctx.scheduleRender();
 		});
 
 		sortBtn.addEventListener("click", (e) => {
@@ -391,16 +391,16 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 						ctx.aiSearchResult = null;
 						ctx.aiSearchQueryCache = "";
 						// Esc 仅清搜索，不重置筛选
-						syncClearBtn();
-						searchInput.focus();
-						ctx.renderPluginList();
-					} else if (ctx.authorFilter) {
-						// 搜索框为空但处于作者筛选态：Esc 退出作者筛选
-						ctx.authorFilter = null;
-						ctx.updateAuthorBanner();
-						ctx.renderAuthorFacet();
-						ctx.updateFacetVisibility();
-						ctx.renderPluginList();
+					syncClearBtn();
+					searchInput.focus();
+					ctx.scheduleRender();
+				} else if (ctx.authorFilter) {
+					// 搜索框为空但处于作者筛选态：Esc 退出作者筛选
+					ctx.authorFilter = null;
+					ctx.updateAuthorBanner();
+					ctx.renderAuthorFacet();
+					ctx.updateFacetVisibility();
+					ctx.scheduleRender();
 					} else {
 						searchInput.blur();
 					}
@@ -465,11 +465,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 						(el as HTMLElement) === btn ? "true" : "false"
 					);
 				});
-				ctx.settings.sourceFilter = ctx.sourceFilter;
-				ctx.track(`filter:source_${ctx.sourceFilter}`);
-				ctx.saveSettings();
-				ctx.renderPluginList(true);
-			});
+			ctx.settings.sourceFilter = ctx.sourceFilter;
+			ctx.track(`filter:source_${ctx.sourceFilter}`);
+			ctx.saveSettings();
+			// rAF 延迟渲染：点击立即响应（aria-pressed 已更新），全量过滤+渲染移出点击帧，避免筛选卡顿
+			ctx.scheduleRender(true);
+		});
 		}
 
 
@@ -510,8 +511,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 					}
 					// 重建 chips，保证 aria-pressed 视觉状态与 selectedCategories 同步
 					renderChips();
-					// keyword 模式下即时过滤，AI 模式由 Enter 统一触发
-					if (isKeywordMode(ctx)) ctx.renderPluginList(true);
+					// keyword 模式下即时过滤，AI 模式由 Enter 统一触发；rAF 延迟列表渲染，点击不阻塞
+					if (isKeywordMode(ctx)) ctx.scheduleRender(true);
 				},
 				{
 					maxVisible: 8,
@@ -551,7 +552,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			uninstalledToggle.setAttribute("aria-pressed", ctx.installFilter === "installed" ? "true" : "false");
 			uninstalledToggle.textContent = ctx.installFilter === "installed" ? "显示全部" : "仅显示已安装";
 			ctx.track(ctx.installFilter === "installed" ? "filter:installed" : "filter:installed_off");
-			ctx.renderPluginList(true);
+			ctx.scheduleRender(true);
 		});
 
 		// 重置筛选：移至标题行右侧（与「筛选与统计」同行右端对齐）
@@ -576,7 +577,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			uninstalledToggle.setAttribute("aria-pressed", "false");
 			uninstalledToggle.textContent = "仅显示已安装";
 			ctx.renderAuthorFacet();
-			ctx.renderPluginList();
+			ctx.scheduleRender();
 		});
 
 		// 折叠交互

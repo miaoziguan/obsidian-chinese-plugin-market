@@ -735,7 +735,7 @@ public refreshCardTranslation = (id: string, result: TranslateResult) => refresh
 	 * 注意：必须走 renderPluginList（重新过滤 visibleList），
 	 * 而不是 renderWindow（只重画当前窗口）——否则搜索词变化后列表不更新。
 	 */
-public scheduleRender = () => scheduleRender(this._ctx);
+public scheduleRender = (preserveScroll?: boolean) => scheduleRender(this._ctx, !!preserveScroll);
 
 	/**
 	 * 测量列数 colCount（方案 B 下不再假设固定行高）。

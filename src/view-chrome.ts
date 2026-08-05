@@ -263,7 +263,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 					el.setAttribute("aria-pressed", (el as HTMLElement).dataset.value === "all" ? "true" : "false");
 				});
 				ctx.updateFacetVisibility();
-				ctx.renderPluginList();
+				ctx.scheduleRender();
 			},
 		});
 	}
@@ -279,7 +279,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 					t.textContent = "仅显示已安装";
 				}
 				ctx.updateFacetVisibility();
-				ctx.renderPluginList();
+				ctx.scheduleRender();
 			},
 		});
 	}
@@ -293,7 +293,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 				const chip = q(ctx.contentEl, `.pt-facet-chip[data-cat="${CSS.escape(cat)}"]`);
 				if (chip) chip.setAttribute("aria-pressed", "false");
 				ctx.updateFacetVisibility();
-				ctx.renderPluginList(true);
+				ctx.scheduleRender();
 			},
 		});
 	}
@@ -306,7 +306,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 				ctx.updateAuthorBanner();
 				ctx.renderAuthorFacet();
 				ctx.updateFacetVisibility();
-				ctx.renderPluginList();
+				ctx.scheduleRender();
 			},
 		});
 	}
