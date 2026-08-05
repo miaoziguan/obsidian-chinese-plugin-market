@@ -707,7 +707,7 @@ export function updateAuthorBanner(ctx: ViewContext) {
 			});
 			ctx.authorBannerEl = banner;
 		}
-		const textSpan = q(ctx.authorBannerEl!, ".pt-author-banner-text");
+		const textSpan = q(ctx.authorBannerEl, ".pt-author-banner-text");
 		if (textSpan) {
 			textSpan.textContent = ctx.t("author.filter.active", {
 				author: ctx.authorFilter,

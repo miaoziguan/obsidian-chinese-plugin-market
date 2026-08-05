@@ -103,7 +103,7 @@ export function createEmbeddingProvider(spec: EmbeddingProviderSpec): EmbeddingP
 			);
 		}
 		default:
-			throw new Error(`未知的 Embedding 来源：${String((spec as EmbeddingProviderSpec).source)}`);
+			throw new Error(`未知的 Embedding 来源：${String(spec.source)}`);
 	}
 }
 

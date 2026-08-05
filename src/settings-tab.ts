@@ -341,7 +341,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			}
 			items.forEach((item, idx) => {
 				const row = shList.createDiv({ cls: "pt-selfhosted-row" });
-				const sel = row.createEl("select", { cls: "pt-selfhosted-type" }) as HTMLSelectElement;
+				const sel = row.createEl("select", { cls: "pt-selfhosted-type" });
 				(["deeplx", "libretranslate"] as const).forEach((tp) => {
 					const opt = sel.createEl("option", {
 						value: tp,
@@ -362,7 +362,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				cls: "pt-selfhosted-url",
 				type: "text",
 				placeholder: "http://localhost:1188",
-			}) as HTMLInputElement;
+			});
 			txt.value = item.baseUrl;
 			txt.addEventListener("change", () => {
 				void (async () => {

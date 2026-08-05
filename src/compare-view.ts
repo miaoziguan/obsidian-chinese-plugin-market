@@ -607,9 +607,9 @@ function buildExportItems(
 		description: vm.desc,
 		downloads: vm.info.downloads,
 		updated: vm.info.updated,
-		installed: (installedIds.has(vm.id)
+		installed: installedIds.has(vm.id)
 			? enabledIds.has(vm.id) ? "on" : "off"
-			: "none") as CompareExportItem["installed"],
+			: "none",
 		tags: vm.tag,
 	}));
 }

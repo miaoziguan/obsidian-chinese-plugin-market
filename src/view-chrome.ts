@@ -228,7 +228,7 @@ export function renderActiveFilters(ctx: ViewContext) {
 	const header = q(ctx.contentEl, ".pt-header");
 	if (!header) return;
 	// 懒创建容器：插在搜索行之后、高级筛选面板之前
-	let box = q(ctx.contentEl, ".pt-active-filters") as HTMLElement | null;
+	let box = q(ctx.contentEl, ".pt-active-filters");
 	if (!box) {
 		box = header.createDiv({ cls: "pt-active-filters" });
 		const anchor = q(ctx.contentEl, ".pt-advanced");

@@ -561,7 +561,7 @@ export class PluginDetailDrawer {
 		const insightBtn = readmeHeader.createEl("button", {
 			cls: "pt-detail-btn pt-detail-btn--insight",
 			text: this.t("detail.insight"),
-		}) as HTMLButtonElement;
+		});
 		insightBtn.addEventListener("click", () => {
 			const hostPlugin = this.plugin;
 			openInsightModal(
@@ -584,7 +584,7 @@ export class PluginDetailDrawer {
 		if (isMacOS()) {
 			const sysBtn = readmeHeader.createEl("button", {
 				cls: "pt-detail-btn pt-detail-btn--sys-translate",
-			}) as HTMLButtonElement;
+			});
 			this.readmeSysBtnEl = sysBtn;
 			sysBtn.textContent = this.t("card.sysTranslate.readme");
 			this.updateSysTranslateBtn();
