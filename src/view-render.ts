@@ -447,7 +447,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 		const win = computeVisibleWindowRange(ctx);
 
 		const seen = new Set<string>();
-		const fragment = document.createDocumentFragment();
+		const fragment = createFragment();
 		for (let i = 0; i < total; i++) {
 			const plugin = ctx.visibleList[i];
 			const id = plugin.id;
