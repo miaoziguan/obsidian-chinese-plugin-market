@@ -8,7 +8,7 @@
 import { type I18nKey } from "./i18n";
 import { setListState } from "./list-state";
 import { isAIMode, isKeywordMode } from "./search-mode";
-import { q } from "./dom";
+import { q, appendSVG } from "./dom";
 import type { ViewContext } from "./view-context";
 import { buildToolbar, alignFacetLabels, type ToolbarState } from "./view-toolbar";
 import { asAppInternals } from "./obsidian-internals";
@@ -406,7 +406,7 @@ export async function loadAndRender(ctx: ViewContext) {
 			cls: "pt-back-top",
 			attr: { "aria-label": "回到顶部", title: "回到顶部", type: "button" },
 		});
-		backToTop.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>`);
+		appendSVG(backToTop, `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>`);
 		backToTop.addEventListener("click", () => {
 			listContainer.scrollTo({ top: 0, behavior: "smooth" });
 		});
@@ -417,7 +417,7 @@ export async function loadAndRender(ctx: ViewContext) {
 			cls: "pt-scroll-bottom",
 			attr: { "aria-label": "一键置底", title: "一键置底", type: "button" },
 		});
-		scrollBottom.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`);
+		appendSVG(scrollBottom, `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`);
 		scrollBottom.addEventListener("click", () => {
 			// spacer 撑出整列表总高，滚到 scrollHeight 即最底部（虚拟滚动下仍可靠）
 			listContainer.scrollTo({ top: listContainer.scrollHeight, behavior: "smooth" });

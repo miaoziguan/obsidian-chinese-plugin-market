@@ -141,7 +141,7 @@ function tokenizeBigram(text: string): string[] {
 	const tokens: string[] = [];
 
 	// 按标点分割片段
-	const segments = trimmed.split(/[\]\s,，。；;、!！?？·\[()（）""''""'']+/);
+	const segments = trimmed.split(/[\]\s,，。；;、!！?？·[()（）""''""'']+/);
 
 	for (const seg of segments) {
 		if (!seg) continue;
