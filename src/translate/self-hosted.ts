@@ -72,7 +72,7 @@ export class DeepLXClient implements SelfHostedTranslator {
 				source: "online",
 				provider: "deeplx",
 			};
-		} catch (e) {
+		} catch (e: unknown) {
 			this.breaker.recordFailure(false);
 			logger.warn(`[Chinese Plugin Market] DeepLX 翻译失败 (${plugin.id}):`, e);
 			return null;
@@ -145,7 +145,7 @@ export class LibreTranslateClient implements SelfHostedTranslator {
 				source: "online",
 				provider: "libretranslate",
 			};
-		} catch (e) {
+		} catch (e: unknown) {
 			this.breaker.recordFailure(false);
 			logger.warn(`[Chinese Plugin Market] LibreTranslate 翻译失败 (${plugin.id}):`, e);
 			return null;

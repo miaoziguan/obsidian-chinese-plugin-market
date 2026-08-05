@@ -242,7 +242,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			.catch((e2) => logger.warn("[Chinese Plugin Market] 异步刷新 stats 失败：", e2));
 
 		return true;
-		} catch (e) {
+		} catch (e: unknown) {
 			// 网络失败时尝试从本地缓存恢复（离线应急，不阻断使用）
 			const cachedData = await ctx.tryLoadCachedPluginList();
 			if (cachedData && cachedData.length > 0) {
@@ -379,7 +379,7 @@ export async function fetchPluginsWithFallback(ctx: ViewContext) : Promise<Plugi
 			// 注入清单数组下标：官方把新插件追加到尾部，下标越大越新；
 			// 「最新发布」排序据此倒序（与官方「New」标签一致）。
 			return arr.map((p, i) => ({ ...p, listIndex: i }));
-			} catch (e) {
+			} catch (e: unknown) {
 				const info = classifyNetworkError(e);
 				// 仅网络/访问受限类错误才继续探测，解析等错误直接抛出
 				if (!info.suggestMirror && info.kind !== "timeout" && info.kind !== "dns") {
@@ -441,7 +441,7 @@ export async function refreshData(ctx: ViewContext) : Promise<void> {
 
 			ctx.scheduleRender();
 			new Notice(ctx.t("action.refresh.done"));
-		} catch (e) {
+		} catch (e: unknown) {
 			const info = classifyNetworkError(e);
 			new Notice(`${ctx.t("action.refresh")}：${info.message}`);
 			// 失败：保留当前已加载数据，仅复位锁以便下次重试
@@ -517,7 +517,7 @@ export async function fetchStatsAndMerge(ctx: ViewContext) : Promise<void> {
 			ctx.statsMap = map;
 			ctx.mergeStatsIntoPlugins();
 			void ctx.saveStatsCache(map);
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 拉取 stats 失败，复用缓存/旧值：", e);
 		}
 	
@@ -570,7 +570,7 @@ export function snapshotInstalled(ctx: ViewContext) {
 			if (plugins.enabledPlugins && typeof plugins.enabledPlugins.forEach === "function") {
 				ctx.enabledIds = new Set(plugins.enabledPlugins as Set<string>);
 			}
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取已安装插件失败：", e);
 		}
 	
@@ -815,7 +815,7 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 				}
 			);
 			logger.debug("[Chinese Plugin Market] 智能混合翻译：translateBatchIncremental 完成");
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.error("[Chinese Plugin Market] 智能混合翻译：异常", e);
 	} finally {
 		ctx.aiTranslateRunning = false;

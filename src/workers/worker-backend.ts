@@ -94,7 +94,7 @@ export class WorkerLocalBackend implements LocalModelBackend {
 		});
 		try {
 			this.bootWorker();
-		} catch (e) {
+		} catch (e: unknown) {
 			this.failInit(e instanceof Error ? e : new Error(String(e)));
 		}
 		return this.initPromise;

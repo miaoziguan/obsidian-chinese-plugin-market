@@ -158,7 +158,7 @@ function translateOnce(text: string): Promise<string> {
 
 		try {
 			fs.writeFileSync(inFile, text, "utf8");
-		} catch (e) {
+		} catch (e: unknown) {
 			reject(new Error(`写入输入文件失败: ${e}`));
 			return;
 		}
@@ -182,7 +182,7 @@ function translateOnce(text: string): Promise<string> {
 					cleanup();
 					if (out) resolve(out);
 					else reject(new Error("快捷指令输出为空，请确认指令已正确设置「停止并输出」"));
-				} catch (e) {
+				} catch (e: unknown) {
 					cleanup();
 					reject(new Error(`读取输出文件失败: ${e}`));
 				}
@@ -375,7 +375,7 @@ async function translateWithRetry(batch: string): Promise<string | null> {
 	for (let attempt = 1; attempt <= MACOS_RETRY_TIMES; attempt++) {
 		try {
 			return await translateOnce(batch);
-		} catch (e) {
+		} catch (e: unknown) {
 			lastErr = e;
 			if (attempt < MACOS_RETRY_TIMES) {
 				await sleep(MACOS_RETRY_BASE_MS * Math.pow(2, attempt - 1));

@@ -379,7 +379,7 @@ class InsightModal extends Modal {
 			body.textContent = text;
 			translator.setInsight(this.plugin.id, text);
 			this.host.saveTranslatorData();
-		} catch (e) {
+		} catch (e: unknown) {
 			loading.remove();
 			// 降级：回退到官方描述
 			body.textContent = this.plugin.description || t("insight.noContent");

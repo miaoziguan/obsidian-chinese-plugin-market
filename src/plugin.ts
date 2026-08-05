@@ -22,6 +22,10 @@ import { writeTMNote, removeTMNote, TM_FOLDER, parseTMNote, type TMEntry } from 
 import { SqliteVectorStore, initSqlJsStatic, type PersistAdapter } from "./vec-store";
 import type { TrendSnapshot } from "./recommend/trending";
 import type { DrawerHostPlugin } from "./detail-drawer";
+/** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
+type LoadDataRaw = NonNullable<Parameters<Translator["loadData"]>[0]>;
+/** Translator.setPluginTags 的入参结构 */
+type PluginTagMap = NonNullable<Parameters<Translator["setPluginTags"]>[0]>;
 export default class ChinesePluginMarketPlugin extends Plugin {
 	settings: ChinesePluginMarketSettings = DEFAULT_SETTINGS;
 	translator: Translator = new Translator();
@@ -115,8 +119,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 插件彻底无法加载。此处兜底为空白状态，保证插件始终能启动（数据可重建）。
 		let loaded: Record<string, unknown> = {};
 		try {
-			loaded = (await this.loadData()) || {};
-		} catch (e) {
+			loaded = ((await this.loadData()) as Record<string, unknown>) ?? {};
+		} catch (e: unknown) {
 			logger.warn(
 				"[Chinese Plugin Market] data.json 解析失败，已回退空白状态（原文件可能损坏）：",
 				e,
@@ -367,7 +371,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	// ──────────────────────────────────────────
 
 	private async loadSettings(allData?: Record<string, unknown>) {
-		const data = allData ?? ((await this.loadData()) || {});
+		const data: Record<string, unknown> = allData ?? ((await this.loadData()) as Record<string, unknown>) ?? {};
 		// 清理已移除的 locale 字段（旧版本遗留，避免脏数据残留在 data.json）
 		if ("locale" in data) delete data.locale;
 		// 来源筛选已移除「自定义」选项，旧设置迁移回「全部」
@@ -421,13 +425,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	}
 
 	private async loadTranslatorData(allData?: Record<string, unknown>) {
-		const data = allData ?? ((await this.loadData()) || {});
+		const data: Record<string, unknown> = allData ?? ((await this.loadData()) as Record<string, unknown>) ?? {};
 		this.translator.loadData({
-			cache: data._translatorCache,
-			aiDict: data._translatorAiDict,
-			tmQueue: data._translatorTMQueue,
-			tmApproved: data._translatorTMApproved,
-			myMemoryBlockedDate: data._myMemoryBlockedDate,
+			cache: data._translatorCache as LoadDataRaw["cache"],
+			aiDict: data._translatorAiDict as LoadDataRaw["aiDict"],
+			tmQueue: data._translatorTMQueue as LoadDataRaw["tmQueue"],
+			tmApproved: data._translatorTMApproved as LoadDataRaw["tmApproved"],
+			myMemoryBlockedDate: data._myMemoryBlockedDate as LoadDataRaw["myMemoryBlockedDate"],
 		});
 		// 跨会话恢复列表拉取时间（修复：原 lastListFetchAt 是视图内存字段，重启归零
 		// 导致 isListStale(0, now, 6h) 恒真 → 每次启动都强制重拉列表 + 重译可见项）
@@ -472,14 +476,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				return;
 			}
 			const text = await adapter.read(fullPath);
-			const parsed = JSON.parse(text);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
 			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-				this.translator.setPluginTags(parsed);
+				this.translator.setPluginTags(parsed as PluginTagMap);
 				this.buildPluginTagMap();
 				// T4(#7): 分类标签就绪，通知视图刷新 facet（首屏可能早于标签加载完成）
 				this.onPluginTagsLoaded?.();
 			}
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn(`[Chinese Plugin Market] 加载分类索引失败，已跳过：`, e);
 		}
 	}
@@ -493,7 +497,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			// 不依赖 adapter.exists（部分环境下对 .obsidian 目录探测不稳定），
 			// 直接尝试读取，失败（含文件不存在）再走兜底。
 			const text = await adapter.read(fullPath);
-			const parsed = JSON.parse(text);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
 			if (parsed && typeof parsed === "object") {
 				if (typeof parsed.title === "string" && parsed.title.trim()) {
 					this.recommendedTitle = parsed.title.trim();
@@ -506,7 +510,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					return;
 				}
 			}
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn(`[Chinese Plugin Market] 读取推荐清单失败，回退内置清单：`, e);
 		}
 		// 兜底：用编译进包的清单，保证首页「官方推荐」区始终可用
@@ -608,7 +612,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			try {
 				await writeTMNote(this.app, e);
 				this.translator.clearTMDirty(id);
-			} catch (err) {
+			} catch (err: unknown) {
 				logger.warn("[Chinese Plugin Market] 写入 TM 笔记失败，已保留待重试：", id, err);
 			}
 		}
@@ -617,7 +621,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			try {
 				await removeTMNote(this.app, id);
 				this.translator.clearTMRemoved(id);
-			} catch (err) {
+			} catch (err: unknown) {
 				logger.warn("[Chinese Plugin Market] 删除 TM 笔记失败，已保留待重试：", id, err);
 			}
 		}
@@ -829,7 +833,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				for (const id of delta.removed) delete entries[id];
 			}
 			return { version: 1, mtimes, idsByPath, entries };
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取 TM 快照失败，将全量重扫：", e);
 			return null;
 		}
@@ -845,7 +849,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			const adapter = this.app.vault.adapter;
 			if (!(await adapter.exists(this.tmSnapshotFilePath))) return null;
 			const raw = await adapter.read(this.tmSnapshotFilePath);
-			const data = JSON.parse(raw);
+			const data = JSON.parse(raw) as {
+				version: 1;
+				mtimes: Record<string, number>;
+				idsByPath: Record<string, string>;
+				entries: Record<string, TMEntry>;
+			} | null;
 			if (data?.version !== 1 || !data.entries) return null;
 			return data;
 		} catch {
@@ -863,7 +872,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			const adapter = this.app.vault.adapter;
 			if (!(await adapter.exists(this.tmDeltaFilePath))) return null;
 			const raw = await adapter.read(this.tmDeltaFilePath);
-			const data = JSON.parse(raw);
+			const data = JSON.parse(raw) as {
+				mtimesPatch?: Record<string, number>;
+				idsByPathPatch?: Record<string, string | null>;
+				entriesPatch?: Record<string, TMEntry>;
+				removed?: string[];
+			} | null;
 			if (!data || typeof data !== "object") return null;
 			return {
 				mtimesPatch: data.mtimesPatch ?? {},
@@ -898,7 +912,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				await adapter.remove(this.tmDeltaFilePath).catch(() => {});
 				// 深拷贝切断与实时 tmApproved 的引用共享：否则后续 mutate tmApproved
 				// 会同步污染 baseline，使增量 diff 的 entriesPatch 恒为空、delta 机制失效。
-				this._snapshotBaselineEntries = JSON.parse(JSON.stringify(entries));
+				this._snapshotBaselineEntries = JSON.parse(JSON.stringify(entries)) as Record<string, TMEntry>;
 				this._snapshotBaselineMtimes = { ...mtimes };
 				this._snapshotBaselineIdsByPath = { ...idsByPath };
 				return;
@@ -936,7 +950,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				);
 				await adapter.remove(this.tmDeltaFilePath).catch(() => {});
 				// 深拷贝切断与实时 tmApproved 的引用共享（同首次保存路径，避免 delta 失效）
-				this._snapshotBaselineEntries = JSON.parse(JSON.stringify(entries));
+				this._snapshotBaselineEntries = JSON.parse(JSON.stringify(entries)) as Record<string, TMEntry>;
 				this._snapshotBaselineMtimes = { ...mtimes };
 				this._snapshotBaselineIdsByPath = { ...idsByPath };
 				return;
@@ -946,7 +960,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				this.tmDeltaFilePath,
 				JSON.stringify({ mtimesPatch, idsByPathPatch, entriesPatch, removed })
 			);
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 写入 TM 快照失败（不影响翻译，下次全量重扫）：", e);
 		}
 	}
@@ -1034,7 +1048,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			logger.debug(`[Chinese Plugin Market] 探针：SqliteVectorStore.open（读库+建表）耗时 ${Date.now() - tOpen}ms`);
 			logger.timeEnd("[Chinese Plugin Market] ensureVectorStore 总耗时");
 			return this.vectorStore;
-		} catch (e) {
+		} catch (e: unknown) {
 			this.vectorStoreInitFailed = true;
 			// 明确提示这是沙箱/打包限制（不是同步遗漏），且只提示一次
 			logger.warn(
@@ -1085,7 +1099,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				const provider = new LocalEmbeddingProvider(undefined, model, this.settings.embeddingLocalWasmPaths || undefined);
 				await provider.warmup();
 				logger.debug("[Chinese Plugin Market] 本地 embedding 已预热（worker + 模型就绪）");
-			} catch (e) {
+			} catch (e: unknown) {
 				// 预热失败：重置标记，允许下次再试（不永久禁用）
 				this.localWarmupDone = false;
 				logger.debug("[Chinese Plugin Market] 本地 embedding 预热跳过：", (e as Error)?.message || e);
@@ -1176,7 +1190,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			this.translator.setVectorIndex(index);
 			await this.saveVectorIndex();
 			done("done");
-		} catch (e) {
+		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			logger.warn("[Chinese Plugin Market] 预建本地向量索引失败：", e);
 			done("error", msg);
@@ -1193,12 +1207,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				return decodeVectorIndex(buf);
 			}
 			if (await adapter.exists(this.legacyVectorJsonFilePath)) {
-				const parsed = JSON.parse(await adapter.read(this.legacyVectorJsonFilePath));
+				const parsed = JSON.parse(await adapter.read(this.legacyVectorJsonFilePath)) as import("./embedding").VectorIndex;
 				if (parsed && Array.isArray(parsed.ids) && Array.isArray(parsed.vectors)) {
 					return parsed;
 				}
 			}
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取旧版向量索引失败，将重建：", e);
 		}
 		return null;
@@ -1229,7 +1243,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					const rawHash = store.getMeta("perIdHash");
 					if (rawHash) {
 						try {
-							perIdHash = JSON.parse(rawHash);
+							perIdHash = JSON.parse(rawHash) as Record<string, string>;
 						} catch {
 							perIdHash = undefined;
 						}
@@ -1250,7 +1264,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			// SQLite 不可用：退化为旧版内存索引
 			const legacy = await this.loadLegacyVectorIndex();
 			this.translator.setVectorIndex(legacy);
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 加载向量索引失败，将重建：", e);
 			this.translator.setVectorIndex(null);
 		} finally {
@@ -1273,7 +1287,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			const oldRaw = store.getMeta("perIdHash");
 			let oldHash: Record<string, string> | null = null;
 			if (oldRaw) {
-				try { oldHash = JSON.parse(oldRaw); } catch { oldHash = null; }
+				try { oldHash = JSON.parse(oldRaw) as Record<string, string>; } catch { oldHash = null; }
 			}
 			const newHash = index.perIdHash ?? {};
 
@@ -1304,7 +1318,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			if (index.categorySchemaVersion) store.setMeta("categorySchemaVersion", index.categorySchemaVersion);
 			if (index.perIdHash) store.setMeta("perIdHash", JSON.stringify(index.perIdHash));
 			await store.flush();
-		} catch (e) {
+		} catch (e: unknown) {
 			// 写盘失败不影响搜索功能，仅无法跨会话复用
 			logger.warn("[Chinese Plugin Market] 保存向量索引失败：", e);
 		}

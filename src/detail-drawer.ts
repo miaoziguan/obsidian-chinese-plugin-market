@@ -723,7 +723,7 @@ export class PluginDetailDrawer {
 			this.readmeRaw = md;
 			this.readmeTranslated = false;
 			this.renderReadme(container, md, p.repo);
-		} catch (e) {
+		} catch (e: unknown) {
 			if (!this.drawerEl) return; // 已关闭，跳过错误渲染
 			loading.remove();
 			const info = classifyNetworkError(e);

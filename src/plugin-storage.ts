@@ -31,7 +31,7 @@ export class PluginStorage {
 				this.trendingHistoryFilePath,
 				JSON.stringify(history)
 			);
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 保存趋势历史失败：", e);
 		}
 	}
@@ -41,11 +41,11 @@ export class PluginStorage {
 		try {
 			const adapter = this.app.vault.adapter;
 			if (!(await adapter.exists(this.trendingHistoryFilePath))) return null;
-			const parsed = JSON.parse(await adapter.read(this.trendingHistoryFilePath));
+			const parsed = JSON.parse(await adapter.read(this.trendingHistoryFilePath)) as Record<string, unknown>;
 			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
 				return parsed as Record<string, TrendSnapshot[]>;
 			}
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取趋势历史失败，将重新累积：", e);
 		}
 		return null;
@@ -58,7 +58,7 @@ export class PluginStorage {
 				this.pluginListCacheFilePath,
 				JSON.stringify(list)
 			);
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 保存插件列表缓存失败：", e);
 		}
 	}
@@ -71,7 +71,7 @@ export class PluginStorage {
 		try {
 			const adapter = this.app.vault.adapter;
 			if (await adapter.exists(this.pluginListCacheFilePath)) {
-				const parsed = JSON.parse(await adapter.read(this.pluginListCacheFilePath));
+				const parsed = JSON.parse(await adapter.read(this.pluginListCacheFilePath)) as unknown[];
 				if (Array.isArray(parsed) && parsed.length > 0) return parsed;
 			}
 			// 旧版迁移路径：首次升级后独立文件尚未生成（复用内存权威对象，免去一次 read）
@@ -94,7 +94,7 @@ export class PluginStorage {
 				this.statsCacheFilePath,
 				JSON.stringify({ savedAt: Date.now(), stats: obj })
 			);
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 保存 stats 缓存失败：", e);
 		}
 	}
@@ -108,12 +108,12 @@ export class PluginStorage {
 			const adapter = this.app.vault.adapter;
 			if (!(await adapter.exists(this.statsCacheFilePath))) return null;
 			const text = await adapter.read(this.statsCacheFilePath);
-			const parsed = JSON.parse(text);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
 			if (!parsed || typeof parsed !== "object") return null;
 			const savedAt = parsed.savedAt;
 			if (typeof savedAt !== "number" || Date.now() - savedAt > TTL) return null;
 			return parseStatsJson(parsed.stats);
-		} catch (e) {
+		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取 stats 缓存失败：", e);
 			return null;
 		}

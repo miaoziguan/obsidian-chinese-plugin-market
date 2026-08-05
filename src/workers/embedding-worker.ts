@@ -51,7 +51,7 @@ self.onmessage = (event: MessageEvent<IncomingMsg>) => {
 				extractor = null;
 				modelDimension = null;
 			}
-		} catch (err) {
+		} catch (err: unknown) {
 			const m = err instanceof Error ? err.message : String(err);
 			const stack = err instanceof Error ? err.stack : undefined;
 			if (msg.type === "embed") {
@@ -153,7 +153,7 @@ async function handleInit(msg: InitMsg): Promise<void> {
 			readyDim = dim;
 			postLog(`[embedding-worker] device=${device} ready (dim=${dim})`);
 			break;
-		} catch (err) {
+		} catch (err: unknown) {
 			const m = err instanceof Error ? err.message : String(err);
 			postLog(`[embedding-worker] device=${device} failed (${m})`);
 		}

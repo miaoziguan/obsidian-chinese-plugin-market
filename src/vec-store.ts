@@ -192,7 +192,7 @@ export class SqliteVectorStore {
 		return res[0].values.map((row) => ({
 			id: row[0] as string,
 			category: (row[1] as string) ?? null,
-			tags: row[2] ? JSON.parse(row[2] as string) : [],
+			tags: row[2] ? (JSON.parse(row[2] as string) as string[]) : [],
 		}));
 	}
 

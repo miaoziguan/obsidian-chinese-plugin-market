@@ -450,7 +450,7 @@ function renderAIArea(
 			out.empty();
 			await MarkdownRenderer.render(app, md, out, "", comp);
 			btn.textContent = t("compare.ai.start");
-		} catch (e) {
+		} catch (e: unknown) {
 			if (signal.aborted) return;
 			lastError = (e as Error).message || "";
 			out.empty();

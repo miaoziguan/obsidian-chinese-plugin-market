@@ -736,7 +736,7 @@ export class Translator {
 				// 自动机翻译文投入审核队列（与 AI 翻译一致）
 				this.enqueueOnlineTM(plugin.id);
 				return result;
-			} catch (e) {
+			} catch (e: unknown) {
 				this.logTencentError(plugin.id, e);
 			}
 		}

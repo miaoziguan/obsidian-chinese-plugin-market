@@ -101,7 +101,7 @@ export class MyMemoryClient {
 			const reason =
 				nameR.status === "rejected" ? nameR.reason : (descR as PromiseRejectedResult).reason;
 			throw reason ?? new Error("name and description both failed");
-		} catch (e) {
+		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			if (/429|quota|mymemory warning|配额|额度|rate.?limit/i.test(msg)) {
 				if (!this.blocked) {
@@ -127,7 +127,7 @@ export class MyMemoryClient {
 			const translated = await this.callApi(text);
 			this.netBreaker.recordSuccess();
 			return { translatedName: translated, translatedDesc: "", match: 0 };
-		} catch (e) {
+		} catch (e: unknown) {
 			this.netBreaker.recordFailure(isFatalError(e));
 			return null;
 		}
@@ -240,7 +240,7 @@ export class GoogleClient {
 				source: "online",
 				provider: "google",
 			};
-		} catch (e) {
+		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			if (/429|quota|rate.?limit|额度|配额|too many/i.test(msg)) {
 				if (!this.blocked) {
@@ -267,7 +267,7 @@ export class GoogleClient {
 			const res = await this.callApi(text);
 			this.netBreaker.recordSuccess();
 			return res.unchanged ? text : res.text;
-		} catch (e) {
+		} catch (e: unknown) {
 			this.netBreaker.recordFailure(isFatalError(e));
 			return null;
 		}
@@ -340,7 +340,7 @@ export class TencentClient {
 			);
 			this.breaker.recordSuccess();
 			return translated;
-		} catch (e) {
+		} catch (e: unknown) {
 			// 开路错误属内部熔断信号，不再重复计入
 			if (e instanceof CircuitOpenError) throw e;
 			this.breaker.recordFailure(isFatalError(e));
@@ -431,7 +431,7 @@ export class LLMClient {
 			const content = extractLLMContent(response.json as unknown);
 			this.breaker.recordSuccess();
 			return content;
-		} catch (e) {
+		} catch (e: unknown) {
 			if (e instanceof CircuitOpenError) throw e;
 			this.breaker.recordFailure(isFatalError(e));
 			throw e;
@@ -481,7 +481,7 @@ export async function callAITranslate(
 			translatedDesc: description || plugin.description,
 			source: "ai",
 		};
-	} catch (e) {
+	} catch (e: unknown) {
 		logger.warn(`[Chinese Plugin Market] AI 翻译失败 (${plugin.id}):`, e);
 		return null;
 	}

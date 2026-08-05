@@ -138,7 +138,7 @@ export async function runAISearch(
 		if (settings.embeddingSource !== "keyword") {
 			void ctx.saveVectorIndex();
 		}
-	} catch (err) {
+	} catch (err: unknown) {
 		ctx.aiSearchResult = null;
 		aiBadge.className = "pt-ai-badge pt-ai-ready";
 		aiBadge.setAttribute("title", isLocal ? "本地语义失败" : "AI 排序失败，已使用常规搜索");
