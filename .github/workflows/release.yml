@@ -35,8 +35,8 @@ jobs:
           mkdir -p dist
           cp main.js manifest.json styles.css versions.json dist/
 
-      - name: 为构建产物生成来源证明（attestation）
-        uses: actions/attest@v2
+      - name: 为构建产物生成来源证明（build provenance / attestation）
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: "dist/main.js,dist/styles.css"
 
