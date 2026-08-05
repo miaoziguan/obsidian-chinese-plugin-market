@@ -168,7 +168,9 @@ function translateOnce(text: string): Promise<string> {
 		});
 
 		let stderr = "";
-		child.stderr?.on("data", (d) => (stderr += d.toString()));
+		child.stderr?.on("data", (d: unknown) => {
+			stderr += String(d);
+		});
 		child.on("error", (err) => {
 			cleanup();
 			reject(err);
@@ -337,7 +339,10 @@ export async function macosSystemTranslate(
 	}
 
 	// 分段 + 串行（CONCURRENCY=1）保持顺序；每批带重试；某批持续失败时保留原文（best-effort）
-	const results: (string | null)[] = new Array(batches.length).fill(null);
+	const results: (string | null)[] = Array.from(
+		{ length: batches.length },
+		() => null as string | null
+	);
 	let failedCount = 0;
 	let cursor = 0;
 	let done = 0;

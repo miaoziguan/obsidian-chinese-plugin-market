@@ -115,7 +115,7 @@ export function parseJSON(content: string): Record<string, unknown> {
 		);
 	}
 	try {
-		return JSON.parse(jsonMatch[0]);
+		return JSON.parse(jsonMatch[0]) as Record<string, unknown>;
 	} catch {
 		throw new Error("AI 返回的 JSON 解析失败（格式损坏）");
 	}

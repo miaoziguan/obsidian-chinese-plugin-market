@@ -15,7 +15,7 @@ import { requestUrl } from "obsidian";
 /** 对齐 Obsidian requestUrl 的响应子集（调用方用到的字段） */
 export interface NetResponse {
 	status: number;
-	json: any;
+	json: unknown;
 	text: string;
 	headers: Record<string, string>;
 }

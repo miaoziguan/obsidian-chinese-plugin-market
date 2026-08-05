@@ -88,7 +88,7 @@ export async function fetchManifest(
 	try {
 		const resp = await netRequest({ url, method: "GET" });
 		if (resp.status < 200 || resp.status >= 300) return {};
-		const json = resp.json;
+		const json = resp.json as Partial<PluginManifest>;
 		if (!json || typeof json !== "object") return {};
 		return {
 			description: typeof json.description === "string" ? json.description : undefined,

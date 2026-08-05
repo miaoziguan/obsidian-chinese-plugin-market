@@ -68,5 +68,5 @@ export function formatUpdated(ts?: number): string {
 /** 从网络拉取并解析 stats（失败向上抛，由调用方静默降级） */
 export async function fetchPluginStats(url: string): Promise<Map<string, PluginStat>> {
 	const response = await requestUrl({ url, method: "GET" });
-	return parseStatsJson(response.json);
+	return parseStatsJson(response.json as unknown);
 }

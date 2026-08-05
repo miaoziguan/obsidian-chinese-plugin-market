@@ -54,7 +54,7 @@ export class DiversityReranker {
 		tags: TaggedPlugin[],
 		categoryMap?: Map<string, string>
 	) {
-		this.categoryMap = categoryMap ?? new Map();
+		this.categoryMap = categoryMap ?? new Map<string, string>();
 
 		// 建立查表索引
 		this.tagMap = new Map();
