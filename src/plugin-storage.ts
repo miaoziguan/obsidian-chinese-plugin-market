@@ -1,4 +1,5 @@
 import { type App } from "obsidian";
+import { logger } from "./logger";
 import { type PluginStat, parseStatsJson } from "./stats";
 import { type TrendSnapshot } from "./recommend/trending";
 
@@ -31,7 +32,7 @@ export class PluginStorage {
 				JSON.stringify(history)
 			);
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 保存趋势历史失败：", e);
+			logger.warn("[Chinese Plugin Market] 保存趋势历史失败：", e);
 		}
 	}
 
@@ -45,7 +46,7 @@ export class PluginStorage {
 				return parsed as Record<string, TrendSnapshot[]>;
 			}
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 读取趋势历史失败，将重新累积：", e);
+			logger.warn("[Chinese Plugin Market] 读取趋势历史失败，将重新累积：", e);
 		}
 		return null;
 	}
@@ -58,7 +59,7 @@ export class PluginStorage {
 				JSON.stringify(list)
 			);
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 保存插件列表缓存失败：", e);
+			logger.warn("[Chinese Plugin Market] 保存插件列表缓存失败：", e);
 		}
 	}
 
@@ -94,7 +95,7 @@ export class PluginStorage {
 				JSON.stringify({ savedAt: Date.now(), stats: obj })
 			);
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 保存 stats 缓存失败：", e);
+			logger.warn("[Chinese Plugin Market] 保存 stats 缓存失败：", e);
 		}
 	}
 
@@ -113,7 +114,7 @@ export class PluginStorage {
 			if (typeof savedAt !== "number" || Date.now() - savedAt > TTL) return null;
 			return parseStatsJson(parsed.stats);
 		} catch (e) {
-			console.warn("[Chinese Plugin Market] 读取 stats 缓存失败：", e);
+			logger.warn("[Chinese Plugin Market] 读取 stats 缓存失败：", e);
 			return null;
 		}
 	}

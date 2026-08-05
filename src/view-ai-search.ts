@@ -8,6 +8,7 @@
  */
 
 import { Notice } from "obsidian";
+import { logger } from "./logger";
 import type { ViewContext } from "./view-context";
 
 /** 根据 Base URL 判断是否国内模型（直连可达，无需 VPN） */
@@ -49,7 +50,7 @@ export async function runAISearch(
 			return;
 		}
 	}
-	console.debug(`[Chinese Plugin Market] 搜索耗时：数据就绪检查+加载=${Date.now() - tStart}ms（plugins=${ctx.plugins.length}）`);
+	logger.debug(`[Chinese Plugin Market] 搜索耗时：数据就绪检查+加载=${Date.now() - tStart}ms（plugins=${ctx.plugins.length}）`);
 
 	ctx.aiSearchPending = true;
 	ctx.aiSearchQueryCache = query;
@@ -97,7 +98,7 @@ export async function runAISearch(
 					},
 					cats
 			  );
-		console.debug(`[Chinese Plugin Market] 搜索耗时：语义搜索=${Date.now() - tSearch}ms · 总=${Date.now() - tStart}ms · 结果=${aiResult.rankedIds.length}`);
+		logger.debug(`[Chinese Plugin Market] 搜索耗时：语义搜索=${Date.now() - tSearch}ms · 总=${Date.now() - tStart}ms · 结果=${aiResult.rankedIds.length}`);
 
 		ctx.aiSearchResult = aiResult;
 		ctx.aiSearchQueryCache = ctx.searchQuery.trim();

@@ -9,6 +9,7 @@
  * 对上层透明：LocalEmbeddingProvider 仍负责分批，本 backend 只负责「一批文本 → 向量」。
  */
 import type { LocalModelBackend } from "../embedding";
+import { logger } from "../logger";
 import inlineWorkerSource from "@inline-worker";
 
 export type WorkerBackendConfig = {
@@ -100,7 +101,7 @@ export class WorkerLocalBackend implements LocalModelBackend {
 	}
 
 	private bootWorker(): void {
-		console.debug(`[Chinese Plugin Market] boot embedding worker（model=${this.cfg.model}）`);
+		logger.debug(`[Chinese Plugin Market] boot embedding worker（model=${this.cfg.model}）`);
 		const blob = new Blob([this.workerSource], { type: "application/javascript" });
 		this.workerUrl = URL.createObjectURL(blob);
 		const worker = new Worker(this.workerUrl);
@@ -157,7 +158,7 @@ export class WorkerLocalBackend implements LocalModelBackend {
 			| { type: "result"; id: number; vectors: Float32Array[] | null; error?: string }
 			| { type: "log"; message: string };
 		if (m.type === "log") {
-			console.warn(`[Chinese Plugin Market] ${m.message}`);
+			logger.warn(`[Chinese Plugin Market] ${m.message}`);
 			return;
 		}
 		if (m.type === "ready") {
@@ -165,12 +166,12 @@ export class WorkerLocalBackend implements LocalModelBackend {
 				window.clearTimeout(this.initTimer);
 				this.initTimer = null;
 			}
-			console.debug(`[Chinese Plugin Market] 本地 embedding 就绪（dim=${m.dimension}）`);
+			logger.debug(`[Chinese Plugin Market] 本地 embedding 就绪（dim=${m.dimension}）`);
 			this.initResolve?.();
 		} else if (m.type === "init-error") {
 			this.failInit(new Error(`本地模型加载失败：${m.message}`));
 		} else if (m.type === "progress") {
-			console.debug(`[Chinese Plugin Market] 模型下载 ${Math.round((m.loaded / Math.max(1, m.total)) * 100)}%${m.phase ? ` ${m.phase}` : ""}`);
+			logger.debug(`[Chinese Plugin Market] 模型下载 ${Math.round((m.loaded / Math.max(1, m.total)) * 100)}%${m.phase ? ` ${m.phase}` : ""}`);
 		} else if (m.type === "result") {
 			const p = this.pending.get(m.id);
 			if (!p) return;

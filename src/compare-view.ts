@@ -24,11 +24,20 @@ import { appendSVG } from "./dom";
  * 修复：退出对比模式只是隐藏容器，_ptComp 从未 unload，
  * document 级 click 监听器随每次进入对比持续累积泄漏。
  */
+/** 在 DOM 容器上挂/取对比页 Component 的生命周期句柄（避免 any 逃逸） */
+interface ComponentHolder extends HTMLElement {
+	_ptComp?: Component;
+}
+function getCompHolder(el: HTMLElement): ComponentHolder {
+	return el as ComponentHolder;
+}
+
 export function disposeComparePage(container: HTMLElement) {
-	const prev = (container as any)._ptComp as Component | undefined;
+	const holder = getCompHolder(container);
+	const prev = holder._ptComp;
 	if (prev) {
 		prev.unload();
-		(container as any)._ptComp = undefined;
+		holder._ptComp = undefined;
 	}
 }
 
@@ -51,9 +60,10 @@ export function renderComparePage(
 	const comp = new Component();
 	container.empty();
 	// 注册清理，防止多次调用时内存泄漏
-	const prev = (container as any)._ptComp as Component | undefined;
+	const holder = getCompHolder(container);
+	const prev = holder._ptComp;
 	if (prev) prev.unload();
-	(container as any)._ptComp = comp;
+	holder._ptComp = comp;
 
 	// 构建统一视图模型（战略建议 ④：一次构建，多视图复用）
 	const vms = buildPluginViewModels(plugins, translatedResults, (id) =>

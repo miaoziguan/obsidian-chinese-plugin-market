@@ -18,6 +18,7 @@
  */
 
 import { Platform } from "obsidian";
+import { logger } from "../logger";
 
 /** 约定快捷指令名（用户需在「快捷指令」App 导入/自建同名指令） */
 export const MACOS_TRANSLATE_SHORTCUT = "CPM 系统翻译";
@@ -125,7 +126,7 @@ export function restoreMarkdown(translated: string, blocks: string[]): string {
  */
 function translateOnce(text: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const requireFn = (globalThis as unknown as { require?: NodeJS.Require }).require;
+		const requireFn = (window as unknown as { require?: NodeJS.Require }).require;
 		if (!requireFn) {
 			reject(new Error("当前运行环境不支持子进程调用"));
 			return;
@@ -376,7 +377,7 @@ async function translateWithRetry(batch: string): Promise<string | null> {
 			}
 		}
 	}
-	console.warn(`[Chinese Plugin Market] 系统翻译单批重试 ${MACOS_RETRY_TIMES} 次仍失败：`, lastErr);
+	logger.warn(`[Chinese Plugin Market] 系统翻译单批重试 ${MACOS_RETRY_TIMES} 次仍失败：`, lastErr);
 	return null;
 }
 

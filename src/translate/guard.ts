@@ -43,7 +43,7 @@ export function withTimeout<T>(original: Promise<T>, ms: number, label = ""): Pr
 			},
 			(e) => {
 				window.clearTimeout(timer);
-				reject(e);
+				reject(e instanceof Error ? e : new Error(String(e)));
 			}
 		);
 	});
