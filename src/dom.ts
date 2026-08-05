@@ -5,7 +5,7 @@
 
 /** 创建带强调字重的统计数字 `<strong>` 元素 */
 export function createStrong(text: string): HTMLElement {
-	const el = document.createElement("strong");
+	const el = createEl("strong");
 	el.textContent = text;
 	return el;
 }

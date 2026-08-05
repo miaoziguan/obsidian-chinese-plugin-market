@@ -177,12 +177,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.addCommand({
 			id: "open-translator-view",
 			name: t("app.search"),
-			callback: () => this.openTranslatorView(),
+			callback: () => {
+				void this.openTranslatorView();
+			},
 		});
 
 		// 左侧栏图标
 		this.addRibbonIcon("languages", "插件搜索", () => {
-			this.openTranslatorView();
+			void this.openTranslatorView();
 		});
 
 		this.addCommand({
@@ -255,7 +257,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	}
 
 	// 防抖：避免数据加载阶段 12+ 次连续 saveTranslatorData I/O
-	private _saveTranslatorDataTimer: ReturnType<typeof setTimeout> | null = null;
+	private _saveTranslatorDataTimer: number | null = null;
 	// 防抖：避免 track() 每次交互都触发全量 data.json 写入（收敛自手写的 setTimeout/clearTimeout，审计 P1-1）
 	private _saveSettingsDebounce = debounce(() => {
 		void this._saveSettingsImmediate();
@@ -320,7 +322,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const pendingSettings = this._saveSettingsDebounce.pending();
 		const pendingTranslator = this._saveTranslatorDataTimer != null;
 		if (this._saveTranslatorDataTimer) {
-			clearTimeout(this._saveTranslatorDataTimer);
+			window.clearTimeout(this._saveTranslatorDataTimer);
 			this._saveTranslatorDataTimer = null;
 		}
 		this._saveSettingsDebounce.cancel();
@@ -548,8 +550,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 * 数据加载阶段会被连续调用 12+ 次，防抖合并为一次 I/O。
 	 */
 	saveTranslatorData() {
-		if (this._saveTranslatorDataTimer) clearTimeout(this._saveTranslatorDataTimer);
-		this._saveTranslatorDataTimer = setTimeout(() => {
+		if (this._saveTranslatorDataTimer) window.clearTimeout(this._saveTranslatorDataTimer);
+		this._saveTranslatorDataTimer = window.setTimeout(() => {
 			this._saveTranslatorDataTimer = null;
 			void this._saveTranslatorDataImmediate();
 		}, 800);
@@ -558,7 +560,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	/** 立即落盘翻译缓存（关闭插件或关键节点时调用） */
 	async flushTranslatorData() {
 		if (this._saveTranslatorDataTimer) {
-			clearTimeout(this._saveTranslatorDataTimer);
+			window.clearTimeout(this._saveTranslatorDataTimer);
 			this._saveTranslatorDataTimer = null;
 		}
 		await this._saveTranslatorDataImmediate();
@@ -1147,7 +1149,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 						this.localIndexState.progress = Math.min(plugins.length, i + chunk.length);
 						// 时间片让位：批量推进时 UI 保持响应、进度实时刷新
 						if ((i / BATCH) % YIELD_EVERY === 0) {
-							await new Promise<void>((r) => setTimeout(r, 0));
+							await new Promise<void>((r) => window.setTimeout(r, 0));
 						}
 					}
 					return out;

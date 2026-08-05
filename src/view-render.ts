@@ -267,7 +267,7 @@ export function disposeRenderTimers(ctx: ViewContext): void {
 export function scheduleRender(ctx: ViewContext) {
 
 		if (ctx.renderRAF) return;
-		ctx.renderRAF = requestAnimationFrame(() => {
+		ctx.renderRAF = window.requestAnimationFrame(() => {
 			ctx.renderRAF = 0;
 			ctx.renderPluginList();
 		});
@@ -301,7 +301,7 @@ export function measureLayout(ctx: ViewContext) {
 	const tmpl = `repeat(${cols}, 1fr)`;
 	if (layer.style.gridTemplateColumns !== tmpl) layer.setCssStyles({ gridTemplateColumns: tmpl });
 	if (ratio > 0) {
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			if (viewport && viewport.scrollHeight > 0) {
 				viewport.scrollTop = ratio * viewport.scrollHeight;
 			}

@@ -30,7 +30,7 @@ export function isMacOS(): boolean {
 
 /** 清洗 shortcuts 输出的多余字符（BOM / 首尾空白 / 尾部换行） */
 function cleanOutput(s: string): string {
-	return s.replace(/^﻿/, "").trim();
+	return s.replace(/^\uFEFF/, "").trim();
 }
 
 /**
@@ -381,5 +381,5 @@ async function translateWithRetry(batch: string): Promise<string | null> {
 }
 
 function sleep(ms: number): Promise<void> {
-	return new Promise((r) => setTimeout(r, ms));
+	return new Promise((r) => window.setTimeout(r, ms));
 }

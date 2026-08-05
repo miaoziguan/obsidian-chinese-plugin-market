@@ -35,14 +35,14 @@ export class CircuitOpenError extends Error {
  */
 export function withTimeout<T>(original: Promise<T>, ms: number, label = ""): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
-		const timer = setTimeout(() => reject(new TimeoutError(ms, label)), ms);
+		const timer = window.setTimeout(() => reject(new TimeoutError(ms, label)), ms);
 		original.then(
 			(v) => {
-				clearTimeout(timer);
+				window.clearTimeout(timer);
 				resolve(v);
 			},
 			(e) => {
-				clearTimeout(timer);
+				window.clearTimeout(timer);
 				reject(e);
 			}
 		);

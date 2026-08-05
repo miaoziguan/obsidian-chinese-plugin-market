@@ -439,7 +439,7 @@ export async function loadAndRender(ctx: ViewContext) {
 			// 面板动画进行中：跳过每帧重测，避免卡顿（动画结束的定时器里会补一次）
 			if (toolbarState.suppressResizeMeasure) return;
 			if (ctx.measureRAF) return;
-			ctx.measureRAF = requestAnimationFrame(() => {
+			ctx.measureRAF = window.requestAnimationFrame(() => {
 				ctx.measureRAF = 0;
 				ctx.measureLayout();
 				ctx.fillVisibleWindow();
@@ -451,7 +451,7 @@ export async function loadAndRender(ctx: ViewContext) {
 		// 懒翻译已废弃，滚动不再触发自动翻译（翻译仅由用户点单卡「翻译」按钮）。
 		listContainer.addEventListener("scroll", () => {
 			if (ctx.scrollRAF) return;
-			ctx.scrollRAF = requestAnimationFrame(() => {
+			ctx.scrollRAF = window.requestAnimationFrame(() => {
 				ctx.scrollRAF = 0;
 				ctx.updateScrollButtons();
 				ctx.updateScrollPosBadge();
