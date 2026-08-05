@@ -795,7 +795,7 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 				if (r && r.source !== "original") {
 					handled.add(p.id);
 					ctx.translatedResults[p.id] = r;
-					ctx.refreshCardTranslation(p.id, r);
+					void ctx.refreshCardTranslation(p.id, r);
 					// 本次会话主动翻译计数（懒翻译已移除，历史缓存命中不计入；这里 batch 翻的全是新的）
 					ctx.translatedThisSession++;
 				}

@@ -98,7 +98,7 @@ export class MyMemoryClient {
 					provider: "mymemory",
 				};
 			}
-			const reason =
+			const reason: unknown =
 				nameR.status === "rejected" ? nameR.reason : (descR as PromiseRejectedResult).reason;
 			throw reason ?? new Error("name and description both failed");
 		} catch (e: unknown) {
@@ -219,7 +219,7 @@ export class GoogleClient {
 			]);
 			// 任一段 rejected（结构/空/超时等硬失败）→ 收集原因，走 fallback
 			if (nameR.status === "rejected" || descR.status === "rejected") {
-				const reason =
+				const reason: unknown =
 					nameR.status === "rejected" ? nameR.reason : (descR as PromiseRejectedResult).reason;
 				throw reason ?? new Error("name and description both failed");
 			}

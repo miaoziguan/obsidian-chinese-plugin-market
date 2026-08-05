@@ -224,7 +224,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					rootHeight: rcs?.height ?? "(无)",
 					canScroll: vp.scrollHeight > vp.clientHeight + 1,
 				};
-				logger.table(info);
+				logger.debug(info);
 				const msg =
 					`列表高度=${info.viewportClientH}px | 内容总高=${info.viewportScrollH}px | 可滚动=${info.canScroll}\n` +
 					`viewport: display=${info.viewportDisplay} position=${info.viewportPosition} overflowY=${info.viewportOverflowY}\n` +
@@ -1012,13 +1012,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	private async ensureVectorStore(): Promise<SqliteVectorStore | null> {
 		if (this.vectorStore) return this.vectorStore;
 		if (this.vectorStoreInitFailed) return null; // 已失败过：本会话不再重试/刷屏
-		logger.time("[Chinese Plugin Market] ensureVectorStore 总耗时");
+		const tEnsureVec = Date.now();
 		const tWasmLoad = Date.now();
 		try {
 			const adapter = this.app.vault.adapter;
 			if (!(await adapter.exists(this.sqlWasmFilePath))) {
 				this.vectorStoreInitFailed = true;
-				logger.timeEnd("[Chinese Plugin Market] ensureVectorStore 总耗时");
+				logger.debug(`[Chinese Plugin Market] ensureVectorStore 总耗时 ${Date.now() - tEnsureVec}ms`);
 				logger.warn(
 					"[Chinese Plugin Market] SQLite WASM 缺失（sql-wasm.wasm 未随插件分发），向量库禁用，回退内存索引。"
 				);
@@ -1046,7 +1046,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			const tOpen = Date.now();
 			this.vectorStore = await SqliteVectorStore.open(persist, this.vectorStoreFilePath, sql);
 			logger.debug(`[Chinese Plugin Market] 探针：SqliteVectorStore.open（读库+建表）耗时 ${Date.now() - tOpen}ms`);
-			logger.timeEnd("[Chinese Plugin Market] ensureVectorStore 总耗时");
+			logger.debug(`[Chinese Plugin Market] ensureVectorStore 总耗时 ${Date.now() - tEnsureVec}ms`);
 			return this.vectorStore;
 		} catch (e: unknown) {
 			this.vectorStoreInitFailed = true;
@@ -1219,7 +1219,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	}
 
 	async loadVectorIndex() {
-		logger.time("[Chinese Plugin Market] loadVectorIndex 总耗时");
+		const tLoadVec = Date.now();
 		try {
 			const store = await this.ensureVectorStore();
 			if (store) {
@@ -1268,7 +1268,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			logger.warn("[Chinese Plugin Market] 加载向量索引失败，将重建：", e);
 			this.translator.setVectorIndex(null);
 		} finally {
-			logger.timeEnd("[Chinese Plugin Market] loadVectorIndex 总耗时");
+			logger.debug(`[Chinese Plugin Market] loadVectorIndex 总耗时 ${Date.now() - tLoadVec}ms`);
 		}
 	}
 
