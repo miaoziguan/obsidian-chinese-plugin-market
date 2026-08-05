@@ -372,7 +372,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.aiSearchResult = null;
 				ctx.aiSearchQueryCache = "";
 				syncClearBtn();
-				ctx.renderPluginList();
+				// 状态即时清空；渲染移到下一帧（scheduleRender 用 rAF 合并），避免全量过滤+渲染阻塞输入帧
+				ctx.scheduleRender();
 				return;
 			}
 			ctx.debounceTimer = window.setTimeout(onSearchInput, LAYOUT.SEARCH_DEBOUNCE_MS);

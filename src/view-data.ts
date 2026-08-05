@@ -289,6 +289,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			// 无缓存可用 → 显示错误
 			if (ctx.scrollCardLayer) {
 				ctx.scrollCardLayer.empty();
+				ctx.cardById.clear(); // 清层后持久化卡片索引失效
 				setListState(ctx, "error");
 				const err = ctx.scrollCardLayer.createDiv({ cls: "pt-error" });
 				err.createDiv({ cls: "pt-empty-title", text: ctx.t("error.title") });
@@ -787,7 +788,17 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 		}
 		// 已刷新过的卡片去重，避免重复闪烁
 		const handled = new Set<string>();
-		const refreshDone = () => {
+		// 批量翻译时逐卡高频 onProgress 会触发 refreshDone 全量遍历 visibleList（O(N)），
+		// 5617 卡全量时 O(N²) 且每次都 updateStats 重建 DOM → 卡顿。
+		// 优化：进度条单独高频更新（轻量）；卡片回填用「每 FLUSH_EVERY 个 + rAF 合并」节流，
+		// finally 兜底全刷，保证不漏。
+		let lastFlushedDone = 0;
+		let refreshRAF: number | null = null;
+		let rafQueued = false;
+		const FLUSH_EVERY = 5;
+		const doRefresh = () => {
+			refreshRAF = null;
+			rafQueued = false;
 			for (const p of ctx.visibleList) {
 				if (handled.has(p.id)) continue;
 				const r = data.cache[p.id];
@@ -801,11 +812,19 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 			}
 			ctx.updateStats();
 		};
+		const scheduleRefresh = () => {
+			if (rafQueued) return;
+			rafQueued = true;
+			refreshRAF = requestAnimationFrame(doRefresh);
+		};
 		try {
 			await ctx.translator.translateBatchIncremental(
 				ctx.visibleList,
 				(done: number, total: number) => {
-					refreshDone();
+					if (done - lastFlushedDone >= FLUSH_EVERY) {
+						lastFlushedDone = done;
+						scheduleRefresh();
+					}
 					if (ctx.aiProgressEl) {
 						ctx.aiProgressEl.setText(
 							ctx.t("ai.translate.progress", { done: String(done), total: String(total) })
@@ -818,7 +837,8 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 			logger.error("[Chinese Plugin Market] 智能混合翻译：异常", e);
 	} finally {
 		ctx.aiTranslateRunning = false;
-		refreshDone();
+		if (refreshRAF !== null) cancelAnimationFrame(refreshRAF);
+		doRefresh();
 		ctx.buildSearchIndex();
 		// 立即落盘（无防抖）：确保本次翻译结果（含 TM 已采纳 vault 笔记）在按钮流程结束时
 		// 立刻写出，不依赖 800ms 防抖定时器——否则重载插件时定时器未触发会导致数据静默丢失，

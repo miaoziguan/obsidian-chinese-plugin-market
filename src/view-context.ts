@@ -135,6 +135,8 @@ export interface ViewContext {
 	cardPool: HTMLElement[];
 	pendingCards: Set<HTMLElement>;
 	cardPoolCtx: CardRenderContext | null;
+	/** 插件 id → 卡片 DOM 持久化索引（增量复用，避免每次 querySelectorAll 全量建 Map） */
+	cardById: Map<string, HTMLElement>;
 	// ── 固定网格行高缓存（per-view）──
 	/** 固定网格行高缓存（卡片高 + 行距） */
 	cachedRowH: number;
@@ -154,6 +156,8 @@ export interface ViewContext {
 	descRAF: number;
 	debounceTimer: number | undefined;
 	scrollPosTimer: number | undefined;
+	/** 滚动位置徽标上次写入文本（避免每帧无变化重写 textContent） */
+	lastScrollPosText: string;
 	resizeObserver: ResizeObserver | null;
 
 	// ── DOM 引用 ──
@@ -406,6 +410,8 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set pendingCards(v) { view.pendingCards = v; },
 		get cardPoolCtx() { return view.cardPoolCtx; },
 		set cardPoolCtx(v) { view.cardPoolCtx = v; },
+		get cardById() { return view.cardById; },
+		set cardById(v) { view.cardById = v; },
 		get cachedRowH() { return view.cachedRowH; },
 		set cachedRowH(v) { view.cachedRowH = v; },
 		get layoutDirty() { return view.layoutDirty; },
@@ -455,6 +461,8 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set compareTrayEl(v) { view.compareTrayEl = v; },
 		get scrollPosEl() { return view.scrollPosEl; },
 		set scrollPosEl(v) { view.scrollPosEl = v; },
+		get lastScrollPosText() { return view.lastScrollPosText; },
+		set lastScrollPosText(v) { view.lastScrollPosText = v; },
 	get facetContainerEl() { return view.facetContainerEl; },
 	set facetContainerEl(v) { view.facetContainerEl = v; },
 	get catRowEl() { return view.catRowEl; },

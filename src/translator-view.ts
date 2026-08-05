@@ -208,11 +208,15 @@ export class ChinesePluginMarketView extends ItemView {
 	public pendingCards: Set<HTMLElement> = new Set();
 	/** 卡片骨架构建上下文（仅用 t + onDescToggle），常驻供池化元素复用 */
 	public cardPoolCtx: CardRenderContext | null = null;
+	/** 插件 id → 卡片 DOM 的持久化索引：renderWindow 增量复用，避免每次搜索词变化全量 querySelectorAll（O(N)） */
+	public cardById: Map<string, HTMLElement> = new Map();
 	/** 列表身份签名（S2）：mode+query+id 序列一致时走原地刷新，不清 DOM、不回顶、不丢行高缓存 */
 	public lastListSignature = "";
 	/** 滚动位置指示徽标（S7）：滚动中显示「第 x / 共 n」，滚停淡出 */
 	public scrollPosEl: HTMLElement | null = null;
 	public scrollPosTimer: number | undefined;
+	/** 滚动位置徽标上次写入文本（避免每帧无变化重写 textContent） */
+	public lastScrollPosText = "";
 
 	// ── 搜索索引（小写化 Blob 预计算 + 前缀增量缓存） ──
 	public searchIndex: Map<string, string> = new Map(); // pluginId → 小写化搜索串
@@ -343,6 +347,7 @@ export class ChinesePluginMarketView extends ItemView {
 		this.scrollPosEl = null;
 		// 释放卡片池（游离 DOM 引用），避免视图销毁后内存滞留
 		this.cardPool = [];
+		this.cardById.clear();
 		this.cardPoolCtx = null;
 		// 选品对比：视图关闭时彻底重置（内存 + 硬盘），下次打开不再保留上次选择
 		this.compareSet.clear();

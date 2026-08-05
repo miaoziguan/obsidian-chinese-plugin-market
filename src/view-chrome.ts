@@ -22,6 +22,7 @@ export function showSearchGuide(ctx: ViewContext) {
 		setListState(ctx, "guide");
 
 		layer.empty();
+		ctx.cardById.clear(); // 清层后持久化卡片索引失效
 		// 模式引导行：渲染在列表区顶部（而非 header 中），避免与工具栏视觉混淆
 		ctx.guidanceEl = layer.createDiv({ cls: "pt-mode-guidance pt-mode-guidance--in-list" });
 		ctx.updateGuidance();
@@ -75,6 +76,7 @@ export function showAIPendingHint(ctx: ViewContext) {
 		setListState(ctx, "aiPending");
 
 		layer.empty();
+		ctx.cardById.clear(); // 清层后持久化卡片索引失效
 		const hint = layer.createDiv({ cls: "pt-empty pt-ai-pending" });
 		hint.createDiv({ cls: "pt-empty-icon" });
 		hint.createDiv({
@@ -118,6 +120,7 @@ export function showAIConfigGuide(ctx: ViewContext, reason: "disabled" | "noKey"
 		setListState(ctx, "aiConfig");
 
 		layer.empty();
+		ctx.cardById.clear(); // 清层后持久化卡片索引失效
 		const guide = layer.createDiv({ cls: "pt-empty pt-ai-config-guide" });
 		guide.createDiv({ cls: "pt-empty-icon" });
 		guide.createDiv({
@@ -150,6 +153,7 @@ export function showLoadingState(ctx: ViewContext, message: string) {
 		setListState(ctx, "loading");
 
 		layer.empty();
+		ctx.cardById.clear(); // 清层后持久化卡片索引失效
 		const loading = layer.createDiv({ cls: "pt-empty pt-loading" });
 		loading.createDiv({ cls: "pt-loading-spinner" });
 		loading.createDiv({ cls: "pt-empty-title", text: ctx.t("app.loading") });
@@ -369,7 +373,12 @@ export function updateScrollPosBadge(ctx: ViewContext) {
 		// 原生滚动：按固定行高估算当前首行（与网格行距一致）
 		const row = Math.floor(vp.scrollTop / ((ctx.defaultRowH + ctx.rowGap) || 1));
 		const firstIdx = Math.min(total, row * (ctx.colCount || 1) + 1);
-		el.textContent = `${firstIdx} / ${total}`;
+		// 值比较：文本未变则不重写 textContent（避免高频滚动每帧无谓 DOM 写）
+		const text = `${firstIdx} / ${total}`;
+		if (ctx.lastScrollPosText !== text) {
+			ctx.lastScrollPosText = text;
+			el.textContent = text;
+		}
 		el.classList.add("pt-scroll-pos--visible");
 		if (ctx.scrollPosTimer) window.clearTimeout(ctx.scrollPosTimer);
 		ctx.scrollPosTimer = window.setTimeout(() => {
