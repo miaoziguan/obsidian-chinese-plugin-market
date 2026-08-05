@@ -304,25 +304,40 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 }
 
 /** 构建按安装状态变化的安装按钮（无 SVG，纯文本/属性，复用成本低） */
-function buildInstallButton(plugin: PluginInfo, ctx: CardRenderContext): HTMLElement {
+/** 原地更新安装按钮；若结构变化（enabled 的 span ↔ 其它状态的 button）则 replaceWith 重建。 */
+function updateInstallButton(
+	existing: HTMLElement,
+	plugin: PluginInfo,
+	ctx: CardRenderContext
+): HTMLElement {
 	const t = ctx.t;
 	const isInstalled = ctx.installedIds.has(plugin.id);
 	const isEnabled = ctx.enabledIds.has(plugin.id);
+	// enabled 是 span，其余是 button——结构不同需重建
 	if (isEnabled) {
+		if (existing.tagName === "SPAN" && existing.classList.contains("pt-card-install-btn--enabled")) {
+			existing.textContent = t("card.installed.on");
+			return existing;
+		}
 		const el = createSpan();
 		el.className = "pt-card-install-btn pt-card-install-btn--enabled";
 		el.textContent = t("card.installed.on");
+		existing.replaceWith(el);
 		return el;
 	}
-	const el = createEl("button");
-	el.className = isInstalled ? "pt-card-install-btn pt-card-install-btn--installed" : "pt-card-install-btn";
-	el.setAttribute("data-action", "market");
-	el.setAttribute("data-url", `obsidian://show-plugin?id=${plugin.id}`);
+	// install / installed 都是 button[data-action=market]，可原地更新 class/text/attrs
+	const btn = existing.tagName === "BUTTON" && existing.dataset.action === "market"
+		? existing
+		: createEl("button");
+	if (btn !== existing) existing.replaceWith(btn);
+	btn.className = isInstalled ? "pt-card-install-btn pt-card-install-btn--installed" : "pt-card-install-btn";
+	btn.setAttribute("data-action", "market");
+	btn.setAttribute("data-url", `obsidian://show-plugin?id=${plugin.id}`);
 	const label = isInstalled ? t("card.installed.off") : t("card.install");
-	el.setAttribute("aria-label", `${label} ${plugin.name}`);
-	el.setAttribute("title", isInstalled ? `${t("card.installed.off")} — ${t("card.enable")}` : t("card.install"));
-	el.textContent = label;
-	return el;
+	btn.setAttribute("aria-label", `${label} ${plugin.name}`);
+	btn.setAttribute("title", isInstalled ? `${t("card.installed.off")} — ${t("card.enable")}` : t("card.install"));
+	btn.textContent = label;
+	return btn;
 }
 
 /**
@@ -430,10 +445,8 @@ export function applyCardState(
 		refs.nameSpan.setAttribute("aria-pressed", String(showOrig));
 	}
 
-	// 安装按钮（按状态重建并替换，保持 head Row 顺序）
-	const newInstall = buildInstallButton(plugin, ctx);
-	refs.installBtn.replaceWith(newInstall);
-	refs.installBtn = newInstall;
+	// 安装按钮：install/installed 状态原地更新，enabled 结构变化才重建（保持 head Row 顺序）
+	refs.installBtn = updateInstallButton(refs.installBtn, plugin, ctx);
 
 	// 对比 / 收藏图标态
 	refs.compareBtn.classList.toggle("is-compare-on", isCompared);

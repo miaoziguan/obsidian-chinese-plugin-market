@@ -343,6 +343,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 			// AI 搜索进行中：显示醒目加载提示（P2-4：提升空态可见性）
 			if (ctx.aiSearchPending) {
 				layer.empty();
+				ctx.cardById.clear(); // 清层后持久化索引失效，整体清空
 				const loading = layer.createDiv({ cls: "pt-empty pt-ai-loading-state" });
 				loading.createDiv({ cls: "pt-empty-icon" });
 				loading.createDiv({ cls: "pt-empty-title", text: ctx.t("notice.ai.analyzing") });
@@ -350,6 +351,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 				return;
 			}
 			layer.empty();
+			ctx.cardById.clear(); // 清层后持久化索引失效，整体清空
 			const empty = layer.createDiv({ cls: "pt-empty" });
 			empty.createDiv({ cls: "pt-empty-icon" });
 			const hasQuery = !!ctx.searchQuery;
@@ -433,12 +435,9 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 		}
 		for (const el of stale) el.remove();
 
-		// 现有卡片按 id 建索引，便于增量复用
-		const existing = new Map<string, HTMLElement>();
-		layer.querySelectorAll(":scope > .pt-card[data-plugin-id]").forEach((el) => {
-			const id = (el as HTMLElement).getAttribute("data-plugin-id");
-			if (id) existing.set(id, el as HTMLElement);
-		});
+		// 现有卡片复用持久化索引（cardById），避免每次搜索词变化全量 querySelectorAll 建 Map（O(N)）。
+		// 索引由本函数增量维护：新建加入、移出删除；清层（空态）时整体清空。
+		const existing = ctx.cardById;
 
 		const renderCtx = makeCardRenderCtx(ctx);
 		// 可见窗口范围（含预取余量）：窗口内卡片立即填充内容，窗口外仅建骨架
@@ -458,6 +457,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 				// 池化复用或新建骨架
 				card = ctx.cardPool.pop() ?? createCardElement(ctx.cardPoolCtx ?? renderCtx);
 				card.setAttribute("data-plugin-id", id);
+				existing.set(id, card);
 				if (i >= win.start && i < win.end) {
 					// 窗口内：完整填充内容
 					applyCardState(card, plugin, ctx.translatedResults[id], renderCtx);
@@ -477,12 +477,13 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 			card.setAttribute("data-idx", String(i));
 			fragment.appendChild(card);
 		}
-		// 移除离开列表的卡片，回收入池（供下次复用），并清理 pending 登记
+		// 移除离开列表的卡片，回收入池（供下次复用），并清理 pending 登记与持久化索引
 		for (const [id, card] of existing) {
 			if (!seen.has(id)) {
 				card.remove();
 				ctx.cardPool.push(card);
 				ctx.pendingCards.delete(card);
+				existing.delete(id);
 			}
 		}
 		layer.appendChild(fragment);

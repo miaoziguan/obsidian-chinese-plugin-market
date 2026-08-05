@@ -98,7 +98,12 @@ export function scoreAllPlugins(
 ): Map<string, number> {
 	const { smartSignals, trendingScores, userAffinity, weights = DEFAULT_WEIGHTS } = options;
 
-	const maxDl = Math.max(1, ...plugins.map((p) => p.downloads ?? 0));
+	// reduce 替代 Math.max(...展开)：避免为 N 个插件分配超长参数表
+	let maxDl = 1;
+	for (const p of plugins) {
+		const dl = p.downloads ?? 0;
+		if (dl > maxDl) maxDl = dl;
+	}
 	const out = new Map<string, number>();
 
 	// 预计算下载量分位（避免重复排序）
