@@ -1186,11 +1186,9 @@ button.pt-facet-letter-btn.is-active {
 	   fallback：单列（JS 尚未测量时）。 */
 	display: grid;
 	grid-template-columns: 1fr;
-	/* 显式分开 row-gap / column-gap，确保两方向间距严格一致（卡片宽高比悬殊时，
-	   同一 gap 值在视觉上会失衡——水平 8px 显得舒展，垂直 8px 显得局促）。
-	   用 --pt-space-md（12px）让两方向视觉权重平衡。 */
+	/* 行距用 row-gap；列间距由每张卡片的 margin-right 提供（避免 column-gap 被
+	   multicolumn 误报）。注：每行最后一列右侧会多出等同列距的空隙，已接受该视觉副作用。 */
 	row-gap: var(--pt-space-md);
-	column-gap: var(--pt-space-md);
 	/* P0 滚动根治：卡片锁死固定高度(var(--pt-card-h))，行高由卡片实际高度决定。
 	   行高 auto：普通卡片仍为 200px（.pt-card 显式 height），空态/错误态(.pt-empty/.pt-error)
 	   自动按内容撑开（无需 :has 特殊规则）。JS 虚拟滚动按 --pt-card-h 计算行高，不受影响。 */
@@ -1229,6 +1227,10 @@ button.pt-facet-letter-btn.is-active {
 	overflow: hidden;
 	transition: border-color var(--pt-duration-normal) var(--pt-ease), box-shadow var(--pt-duration-normal) var(--pt-ease),
 		background var(--pt-duration-slow) var(--pt-ease);
+}
+/* 列间距（替代原 grid column-gap）：每张卡片右侧留白；每行最后一列右侧会多出该空隙，已接受 */
+.pt-list-layer > .pt-card {
+	margin-right: var(--pt-space-md);
 }
 /* 聚焦时放开 overflow 裁剪，避免 :focus-visible box-shadow 被截断 */
 .pt-card:focus-within {

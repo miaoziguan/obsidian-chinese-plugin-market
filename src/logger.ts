@@ -5,12 +5,7 @@
  */
 
 export const logger = {
-	log: (...args: unknown[]): void => console.log(...args),
-	info: (...args: unknown[]): void => console.info(...args),
 	debug: (...args: unknown[]): void => console.debug(...args),
 	warn: (...args: unknown[]): void => console.warn(...args),
 	error: (...args: unknown[]): void => console.error(...args),
-	table: (...args: unknown[]): void => console.table(...args),
-	time: (label: string): void => console.time(label),
-	timeEnd: (label: string): void => console.timeEnd(label),
 };

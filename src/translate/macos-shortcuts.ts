@@ -311,7 +311,7 @@ export function joinBatches(
  * 仅用于兼容旧调用点；新代码应始终传入 splitBatchesDetailed 给出的 separators。
  */
 function inferSeparators(batches: string[]): string[] {
-	return new Array(Math.max(0, batches.length - 1)).fill("\n\n");
+	return new Array<string>(Math.max(0, batches.length - 1)).fill("\n\n");
 }
 
 /**

@@ -45,5 +45,5 @@ export function q<T extends HTMLElement = HTMLElement>(
 	root: ParentNode,
 	selector: string
 ): T | null {
-	return root.querySelector(selector) as T | null;
+	return root.querySelector(selector);
 }
