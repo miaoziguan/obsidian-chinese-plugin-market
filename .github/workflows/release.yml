@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+  id-token: write # 用于 actions/attest 生成构建来源证明（OIDC/sigstore）
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查 + 生产构建
+        run: npm run build
+
+      - name: 单元测试
+        run: npm test
+
+      - name: 收集发布产物
+        run: |
+          mkdir -p dist
+          cp main.js manifest.json styles.css versions.json dist/
+
+      - name: 为构建产物生成来源证明（attestation）
+        uses: actions/attest@v2
+        with:
+          subject-path: "dist/main.js,dist/styles.css"
+
+      - name: 创建 GitHub Release 并上传产物
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }} · CI 构建" \
+            --notes "由 CI 自动构建并附构建来源证明（artifact attestations）。" \
+            dist/main.js dist/manifest.json dist/styles.css dist/versions.json
