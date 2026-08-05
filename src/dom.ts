@@ -47,3 +47,20 @@ export function q<T extends HTMLElement = HTMLElement>(
 ): T | null {
 	return root.querySelector(selector);
 }
+
+/**
+ * Element → 具体 HTMLElement 子类 运行时类型守卫。
+ * 替代裸 `as HTMLElement | null` 断言（会触发 no-unnecessary-type-assertion），
+ * 用 instanceof 运行时校验：非目标类型（如 SVG 节点 / 类型不符）安全返回 null，不产生类型假设。
+ * 默认收窄到 HTMLElement；传 ctor（如 HTMLInputElement）可收窄到具体子类。
+ */
+export function toHTMLElement<T extends HTMLElement = HTMLElement>(
+	el: Element | null,
+	ctor?: new (...args: never[]) => T
+): T | null {
+	if (el instanceof HTMLElement && (!ctor || el instanceof ctor)) {
+		// instanceof 运行时校验后收窄：HTMLElement → T（T 为具体子类，无法静态推导，需显式断言）
+		return el as T;
+	}
+	return null;
+}

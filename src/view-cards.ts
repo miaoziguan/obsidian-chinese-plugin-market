@@ -9,7 +9,7 @@ import { type PluginInfo, type Translator } from "./translator";
 import { computeSimilar, type SimilarCandidate } from "./recommend/similar";
 import { PluginDetailDrawer } from "./detail-drawer";
 import type { ViewContext } from "./view-context";
-import { q } from "./dom";
+import { q, toHTMLElement } from "./dom";
 import { fetchManifest, fetchReadmeText, fetchMainSignals, generateInsight } from "./plugin-insight";
 import type { I18nKey } from "./i18n";
 import type { MirrorConfig } from "./mirror";
@@ -90,10 +90,10 @@ export function computeSimilarFor(ctx: ViewContext, info: PluginInfo) : SimilarC
 export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 
 		const target = ev.target as HTMLElement;
-		const actionEl = target.closest("[data-action]") as HTMLElement | null;
+		const actionEl = toHTMLElement(target.closest("[data-action]"));
 		// 整卡点击打开详情（非按钮区域点击）
 		if (!actionEl) {
-			const card = target.closest(".pt-card--clickable") as HTMLElement | null;
+			const card = toHTMLElement(target.closest(".pt-card--clickable"));
 			const pid = card?.getAttribute("data-plugin-id");
 			if (pid) {
 				ev.stopPropagation();
@@ -105,7 +105,7 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			}
 			return;
 		}
-		const card = actionEl.closest(".pt-card") as HTMLElement | null;
+		const card = toHTMLElement(actionEl.closest(".pt-card"));
 		const pid = card?.getAttribute("data-plugin-id");
 		if (!pid) return;
 		ev.stopPropagation();
@@ -179,7 +179,7 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			new Notice(isOn ? ctx.t("favorite.removed") : ctx.t("favorite.added"));
 			if (ctx.sortFavoritesFirst && !newState) {
 				// 仅看收藏模式下取消收藏：从列表中移除该卡片（带过渡动画）
-				const card = actionEl.closest(".pt-card") as HTMLElement | null;
+				const card = toHTMLElement(actionEl.closest(".pt-card"));
 				if (card) {
 					card.setCssStyles({ transition: "opacity 200ms ease, transform 200ms ease", opacity: "0", transform: "scale(0.95)" });
 					window.setTimeout(() => {

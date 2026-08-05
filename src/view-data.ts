@@ -12,7 +12,7 @@ import { resolveUrl, classifyNetworkError, buildMirrorOrder, type MirrorConfig }
 import { fetchPluginStats, PLUGIN_STATS_URL } from "./stats";
 import { formatRelativeTime, type I18nKey } from "./i18n";
 import { computeCoverage } from "./dictionary";
-import { createStrong, q } from "./dom";
+import { createStrong, q, toHTMLElement } from "./dom";
 import { buildSearchBlob } from "./filter";
 import { renderFacetChips } from "./facetChips";
 import { groupAuthorsByName } from "./pinyin-init";
@@ -46,14 +46,13 @@ export function disposeViewDataCache(ctx: ViewContext): void {
 
 export function applySearchInput(ctx: ViewContext) {
 
-		const input = ctx.contentEl.querySelector(
-			".pt-search-input"
-		) as HTMLInputElement | null;
+		const input = toHTMLElement(
+			ctx.contentEl.querySelector(".pt-search-input"),
+			HTMLInputElement
+		);
 		if (!input) return;
 		// 同步清除按钮可见性（与即时 input 事件一致）
-		const clearBtn = ctx.contentEl.querySelector(
-			".pt-search-clear"
-		) as HTMLElement | null;
+		const clearBtn = toHTMLElement(ctx.contentEl.querySelector(".pt-search-clear"));
 		if (clearBtn) {
 			clearBtn.setCssStyles({ display: input.value.length > 0 ? "" : "none" });
 		}
@@ -856,9 +855,9 @@ export function refreshCardTranslation(ctx: ViewContext, id: string, result: Tra
 		// 架构重构：卡片固定高度，译文就地更新不改变行高，无需滚动冻结。
 		const layer = ctx.scrollCardLayer;
 		if (!layer) return;
-		const card = layer.querySelector(
-			`.pt-card[data-plugin-id="${CSS.escape(id)}"]`
-		) as HTMLElement | null;
+		const card = toHTMLElement(
+			layer.querySelector(`.pt-card[data-plugin-id="${CSS.escape(id)}"]`)
+		);
 		if (!card) return;
 		const plugin = getPluginMap(ctx).get(id);
 		if (!plugin) return;

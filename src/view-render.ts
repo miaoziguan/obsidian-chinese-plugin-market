@@ -12,7 +12,7 @@ import { createCardElement, applyCardState, type CardRenderContext } from "./car
 import { computeSmartSignals } from "./smart-signal";
 import { scoreAllPlugins } from "./recommend/engine";
 import { setListState } from "./list-state";
-import { q } from "./dom";
+import { q, toHTMLElement } from "./dom";
 import type { ViewContext } from "./view-context";
 import { LAYOUT } from "./constants";
 
@@ -215,9 +215,9 @@ export function postRenderSync(ctx: ViewContext) {
 export function refreshCardState(ctx: ViewContext, pluginId: string) {
 
 		// 必须 CSS.escape：插件 id 可能含引号等特殊字符，直接内插会抛 SyntaxError 中断刷新
-		const card = ctx.scrollCardLayer?.querySelector(
-			`.pt-card[data-plugin-id="${CSS.escape(pluginId)}"]`
-		) as HTMLElement | null;
+		const card = toHTMLElement(
+			ctx.scrollCardLayer?.querySelector(`.pt-card[data-plugin-id="${CSS.escape(pluginId)}"]`) ?? null
+		);
 		if (!card) return;
 		// 更新收藏态
 		card.classList.toggle("is-favorited", ctx.favoritesSet.has(pluginId));
@@ -372,7 +372,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 					text: ctx.t("empty.clearAction"),
 				});
 				clearAction.addEventListener("click", () => {
-					const input = ctx.contentEl.querySelector(".pt-search-input") as HTMLInputElement | null;
+					const input = toHTMLElement(ctx.contentEl.querySelector(".pt-search-input"), HTMLInputElement);
 					if (input) { input.value = ""; }
 					ctx.searchQuery = "";
 					ctx.sourceFilter = "all";
@@ -405,9 +405,10 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 				const targetMode = emptyState.bridgeAction.mode;
 				bridgeBtn.addEventListener("click", () => {
 					// 切换模式下拉
-					const modeSelect = ctx.contentEl.querySelector(
-						".pt-search-mode"
-					) as HTMLSelectElement | null;
+					const modeSelect = toHTMLElement(
+						ctx.contentEl.querySelector(".pt-search-mode"),
+						HTMLSelectElement
+					);
 					if (modeSelect) {
 						modeSelect.value = targetMode;
 						modeSelect.dispatchEvent(new Event("change", { bubbles: true }));
