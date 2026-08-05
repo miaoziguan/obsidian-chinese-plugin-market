@@ -95,7 +95,7 @@ export function showAIPendingHint(ctx: ViewContext) {
 				window.setTimeout(() => input.classList.remove("pt-search-flash"), LAYOUT.SEARCH_FLASH_MS);
 				ctx.searchQuery = ex;
 				const clearBtn = q(ctx.contentEl, ".pt-search-clear");
-				if (clearBtn) clearBtn.style.display = "";
+				if (clearBtn) clearBtn.setCssStyles({ display: "" });
 				void ctx.runAISearch(input, badge);
 			});
 		}
@@ -152,7 +152,7 @@ export function updateStats(ctx: ViewContext) {
 
 		const stats = q(ctx.containerEl, ".pt-stats");
 		if (!stats) return;
-		stats.style.display = "";
+		stats.setCssStyles({ display: "" });
 	const total = ctx.plugins.length;
 	stats.empty();
 	stats.createEl("span", { cls: "pt-stat", text: `共 ${total}` });
@@ -179,12 +179,12 @@ export function updateGuidance(ctx: ViewContext) {
 		if (!ctx.guidanceEl) return;
 		const hasQuery = ctx.searchQuery.trim().length > 0;
 		if (hasQuery) {
-			ctx.guidanceEl.style.display = "none";
+			ctx.guidanceEl.setCssStyles({ display: "none" });
 			return;
 		}
 		const key = `mode.guidance.${ctx.searchMode}` as I18nKey;
 		ctx.guidanceEl.textContent = ctx.t(key);
-		ctx.guidanceEl.style.display = "";
+		ctx.guidanceEl.setCssStyles({ display: "" });
 	
 }
 
@@ -193,10 +193,10 @@ export function updateFacetVisibility(ctx: ViewContext) {
 		const showCat = isAIMode(ctx) || isKeywordMode(ctx);
 		const showAuthor = (isAIMode(ctx) || isKeywordMode(ctx)) && ctx.authorFacetList.reduce((n, g) => n + g.authors.length, 0) > 0;
 		if (ctx.facetContainerEl) {
-			ctx.facetContainerEl.style.display = showCat || showAuthor ? "" : "none";
+			ctx.facetContainerEl.setCssStyles({ display: showCat || showAuthor ? "" : "none" });
 		}
-		if (ctx.catRowEl) ctx.catRowEl.style.display = showCat ? "" : "none";
-	if (ctx.authorRowEl) ctx.authorRowEl.style.display = showAuthor ? "" : "none";
+		if (ctx.catRowEl) ctx.catRowEl.setCssStyles({ display: showCat ? "" : "none" });
+	if (ctx.authorRowEl) ctx.authorRowEl.setCssStyles({ display: showAuthor ? "" : "none" });
 
 	// 重置按钮状态反馈：有任何筛选激活时高亮，让用户一眼知道「可以清空」
 	const resetBtn = q(ctx.contentEl, ".pt-toolbar-reset--inline");
@@ -296,10 +296,10 @@ export function renderActiveFilters(ctx: ViewContext) {
 	}
 
 	if (chips.length === 0) {
-		box.style.display = "none";
+		box.setCssStyles({ display: "none" });
 		return;
 	}
-	box.style.display = "";
+	box.setCssStyles({ display: "" });
 	box.createEl("span", { cls: "pt-active-filters-label", text: ctx.t("filter.active.label") });
 	for (const c of chips) {
 		const chip = box.createEl("span", { cls: "pt-active-chip" });
@@ -406,7 +406,7 @@ export async function loadAndRender(ctx: ViewContext) {
 			cls: "pt-back-top",
 			attr: { "aria-label": "回到顶部", title: "回到顶部", type: "button" },
 		});
-		backToTop.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>`;
+		backToTop.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>`);
 		backToTop.addEventListener("click", () => {
 			listContainer.scrollTo({ top: 0, behavior: "smooth" });
 		});
@@ -417,7 +417,7 @@ export async function loadAndRender(ctx: ViewContext) {
 			cls: "pt-scroll-bottom",
 			attr: { "aria-label": "一键置底", title: "一键置底", type: "button" },
 		});
-		scrollBottom.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+		scrollBottom.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`);
 		scrollBottom.addEventListener("click", () => {
 			// spacer 撑出整列表总高，滚到 scrollHeight 即最底部（虚拟滚动下仍可靠）
 			listContainer.scrollTo({ top: listContainer.scrollHeight, behavior: "smooth" });
@@ -468,7 +468,7 @@ export async function loadAndRender(ctx: ViewContext) {
 	// ── 首屏策略：打开即加载热门列表（内容即见，不再空态引导） ──
 	// stats 由工具栏块创建，尾部复用时重新查询（避免跨越抽取边界持有闭包引用）
 	const stats = q(ctx.contentEl, ".pt-stats");
-	if (stats) stats.style.display = "none";
+	if (stats) stats.setCssStyles({ display: "none" });
 		ctx.showLoadingState(ctx.t("stats.fetching"));
 		// UX: 搜索框自动聚焦，省去用户手动点击
 		window.setTimeout(() => searchInput.focus({ preventScroll: true }), LAYOUT.FOCUS_DELAY_MS);

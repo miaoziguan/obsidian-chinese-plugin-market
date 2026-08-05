@@ -2858,13 +2858,18 @@ button.pt-card-install-btn--installed {
 }
 
 /* 卡片标题 */
-.pt-settings-section > h3 {
+.pt-settings-section > h3,
+.pt-settings-section > .setting-item.setting-item-heading {
 	margin: 0 0 var(--pt-space-sm, 8px);
 	padding: 0;
 	font-size: var(--font-ui-medium, 14px);
 	font-weight: var(--font-semibold, 600);
 	color: var(--text-normal, var(--color-base-100));
 	letter-spacing: -0.01em;
+}
+.pt-settings-section > .setting-item.setting-item-heading {
+	border: none;
+	padding-bottom: 0;
 }
 
 /* 分组说明 */

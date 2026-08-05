@@ -106,7 +106,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		// 小节标题 + 说明辅助函数
 		const section = (titleKey: I18nKey, descKey?: I18nKey) => {
 			const wrap = containerEl.createDiv({ cls: "pt-settings-section" });
-			wrap.createEl("h3", { text: this.t(titleKey) });
+			new Setting(wrap).setHeading().setName(this.t(titleKey));
 			if (descKey) {
 				wrap.createEl("p", {
 					text: this.t(descKey),
@@ -178,8 +178,9 @@ export class TranslatorSettingTab extends PluginSettingTab {
 						await this.plugin.flushSaveSettings();
 					})
 			);
-		customMirrorSetting.settingEl.style.display =
-			this.plugin.settings.mirrorSource === "custom" ? "" : "none";
+		customMirrorSetting.settingEl.setCssStyles({
+			display: this.plugin.settings.mirrorSource === "custom" ? "" : "none",
+		});
 
 		// ── 翻译引擎 ──
 		const engineSec = section("settings.engineAndAi", "settings.engineAndAi.desc");
@@ -539,8 +540,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		});
 		renderIndexState();
 		// 根据模式显示/隐藏相应字段组
-		for (const s of [embUrl, embKey, embModel]) s.settingEl.style.display = isApi ? "" : "none";
-		for (const s of [embLocal, embWasm, embGpu, embReady, embIndex]) s.settingEl.style.display = isLocal ? "" : "none";
+		for (const s of [embUrl, embKey, embModel]) s.settingEl.setCssStyles({ display: isApi ? "" : "none" });
+		for (const s of [embLocal, embWasm, embGpu, embReady, embIndex]) s.settingEl.setCssStyles({ display: isLocal ? "" : "none" });
 
 		// ── 缓存与质量 ──
 		const cacheSec = section("settings.cacheQuality");

@@ -82,26 +82,26 @@ export function renderComparePage(
 		cls: "pt-compare-export-toggle",
 		attr: { "aria-label": t("compare.export.md"), "aria-expanded": "false" },
 	});
-	exportToggle.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+	exportToggle.insertAdjacentHTML("beforeend", `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`);
 	const exportMenu = exportGroup.createEl("div", { cls: "pt-compare-export-menu" });
-	exportMenu.style.display = "none";
+	exportMenu.setCssStyles({ display: "none" });
 	const mdItem = exportMenu.createEl("button", {
 		cls: "pt-compare-export-item",
 		text: t("compare.export.md"),
 	});
 	mdItem.onclick = () => {
 		exportMarkdown(vms, installedIds, enabledIds, t);
-		exportMenu.style.display = "none";
+		exportMenu.setCssStyles({ display: "none" });
 		exportToggle.setAttribute("aria-expanded", "false");
 	};
 	exportToggle.onclick = () => {
 		const open = exportMenu.style.display === "none";
-		exportMenu.style.display = open ? "" : "none";
+		exportMenu.setCssStyles({ display: open ? "" : "none" });
 		exportToggle.setAttribute("aria-expanded", open ? "true" : "false");
 	};
 	const closeMenu = (ev: MouseEvent) => {
 		if (!exportGroup.contains(ev.target as HTMLElement)) {
-			exportMenu.style.display = "none";
+			exportMenu.setCssStyles({ display: "none" });
 			exportToggle.setAttribute("aria-expanded", "false");
 		}
 	};

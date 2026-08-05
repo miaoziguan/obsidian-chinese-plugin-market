@@ -145,7 +145,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	recommendBadge.className = "pt-card-recommend-badge";
 	recommendBadge.textContent = ctx.t("recommend.badge");
 	recommendBadge.setAttribute("title", ctx.t("recommend.badge"));
-	recommendBadge.style.display = "none";
+	recommendBadge.setCssStyles({ display: "none" });
 	card.appendChild(recommendBadge);
 
 	// ── 头行：标题区 + 安装按钮 ──
@@ -153,7 +153,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const nameBlock = headRow.createEl("div", { cls: "pt-card-name-block" });
 	const nameSpan = nameBlock.createEl("span", { cls: "pt-card-name" });
 	const originalName = nameBlock.createEl("span", { cls: "pt-card-original-name" });
-	originalName.style.display = "none";
+	originalName.setCssStyles({ display: "none" });
 
 	// 安装按钮占位（applyCardState 按状态重建并 replaceWith，保持 head Row 的 flex 顺序）
 	const installBtn = document.createElement("span");
@@ -168,10 +168,10 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		cls: "pt-meta-chip pt-meta-chip--author",
 		attr: { "data-action": "author" },
 	});
-	authorSpan.createEl("span", { cls: "pt-author-icon" }).innerHTML = ICON_PERSON;
+	authorSpan.createEl("span", { cls: "pt-author-icon" }).insertAdjacentHTML("beforeend", ICON_PERSON);
 	const authorName = authorSpan.createEl("span", { cls: "pt-author-name" });
 	const installedMeta = metaInfo.createEl("span", { cls: "pt-card-installed" });
-	installedMeta.style.display = "none";
+	installedMeta.setCssStyles({ display: "none" });
 
 	// ── 描述（固定行数截断，hover 浮层展示完整描述） ──
 	const descEl = card.createEl("div", { cls: "pt-card-desc pt-card-desc--clamped" });
@@ -194,10 +194,9 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 			// 浮层宽度与卡片对齐，保底 200px
 			const minW = 200;
 			const ttW = Math.max(minW, Math.min(cardRect.width, 440));
-			descTooltip.style.minWidth = `${minW}px`;
-			descTooltip.style.maxWidth = `${ttW}px`;
+			descTooltip.setCssStyles({ minWidth: `${minW}px`, maxWidth: `${ttW}px` });
 			// 先挂载以测量实际高度
-			descTooltip.style.visibility = "hidden";
+			descTooltip.setCssStyles({ visibility: "hidden" });
 			document.body.appendChild(descTooltip);
 			const actualW = Math.min(ttW, descTooltip.scrollWidth);
 			const actualH = descTooltip.offsetHeight;
@@ -205,19 +204,19 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 			let left = cardRect.left;
 			if (left + actualW > vw - 8) left = vw - 8 - actualW;
 			if (left < 8) left = 8;
-			descTooltip.style.left = `${left}px`;
+			descTooltip.setCssStyles({ left: `${left}px` });
 			// 智能纵向定位
 			const belowTop = descRect.bottom + gap;
 			if (belowTop + actualH > vh - 8) {
-				descTooltip.style.top = `${descRect.top - gap - actualH}px`;
+				descTooltip.setCssStyles({ top: `${descRect.top - gap - actualH}px` });
 				descTooltip.classList.add("pt-desc-tooltip--above");
 			} else {
-				descTooltip.style.top = `${belowTop}px`;
+				descTooltip.setCssStyles({ top: `${belowTop}px` });
 			}
 			// 三角箭头水平对齐描述区
 			const arrowLeft = Math.max(12, Math.min(descRect.left - left + 12, actualW - 24));
-			descTooltip.style.setProperty("--pt-tooltip-arrow-x", `${arrowLeft}px`);
-			descTooltip.style.visibility = "";
+			descTooltip.setCssProps({ "--pt-tooltip-arrow-x": `${arrowLeft}px` });
+			descTooltip.setCssStyles({ visibility: "" });
 		}, 150);
 	});
 	descEl.addEventListener("mouseleave", () => {
@@ -233,12 +232,12 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		const showOrig = nameSpan.classList.toggle("pt-card-name--original");
 		const orig = nameSpan.dataset.originalName || "";
 		const disp = nameSpan.dataset.displayName || "";
-		nameSpan.style.opacity = "0";
+		nameSpan.setCssStyles({ opacity: "0" });
 		setTimeout(() => {
 			nameSpan.textContent = showOrig ? orig : disp;
 			nameSpan.setAttribute("aria-pressed", String(showOrig));
 			nameSpan.title = showOrig ? ctx.t("card.name.toggleBack") : ctx.t("card.name.toggleOriginal");
-			nameSpan.style.opacity = "1";
+			nameSpan.setCssStyles({ opacity: "1" });
 		}, 100);
 	});
 	nameSpan.addEventListener("keydown", (e: KeyboardEvent) => {
@@ -252,41 +251,41 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 
 	// ── 统计信息行（下载/更新 chip，SVG 常驻） ──
 	const statline = card.createEl("div", { cls: "pt-card-statline" });
-	statline.style.display = "none";
+	statline.setCssStyles({ display: "none" });
 	const dlChip = statline.createEl("span", { cls: "pt-stat-chip" });
-	dlChip.createEl("span", { cls: "pt-stat-icon" }).innerHTML = ICON_DOWNLOAD;
+	dlChip.createEl("span", { cls: "pt-stat-icon" }).insertAdjacentHTML("beforeend", ICON_DOWNLOAD);
 	const dlText = dlChip.createEl("span");
-	dlChip.style.display = "none";
+	dlChip.setCssStyles({ display: "none" });
 	const clkChip = statline.createEl("span", { cls: "pt-stat-chip" });
-	clkChip.createEl("span", { cls: "pt-stat-icon" }).innerHTML = ICON_CLOCK;
+	clkChip.createEl("span", { cls: "pt-stat-icon" }).insertAdjacentHTML("beforeend", ICON_CLOCK);
 	const clkText = clkChip.createEl("span");
-	clkChip.style.display = "none";
+	clkChip.setCssStyles({ display: "none" });
 
 	// ── 离线智能信号（pill 文本，无 SVG，按需填充） ──
 	const signalsRow = card.createEl("div", { cls: "pt-card-signals" });
-	signalsRow.style.display = "none";
+	signalsRow.setCssStyles({ display: "none" });
 
 	// ── AI 排序理由（可选） ──
 	const aiReason = card.createEl("div", { cls: "pt-ai-reason" });
-	aiReason.style.display = "none";
+	aiReason.setCssStyles({ display: "none" });
 	aiReason.createEl("span", { cls: "pt-ai-reason-icon", text: "AI" });
 	const aiReasonText = aiReason.createEl("span", { cls: "pt-ai-reason-text" });
 
 	// ── 操作图标组（静态 SVG，常驻） ──
 	const actionsRow = card.createEl("div", { cls: "pt-card-actions-row" });
 	const insightBtn = makeIconBtn("pt-icon-btn pt-card-insight", "insight", ctx.t("card.insight"), ctx);
-	insightBtn.innerHTML = ICON_INSIGHT;
+	insightBtn.insertAdjacentHTML("beforeend", ICON_INSIGHT);
 	const compareBtn = makeIconBtn("pt-icon-btn pt-card-compare", "compare", ctx.t("card.compare"), ctx);
-	compareBtn.innerHTML = ICON_COMPARE;
+	compareBtn.insertAdjacentHTML("beforeend", ICON_COMPARE);
 	const favBtn = makeIconBtn("pt-icon-btn pt-card-favorite", "favorite", ctx.t("card.favorite"), ctx);
-	favBtn.innerHTML = ICON_FAVORITE;
+	favBtn.insertAdjacentHTML("beforeend", ICON_FAVORITE);
 	actionsRow.append(insightBtn, compareBtn, favBtn);
 
 	// macOS 系统翻译（按需按钮，仅 macOS 桌面端渲染）
 	let macosBtn: HTMLElement | null = null;
 	if (isMacOS()) {
 		macosBtn = makeIconBtn("pt-icon-btn pt-card-sys-translate", "sys-translate", ctx.t("card.sysTranslate"), ctx);
-		macosBtn.innerHTML = ICON_SYS_TRANSLATE;
+		macosBtn.insertAdjacentHTML("beforeend", ICON_SYS_TRANSLATE);
 		macosBtn.addEventListener("click", (e: MouseEvent) => {
 			e.stopPropagation();
 			void handleCardSysTranslate(card, ctx);
@@ -357,7 +356,7 @@ async function handleCardSysTranslate(card: HTMLElement, ctx: CardRenderContext)
 		if (nameR) {
 			refs.nameSpan.textContent = nameR;
 			refs.nameSpan.classList.remove("pt-card-name--clickable", "pt-card-name--original");
-			refs.nameSpan.style.opacity = "1";
+			refs.nameSpan.setCssStyles({ opacity: "1" });
 		}
 		if (descR) {
 			refs.descEl.textContent = descR;
@@ -401,19 +400,19 @@ export function applyCardState(
 	// 收藏 / 推荐态
 	cardEl.classList.toggle("is-favorited", isFav);
 	cardEl.classList.toggle("is-recommended", rec);
-	refs.recommendBadge.style.display = rec ? "" : "none";
+	refs.recommendBadge.setCssStyles({ display: rec ? "" : "none" });
 
 	// 名称 + 原名（点击标题切换中/英）/ 未翻译说明
 	const displayName = cleanChineseSpaces(rawName);
 	refs.nameSpan.dataset.originalName = plugin.name;
 	refs.nameSpan.dataset.displayName = displayName;
-	refs.originalName.style.display = "none"; // 始终隐藏，点击标题切换取而代之
+	refs.originalName.setCssStyles({ display: "none" }); // 始终隐藏，点击标题切换取而代之
 	const isTranslated = displayName !== plugin.name && result?.source !== "original";
 	if (!isTranslated) {
 		// 无翻译 / 未翻译：标题即原名或中文，无切换
 		refs.nameSpan.classList.remove("pt-card-name--clickable", "pt-card-name--original");
 		refs.nameSpan.textContent = displayName;
-		refs.nameSpan.style.opacity = "1";
+		refs.nameSpan.setCssStyles({ opacity: "1" });
 		refs.nameSpan.title = result?.source === "original" ? t("card.original.hint") : "";
 		refs.nameSpan.removeAttribute("role");
 		refs.nameSpan.removeAttribute("tabindex");
@@ -423,7 +422,7 @@ export function applyCardState(
 		refs.nameSpan.classList.add("pt-card-name--clickable");
 		const showOrig = refs.nameSpan.classList.contains("pt-card-name--original");
 		refs.nameSpan.textContent = showOrig ? plugin.name : displayName;
-		refs.nameSpan.style.opacity = "1";
+		refs.nameSpan.setCssStyles({ opacity: "1" });
 		refs.nameSpan.title = showOrig ? t("card.name.toggleBack") : t("card.name.toggleOriginal");
 		refs.nameSpan.setAttribute("role", "button");
 		refs.nameSpan.setAttribute("tabindex", "0");
@@ -449,34 +448,34 @@ export function applyCardState(
 	// 统计行
 	const dl = plugin.downloads;
 	const showDl = dl != null;
-	refs.dlChip.style.display = showDl ? "" : "none";
+	refs.dlChip.setCssStyles({ display: showDl ? "" : "none" });
 	if (showDl) refs.dlText.textContent = (formatDownloads(dl));
 	const u = plugin.updated != null ? formatUpdated(plugin.updated) : "";
 	const showClk = !!u;
-	refs.clkChip.style.display = showClk ? "" : "none";
+	refs.clkChip.setCssStyles({ display: showClk ? "" : "none" });
 	if (showClk) refs.clkText.textContent = (`更新于 ${u}`);
-	refs.statline.style.display = showDl || showClk ? "" : "none";
+	refs.statline.setCssStyles({ display: showDl || showClk ? "" : "none" });
 
 	// 离线智能信号
 	const signals = ctx.smartSignals?.get(plugin.id);
 	if (signals && signals.length > 0) {
-		refs.signalsRow.style.display = "";
+		refs.signalsRow.setCssStyles({ display: "" });
 		refs.signalsRow.replaceChildren();
 		for (const sig of signals) {
 			refs.signalsRow.createEl("span", { cls: "pt-signal-pill", text: SIGNAL_LABELS[sig] });
 		}
 	} else {
-		refs.signalsRow.style.display = "none";
+		refs.signalsRow.setCssStyles({ display: "none" });
 		refs.signalsRow.replaceChildren();
 	}
 
 	// AI 排序理由
 	const reason = ctx.aiSearchResult?.reasons?.[plugin.id];
 	if (reason) {
-		refs.aiReason.style.display = "";
+		refs.aiReason.setCssStyles({ display: "" });
 		refs.aiReasonText.textContent = (reason);
 	} else {
-		refs.aiReason.style.display = "none";
+		refs.aiReason.setCssStyles({ display: "none" });
 	}
 
 	// 元信息：作者 + ID + 安装状态
@@ -484,12 +483,12 @@ export function applyCardState(
 	refs.authorSpan.setAttribute("title", t("card.author.tip").replace("{author}", plugin.author));
 	if (ctx.installedIds.has(plugin.id)) {
 		const enabled = ctx.enabledIds.has(plugin.id);
-		refs.installedMeta.style.display = "";
+		refs.installedMeta.setCssStyles({ display: "" });
 		const txt = t(enabled ? "card.installed.on" : "card.installed.off");
 		refs.installedMeta.textContent = (txt);
 		refs.installedMeta.className = enabled ? "pt-card-installed pt-installed-on" : "pt-card-installed pt-installed-off";
 		refs.installedMeta.setAttribute("title", txt);
 	} else {
-		refs.installedMeta.style.display = "none";
+		refs.installedMeta.setCssStyles({ display: "none" });
 	}
 }

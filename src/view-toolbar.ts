@@ -42,7 +42,7 @@ export function alignFacetLabels(scope: HTMLElement) {
 	if (max === 0) max = 64;
 	const flexVal = `0 0 ${max}px`;
 	labels.forEach((l) => {
-		l.style.flex = flexVal;
+		l.setCssStyles({ flex: flexVal });
 	});
 }
 
@@ -88,17 +88,17 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			attr: { "aria-label": "清除搜索", title: "清除", type: "button" },
 		});
 		setIcon(clearBtn, "x");
-		clearBtn.style.display = "none";
+		clearBtn.setCssStyles({ display: "none" });
 		
 		// AI 搜索状态徽章（仅语义模式显示）：展示「按 Enter 触发」契约 + 未配置 Key 引导。
 		// 关键词模式隐藏；语义模式下文案直接告知用户需按 Enter，避免「输入即搜」习惯导致以为搜索失效。
 		const aiBadge = searchField.createEl("span", { cls: "pt-ai-badge pt-ai-off" });
 		const updateModeBadge = () => {
 			if (!isAIMode(ctx) && !isLocalMode(ctx)) {
-				aiBadge.style.display = "none";
+				aiBadge.setCssStyles({ display: "none" });
 				return;
 			}
-			aiBadge.style.display = "";
+			aiBadge.setCssStyles({ display: "" });
 			const hasKey = ctx.settings.aiSearchEnabled && ctx.settings.aiSearchApiKey;
 			if (ctx.searchMode === "ai") {
 				if (hasKey) {
@@ -147,7 +147,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.aiSearchQueryCache = "";
 				ctx.selectedCategories = [];
 			const aiBtn = q(ctx.contentEl, '.pt-filter[data-value="ai"]');
-			if (aiBtn) aiBtn.style.display = "";
+			if (aiBtn) aiBtn.setCssStyles({ display: "" });
 				facetContainer?.querySelectorAll(".pt-filter").forEach((el) => {
 					el.setAttribute("aria-pressed", "false");
 				});
@@ -188,7 +188,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		
 		// 根据搜索框内容同步清除按钮可见性
 		const syncClearBtn = () => {
-			clearBtn.style.display = searchInput.value.length > 0 ? "" : "none";
+			clearBtn.setCssStyles({ display: searchInput.value.length > 0 ? "" : "none" });
 		};
 
 		// 清除按钮：清空输入 → 立即重新过滤 → 重新聚焦搜索框
@@ -221,7 +221,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 		setIcon(ctx.aiTranslateBtnEl, "sparkles");
 		ctx.aiProgressEl = headerRow.createEl("span", { cls: "pt-ai-progress" });
-		ctx.aiProgressEl.style.display = "none";
+		ctx.aiProgressEl.setCssStyles({ display: "none" });
 		ctx.aiTranslateBtnEl.addEventListener("click", () => {
 			if (ctx.aiTranslateRunning) return;
 			ctx.track("action:ai_translate");
@@ -452,7 +452,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			btn.setAttribute("aria-pressed", value === ctx.sourceFilter ? "true" : "false");
 			// AI 语义模式下，「由AI译」来源筛选无意义（结果集非逐个 AI 翻译），隐藏该选项
 			if (value === "ai" && isAIMode(ctx)) {
-				btn.style.display = "none";
+				btn.setCssStyles({ display: "none" });
 			}
 			btn.addEventListener("click", () => {
 				ctx.sourceFilter = value as typeof ctx.sourceFilter;
@@ -475,7 +475,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	facetContainer = advancedInner.createEl("div", {
 		cls: "pt-ai-facets",
 	});
-	facetContainer.style.display = isAIMode(ctx) ? "" : "none";
+	facetContainer.setCssStyles({ display: isAIMode(ctx) ? "" : "none" });
 	ctx.facetContainerEl = facetContainer;
 	// 分类行：AI/keyword 模式可见（标签离线预生成覆盖全量，作为全局发现维度）
 	const catRow = facetContainer.createEl("div", { cls: "pt-facet-row" });

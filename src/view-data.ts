@@ -54,7 +54,7 @@ export function applySearchInput(ctx: ViewContext) {
 			".pt-search-clear"
 		) as HTMLElement | null;
 		if (clearBtn) {
-			clearBtn.style.display = input.value.length > 0 ? "" : "none";
+			clearBtn.setCssStyles({ display: input.value.length > 0 ? "" : "none" });
 		}
 		const value = input.value.trim().toLowerCase();
 		ctx.searchQuery = value;
@@ -128,7 +128,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 		ctx.dataLoading = true;
 		const stats = q(ctx.containerEl, ".pt-stats");
 		if (stats) {
-			stats.style.display = "";
+			stats.setCssStyles({ display: "" });
 			stats.empty();
 			stats.createEl("span", { cls: "pt-stat", text: ctx.t("app.loading") + "..." });
 		}
@@ -732,8 +732,7 @@ export function updateAiTranslateButton(ctx: ViewContext) {
 
 		if (ctx.sourceFilter === "original") {
 			// 已处于「未翻译」筛选态：按钮作为该态的重跑入口（常态化显示 + 高亮态）
-			btn.style.display = "";
-			btn.style.opacity = "1";
+			btn.setCssStyles({ display: "", opacity: "1" });
 			btn.classList.add("pt-ai-icon-btn--ready");
 			if (ctx.aiTranslateRunning) {
 				btn.disabled = true;
@@ -747,15 +746,13 @@ export function updateAiTranslateButton(ctx: ViewContext) {
 			btn.title = hasKey ? ctx.t("ai.translate.rerun") : ctx.t("ai.translate.free");
 		} else if (untranslatedCount > 0) {
 			// 有待翻译：按钮常态化显示 + 染主题色，暗示「有事可做」
-			btn.style.display = "";
-			btn.style.opacity = "1";
+			btn.setCssStyles({ display: "", opacity: "1" });
 			btn.classList.add("pt-ai-icon-btn--ready");
 			btn.disabled = false;
 			btn.title = ctx.t("ai.translate.hint", { n: String(untranslatedCount) });
 		} else {
 			// 全部已翻译：按钮仍常驻显示，但置灰禁用，避免有效插件消失带来的定位困扰
-			btn.style.display = "";
-			btn.style.opacity = "1";
+			btn.setCssStyles({ display: "", opacity: "1" });
 			btn.disabled = true;
 			btn.title = ctx.t("ai.translate.none");
 		}
@@ -781,7 +778,7 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 		ctx.aiTranslateRunning = true;
 		ctx.updateAiTranslateButton();
 		if (ctx.aiProgressEl) {
-			ctx.aiProgressEl.style.display = "";
+			ctx.aiProgressEl.setCssStyles({ display: "" });
 			ctx.aiProgressEl.setText(
 				ctx.t("ai.translate.progress", { done: "0", total: String(pending.length) })
 			);
@@ -836,7 +833,7 @@ export function setAIProgressDone(ctx: ViewContext, n: number) {
 		const el = ctx.aiProgressEl;
 		if (!el) return;
 		if (n === 0) {
-			el.style.display = "none";
+			el.setCssStyles({ display: "none" });
 			return;
 		}
 		el.setText(ctx.t("ai.translate.done", { n: String(n) }));
@@ -844,7 +841,7 @@ export function setAIProgressDone(ctx: ViewContext, n: number) {
 		el.addClass("pt-ai-progress--done");
 		window.setTimeout(() => {
 			if (el) {
-				el.style.display = "none";
+				el.setCssStyles({ display: "none" });
 				el.removeClass("pt-ai-progress--done");
 			}
 		}, 4000);
