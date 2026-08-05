@@ -61,8 +61,8 @@ export function applySearchInput(ctx: ViewContext) {
 		if (!value) {
 			ctx.aiSearchResult = null;
 			ctx.aiSearchQueryCache = "";
-			// 空查询 → 回到全量列表
-			ctx.renderPluginList();
+			// 空查询 → 回到全量列表（rAF 延迟，输入路径不阻塞）
+			ctx.scheduleRender();
 			return;
 		}
 		if (!isAIMode(ctx)) {
@@ -672,7 +672,7 @@ export function toggleAuthorFilter(ctx: ViewContext, author: string) {
 		ctx.authorFilter = ctx.authorFilter === author ? null : author;
 		ctx.renderAuthorFacet();
 		ctx.updateFacetVisibility();
-		ctx.renderPluginList(true);
+		ctx.scheduleRender(true);
 		ctx.updateAuthorBanner();
 	
 }
@@ -703,7 +703,7 @@ export function updateAuthorBanner(ctx: ViewContext) {
 				ctx.updateAuthorBanner();
 				ctx.renderAuthorFacet();
 				ctx.updateFacetVisibility();
-				ctx.renderPluginList();
+				ctx.scheduleRender();
 			});
 			ctx.authorBannerEl = banner;
 		}
