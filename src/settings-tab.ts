@@ -706,7 +706,13 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							{
 								name: this.t("settings.ai.test"),
 								desc: this.t("settings.ai.test.desc"),
-								action: () => void this.testAIConnection(),
+								render: (setting) => {
+									setting.addButton((btn) =>
+										btn
+											.setButtonText(this.t("settings.ai.test.btn"))
+											.onClick(() => void this.testAIConnection())
+									);
+								},
 							},
 							{
 								name: this.t("settings.ai.showReason"),
@@ -808,12 +814,26 @@ export class TranslatorSettingTab extends PluginSettingTab {
 					{
 						name: this.t("settings.cache"),
 						desc: this.t("settings.cache.desc"),
-						action: () => void this.clearCache(),
+						render: (setting) => {
+							setting.addButton((btn) =>
+								btn
+									.setButtonText(this.t("settings.cache.clear"))
+									.setDestructive()
+									.onClick(() => void this.clearCache())
+							);
+						},
 					},
 					{
 						name: this.t("settings.aidict"),
 						desc: `${this.t("settings.aidict.desc")} ${this.plugin.translator.getAIDictSize()} 条）`,
-						action: () => void this.clearAIDict(),
+						render: (setting) => {
+							setting.addButton((btn) =>
+								btn
+									.setButtonText(this.t("settings.aidict.clear"))
+									.setDestructive()
+									.onClick(() => void this.clearAIDict())
+							);
+						},
 					},
 				],
 			},
@@ -825,7 +845,14 @@ export class TranslatorSettingTab extends PluginSettingTab {
 					{
 						name: this.t("settings.tm.clearApproved"),
 						desc: this.t("settings.tm.clearDesc"),
-						action: () => void this.plugin.clearApprovedTM(),
+						render: (setting) => {
+							setting.addButton((btn) =>
+								btn
+									.setButtonText(this.t("settings.tm.clearApproved"))
+									.setDestructive()
+									.onClick(() => void this.plugin.clearApprovedTM())
+							);
+						},
 					},
 				],
 			},
