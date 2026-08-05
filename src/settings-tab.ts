@@ -894,10 +894,6 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		if (key === "useMyMemory") {
 			this.plugin.translator.setUseMyMemory(Boolean(value));
 		}
-		if (key === "embeddingSource" || key === "mirrorSource") {
-			// 切换模式后需重算条件字段组的 visible 显隐
-			this.update();
-		}
 		return this.plugin.flushSaveSettings();
 	}
 
@@ -977,14 +973,12 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		this.plugin.translator.clearCache();
 		this.plugin.saveTranslatorData();
 		new Notice(this.t("notice.cacheCleared"));
-		this.update();
 	}
 
 	private async clearAIDict(): Promise<void> {
 		this.plugin.translator.clearAIDict();
 		this.plugin.saveTranslatorData();
 		new Notice(this.t("notice.aiDictCleared"));
-		this.update();
 	}
 
 	/** 渲染本地向量索引构建行：按钮 + 实时状态（building→done/error/idle）+ 构建期间禁用 */
