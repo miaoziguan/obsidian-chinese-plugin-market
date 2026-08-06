@@ -58,7 +58,7 @@ export function renderPluginList(ctx: ViewContext, preserveScroll = false) {
 			(filtered[filtered.length - 1]?.id ?? "");
 		const signature =
 			ctx.searchMode + "\u0000" + query + "\u0000" + (ctx.aiSearchPending ? "1" : "0") +
-			"\u0000" + filterState + "\u0000" + listSig;
+			"\u0000" + filterState + "\u0000" + listSig + "\u0000" + String(ctx.smartSignalsRev);
 		if (signature === ctx.lastListSignature && ctx.scrollCardLayer) {
 			if (filtered.length === 0) {
 				// 空态已在屏上且身份未变：不重建空态 DOM（消除闪烁）

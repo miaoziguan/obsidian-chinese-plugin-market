@@ -432,6 +432,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			tmQueue: data._translatorTMQueue as LoadDataRaw["tmQueue"],
 			tmApproved: data._translatorTMApproved as LoadDataRaw["tmApproved"],
 			myMemoryBlockedDate: data._myMemoryBlockedDate as LoadDataRaw["myMemoryBlockedDate"],
+			// 持久化洞察缓存与覆盖率快照（此前遗漏导致每次会话失效重算、重新烧 token）
+			pluginInsights: data._translatorPluginInsights as LoadDataRaw["pluginInsights"],
+			compareInsights: data._translatorCompareInsights as LoadDataRaw["compareInsights"],
+			coverageSnapshots: data._translatorCoverageSnapshots as LoadDataRaw["coverageSnapshots"],
 		});
 		// 跨会话恢复列表拉取时间（修复：原 lastListFetchAt 是视图内存字段，重启归零
 		// 导致 isListStale(0, now, 6h) 恒真 → 每次启动都强制重拉列表 + 重译可见项）
@@ -538,6 +542,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 		allData._translatorCache = persistCache;
 		allData._translatorAiDict = translatorData.aiDict;
+		// 持久化洞察缓存与覆盖率快照（此前遗漏导致每次会话失效重算、重新烧 token）
+		allData._translatorPluginInsights = translatorData.pluginInsights;
+		allData._translatorCompareInsights = translatorData.compareInsights;
+		allData._translatorCoverageSnapshots = translatorData.coverageSnapshots;
 		// 性能：tmApproved 不再双份持久化——vault 笔记是权威（1213KB 冗余），
 		// 启动时由 scanVaultTM 从 metadataCache 免 IO 回灌。
 		delete allData._translatorTMApproved;
