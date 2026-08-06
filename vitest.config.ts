@@ -9,6 +9,13 @@ import { resolve } from "path";
 export default defineConfig({
 	resolve: {
 		alias: {
+			"@shared": resolve(__dirname, "src/shared"),
+			"@app": resolve(__dirname, "src/app"),
+			"@ui": resolve(__dirname, "src/ui"),
+			"@domain": resolve(__dirname, "src/domain"),
+			"@translation": resolve(__dirname, "src/translation"),
+			"@semantic": resolve(__dirname, "src/semantic"),
+			"@data": resolve(__dirname, "src/data"),
 			obsidian: resolve(__dirname, "test/mocks/obsidian.ts"),
 			"@inline-worker": resolve(__dirname, "test/mocks/inline-worker.ts"),
 		},

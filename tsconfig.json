@@ -13,7 +13,35 @@
 		"strictNullChecks": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
-	"lib": ["DOM", "ES2020"]
+		"lib": [
+			"DOM",
+			"ES2020"
+		],
+		"paths": {
+			"@shared/*": [
+				"src/shared/*"
+			],
+			"@app/*": [
+				"src/app/*"
+			],
+			"@ui/*": [
+				"src/ui/*"
+			],
+			"@domain/*": [
+				"src/domain/*"
+			],
+			"@translation/*": [
+				"src/translation/*"
+			],
+			"@semantic/*": [
+				"src/semantic/*"
+			],
+			"@data/*": [
+				"src/data/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts"]
+	"include": [
+		"src/**/*.ts"
+	]
 }
