@@ -12,6 +12,12 @@ const banner = `/*
  */
 `;
 
+// ── 样式表：构建时从源码根复制到插件根目录（Obsidian 插件约定 styles.css 在根，随插件分发）──
+if (!existsSync("styles.css")) {
+	throw new Error("Missing styles.css at project root");
+}
+copyFileSync("styles.css", path.join(PLUGIN_ROOT, "styles.css"));
+
 // ── 运行时 WASM 资产：构建时从 node_modules 拷贝到插件根目录，随插件分发 ──
 const copyWasm = (src, name) => {
 	if (!existsSync(src)) {
