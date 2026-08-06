@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用讨论 / Discussions
+    url: https://github.com/miaoziguan/obsidian-chinese-plugin-market/discussions
+    about: 使用问题、想法交流请到 Discussions;Bug 与功能建议请用上方模板。
