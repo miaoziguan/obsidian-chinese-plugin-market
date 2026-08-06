@@ -167,6 +167,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			this._resolveTmApprovedReady();
 		}, 30_000);
 
+		// 官方推荐清单（体量小，同步加载以保推荐区首屏完整；不依赖 initDeferredLoad 的异步时序）
+		await this.loadPluginRecommend();
+
 		this.app.workspace.onLayoutReady(() => {
 			void this.initDeferredLoad().catch((e) =>
 				logger.error("[Chinese Plugin Market] 延迟初始化失败：", e),
@@ -307,8 +310,6 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.loadPluginTags().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载分类索引失败：", e),
 		);
-		// 官方推荐清单（体量小，同步加载以保推荐区首屏完整）
-		await this.loadPluginRecommend();
 
 		// TM/索引就绪：通知已打开的视图用最终数据重渲染一次。
 		// 视图尚未创建时无需处理——其 onOpen 会自然读到已就绪的数据。

@@ -4,10 +4,10 @@
  * 仅测试「渲染层」关键路径：插件卡片 + 对比页，不启动整个插件生命周期。
  */
 import "./obsidian-mock";
-import { createPluginCard } from "../../src/card-render";
-import { renderComparePage } from "../../src/compare-view";
-import { makeT } from "../../src/i18n";
-import type { PluginInfo, TranslateResult } from "../../src/translator";
+import { createPluginCard } from "../../src/ui/components/card-render";
+import { renderComparePage } from "../../src/ui/components/compare-view";
+import { makeT } from "../../src/shared/i18n";
+import type { PluginInfo, TranslateResult } from "../../src/domain/catalog/translator";
 
 function baseCtx() {
 	const t = makeT();
@@ -68,7 +68,7 @@ function renderCompare(): string {
 		alpha: { translatedName: "阿尔法插件", translatedDesc: "示例 A", source: "bulk" },
 		beta: { translatedName: "贝塔插件", translatedDesc: "示例 B", source: "bulk" },
 	};
-	renderComparePage(container, plugins, translatorStub, translated, new Set(), new Set(), {
+	renderComparePage(container, plugins, translatorStub, translated, new Set(), new Set(), () => ({ source: "jsdelivr" as const }), {
 		app: {} as any,
 		onBack() {},
 		onRemove() {},

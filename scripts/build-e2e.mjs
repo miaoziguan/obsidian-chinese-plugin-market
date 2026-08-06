@@ -12,6 +12,8 @@ import { resolve } from "path";
 const alias = {
 	obsidian: resolve("test/e2e/obsidian-mock.ts"),
 	"@xenova/transformers": resolve("test/e2e/transformers-stub.ts"),
+	// 主构建用 inlineWorkerSourcePlugin 注入 worker 源码；e2e 不启动真实 worker，用空桩占位
+	"@inline-worker": resolve("test/e2e/inline-worker-stub.ts"),
 };
 
 const entries = [

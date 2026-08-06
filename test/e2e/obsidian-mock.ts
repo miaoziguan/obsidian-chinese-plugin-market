@@ -96,6 +96,14 @@ proto.removeClass ??= removeClass;
 proto.toggleClass ??= toggleClass;
 proto.show ??= show;
 proto.hide ??= hide;
+// Obsidian 的 setCssStyles（camelCase → kebab-case 设 style），e2e 浏览器环境补齐
+if (!proto.setCssStyles) {
+	proto.setCssStyles = function (this: HTMLElement, styles: Record<string, string>) {
+		for (const [k, v] of Object.entries(styles)) {
+			this.style.setProperty(k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`), v);
+		}
+	};
+}
 // 内联赋值，避免被 esbuild tree-shake（仅原型赋值引用时会被移除）
 proto.createDiv = function (this: HTMLElement, opts?: ElOpts): HTMLElement {
 	return (proto.createEl as (this: HTMLElement, tag: string, o?: ElOpts) => HTMLElement).call(this, "div", opts);
@@ -103,6 +111,12 @@ proto.createDiv = function (this: HTMLElement, opts?: ElOpts): HTMLElement {
 proto.createSpan = function (this: HTMLElement, opts?: ElOpts): HTMLElement {
 	return (proto.createEl as (this: HTMLElement, tag: string, o?: ElOpts) => HTMLElement).call(this, "span", opts);
 };
+// Obsidian 全局 helper：card-render 等用全局 createDiv()/createSpan()/createEl()/createFragment()
+// （非实例方法），e2e 浏览器环境需补全局函数
+(globalThis as unknown as Record<string, unknown>).createDiv = (opts?: ElOpts) => makeEl("div", opts);
+(globalThis as unknown as Record<string, unknown>).createSpan = (opts?: ElOpts) => makeEl("span", opts);
+(globalThis as unknown as Record<string, unknown>).createEl = (tag: string, opts?: ElOpts) => makeEl(tag, opts);
+(globalThis as unknown as Record<string, unknown>).createFragment = () => document.createDocumentFragment();
 
 // ── 渲染层 import 的最小符号 ──
 export class Component {
@@ -245,6 +259,7 @@ export function makeApp() {
 				detach: (): void => {},
 			}),
 			setActiveLeaf: (): void => {},
+			onLayoutReady: (cb: () => void): void => cb(), // 同步执行布局就绪回调
 			on: () => ({ unload: (): void => {} }),
 			off: (): void => {},
 			trigger: (): void => {},
