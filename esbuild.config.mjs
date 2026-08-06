@@ -104,7 +104,7 @@ const transformersAliasesMain = {
 // Step 1：打包 Embedding Worker（transformers + onnxruntime 全在 worker 里跑）
 // ════════════════════════════════════════════════════════════════════════════
 await esbuild.build({
-	entryPoints: ["src/workers/embedding-worker.ts"],
+	entryPoints: ["src/semantic/workers/embedding-worker.ts"],
 	bundle: true,
 	format: "iife",
 	platform: "browser",
@@ -114,6 +114,7 @@ await esbuild.build({
 	minify: true,
 	sourcemap: false,
 	loader: { ".wasm": "binary" },
+	tsconfig: "tsconfig.json",
 	alias: {
 		"@huggingface/transformers":
 			"./node_modules/@huggingface/transformers/dist/transformers.web.js",
@@ -135,9 +136,10 @@ await esbuild.build({
 // ════════════════════════════════════════════════════════════════════════════
 await esbuild.build({
 	banner: { js: banner },
-	entryPoints: ["src/main.ts"],
+	entryPoints: ["src/app/main.ts"],
 	bundle: true,
 	loader: { ".wasm": "binary" },
+	tsconfig: "tsconfig.json",
 	alias: transformersAliasesMain,
 	external: [
 		"obsidian",
