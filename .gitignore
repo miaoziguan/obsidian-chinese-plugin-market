@@ -17,6 +17,11 @@ dict-delta-report.json
 # 生产构建生成的 sourcemap（仅本地排查用，Obsidian 不加载，不纳入分发）
 main.js.map
 
+# Don't include the compiled main.js file in the repo.
+# They should be uploaded to GitHub releases instead.
+main.js
+styles.css
+
 # IDE/调试临时产物
 .playwright-repro/
 .trae-html-share-packages/
