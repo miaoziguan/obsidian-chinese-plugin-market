@@ -1,0 +1,11 @@
+allowBuilds:
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
+
+# onnxruntime-web 是 @huggingface/transformers 的间接依赖，pnpm 默认不提升到顶层
+# node_modules；而 esbuild.config.mjs 硬编码了 ./node_modules/onnxruntime-web 路径。
+# 提升它以让 copyWasm 与 alias 命中（等价于 npm 的扁平布局）。
+publicHoistPattern:
+  - onnxruntime-web
