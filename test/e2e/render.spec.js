@@ -16,8 +16,8 @@ test("插件卡片渲染出正确结构（含中文译名 / 操作区 / aria）"
 	expect(html).toContain("数据视图"); // 注入的中文译名
 	expect(html).toContain("pt-card-actions-row"); // 对比/收藏/翻译操作按钮
 	expect(html).toContain("pt-card-install-btn");
-	// aria-label 应包含中文名
-	expect(html).toMatch(/aria-label="[^"]*数据视图/);
+	// aria-label 应包含插件名（无障碍读英文原名；中文译名显示在标题 span）
+	expect(html).toMatch(/aria-label="[^"]*Dataview/);
 });
 
 test("对比页渲染出导航与多张对比卡片（含中文译名）", async ({ page }) => {
