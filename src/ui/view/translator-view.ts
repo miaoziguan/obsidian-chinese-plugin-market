@@ -105,6 +105,7 @@ import { loadAndRender, updateGuidance, updateFacetVisibility, showSearchGuide, 
 import { ensureDataLoaded, fetchPluginsWithFallback, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, updateAuthorBanner, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
 import { runAISearch } from "@ui/view/view-ai-search";
 import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, disposeRenderTimers } from "@ui/view/view-render";
+import { startInstalledWatch } from "@ui/view/installed-watch";
 import { onCardClick, toggleFavorite, onCardKeydown, focusCardByIdx, flashAction, computeSimilarFor, openDetailDrawer as _openDetailDrawer } from "@ui/view/view-cards";
 import { renderFeaturedSection, ensureFeaturedSection, hideFeaturedSection } from "@ui/view/view-featured";
 import { createViewContext, type ViewContext } from "@ui/view/view-context";
@@ -138,6 +139,8 @@ export class ChinesePluginMarketView extends ItemView {
 	public descRAF = 0; // 与 scheduleRender 分离，防止描述展开回调被吞
 	/** 视图已卸载标记：卸载后置 true，异步路径据此尽早退出（见 onClose） */
 	public disposed = false;
+	/** 已安装状态监听的清理函数（#14：fs.watch 桌面 / 轮询移动），onClose 时调用 */
+	public installedWatchDispose: (() => void) | null = null;
 	/** 结果计数元素引用（常驻工具栏内，搜索后显示「找到 N 个插件」） */
 	public resultCountEl: HTMLElement | null = null;
 	/** 「AI 一键翻译」按钮与进度元素（仅筛选「未翻译」时显示，聚焦 AI 战略） */
@@ -290,6 +293,8 @@ export class ChinesePluginMarketView extends ItemView {
 			},
 		};
 		await this.loadAndRender();
+		// #14：启动已安装状态实时同步（桌面 fs.watch / 移动轮询），视图关闭时释放
+		this.installedWatchDispose = startInstalledWatch(this._ctx);
 		// T4(#7): 注册分类标签加载完成回调，刷新 facet（标签可能晚于首屏就绪）；
 		// 若打开视图时标签已就绪（竞态：加载早于视图打开），立即补刷一次。
 		this.plugin.onPluginTagsLoaded = () => {
@@ -333,6 +338,11 @@ export class ChinesePluginMarketView extends ItemView {
 		if (this.debounceTimer) {
 			window.clearTimeout(this.debounceTimer);
 			this.debounceTimer = undefined;
+		}
+		// #14：释放已安装状态监听（关闭 fs.watch / 清除轮询定时器）
+		if (this.installedWatchDispose) {
+			this.installedWatchDispose();
+			this.installedWatchDispose = null;
 		}
 		// Bug fix: 清理懒翻译定时器，避免视图销毁后仍触发网络请求
 		if (this.translateVisibleTimer) {
