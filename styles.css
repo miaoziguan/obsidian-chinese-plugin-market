@@ -4536,6 +4536,52 @@ button.pt-card-install-btn--installed {
 	.pt-desc-pending::after { animation: none; }
 }
 
+/* ── 卡片骨架屏：窗口外 pending 卡的加载占位微光 ──
+   虚拟滚动下窗口外的卡片仅建骨架（data-fill-pending），滚入视口后才由
+   fillVisibleWindow 填充内容。在填充前的那一帧，卡片内容为空显得突兀，
+   这里把标题/描述/元信息区域渲染成微光骨架（复用 pt-skeleton-shimmer），
+   让「正在加载」的过渡更顺滑。填充后（移除 data-fill-pending）即恢复真实内容。 */
+.pt-card[data-fill-pending] {
+	position: relative;
+}
+.pt-card[data-fill-pending] .pt-card-name,
+.pt-card[data-fill-pending] .pt-card-desc {
+	position: relative;
+	overflow: hidden;
+	border-radius: var(--pt-radius-sm, 4px);
+	background: linear-gradient(
+		90deg,
+		var(--background-secondary) 25%,
+		var(--background-modifier-hover) 50%,
+		var(--background-secondary) 75%
+	);
+	background-size: 200% 100%;
+	animation: pt-skeleton-shimmer 1.2s ease-in-out infinite;
+}
+.pt-card[data-fill-pending] .pt-card-name {
+	height: 1.1em;
+	width: 60%;
+	margin-bottom: var(--pt-space-xs, 6px);
+}
+.pt-card[data-fill-pending] .pt-card-desc {
+	height: 2.9em; /* 约 2 行截断高度 */
+	max-height: none; /* 覆盖 --clamped 的 max-height，确保骨架块可见 */
+	width: 100%;
+}
+.pt-card[data-fill-pending] .pt-card-meta,
+.pt-card[data-fill-pending] .pt-card-statline,
+.pt-card[data-fill-pending] .pt-card-signals,
+.pt-card[data-fill-pending] .pt-ai-reason {
+	display: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+	.pt-card[data-fill-pending] .pt-card-name,
+	.pt-card[data-fill-pending] .pt-card-desc {
+		animation: none;
+		background: var(--background-secondary);
+	}
+}
+
 /* ── S7 滚动位置指示徽标 ── */
 .pt-scroll-pos {
 	position: absolute;
