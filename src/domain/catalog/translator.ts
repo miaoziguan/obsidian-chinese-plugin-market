@@ -100,6 +100,14 @@ export interface AISearchResult {
 	/** LLM 精排失败、已降级到本地召回排序（向量∪关键词混合序）时为 true */
 	rankFallback?: boolean;
 	reasons?: Record<string, string>;
+	/** 命中高亮词（query 分词 + 同义词扩展，小写），供卡片在名称/描述中高亮匹配片段 */
+	highlightTerms?: string[];
+	/**
+	 * 排序可解释性：每个插件命中的召回信号（可解释「为什么排在这」）。
+	 * 取值为下列信号的子集：vector=向量语义命中 / keyword=关键词 BM25 命中 /
+	 * title=标题模糊命中 / llm=经 AI 精排保留（LLM 认为相关）。
+	 */
+	signals?: Record<string, string[]>;
 }
 
 export interface CoverageSnapshot {

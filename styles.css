@@ -1712,6 +1712,48 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-text);
 }
 
+/* AI/本地语义搜索：命中词高亮 */
+.pt-hl {
+	background: color-mix(in srgb, var(--pt-accent) 28%, transparent);
+	color: var(--pt-text-strong, var(--text-normal));
+	border-radius: 3px;
+	padding: 0 1px;
+	font-weight: var(--pt-weight-semibold);
+}
+
+/* 排序可解释性：召回信号徽标行 */
+.pt-card-match-signals {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: var(--pt-space-xs);
+}
+.pt-match-signal {
+	font-size: var(--pt-text-2xs);
+	line-height: 1.4;
+	padding: 1px 7px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in srgb, var(--pt-accent) 30%, transparent);
+	color: var(--pt-accent);
+	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+	white-space: nowrap;
+}
+.pt-match-signal--vector {
+	border-color: color-mix(in srgb, #6c8cff 35%, transparent);
+	color: #6c8cff;
+	background: color-mix(in srgb, #6c8cff 12%, transparent);
+}
+.pt-match-signal--llm {
+	border-color: color-mix(in srgb, #c78cff 35%, transparent);
+	color: #c78cff;
+	background: color-mix(in srgb, #c78cff 12%, transparent);
+}
+.pt-match-signal--title {
+	border-color: color-mix(in srgb, #ffb454 35%, transparent);
+	color: #d99833;
+	background: color-mix(in srgb, #ffb454 12%, transparent);
+}
+
 /* 元信息行（作者 + 已安装）：无上下边框/间距，依赖父级卡片栅格 */
 .pt-card-meta {
 	display: flex;
