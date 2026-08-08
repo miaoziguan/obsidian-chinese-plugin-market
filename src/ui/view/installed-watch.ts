@@ -15,9 +15,9 @@ import type { ViewContext } from "@ui/view/view-context";
 
 /** 桌面端是否可用 fs.watch */
 function tryGetFsWatch(): ((dir: string, cb: () => void) => { close: () => void }) | null {
-	// 运行时取 require：CJS 产物在桌面 Electron 下存在；移动端 require 不存在或 require("fs") 抛错 → 降级轮询
-	const g = globalThis as unknown as { require?: (id: string) => unknown };
-	const fsRequire = g.require;
+	// 运行时取 require：CJS 产物在桌面 Electron 下存在；移动端 require 不存在或 require("fs") 抛错 → 降级轮询。
+	// 用 window（而非 globalThis）以兼容 Obsidian 弹出窗口（popout window）的作用域。
+	const fsRequire = (window as unknown as { require?: (id: string) => unknown }).require;
 	if (!fsRequire) return null;
 	try {
 		const fs = fsRequire("fs") as {
