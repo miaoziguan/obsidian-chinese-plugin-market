@@ -815,7 +815,7 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 		const scheduleRefresh = () => {
 			if (rafQueued) return;
 			rafQueued = true;
-			refreshRAF = requestAnimationFrame(doRefresh);
+			refreshRAF = window.requestAnimationFrame(doRefresh);
 		};
 		try {
 			await ctx.translator.translateBatchIncremental(
@@ -837,7 +837,7 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 			logger.error("[Chinese Plugin Market] 智能混合翻译：异常", e);
 	} finally {
 		ctx.aiTranslateRunning = false;
-		if (refreshRAF !== null) cancelAnimationFrame(refreshRAF);
+		if (refreshRAF !== null) window.cancelAnimationFrame(refreshRAF);
 		doRefresh();
 		ctx.buildSearchIndex();
 		// 立即落盘（无防抖）：确保本次翻译结果（含 TM 已采纳 vault 笔记）在按钮流程结束时
