@@ -269,12 +269,12 @@ export const STRINGS = {
 	},
 	"settings.embedding.mode": { zh: "召回方式" },
 	"settings.embedding.mode.desc": {
-		zh: "keyword：本地关键词（默认）；api：API 向量语义；local：本地模型（离线，依赖 @xenova/transformers）。",
+		zh: "关键词：纯本地匹配（默认，无需下载任何模型，速度最快）；API 向量：调用云端 Embedding 接口做语义搜索（需填密钥）；本地模型：本机离线运行 transformers.js 模型做语义搜索（首次会自动下载约 110MB 模型，无需联网即可语义检索）。",
 
 	},
 	"settings.embedding.keyword": { zh: "关键词（本地，默认）" },
 	"settings.embedding.api": { zh: "API 向量（语义）" },
-	"settings.embedding.local": { zh: "本地模型（离线）" },
+	"settings.embedding.local": { zh: "本地模型（离线语义）" },
 	"settings.embedding.baseUrl": { zh: "Embedding Base URL" },
 	"settings.embedding.baseUrl.desc": {
 		zh: "向量接口地址（OpenAI 兼容 /v1/embeddings）。可与聊天接口不同。",
@@ -290,14 +290,14 @@ export const STRINGS = {
 		zh: "如 text-embedding-3-small（OpenAI）、nomic-embed-text（ollama）等。",
 
 	},
-	"settings.embedding.localModel": { zh: "本地模型名（local 模式）" },
+	"settings.embedding.localModel": { zh: "本地模型名" },
 	"settings.embedding.localModel.desc": {
-		zh: "transformers.js 模型 ID，默认 Xenova/bge-small-zh-v1.5（面向中文语义，体积 ~110MB）。",
+		zh: "本地语义用的 transformers.js 模型 ID，插件已内置默认模型 Xenova/bge-small-zh-v1.5（中文语义，约 110MB，首次自动下载）。一般无需修改；仅当你想换成其它本地模型（如 bge-base、all-MiniLM 等）时再填。",
 
 	},
-	"settings.embedding.wasm": { zh: "ONNX WASM 路径（可选）" },
+	"settings.embedding.wasm": { zh: "ONNX Runtime WASM 路径（高级，可选）" },
 	"settings.embedding.wasm.desc": {
-		zh: "留空则用 transformers.js 默认 CDN。可填自托管/CDN 地址以加速或离线加载 wasm。",
+		zh: "transformers.js 运行模型所需的 ONNX Runtime WASM 文件地址。留空则自动从官方 CDN 加载（需联网一次）。若你想完全离线运行，可把本仓库附带的 ort-wasm-simd-threaded.jsep.wasm 放到某个可访问路径并填其目录（末尾带 /）。绝大多数用户无需填写。",
 
 	},
 	"settings.embedding.webgpu": { zh: "WebGPU 加速" },
@@ -319,7 +319,9 @@ export const STRINGS = {
 	"settings.embedding.index.building": { zh: "正在构建本地向量索引… {p}/{t}" },
 	"settings.embedding.index.idle": { zh: "尚未构建。首次使用「本地语义」模式会自动构建；也可点击按钮手动预建（推荐，避免首次搜索等待）。" },
 	"settings.embedding.index.done": { zh: "本地向量索引已就绪，可离线语义搜索。" },
+	"settings.embedding.index.doneNotice": { zh: "✓ 本地向量索引构建完成（{p} 个插件），已可离线语义搜索。" },
 	"settings.embedding.index.error": { zh: "构建失败" },
+	"settings.embedding.index.errorNotice": { zh: "✗ 本地向量索引构建失败：" },
 	// 翻译引擎
 	"settings.engine.myMemory": { zh: "启用 MyMemory 免费翻译" },
 	"settings.engine.myMemory.desc": {
