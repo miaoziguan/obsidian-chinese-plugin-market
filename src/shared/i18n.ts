@@ -160,6 +160,7 @@ export const STRINGS = {
 	"card.name.toggleBack": { zh: "点击返回中文译名" },
 	"card.installed.on": { zh: "已启用" },
 	"card.author.tip": { zh: "作者：{author}（点击只看该作者的插件）" },
+	"card.matchSignal.title": { zh: "该结果因「{sig}」命中而被召回" },
 	"card.installed.off": { zh: "已安装" },
 	"card.enable": { zh: "启用" },
 	"favorite.added": { zh: "已收藏" },

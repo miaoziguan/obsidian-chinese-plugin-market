@@ -267,9 +267,10 @@ export class AISearcher {
 				const full = allPlugins.find((p) => p.id === merged[0].id);
 				if (full) merged[0].description = full.description;
 			}
+			const exp = this.buildExplainability(query, vectorScores, localScores, fuzzyScores);
 			return this.rankTopOrFallback(query, merged, showReason, () =>
 				onPhase?.("精排", `共 ${merged.length} 条候选`)
-			);
+			, exp);
 		}
 
 		// 补齐 description
@@ -279,8 +280,9 @@ export class AISearcher {
 			c.description = idToDesc.get(c.id) || c.description || "";
 		}
 
+		const exp = this.buildExplainability(query, vectorScores, localScores, fuzzyScores);
 		onPhase?.("精排", `共 ${merged.length} 条候选`);
-		return this.rankTopOrFallback(query, merged, showReason);
+		return this.rankTopOrFallback(query, merged, showReason, undefined, exp);
 	}
 
 	/**
@@ -336,7 +338,8 @@ export class AISearcher {
 				`融合后=${fusedIds.length}（${Date.now() - tStart}ms）`
 		);
 
-		return { rankedIds: fusedIds, rankFallback: true };
+		const exp = this.buildExplainability(query, vectorScores, localScores, fuzzyScores);
+		return { rankedIds: fusedIds, rankFallback: true, ...exp };
 	}
 
 	/** AI 深度对比（基于真实信号：commands / 依赖 / 标签 / README，不单靠描述） */
@@ -545,6 +548,7 @@ ${lines}
 		candidates: AISearchCandidate[],
 		showReason: boolean,
 		onPhase?: () => void,
+		signals?: Record<string, string[]>,
 	): Promise<AISearchResult> {
 		const rankSubset = candidates.slice(0, RANK_TOP_N);
 
@@ -626,6 +630,12 @@ ${candidateLines}
 			}
 			result.reasons = filteredReasons;
 		}
+		// 排序可解释性：经 LLM 精排保留（给了理由）的插件补 llm 信号
+		if (signals) {
+			for (const id of Object.keys(reasonsMap)) {
+				if (rankedIds.includes(id)) (signals[id] ??= []).push("llm");
+			}
+		}
 		return result;
 	}
 
@@ -642,13 +652,14 @@ ${candidateLines}
 		candidates: AISearchCandidate[],
 		showReason: boolean,
 		onPhase?: () => void,
+		extra?: Partial<AISearchResult>,
 	): Promise<AISearchResult> {
 		try {
-			const r = await this.rankTop(query, candidates, showReason, onPhase);
+			const r = await this.rankTop(query, candidates, showReason, onPhase, extra?.signals);
 			logger.debug(
 				`[Chinese Plugin Market] AI 精排完成：候选=${candidates.length} → 命中=${r.rankedIds.length}（LLM 精排成功）`
 			);
-			return r;
+			return { ...r, ...extra };
 		} catch (e: unknown) {
 			logger.warn(
 				"[Chinese Plugin Market] AI 精排失败，降级到本地召回排序（向量∪关键词）：",
@@ -659,7 +670,39 @@ ${candidateLines}
 			logger.debug(
 				`[Chinese Plugin Market] AI 精排降级：候选=${candidates.length} → 回退本地召回序`
 			);
-			return { rankedIds: candidates.map((c) => c.id), rankFallback: true };
+			return { rankedIds: candidates.map((c) => c.id), rankFallback: true, ...extra };
 		}
+	}
+
+	/**
+	 * 构建排序可解释性数据：高亮词 + 每插件命中的召回信号。
+	 * - highlightTerms：query 的 BM25 分词 + 同义词扩展（小写），供卡片高亮匹配片段。
+	 * - signals：每个插件命中的召回路（vector/keyword/title），经 LLM 精排保留的再补 llm。
+	 * 卡片据此在名称/描述高亮、并展示「为什么排在这」的信号徽标。
+	 */
+	private buildExplainability(
+		query: string,
+		vectorScores: Map<string, number> | null,
+		localScores: Map<string, number>,
+		fuzzyScores: Map<string, number>,
+		llmIds?: Set<string>,
+	): { highlightTerms: string[]; signals: Record<string, string[]> } {
+		// 高亮词：query 分词（CJK 三元组 + ASCII 词）+ 同义词扩展
+		const baseTokens = tokenizeForBM25(query).map((t) => t.toLowerCase());
+		const expanded = expandQuery(query).toLowerCase();
+		const synonymTokens = tokenizeForBM25(expanded).map((t) => t.toLowerCase());
+		const termSet = new Set<string>([...baseTokens, ...synonymTokens].filter((t) => t.length > 1));
+		const highlightTerms = Array.from(termSet);
+
+		// 信号：逐插件判定命中了哪些召回路
+		const signals: Record<string, string[]> = {};
+		const mark = (id: string, sig: string) => {
+			(signals[id] ??= []).push(sig);
+		};
+		for (const id of vectorScores?.keys() ?? []) mark(id, "vector");
+		for (const id of localScores.keys()) mark(id, "keyword");
+		for (const id of fuzzyScores.keys()) mark(id, "title");
+		if (llmIds) for (const id of llmIds) mark(id, "llm");
+		return { highlightTerms, signals };
 	}
 }
