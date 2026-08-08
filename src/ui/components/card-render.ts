@@ -25,6 +25,36 @@ const SIGNAL_LABELS: Record<SignalId, string> = {
 	velocityRising: "增速飙升",
 };
 
+/** 召回信号 → 中文徽标文案（排序可解释性用） */
+const MATCH_SIGNAL_LABELS: Record<string, string> = {
+	vector: "语义",
+	keyword: "关键词",
+	title: "标题",
+	llm: "AI 精排",
+};
+
+/** HTML 转义（高亮拼接前必须先转义，避免注入） */
+function escapeHtml(s: string): string {
+	return s.replace(/[&<>"']/g, (c) =>
+		c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;"
+	);
+}
+
+/**
+ * 在文本中高亮命中词（highlightTerms，小写）。先转义后按词做大小写不敏感包裹，
+ * 返回的 HTML 可直接赋给 innerHTML。terms 为空或文本空则返回转义原文。
+ * 说明：plugin 名称/描述来自 Obsidian 社区市场（可信源），且已先转义，innerHTML 安全。
+ */
+function highlight(text: string, terms: string[] | undefined): string {
+	const safe = escapeHtml(text);
+	if (!terms || terms.length === 0 || !text) return safe;
+	// 按长度降序，避免短词先匹配把长词拆断
+	const sorted = [...terms].sort((a, b) => b.length - a.length);
+	const pattern = sorted.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+	const re = new RegExp(`(${pattern})`, "gi");
+	return safe.replace(re, '<mark class="pt-hl">$1</mark>');
+}
+
 /** 卡片渲染上下文（由视图注入，避免渲染器依赖视图实例） */
 export interface CardRenderContext {
 	/** i18n 取词函数 */
@@ -113,6 +143,8 @@ interface CardRefs {
 	authorName: HTMLElement;
 	installedMeta: HTMLElement;
 	recommendBadge: HTMLElement;
+	/** 排序可解释性：召回信号徽标行（向量/关键词/标题/AI 精排） */
+	matchSignals: HTMLElement;
 }
 
 const cardRefsMap = new WeakMap<HTMLElement, CardRefs>();
@@ -235,7 +267,8 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		const disp = nameSpan.dataset.displayName || "";
 		nameSpan.setCssStyles({ opacity: "0" });
 		window.setTimeout(() => {
-			nameSpan.textContent = showOrig ? orig : disp;
+			const hl = cardCtxMap.get(card)?.aiSearchResult?.highlightTerms;
+			nameSpan.innerHTML = highlight(showOrig ? orig : disp, hl);
 			nameSpan.setAttribute("aria-pressed", String(showOrig));
 			nameSpan.title = showOrig ? ctx.t("card.name.toggleBack") : ctx.t("card.name.toggleOriginal");
 			nameSpan.setCssStyles({ opacity: "1" });
@@ -272,6 +305,10 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	aiReason.createSpan({ cls: "pt-ai-reason-icon", text: "AI" });
 	const aiReasonText = aiReason.createSpan({ cls: "pt-ai-reason-text" });
 
+	// 排序可解释性：召回信号徽标行（向量/关键词/标题/AI 精排），常驻隐藏，applyCardState 控制显隐
+	const matchSignals = card.createDiv({ cls: "pt-card-match-signals" });
+	matchSignals.setCssStyles({ display: "none" });
+
 	// ── 操作图标组（静态 SVG，常驻） ──
 	const actionsRow = card.createDiv({ cls: "pt-card-actions-row" });
 	const insightBtn = makeIconBtn("pt-icon-btn pt-card-insight", "insight", ctx.t("card.insight"), ctx);
@@ -297,7 +334,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	cardRefsMap.set(card, {
 		nameSpan, originalName, installBtn, insightBtn, compareBtn, favBtn, macosBtn,
 		descEl, statline, dlChip, dlText, clkChip, clkText,
-		signalsRow, aiReason, aiReasonText, authorSpan, authorName, installedMeta, recommendBadge,
+		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, installedMeta, recommendBadge, matchSignals,
 	});
 	cardCtxMap.set(card, ctx);
 	return card;
@@ -423,11 +460,13 @@ export function applyCardState(
 	refs.nameSpan.dataset.originalName = plugin.name;
 	refs.nameSpan.dataset.displayName = displayName;
 	refs.originalName.setCssStyles({ display: "none" }); // 始终隐藏，点击标题切换取而代之
+	// AI/本地语义搜索命中词高亮（highlightTerms 由 ctx.aiSearchResult 携带）
+	const hl = ctx.aiSearchResult?.highlightTerms;
 	const isTranslated = displayName !== plugin.name && result?.source !== "original";
 	if (!isTranslated) {
 		// 无翻译 / 未翻译：标题即原名或中文，无切换
 		refs.nameSpan.classList.remove("pt-card-name--clickable", "pt-card-name--original");
-		refs.nameSpan.textContent = displayName;
+		refs.nameSpan.innerHTML = highlight(displayName, hl);
 		refs.nameSpan.setCssStyles({ opacity: "1" });
 		refs.nameSpan.title = result?.source === "original" ? t("card.original.hint") : "";
 		refs.nameSpan.removeAttribute("role");
@@ -437,7 +476,7 @@ export function applyCardState(
 		// 已翻译：标题可点击切换中/英文
 		refs.nameSpan.classList.add("pt-card-name--clickable");
 		const showOrig = refs.nameSpan.classList.contains("pt-card-name--original");
-		refs.nameSpan.textContent = showOrig ? plugin.name : displayName;
+		refs.nameSpan.innerHTML = highlight(showOrig ? plugin.name : displayName, hl);
 		refs.nameSpan.setCssStyles({ opacity: "1" });
 		refs.nameSpan.title = showOrig ? t("card.name.toggleBack") : t("card.name.toggleOriginal");
 		refs.nameSpan.setAttribute("role", "button");
@@ -454,7 +493,7 @@ export function applyCardState(
 
 	// 描述
 	const descText = cleanChineseSpaces(result?.translatedDesc || plugin.description);
-	refs.descEl.textContent = (descText);
+	refs.descEl.innerHTML = highlight(descText, hl);
 	refs.descEl.dataset.originalDesc = plugin.description;
 	refs.descEl.classList.toggle("pt-desc-pending", !result);
 	refs.descEl.classList.add("pt-card-desc--clamped"); // 固定截断态（与首次建卡一致）
@@ -490,6 +529,22 @@ export function applyCardState(
 		refs.aiReasonText.textContent = (reason);
 	} else {
 		refs.aiReason.setCssStyles({ display: "none" });
+	}
+
+	// 排序可解释性：召回信号徽标（向量/关键词/标题/AI 精排）
+	// signals 仅在 AI / 本地语义搜索时由 translator 填充，故存在即可显示，无需再判搜索模式
+	const matchSigs = ctx.aiSearchResult?.signals?.[plugin.id];
+	if (matchSigs && matchSigs.length > 0) {
+		refs.matchSignals.setCssStyles({ display: "" });
+		refs.matchSignals.replaceChildren();
+		for (const sig of matchSigs) {
+			const label = MATCH_SIGNAL_LABELS[sig] ?? sig;
+			const chip = refs.matchSignals.createSpan({ cls: `pt-match-signal pt-match-signal--${sig}`, text: label });
+			chip.setAttribute("title", t("card.matchSignal.title").replace("{sig}", label));
+		}
+	} else {
+		refs.matchSignals.setCssStyles({ display: "none" });
+		refs.matchSignals.replaceChildren();
 	}
 
 	// 元信息：作者 + ID + 安装状态
