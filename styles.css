@@ -4582,6 +4582,21 @@ button.pt-card-install-btn--installed {
 	}
 }
 
+/* ── 设置页：本地向量索引构建进度条 ── */
+.pt-index-progress {
+	accent-color: var(--interactive-accent, var(--pt-accent, #7b6cff));
+	height: 6px;
+	border-radius: 999px;
+}
+.pt-index-progress::-webkit-progress-bar {
+	background: var(--background-modifier-border);
+	border-radius: 999px;
+}
+.pt-index-progress::-webkit-progress-value {
+	background: var(--interactive-accent, var(--pt-accent, #7b6cff));
+	border-radius: 999px;
+}
+
 /* ── S7 滚动位置指示徽标 ── */
 .pt-scroll-pos {
 	position: absolute;

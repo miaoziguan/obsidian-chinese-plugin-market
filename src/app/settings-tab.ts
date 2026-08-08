@@ -511,20 +511,30 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		new Notice(this.t("notice.aiDictCleared"));
 	}
 
-	/** 渲染本地向量索引构建行：按钮 + 实时状态（building→done/error/idle）+ 构建期间禁用 */
+	/** 渲染本地向量索引构建行：按钮 + 实时状态（building→done/error/idle）+ 进度条 + Notice 提示 */
 	private renderEmbeddingIndex(setting: Setting): void {
+		// 进度条（building 时显示，其它态隐藏）
+		const progress = setting.controlEl.createEl("progress", { cls: "pt-index-progress" });
+		progress.max = 100;
+		progress.value = 0;
+		progress.setCssStyles({ display: "none", width: "100%", margin: "6px 0 0" });
+
 		let btn: { setDisabled: (d: boolean) => void; setButtonText: (t: string) => void } | null = null;
 		const renderState = () => {
 			if (!btn) return;
 			const st = this.plugin.localIndexState;
 			if (st.status === "building") {
 				setting.descEl.setText(this.t("settings.embedding.index.building", { p: String(st.progress), t: String(st.total) }));
+				const pct = st.total > 0 ? Math.round((st.progress / st.total) * 100) : 0;
+				progress.value = pct;
+				progress.setCssStyles({ display: "" });
 				btn.setDisabled(true);
 				btn.setButtonText(this.t("settings.embedding.index.buildingBtn"));
 			} else {
 				if (st.status === "done") setting.descEl.setText(this.t("settings.embedding.index.done"));
 				else if (st.status === "error") setting.descEl.setText(this.t("settings.embedding.index.error") + (st.error ? `（${st.error}）` : ""));
 				else setting.descEl.setText(this.t("settings.embedding.index.idle"));
+				progress.setCssStyles({ display: "none" });
 				btn.setDisabled(false);
 				btn.setButtonText(this.t("settings.embedding.index.btn"));
 			}
@@ -534,13 +544,26 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			b.setButtonText(this.t("settings.embedding.index.btn")).onClick(async () => {
 				if (this.plugin.localIndexState.status === "building") return;
 				setting.descEl.setText(this.t("settings.embedding.index.start"));
+				new Notice(this.t("settings.embedding.index.start"), 4000);
+				// 构建期间轮询 localIndexState，实时刷新进度条（buildLocalIndex 内部用时间片让出主线程）
+				const timer = window.setInterval(() => renderState(), 120);
 				await this.plugin.buildLocalIndex(true);
+				window.clearInterval(timer);
+				const st = this.plugin.localIndexState;
+				if (st.status === "done") {
+					new Notice(this.t("settings.embedding.index.doneNotice", { p: String(st.progress) }), 6000);
+				} else if (st.status === "error") {
+					new Notice(this.t("settings.embedding.index.errorNotice") + (st.error || ""), 10000);
+				}
 				renderState();
 			});
 		});
 		renderState();
 		void this.plugin.getLocalVectorStatus().then((st) => {
-			setting.descEl.setText(`${this.t("settings.embedding.index.idle")} · SQLite ${st.sqliteReady ? "✓" : "✗"}`);
+			// 若当前非构建态，补一行 SQLite 就绪状态（构建态不打断进度文案）
+			if (this.plugin.localIndexState.status !== "building") {
+				setting.descEl.setText(`${this.t("settings.embedding.index.idle")} · SQLite ${st.sqliteReady ? "✓" : "✗"}`);
+			}
 		}).catch(() => {});
 	}
 }
