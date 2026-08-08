@@ -4614,7 +4614,7 @@ button.pt-card-install-btn--installed {
 .pt-card[data-fill-pending] .pt-card-statline,
 .pt-card[data-fill-pending] .pt-card-signals,
 .pt-card[data-fill-pending] .pt-ai-reason {
-	display: none !important;
+	display: none;
 }
 @media (prefers-reduced-motion: reduce) {
 	.pt-card[data-fill-pending] .pt-card-name,
