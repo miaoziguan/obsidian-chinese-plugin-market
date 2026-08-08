@@ -319,15 +319,15 @@ export class ChinesePluginMarketView extends ItemView {
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
 		if (this.scrollRAF) {
-			cancelAnimationFrame(this.scrollRAF);
+			window.cancelAnimationFrame(this.scrollRAF);
 			this.scrollRAF = 0;
 		}
 		if (this.renderRAF) {
-			cancelAnimationFrame(this.renderRAF);
+			window.cancelAnimationFrame(this.renderRAF);
 			this.renderRAF = 0;
 		}
 		if (this.measureRAF) {
-			cancelAnimationFrame(this.measureRAF);
+			window.cancelAnimationFrame(this.measureRAF);
 			this.measureRAF = 0;
 		}
 		if (this.debounceTimer) {
