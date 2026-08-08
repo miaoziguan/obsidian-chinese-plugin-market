@@ -33,26 +33,36 @@ const MATCH_SIGNAL_LABELS: Record<string, string> = {
 	llm: "AI 精排",
 };
 
-/** HTML 转义（高亮拼接前必须先转义，避免注入） */
-function escapeHtml(s: string): string {
-	return s.replace(/[&<>"']/g, (c) =>
-		c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;"
-	);
-}
-
 /**
- * 在文本中高亮命中词（highlightTerms，小写）。先转义后按词做大小写不敏感包裹，
- * 返回的 HTML 可直接赋给 innerHTML。terms 为空或文本空则返回转义原文。
- * 说明：plugin 名称/描述来自 Obsidian 社区市场（可信源），且已先转义，innerHTML 安全。
+ * 在文本中高亮命中词（highlightTerms，小写），以 DOM 节点方式就地渲染，
+ * 不触碰 innerHTML（规避 Obsidian 审核对 innerHTML/insertAdjacentHTML 的告警）：
+ * 非命中片段用文本节点，命中片段用 <mark class="pt-hl"> 元素。
+ *
+ * 按长度降序排列 terms，避免短词先匹配把长词拆断；逐段切分后用 DocumentFragment 组装，
+ * 最后 replaceChildren，避免逐字符 innerHTML 拼接带来的注入风险。
  */
-function highlight(text: string, terms: string[] | undefined): string {
-	const safe = escapeHtml(text);
-	if (!terms || terms.length === 0 || !text) return safe;
+function highlightInto(el: HTMLElement, text: string, terms: string[] | undefined): void {
+	el.replaceChildren(); // 清空旧内容（含真实 DOM 节点，无 innerHTML）
+	if (!terms || terms.length === 0 || !text) {
+		el.append(document.createTextNode(text));
+		return;
+	}
 	// 按长度降序，避免短词先匹配把长词拆断
 	const sorted = [...terms].sort((a, b) => b.length - a.length);
 	const pattern = sorted.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
 	const re = new RegExp(`(${pattern})`, "gi");
-	return safe.replace(re, '<mark class="pt-hl">$1</mark>');
+	let last = 0;
+	let m: RegExpExecArray | null;
+	// 用全局正则逐段匹配（lastIndex 推进），未命中段为文本节点、命中段为 mark 元素
+	while ((m = re.exec(text)) !== null) {
+		if (m.index > last) el.append(document.createTextNode(text.slice(last, m.index)));
+		const mark = createSpan({ cls: "pt-hl" });
+		mark.textContent = m[0];
+		el.append(mark);
+		last = m.index + m[0].length;
+		if (m[0].length === 0) re.lastIndex++; // 防御零宽匹配死循环
+	}
+	if (last < text.length) el.append(document.createTextNode(text.slice(last)));
 }
 
 /** 卡片渲染上下文（由视图注入，避免渲染器依赖视图实例） */
@@ -268,7 +278,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		nameSpan.setCssStyles({ opacity: "0" });
 		window.setTimeout(() => {
 			const hl = cardCtxMap.get(card)?.aiSearchResult?.highlightTerms;
-			nameSpan.innerHTML = highlight(showOrig ? orig : disp, hl);
+			highlightInto(nameSpan, showOrig ? orig : disp, hl);
 			nameSpan.setAttribute("aria-pressed", String(showOrig));
 			nameSpan.title = showOrig ? ctx.t("card.name.toggleBack") : ctx.t("card.name.toggleOriginal");
 			nameSpan.setCssStyles({ opacity: "1" });
@@ -466,7 +476,7 @@ export function applyCardState(
 	if (!isTranslated) {
 		// 无翻译 / 未翻译：标题即原名或中文，无切换
 		refs.nameSpan.classList.remove("pt-card-name--clickable", "pt-card-name--original");
-		refs.nameSpan.innerHTML = highlight(displayName, hl);
+		highlightInto(refs.nameSpan, displayName, hl);
 		refs.nameSpan.setCssStyles({ opacity: "1" });
 		refs.nameSpan.title = result?.source === "original" ? t("card.original.hint") : "";
 		refs.nameSpan.removeAttribute("role");
@@ -476,7 +486,7 @@ export function applyCardState(
 		// 已翻译：标题可点击切换中/英文
 		refs.nameSpan.classList.add("pt-card-name--clickable");
 		const showOrig = refs.nameSpan.classList.contains("pt-card-name--original");
-		refs.nameSpan.innerHTML = highlight(showOrig ? plugin.name : displayName, hl);
+		highlightInto(refs.nameSpan, showOrig ? plugin.name : displayName, hl);
 		refs.nameSpan.setCssStyles({ opacity: "1" });
 		refs.nameSpan.title = showOrig ? t("card.name.toggleBack") : t("card.name.toggleOriginal");
 		refs.nameSpan.setAttribute("role", "button");
@@ -493,7 +503,7 @@ export function applyCardState(
 
 	// 描述
 	const descText = cleanChineseSpaces(result?.translatedDesc || plugin.description);
-	refs.descEl.innerHTML = highlight(descText, hl);
+	highlightInto(refs.descEl, descText, hl);
 	refs.descEl.dataset.originalDesc = plugin.description;
 	refs.descEl.classList.toggle("pt-desc-pending", !result);
 	refs.descEl.classList.add("pt-card-desc--clamped"); // 固定截断态（与首次建卡一致）
