@@ -12,5 +12,8 @@
  */
 export function computeColCount(availW: number, minCardW: number): number {
 	const w = Math.max(1, availW);
+	// #7: 窄屏兜底。手机竖屏（如 iPhone SE 375px）可用宽 < 480 时强制单列满宽，
+	// 避免纯数学推导挤出 1.5 列导致卡片横向撕裂。
+	if (w < 480) return 1;
 	return Math.max(1, Math.floor(w / Math.max(1, minCardW)));
 }

@@ -4849,3 +4849,42 @@ button.pt-card-install-btn--installed {
 .pt-mobile .pt-card-desc--touch {
 	-webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
 }
+
+/* ═══════════════════════════════════════════════════ */
+/*  #7 移动端响应式布局：单列卡片 + 工具栏溢出菜单       */
+/* ═══════════════════════════════════════════════════ */
+
+/* 移动端溢出菜单按钮（收起 刷新/AI翻译 等次要操作） */
+.pt-mobile .pt-overflow-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 44px;
+	min-width: 44px;
+	padding: 0 10px;
+	border: none;
+	background: none;
+	color: var(--pt-text-muted, var(--text-muted));
+	cursor: pointer;
+}
+.pt-mobile .pt-overflow-btn:active {
+	color: var(--pt-text-strong, var(--text-normal));
+}
+
+/* 移动端次要按钮已收进菜单，确保工具栏单行不换行 */
+.pt-mobile .pt-header-row {
+	flex-wrap: nowrap;
+}
+
+/*
+ * 纯 CSS 兜底（不依赖 JS 的 pt-mobile 类）：窄屏（≤480px，如 iPhone SE 375px）
+ * 强制卡片单列满宽，避免纯数学列数推导挤出 1.5 列导致横向撕裂。
+ */
+@media (max-width: 480px) {
+	.pt-view .pt-card {
+		min-width: 100% !important;
+	}
+	.pt-view .pt-header-row {
+		flex-wrap: nowrap;
+	}
+}
