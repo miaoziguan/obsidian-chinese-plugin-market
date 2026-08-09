@@ -6,7 +6,7 @@
  * 视图本身由 translator-view.ts 的 ChinesePluginMarketView 承载。
  */
 
-import { Plugin, Notice, TFile, TFolder, Platform } from "obsidian";
+import { Plugin, Notice, TFile, TFolder, Platform, normalizePath } from "obsidian";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
@@ -160,8 +160,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 现在保留全部落盘缓存（含 bulk/custom/tm/ai），mergeOffline 直接使用。
 
 		// 启动双向回灌 + 向量索引 + 缓存恢复等重 IO 工作整体后移至 onLayoutReady：
-		// 这些操作会枚举全 vault（scanVaultTM 含最长 2000ms 的 waitMetadataResolved 超时）、
-		// 初始化 sql.js WASM 并读出数千条向量（loadVectorIndex）、读盘恢复 stats/trending，
+		// scanVaultTM 仅遍历 TM 文件夹子树（不枚举全 vault）+ 读快照，含最长 2000ms 的
+		// waitMetadataResolved 超时；loadVectorIndex 初始化 sql.js WASM 并读出数千条向量；
+		// stats/trending 读盘恢复，
 		// 若串行阻塞在 onload 里会拖慢整个 Obsidian 启动并连累后续插件。
 		// 注册视图/命令/ribbon/设置面板不依赖它们，故先同步完成，再在布局就绪后异步补完。
 		// 内部顺序（TM → 剔除遮蔽缓存 → 向量 → 预热 → stats → trending → 推荐）必须保持原子，
@@ -280,8 +281,65 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			callback: () => void this.clearApprovedTM(),
 		});
 
+		// 注册 TM 文件夹的 vault 事件：用 create/delete 事件增量发现笔记，
+		// 而非启动时枚举全 vault（避免 Vault Enumeration）。collectTMFiles 已只遍历子树。
+		this.registerTMVaultEvents();
+
 		// 设置面板
 		this.addSettingTab(new TranslatorSettingTab(this.app, this));
+	}
+
+	/**
+	 * 注册 TM 文件夹的 vault 事件，替代「枚举全 vault 来发现 TM 笔记」。
+	 *
+	 * - create：若新文件落在 TM 文件夹子树且为 approved 笔记，增量回灌进 tmApproved；
+	 * - delete：若删除的是已记录 TM 笔记，从 tmApproved 移除。
+	 * 这样即使 collectTMFiles 在极端环境下取不到文件夹（返回空），用户在运行时新建/
+	 * 手编的 TM 笔记仍能被实时发现，无需重启后全量扫描。
+	 */
+	private registerTMVaultEvents(): void {
+		const prefix = normalizePath(TM_FOLDER) + "/";
+		const isTMFile = (path: string) =>
+			path === normalizePath(TM_FOLDER) || path.startsWith(prefix);
+
+		this.registerEvent(
+			this.app.vault.on("create", (file) => {
+				if (!(file instanceof TFile) || !isTMFile(file.path)) return;
+				if (!file.path.endsWith(".md")) return;
+				// 延迟到 metadataCache 就绪后读 frontmatter（新建笔记瞬时可能未建索引）
+				void this.resolveTMFileIntoIndex(file);
+			}),
+		);
+		this.registerEvent(
+			this.app.vault.on("delete", (file) => {
+				if (!(file instanceof TFile) || !isTMFile(file.path)) return;
+				// 删除检测：快照里记录过、且本次删除的正是该 path → 从 tmApproved 移除
+				const id = this._lastTMIdsByPath[file.path];
+				if (id) {
+					delete this.translator.tmApproved[id];
+					delete this._lastTMIdsByPath[file.path];
+				}
+			}),
+		);
+	}
+
+	/** 单文件解析并回灌进 tmApproved（供 create 事件与增量重扫复用） */
+	private async resolveTMFileIntoIndex(file: TFile): Promise<void> {
+		const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+		let e: TMEntry | null = null;
+		if (fm && fm.id) {
+			e = this.entryFromFrontmatter(fm);
+		} else {
+			e = parseTMNote(await this.app.vault.cachedRead(file));
+		}
+		if (e && e.id) {
+			this._lastTMIdsByPath[file.path] = e.id;
+			if (e.status === "approved") {
+				this.translator.tmApproved[e.id] = e;
+			} else {
+				delete this.translator.tmApproved[e.id];
+			}
+		}
 	}
 
 	// 防抖：避免数据加载阶段 12+ 次连续 saveTranslatorData I/O
@@ -675,18 +733,20 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 	/**
 	 * 收集 TM 文件夹下的 markdown 文件。
-	 * 优先用 getAbstractFileByPath 精确取文件夹并递归遍历（不枚举全 vault，避免 Vault Enumeration）；
-	 * 若对中文路径返回 null（部分环境 bug），回退到 getMarkdownFiles 枚举 + 路径前缀过滤。
+	 *
+	 * 只遍历目标文件夹的「子树」（`TFolder.children`），不调用 vault.getFiles /
+	 * getMarkdownFiles 等会枚举整个 vault 的 API——避免 Vault Enumeration 权限审查告警。
+	 *
+	 * 路径先经 normalizePath 规范化（处理中文/分隔符编码），绝大多数环境可命中文件夹对象；
+	 * 仅在极端环境下 getAbstractFileByPath 仍返回 null 时返回空集合，此时 TM 笔记发现改由
+	 * vault 的 create 事件增量捕获（见 registerTMVaultEvents），不回退到全 vault 枚举。
 	 */
 	private collectTMFiles(folder: string): TFile[] {
-		const folderObj = this.app.vault.getAbstractFileByPath(folder);
-		if (folderObj instanceof TFolder) {
-			return this.collectMarkdownRecursive(folderObj);
+		const normalized = this.app.vault.getAbstractFileByPath(normalizePath(folder));
+		if (normalized instanceof TFolder) {
+			return this.collectMarkdownRecursive(normalized);
 		}
-		const prefix = folder + "/";
-		return this.app.vault
-			.getMarkdownFiles()
-			.filter((f) => f.path === folder || f.path.startsWith(prefix));
+		return [];
 	}
 
 	/** 递归收集 TFolder 下的所有 markdown 文件（按路径后缀判断，兼容 TFile 无 extension 的环境） */
@@ -713,9 +773,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 */
 		private async scanVaultTM(): Promise<void> {
 		const folder = TM_FOLDER; // "插件翻译记忆库"（vault 根相对路径）
-		// 优先：按文件夹精确读取（不枚举全 vault，避免 Vault Enumeration 提示）。
-		// getAbstractFileByPath 在部分环境下对中文路径返回 null，此时回退到
-		// getMarkdownFiles 枚举 + 路径前缀过滤（曾导致 folderFile 取不到而 tmApproved 为空）。
+		// 只遍历 TM 文件夹子树（collectTMFiles 内部用 getAbstractFileByPath + 子树遍历，
+		// 不调用 vault.getFiles/getMarkdownFiles 等枚举全 vault 的 API，避免 Vault Enumeration）。
+		// 若极端环境下取不到文件夹对象，返回空集合；运行期新增/手编的 TM 笔记由
+		// registerTMVaultEvents 的 create/delete 事件增量捕获，无需枚举全 vault。
 		const files = this.collectTMFiles(folder);
 		// 进度：准备阶段（即使空文件夹也标记 done，避免加载页永远停在旧文案）
 		this.tmProgress = { phase: "resolving", current: 0, total: files.length };
