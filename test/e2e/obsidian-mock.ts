@@ -302,4 +302,21 @@ export const normalizePath = (p: string): string => p;
 export type Vault = unknown;
 export type Workspace = unknown;
 export type Scope = unknown;
-export type Menu = unknown;
+
+/** E2E mock of Obsidian 的 Menu 组件（仅覆盖 e2e 用到的 API） */
+export class Menu {
+	items: { title: string; icon?: string; onClick?: () => void }[] = [];
+	addItem(cb: (item: { setTitle: (t: string) => void; setIcon: (i: string) => void; onClick: (h: () => void) => void }) => void): this {
+		const entry: { title: string; icon?: string; onClick?: () => void } = { title: "" };
+		cb({
+			setTitle: (t: string) => { entry.title = t; },
+			setIcon: (i: string) => { entry.icon = i; },
+			onClick: (h: () => void) => { entry.onClick = h; },
+		});
+		this.items.push(entry);
+		return this;
+	}
+	showAtMouseEvent(_evt: MouseEvent): void {}
+	showAtElement(_el: HTMLElement): void {}
+	showAtPosition(_pos: { x: number; y: number }): void {}
+}
