@@ -1600,6 +1600,15 @@ button.pt-card-install-btn--installed {
 .pt-card-desc--clamped {
 	overflow: hidden;
 }
+/* #5: 移动端点按描述原地展开（移除行数截断），再点收起 */
+.pt-card-desc--touch {
+	cursor: pointer;
+}
+.pt-card-desc--expanded {
+	-webkit-line-clamp: unset;
+	max-height: none;
+	overflow: visible;
+}
 /* 描述 hover 浮层（fixed 定位，不破坏卡片布局） */
 .pt-desc-tooltip {
 	position: fixed;
@@ -4796,4 +4805,47 @@ button.pt-card-install-btn--installed {
 	margin-top: var(--pt-space-sm);
 	font-size: var(--pt-text-sm);
 	color: var(--pt-gold, #d99a1c);
+}
+
+/* ═══════════════════════════════════════════════════ */
+/*  #5 移动端触摸适配：放大触控热区（iOS 人机界面指南推荐 ≥44px） */
+/*  仅作用于 .pt-mobile（view-chrome 在移动端给视图根加的类），不影响桌面。 */
+/* ═══════════════════════════════════════════════════ */
+.pt-mobile .pt-search button,
+.pt-mobile .pt-search-field button,
+.pt-mobile .pt-sort-btn,
+.pt-mobile .pt-sort-wrap > button,
+.pt-mobile .pt-sort-menu button,
+.pt-mobile .pt-source-filters button,
+.pt-mobile .pt-facet-chips button,
+.pt-mobile .pt-toolbar-reset,
+.pt-mobile .pt-advanced-heading > .pt-toolbar-reset--inline,
+.pt-mobile .pt-card-install-btn,
+.pt-mobile .pt-card .pt-icon-btn,
+.pt-mobile .pt-drawer-head button,
+.pt-mobile .pt-back-top,
+.pt-mobile .pt-scroll-bottom {
+	min-height: 44px;
+	min-width: 44px;
+	padding-top: 8px;
+	padding-bottom: 8px;
+}
+/* 工具栏主按钮（刷新 / AI 翻译 / 回顶 / 触底）水平内边距也放宽，便于手指命中 */
+.pt-mobile .pt-search-field button,
+.pt-mobile .pt-sort-wrap > button,
+.pt-mobile .pt-card-install-btn,
+.pt-mobile .pt-back-top,
+.pt-mobile .pt-scroll-bottom {
+	padding-left: 14px;
+	padding-right: 14px;
+}
+/* 搜索模式切换（网页/AI/名称…）与筛选 chip 行间距放宽，避免误触相邻项 */
+.pt-mobile .pt-mode-wrap,
+.pt-mobile .pt-source-filters,
+.pt-mobile .pt-facet-chips {
+	gap: 8px;
+}
+/* 卡片描述可点态：触摸端给轻微视觉提示（点一下展开） */
+.pt-mobile .pt-card-desc--touch {
+	-webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
 }

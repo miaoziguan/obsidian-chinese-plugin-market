@@ -19,6 +19,7 @@ import {
 	requestUrl,
 	Notice,
 } from "obsidian";
+import { isMobileEnvironment } from "@shared/platform";
 import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import { makeT, type I18nKey } from "@shared/i18n";
@@ -215,6 +216,66 @@ export class PluginDetailDrawer {
 		else window.setTimeout(teardown, 50);
 	}
 
+	/**
+	 * #5: 移动端右滑关闭手势绑定。
+	 * drawerEl 上监听 touchstart/move/end：记录起点与按下时刻，move 时按右移量跟手平移
+	 * （左移忽略，保持原位），松手时若 deltaX > 100px 且平均速度 > 0.3px/ms（约 300px/s）
+	 * 判定为「甩动关闭」调用 this.close()；否则回弹到原位。translate 用 transform 动画过渡，
+	 * 跟手阶段临时关闭过渡以求跟手，松手判定阶段再开回过渡做动画。
+	 */
+	private bindSwipeClose(el: HTMLElement) {
+		let startX = 0;
+		let startY = 0;
+		let startT = 0;
+		let tracking = false;
+
+		const onStart = (e: TouchEvent) => {
+			if (e.touches.length !== 1) return;
+			tracking = true;
+			startX = e.touches[0].clientX;
+			startY = e.touches[0].clientY;
+			startT = performance.now();
+			el.setCssStyles({ transition: "none" });
+		};
+		const onMove = (e: TouchEvent) => {
+			if (!tracking || e.touches.length !== 1) return;
+			const dx = e.touches[0].clientX - startX;
+			const dy = e.touches[0].clientY - startY;
+			// 纵向滑动优先（用户可能在滚详情内容）：纵向位移明显大于横向时不拦截
+			if (Math.abs(dy) > Math.abs(dx) * 1.5) return;
+			// 仅允许右移跟手；左移（往屏幕里推）保持原位
+			const shift = Math.max(0, dx);
+			el.setCssStyles({ transform: `translateX(${shift}px)` });
+		};
+		const finish = (e: TouchEvent) => {
+			if (!tracking) return;
+			tracking = false;
+			const lastX = e.changedTouches[0].clientX;
+			const lastT = performance.now();
+			const dx = lastX - startX;
+			const dt = Math.max(1, lastT - startT);
+			const v = dx / dt; // px/ms
+			el.setCssStyles({ transition: "" });
+			if (dx > 100 && v > 0.3) {
+				// 滑出动画后关闭
+				el.setCssStyles({ transform: "translateX(100%)" });
+				window.setTimeout(() => this.close(), 180);
+			} else {
+				// 回弹原位
+				el.setCssStyles({ transform: "" });
+			}
+		};
+
+		el.addEventListener("touchstart", onStart, { passive: true });
+		el.addEventListener("touchmove", onMove, { passive: true });
+		el.addEventListener("touchend", finish, { passive: true });
+		this._cleanupFns.push(() => {
+			el.removeEventListener("touchstart", onStart);
+			el.removeEventListener("touchmove", onMove);
+			el.removeEventListener("touchend", finish);
+		});
+	}
+
 	/** 就地跳转到新插件（不关闭 Drawer，替换内容 + 压入历史栈） */
 	navigate(_pluginId: string, newInfo: PluginInfo, newResult: TranslateResult | undefined, newSimilar: SimilarCandidate[]) {
 		// 保存当前到历史栈
@@ -342,6 +403,13 @@ export class PluginDetailDrawer {
 		if (overlay) {
 			this.backdropEl?.addEventListener("click", this._boundBackdropClick);
 			this._cleanupFns.push(() => this.backdropEl?.removeEventListener("click", this._boundBackdropClick));
+		}
+
+		// #5: 移动端右滑关闭手势（仅浮层模式 + 移动端）。
+		// 监听 drawerEl 的 touch 系列事件：记录起点，move 时实时跟手平移，
+		// 松手时若右移超过 100px 且速度够快则关闭（参考 Obsidian 原生抽屉交互）。
+		if (overlay && isMobileEnvironment() && this.drawerEl) {
+			this.bindSwipeClose(this.drawerEl);
 		}
 
 		// 构建内容
