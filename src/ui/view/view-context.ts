@@ -283,6 +283,11 @@ export interface ViewContext {
 	measureLayoutIfNeeded: () => void;
 	scheduleRender: (preserveScroll?: boolean) => void;
 	renderWindow: (opts?: { measure?: boolean }) => void;
+	/** 增量窗口化：仅根据当前滚动位置换入/换出窗口内卡片（DOM 节点数稳定在 ≤250），滚动监听调用 */
+	updateWindow: () => void;
+	/** 当前已渲染窗口 [windowStart, windowEnd)，用于滚动时跳过无变化的重排 */
+	windowStart: number;
+	windowEnd: number;
 	onCardClick: (ev: MouseEvent) => void;
 	toggleFavorite: (pluginId: string) => boolean;
 	onCardKeydown: (ev: KeyboardEvent) => void;
@@ -592,6 +597,11 @@ get authorFacetList() { return view.authorFacetList; },
 		postRenderSync: view.postRenderSync.bind(view),
 		refreshCardState: view.refreshCardState.bind(view),
 		fillVisibleWindow: view.fillVisibleWindow.bind(view),
+		updateWindow: view.updateWindow.bind(view),
+		get windowStart() { return view.windowStart; },
+		set windowStart(v) { view.windowStart = v; },
+		get windowEnd() { return view.windowEnd; },
+		set windowEnd(v) { view.windowEnd = v; },
 		measureLayout: view.measureLayout.bind(view),
 		measureLayoutIfNeeded: view.measureLayoutIfNeeded.bind(view),
 		scheduleRender: view.scheduleRender.bind(view),

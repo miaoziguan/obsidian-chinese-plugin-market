@@ -12,6 +12,7 @@ import type { ViewContext } from "@ui/view/view-context";
 import { q, toHTMLElement } from "@ui/dom/dom";
 import { fetchManifest, fetchReadmeText, fetchMainSignals, generateInsight } from "@domain/compare/plugin-insight";
 import type { I18nKey } from "@shared/i18n";
+import { LAYOUT } from "@shared/constants";
 import type { MirrorConfig } from "@domain/catalog/mirror";
 
 export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard: HTMLElement | null = null) {
@@ -274,8 +275,9 @@ export function onCardKeydown(ctx: ViewContext, ev: KeyboardEvent) {
 
 /**
  * 聚焦第 idx 张卡片（S6）。
- * 虚拟滚动下目标卡可能不在渲染窗口内：先把该行滚进视口触发 renderWindow，
- * 下一帧再聚焦真实 DOM——这是 PageDown/Home/End 大跨度跳转可用的关键。
+ * #3 虚拟滚动下目标卡可能不在渲染窗口内（已从 DOM 回收）：先把目标行滚进视口，
+ * 下一帧触发 updateWindow 把目标卡换入 DOM，再聚焦——这是 PageDown/Home/End
+ * 大跨度跳转仍能聚焦到目标卡的关键。
  */
 export function focusCardByIdx(ctx: ViewContext, idx: number) {
 
@@ -285,7 +287,22 @@ export function focusCardByIdx(ctx: ViewContext, idx: number) {
 			el.classList.remove("pt-card--focused");
 		});
 
+		const vp = ctx.scrollViewport;
+		const total = ctx.visibleList.length;
+		const cols = Math.max(1, ctx.colCount);
+		// 目标行居中滚入视口（留出半屏余量，确保目标卡在窗口内而非刚好在边缘）
+		if (vp && total > 0 && idx >= 0 && idx < total) {
+			const rowH = ctx.cachedRowH > 0 ? ctx.cachedRowH : (ctx.defaultRowH + ctx.rowGap) || LAYOUT.DEFAULT_ROW_H;
+			const targetRow = Math.floor(idx / cols);
+			const vpH = vp.clientHeight || 600;
+			const centerOffset = Math.max(0, (vpH / rowH - 1) / 2);
+			const targetTop = Math.max(0, (targetRow - centerOffset) * rowH);
+			vp.scrollTop = targetTop;
+		}
+
 		const doFocus = () => {
+			// 先把目标卡换入窗口（大跨度跳转时它很可能还在 DOM 外）
+			ctx.updateWindow();
 			const card = q(layer, `.pt-card[data-idx="${idx}"]`);
 			if (card) {
 				card.classList.add("pt-card--focused");
@@ -294,9 +311,9 @@ export function focusCardByIdx(ctx: ViewContext, idx: number) {
 			}
 		};
 
-		// 架构重构：全部卡片常驻 DOM（原生滚动），目标卡必在 DOM，直接聚焦并滚入视口。
-		doFocus();
-	
+		// 滚动位置已更新，下一帧 updateWindow 才能基于新 scrollTop 换入正确窗口
+		window.requestAnimationFrame(doFocus);
+
 }
 
 export function flashAction(_ctx: ViewContext, btn: HTMLElement) {
