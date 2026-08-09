@@ -6,6 +6,7 @@
  */
 
 import { type I18nKey } from "@shared/i18n";
+import { isMobileEnvironment } from "@shared/platform";
 import { logger } from "@shared/logger";
 import { setListState } from "@ui/dom/list-state";
 import { isAIMode, isKeywordMode } from "@domain/search/search-mode";
@@ -393,6 +394,8 @@ export async function loadAndRender(ctx: ViewContext) {
 		const container = ctx.contentEl;
 		container.empty();
 		container.addClass("pt-view");
+		// #5: 移动端触摸适配 —— 给视图根加 pt-mobile 类，供 CSS 放大触控热区（按钮 min-height 44px 等）
+		if (isMobileEnvironment()) container.addClass("pt-mobile");
 
 		// 从持久化设置恢复筛选状态
 		ctx.sourceFilter = ctx.settings.sourceFilter ?? "all";

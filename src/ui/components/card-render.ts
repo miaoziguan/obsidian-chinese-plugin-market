@@ -8,6 +8,7 @@
  */
 
 import { Notice } from "obsidian";
+import { isMobileEnvironment } from "@shared/platform";
 import type { PluginInfo, TranslateResult, AISearchResult } from "@domain/catalog/translator";
 import type { I18nKey } from "@shared/i18n";
 import { cleanChineseSpaces } from "@shared/utils";
@@ -267,6 +268,20 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		descTooltip?.remove();
 		descTooltip = null;
 	});
+	// #5: 移动端触摸适配。桌面靠 hover 浮层看完整描述；触摸端无 hover，改为点一下描述区
+	// 原地展开/收起（toggle --expanded 移除行数截断），与桌面 hover 互斥：仅移动端绑定。
+	if (isMobileEnvironment()) {
+		descEl.classList.add("pt-card-desc--touch");
+		descEl.addEventListener("click", (e: MouseEvent) => {
+			e.stopPropagation(); // 避免冒泡到整卡误触发打开详情
+			const fullText = descEl.textContent || "";
+			if (!fullText || descEl.scrollHeight <= descEl.clientHeight + 2) return; // 无截断则不处理
+			const expanded = descEl.classList.toggle("pt-card-desc--expanded");
+			descEl.setAttribute("aria-expanded", String(expanded));
+		});
+		descEl.setAttribute("role", "button");
+		descEl.setAttribute("tabindex", "-1");
+	}
 
 	// ── 标题点击切换中文/英文原名（方案 D） ──
 	nameSpan.addEventListener("click", (e: MouseEvent) => {
