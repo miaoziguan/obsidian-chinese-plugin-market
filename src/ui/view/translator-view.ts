@@ -188,6 +188,13 @@ export class ChinesePluginMarketView extends ItemView {
 	public sortFavoritesFirst = false;
 	public compareTrayEl: HTMLElement | null = null;
 	public scrollRAF = 0;
+	/** 滚动速度采样（像素/秒）：由滚动监听按 ΔscrollTop/Δt 实时估算，供 PREFETCH_ROWS 速度自适应 */
+	public scrollVelocity = 0;
+	/** 速度采样基线（上一次 scroll 事件的 scrollTop 与 timestamp） */
+	public lastScrollTopSample = 0;
+	public lastScrollSampleAt = 0;
+	/** requestIdleCallback 句柄：fillVisibleWindow 超量分帧填充的挂起任务，卸载时取消避免幽灵写盘 */
+	public fillIdleHandle: number | null = null;
 	public measureRAF = 0; // 与 scrollRAF 分离，避免 ResizeObserver 与 scroll 互相丢弃对方帧
 	public colCount = 0; // 当前可见列数，由测量得到并同步给 grid
 	// ── 固定网格行高缓存（per-view 实例字段）──
@@ -354,6 +361,12 @@ export class ChinesePluginMarketView extends ItemView {
 			window.clearTimeout(this.scrollPosTimer);
 			this.scrollPosTimer = undefined;
 		}
+		// #4: 取消挂起的空闲分帧填充任务，避免对已销毁 DOM 写盘
+		if (this.fillIdleHandle !== null) {
+			cancelIdleCallback(this.fillIdleHandle);
+			this.fillIdleHandle = null;
+		}
+		this.scrollVelocity = 0;
 		this.scrollPosEl = null;
 		// 释放卡片池（游离 DOM 引用），避免视图销毁后内存滞留
 		this.cardPool = [];

@@ -151,6 +151,13 @@ export interface ViewContext {
 	/** 视图已卸载标记：为 true 时所有异步路径（翻译/落盘定时器）应尽早退出，避免幽灵写盘 */
 	disposed: boolean;
 	scrollRAF: number;
+	/** 滚动速度采样（像素/秒）：由滚动监听实时估算，供 PREFETCH_ROWS 速度自适应 */
+	scrollVelocity: number;
+	/** 速度采样基线（上一次 scroll 事件的 scrollTop / timestamp） */
+	lastScrollTopSample: number;
+	lastScrollSampleAt: number;
+	/** requestIdleCallback 句柄：超量分帧填充的挂起任务，卸载时取消 */
+	fillIdleHandle: number | null;
 	measureRAF: number;
 	renderRAF: number;
 	descRAF: number;
@@ -427,6 +434,14 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 
 		get scrollRAF() { return view.scrollRAF; },
 		set scrollRAF(v) { view.scrollRAF = v; },
+		get scrollVelocity() { return view.scrollVelocity; },
+		set scrollVelocity(v) { view.scrollVelocity = v; },
+		get lastScrollTopSample() { return view.lastScrollTopSample; },
+		set lastScrollTopSample(v) { view.lastScrollTopSample = v; },
+		get lastScrollSampleAt() { return view.lastScrollSampleAt; },
+		set lastScrollSampleAt(v) { view.lastScrollSampleAt = v; },
+		get fillIdleHandle() { return view.fillIdleHandle; },
+		set fillIdleHandle(v) { view.fillIdleHandle = v; },
 		get measureRAF() { return view.measureRAF; },
 		set measureRAF(v) { view.measureRAF = v; },
 		get renderRAF() { return view.renderRAF; },
