@@ -5,7 +5,8 @@
  * 的 DOM 构建与事件绑定。返回 { searchInput } 供 loadAndRender 后续（自动聚焦、"/" 快捷键）使用。
  */
 
-import { setIcon } from "obsidian";
+import { setIcon, Menu } from "obsidian";
+import { isMobileEnvironment } from "@shared/platform";
 import { type I18nKey } from "@shared/i18n";
 import { type SearchMode } from "@domain/filter/filter";
 import { renderFacetChips } from "@ui/components/facet-chips";
@@ -222,7 +223,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		setIcon(ctx.aiTranslateBtnEl, "sparkles");
 		ctx.aiProgressEl = headerRow.createSpan({ cls: "pt-ai-progress" });
 		ctx.aiProgressEl.setCssStyles({ display: "none" });
-		ctx.aiTranslateBtnEl.addEventListener("click", () => {
+		// 抽取为命名处理器：移动端溢出菜单与图标按钮共用同一动作
+		const onAiTranslate = () => {
 			if (ctx.aiTranslateRunning) return;
 			ctx.track("action:ai_translate");
 			// 无论当前是否已在「未翻译」筛选，点击都应立即反应：
@@ -239,7 +241,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			}
 			ctx.updateFacetVisibility();
 			void ctx.aiTranslateAllPending();
-		});
+		};
+		ctx.aiTranslateBtnEl.addEventListener("click", onAiTranslate);
 		ctx.updateAiTranslateButton();
 
 		// 手动刷新按钮（↻）：全局动作，与排序同组置于搜索行右上角
@@ -250,7 +253,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		setIcon(refreshBtn, "refresh-cw");
 		ctx.refreshBtn = refreshBtn;
 		ctx.updateRefreshTooltip();
-		refreshBtn.addEventListener("click", () => { ctx.track("action:refresh"); void ctx.refreshData(); });
+		const onRefresh = () => { ctx.track("action:refresh"); void ctx.refreshData(); };
+		refreshBtn.addEventListener("click", onRefresh);
 
 		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 置于搜索行最右
 		const toggleBtn = headerRow.createEl("button", {
@@ -261,6 +265,34 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		setIcon(filterIcon, "filter");
 		toggleBtn.createSpan({ cls: "pt-toggle-filters-label", text: "筛选" });
 		const filterCaret = toggleBtn.createSpan({ cls: "pt-toggle-filters-caret", text: "▾" });
+
+		// #7: 移动端工具栏折叠。窄屏下「刷新 / AI 翻译」等次要按钮收进右上角 ⋮ 溢出菜单，
+		// 避免与搜索框/排序/筛选挤在同一行导致换行或溢出。保留排序↕与筛选▾（核心、图标紧凑）。
+		if (isMobileEnvironment()) {
+			refreshBtn.setCssStyles({ display: "none" });
+			ctx.aiTranslateBtnEl.setCssStyles({ display: "none" });
+			const overflowBtn = headerRow.createEl("button", {
+				cls: "pt-overflow-btn",
+				attr: { "aria-label": "更多操作", "aria-haspopup": "menu", type: "button" },
+			});
+			setIcon(overflowBtn, "more-vertical");
+			overflowBtn.addEventListener("click", (e: MouseEvent) => {
+				const menu = new Menu();
+				menu.addItem((item) =>
+					item
+						.setTitle(ctx.t("action.refresh"))
+						.setIcon("refresh-cw")
+						.onClick(() => onRefresh())
+				);
+				menu.addItem((item) =>
+					item
+						.setTitle(ctx.t("action.aiTranslate"))
+						.setIcon("sparkles")
+						.onClick(() => onAiTranslate())
+				);
+				menu.showAtMouseEvent(e);
+			});
+		}
 
 		const sortBtn = sortWrap.createEl("button", {
 			cls: "pt-sort-btn",
