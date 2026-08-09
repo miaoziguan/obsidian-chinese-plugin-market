@@ -290,6 +290,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			if (ctx.scrollCardLayer) {
 				ctx.scrollCardLayer.empty();
 				ctx.cardById.clear(); // 清层后持久化卡片索引失效
+				ctx.windowStart = -1; ctx.windowEnd = -1; // 清层后窗口守卫失效，防下次误跳过
 				setListState(ctx, "error");
 				const err = ctx.scrollCardLayer.createDiv({ cls: "pt-error" });
 				err.createDiv({ cls: "pt-empty-title", text: ctx.t("error.title") });
