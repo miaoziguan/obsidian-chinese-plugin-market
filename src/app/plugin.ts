@@ -54,6 +54,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		message?: string;
 		error?: string;
 	} = { status: "idle", progress: 0, total: 0 };
+	/** 当前构建的 Promise（并发去重用：让多次调用共享同一次构建，而非直接 return） */
+	private buildLocalIndexPromise: Promise<void> | null = null;
 	/** 已「见过」的插件 id 集合（产品改进 #16，跨会话落盘，增量提示在重启后仍准确） */
 	seenPluginIds: Set<string> = new Set();
 	/**
@@ -354,7 +356,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			void (async () => {
 				// 串行执行，避免两次 saveData 并发写同一文件
 				if (pendingSettings) await this._saveSettingsImmediate();
-				if (pendingTranslator) await this._saveTranslatorDataImmediate();
+				// 卸载时序不可靠：跳过依赖 vault adapter 的 flushTMVault，
+			// 仅写进程内 data.json（translator 内存数据已含 TM 缓存），保证兜底落盘成功（#31）
+			if (pendingTranslator) await this._saveTranslatorDataImmediate(false);
 			})().catch((e) =>
 				logger.warn("[Chinese Plugin Market] 卸载时落盘失败：", e)
 			);
@@ -557,10 +561,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	}
 
 
-	/** 内部实际写盘（不做防抖） */
-	private async _saveTranslatorDataImmediate() {
+	/** 内部实际写盘（不做防抖）。flushVault=true 时同步写 TM 笔记（依赖 vault adapter）；卸载路径传 false 跳过，避免 onunload 时序不可靠导致落盘失败（#31）。 */
+	private async _saveTranslatorDataImmediate(flushVault = true) {
 		// 先把内存中变更的 TM 条目写盘到 vault 笔记（human 校正/反馈标记等同步来源）
-		await this.flushTMVault();
+		if (flushVault) await this.flushTMVault();
 		// 性能：复用内存权威对象 _data，不再每次保存整读 data.json
 		const allData = this._data;
 		const translatorData = this.translator.getData();
@@ -844,8 +848,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 	/** 从 frontmatter 构造 TMEntry（复用回灌解析逻辑） */
 	private entryFromFrontmatter(fm: Record<string, unknown>): TMEntry | null {
-		const id = String(fm.id);
-		if (!id) return null;
+		// 脏 frontmatter 防护：缺 id 时 fm.id 为 undefined，String(undefined)==="undefined"
+		// 会绕过空值判断污染 tmApproved 索引（语义召回/去重失真，#27）。
+		// 必须是非空字符串，非法值直接丢弃。
+		const rawId = fm.id;
+		if (typeof rawId !== "string" || !rawId.trim()) return null;
+		const id = rawId.trim();
 		return {
 			id,
 			name: String(fm.name ?? id),
@@ -1198,7 +1206,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 * 进度写到 this.localIndexState，供设置页/视图轮询展示。
 	 */
 	async buildLocalIndex(force = false): Promise<void> {
-		if (this.localIndexState.status === "building") return; // 去重
+		// 并发去重：复用同一次构建的 Promise，让重复调用等待结果而非直接 return（#26）
+		if (this.localIndexState.status === "building" && this.buildLocalIndexPromise) {
+			return this.buildLocalIndexPromise;
+		}
 		const plugins = this.getViewPlugins();
 		if (plugins.length === 0) {
 			// 无插件数据：保持 idle（不设 error 以免反复提示），仅在控制台提示一次
@@ -1210,18 +1221,21 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 		if (!force && this.translator.getVectorIndex()?.ids.length === plugins.length) return; // 幂等
 
+		const total = plugins.length;
+		let doneCount = 0; // 真实已 embed 计数（增量构建时为增量条目数，分母对齐 total）
 		const model = this.settings.embeddingLocalModel || DEFAULT_LOCAL_MODEL;
-		this.localIndexState = { status: "building", progress: 0, total: plugins.length };
+		this.localIndexState = { status: "building", progress: 0, total };
 		const done = (s: "done" | "error", error?: string) => {
 			this.localIndexState = {
 				status: s,
-				progress: plugins.length,
-				total: plugins.length,
+				progress: total,
+				total,
 				message: s === "done" ? "本地向量索引构建完成" : undefined,
 				error,
 			};
 		};
 
+		const run = async (): Promise<void> => {
 		try {
 			const base = new LocalEmbeddingProvider(undefined, model, this.settings.embeddingLocalWasmPaths || undefined);
 			// 时间片渐进构建（对齐 vault-curate 的 buildBM25Sliced）：每批 embed 后
@@ -1236,7 +1250,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 						const chunk = texts.slice(i, i + BATCH);
 						const vecs = await base.embed(chunk);
 						out.push(...vecs);
-						this.localIndexState.progress = Math.min(plugins.length, i + chunk.length);
+						doneCount += chunk.length;
+						this.localIndexState.progress = Math.min(total, doneCount);
 						// 时间片让位：批量推进时 UI 保持响应、进度实时刷新
 						if ((i / BATCH) % YIELD_EVERY === 0) {
 							await new Promise<void>((r) => window.setTimeout(r, 0));
@@ -1252,10 +1267,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			});
 			// categorySchemaVersion 必须与 vectorRecallScores 的 needBuild 判断一致
 			// （用 tagService.getSchemaVersion()），否则每次搜索都因版本不匹配而全量重建索引 → 慢。
-		const schemaVer = this.translator.getCategorySchemaVersion();
-		// 把当前索引作为 prevIndex 传入，启用增量 embed（只 embed 新增/内容变化的 id，
-		// 未变的复用旧向量），与 saveVectorIndex 的增量写盘配合，避免每次全量重建。
-		const index = await buildVectorIndex(provider, indexPlugins, model, this.translator.getVectorIndex(), schemaVer);
+			const schemaVer = this.translator.getCategorySchemaVersion();
+			// 把当前索引作为 prevIndex 传入，启用增量 embed（只 embed 新增/内容变化的 id，
+			// 未变的复用旧向量），与 saveVectorIndex 的增量写盘配合，避免每次全量重建。
+			const index = await buildVectorIndex(provider, indexPlugins, model, this.translator.getVectorIndex(), schemaVer);
 			this.translator.setVectorIndex(index);
 			await this.saveVectorIndex();
 			done("done");
@@ -1263,7 +1278,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			const msg = e instanceof Error ? e.message : String(e);
 			logger.warn("[Chinese Plugin Market] 预建本地向量索引失败：", e);
 			done("error", msg);
+		} finally {
+			this.buildLocalIndexPromise = null;
 		}
+		};
+		this.buildLocalIndexPromise = run();
+		return this.buildLocalIndexPromise;
 	}
 
 	/** 从旧版文件（.bin / .json）读取 VectorIndex，用于一次性迁移到 SQLite。 */
