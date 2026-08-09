@@ -492,7 +492,8 @@ export async function loadAndRender(ctx: ViewContext) {
 				ctx.scrollRAF = 0;
 				ctx.updateScrollButtons();
 				ctx.updateScrollPosBadge();
-				ctx.fillVisibleWindow();
+				// #3 虚拟滚动：滚动时增量换入/换出窗口卡片（DOM 节点数稳定 ≤250）
+				ctx.updateWindow();
 			});
 		});
 

@@ -1253,6 +1253,12 @@ button.pt-facet-letter-btn.is-active {
 .pt-list-layer > .pt-card {
 	margin-right: var(--pt-space-md);
 }
+/* #3 虚拟滚动上/下 spacer：跨所有列撑出整张列表总高，窗口卡落在正确滚动位置 */
+.pt-list-spacer {
+	grid-column: 1 / -1;
+	/* 宽度不重要，仅为让 grid 行高按内容（此处即设定高度）占位 */
+	min-height: 0;
+}
 /* 聚焦时放开 overflow 裁剪，避免 :focus-visible box-shadow 被截断 */
 .pt-card:focus-within {
 	overflow: visible;

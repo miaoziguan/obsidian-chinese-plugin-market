@@ -7,7 +7,7 @@
 
 import { type PluginInfo } from "@domain/catalog/translator";
 import { filterAndSortPlugins, resolveEmptyState } from "@domain/filter/filter";
-import { computeColCount } from "@ui/dom/virtual-scroll";
+import { computeColCount, computeWindowRange, computeSpacerHeights } from "@ui/dom/virtual-scroll";
 import { createCardElement, applyCardState, type CardRenderContext } from "@ui/components/card-render";
 import { computeSmartSignals } from "@domain/filter/smart-signal";
 import { scoreAllPlugins } from "@domain/recommend/engine";
@@ -254,11 +254,9 @@ function computeVisibleWindowRange(ctx: ViewContext): { start: number; end: numb
 	const PREFETCH_ROWS = v > 0
 		? (v < 500 ? 1 : v < 2000 ? 3 : 5)
 		: LAYOUT.PREFETCH_ROWS;
-	const firstRow = Math.max(0, Math.floor(vp.scrollTop / rowH) - PREFETCH_ROWS);
-	const visibleRows = Math.ceil(vp.clientHeight / rowH) + PREFETCH_ROWS * 2;
-	const start = Math.min(total, firstRow * ctx.colCount);
-	const end = Math.min(total, (firstRow + visibleRows) * ctx.colCount);
-	return { start, end };
+	// 复用纯函数（#3 虚拟滚动数学），与 spacer 高度计算同源
+	const win = computeWindowRange(vp.scrollTop, vp.clientHeight, rowH, ctx.colCount, total, PREFETCH_ROWS);
+	return { start: win.start, end: win.end };
 }
 
 /**
@@ -425,78 +423,137 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 			return;
 		}
 
-		// ── 原生滚动 + content-visibility：把 visibleList 全部卡片正常流入 grid ──
-		// 全部卡片 DOM 节点挂入 grid，由浏览器原生接管滚动位移；屏外节点靠
-		// content-visibility:auto 折叠。卡片按 id 增量复用（池化），滚动/翻译都只就地更新，
-		// 从根上消除钉死与跳动。仅当布局参数失效时重测（幂等）：
-		// invalidateAndRender / 尺寸变化 / 首次渲染会标脏。
+		// ── #3 真·虚拟滚动：仅渲染「可见窗口 + 预取余量」卡片（DOM 节点数稳定 ≤250）──
+		// 由 top/bottom spacer 撑出整张列表总高，窗口内卡片正常流入 grid 由浏览器原生接管滚动；
+		// 屏外卡片根本不入 DOM（而非 content-visibility 折叠），内存 / querySelectorAll / 样式重算
+		// 均从 O(N=5600+) 降到 O(窗口)，移动端不再被全量常驻 DOM 拖垮。
+		// 卡片池（cardPool）+ 持久化索引（cardById）+ 懒填充（pendingCards）全部复用，
+		// 滚动仅做增量换入换出（见 updateWindow），避免频繁 create/destroy。
 		ctx.measureLayoutIfNeeded();
 
-		// 清掉遗留的非卡片节点（空态 / 引导占位）
-		const stale: HTMLElement[] = [];
-		for (let i = 0; i < layer.children.length; i++) {
-			const el = layer.children[i] as HTMLElement;
-			if (el.getAttribute("data-idx") == null) stale.push(el);
+		// 全量重渲路径（列表身份变化）：回收旧卡片、清空索引，再重建窗口
+		for (const [, card] of ctx.cardById) {
+			ctx.cardPool.push(card);
 		}
-		for (const el of stale) el.remove();
-
-		// 现有卡片复用持久化索引（cardById），避免每次搜索词变化全量 querySelectorAll 建 Map（O(N)）。
-		// 索引由本函数增量维护：新建加入、移出删除；清层（空态）时整体清空。
-		const existing = ctx.cardById;
+		ctx.cardById.clear();
+		ctx.pendingCards.clear();
+		// 清掉遗留的非卡片节点（空态 / 引导占位 / spacer）
+		layer.empty();
 
 		const renderCtx = makeCardRenderCtx(ctx);
-		// 可见窗口范围（含预取余量）：窗口内卡片立即填充内容，窗口外仅建骨架
-		// （data-fill-pending）并登记 pendingCards，进入视口时由 fillVisibleWindow 填充。
-		// 注意：DOM 节点对全量列表都创建（O(N) 的轻量骨架），但「内容填充」仅作用于窗口内，
-		// 把昂贵的 applyCardState 成本从 O(全量 N) 降到 O(可见窗口)，消除筛选放大列表时的卡顿。
-		const win = computeVisibleWindowRange(ctx);
+		// 首次渲染标记（用于入场动画，仅加一次）
+		const firstPaint = !layer.classList.contains("pt-list-in");
 
-		const seen = new Set<string>();
-		const fragment = createFragment();
-		for (let i = 0; i < total; i++) {
-			const plugin = ctx.visibleList[i];
-			const id = plugin.id;
-			seen.add(id);
-			let card = existing.get(id);
-			if (!card) {
-				// 池化复用或新建骨架
-				card = ctx.cardPool.pop() ?? createCardElement(ctx.cardPoolCtx ?? renderCtx);
-				card.setAttribute("data-plugin-id", id);
-				existing.set(id, card);
-				if (i >= win.start && i < win.end) {
-					// 窗口内：完整填充内容
-					applyCardState(card, plugin, ctx.translatedResults[id], renderCtx);
-					card.removeAttribute("data-fill-pending");
-				} else {
-					// 窗口外：仅建骨架占位，登记 pending，进入视口时再填充
-					// （content-visibility:auto 已折叠屏外，未填充对用户不可见）
-					card.setAttribute("data-fill-pending", "1");
-					ctx.pendingCards.add(card);
-				}
-			} else {
-				// 复用既有卡片（内容已就绪或仍 pending）：只更新位置，不重填
-				card.setAttribute("data-idx", String(i));
-				fragment.appendChild(card);
-				continue;
-			}
-			card.setAttribute("data-idx", String(i));
-			fragment.appendChild(card);
-		}
-		// 移除离开列表的卡片，回收入池（供下次复用），并清理 pending 登记与持久化索引
-		for (const [id, card] of existing) {
-			if (!seen.has(id)) {
-				card.remove();
-				ctx.cardPool.push(card);
-				ctx.pendingCards.delete(card);
-				existing.delete(id);
-			}
-		}
-		layer.appendChild(fragment);
+		// 构造上/下 spacer（grid 跨所有列，撑出总高让窗口卡落在正确滚动位置）
+		const spacerTop = createDiv({ cls: "pt-list-spacer pt-list-spacer-top" });
+		const spacerBottom = createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" });
+		layer.appendChild(spacerTop);
+		layer.appendChild(spacerBottom);
 
-		if (!layer.classList.contains("pt-list-in")) layer.classList.add("pt-list-in");
+		// 填充窗口（结构 + 内容骨架），并补完内容填充
+		updateWindowImpl(ctx, renderCtx);
 
-		// 补完：当前可见窗口内若有 pending 卡片（如复用既有 pending 卡片），立即填充
+		if (firstPaint) layer.classList.add("pt-list-in");
+
+		// 补完：当前可见窗口内若有 pending 卡片，立即填充（≤20/帧 + 空闲续填）
 		fillVisibleWindow(ctx);
+}
+
+/**
+ * #3 虚拟滚动：增量窗口化（滚动监听调用）。
+ * 仅根据当前滚动位置换入/换出窗口内卡片，DOM 节点数稳定在 ≤250。
+ * 窗口未越界时直接跳过（windowStart/End 守卫），滚动静止不重排。
+ * 离开窗口的卡片回收入池（脱离 DOM），进入窗口的卡片从池复用并懒填充，
+ * 复用现有 cardById / pendingCards 体系，避免频繁 create/destroy。
+ */
+export function updateWindow(ctx: ViewContext): void {
+	const layer = ctx.scrollCardLayer;
+	if (!layer) return;
+	if (!ctx.scrollViewport) return;
+	ctx.measureLayoutIfNeeded();
+	const renderCtx = makeCardRenderCtx(ctx);
+	updateWindowImpl(ctx, renderCtx);
+	fillVisibleWindow(ctx);
+}
+
+/**
+ * 窗口化渲染核心：基于 computeVisibleWindowRange 计算 [start,end)，
+ * 回收窗口外卡片、确保窗口内卡片在场（池化复用 + data-fill-pending 登记懒填充），
+ * 更新上/下 spacer 高度，最后以 [spacerTop, ...窗口卡, spacerBottom] 顺序重写 layer 子节点。
+ * 纯结构操作（不触发 applyCardState），内容填充交给 fillVisibleWindow 的帧预算分片。
+ */
+function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void {
+	const layer = ctx.scrollCardLayer;
+	const vp = ctx.scrollViewport;
+	if (!layer || !vp || ctx.visibleList.length === 0) return;
+
+	const total = ctx.visibleList.length;
+	const win = computeVisibleWindowRange(ctx);
+	// 窗口未越界：跳过整轮重写（滚动静止 / 窗口内微动不重排）
+	if (win.start === ctx.windowStart && win.end === ctx.windowEnd) return;
+	ctx.windowStart = win.start;
+	ctx.windowEnd = win.end;
+
+	// ── 1. 回收窗口外卡片（脱离 DOM + 回收入池 + 清理索引/pending）──
+	for (const [id, card] of ctx.cardById) {
+		if (card === undefined) continue;
+		if (!isInWindow(card, win.start, win.end)) {
+			ctx.cardPool.push(card);
+			ctx.pendingCards.delete(card);
+			ctx.cardById.delete(id);
+		}
+	}
+
+	// ── 2. 确保窗口内卡片在场（池化复用 + 标记 pending 懒填充）──
+	const seen = new Set<string>();
+	for (let i = win.start; i < win.end; i++) {
+		const plugin = ctx.visibleList[i];
+		if (!plugin) continue;
+		const id = plugin.id;
+		seen.add(id);
+		let card = ctx.cardById.get(id);
+		if (!card) {
+			// 从池取（节点可能残留旧插件内容，必填 pending 待 fillVisibleWindow 覆盖）或新建
+			card = ctx.cardPool.pop() ?? createCardElement(ctx.cardPoolCtx ?? renderCtx);
+			card.setAttribute("data-plugin-id", id);
+			card.setAttribute("data-fill-pending", "1");
+			ctx.cardById.set(id, card);
+			ctx.pendingCards.add(card);
+		}
+		card.setAttribute("data-idx", String(i));
+	}
+
+	// ── 3. 计算 spacer 高度（撑出总高，使窗口卡落在正确滚动位置）──
+	const rowH = ctx.cachedRowH > 0 ? ctx.cachedRowH : (LAYOUT.DEFAULT_ROW_H + ctx.rowGap);
+	const pureWin = computeWindowRange(
+		vp.scrollTop, vp.clientHeight, rowH, ctx.colCount, total,
+		ctx.scrollVelocity > 0 ? (ctx.scrollVelocity < 500 ? 1 : ctx.scrollVelocity < 2000 ? 3 : 5) : LAYOUT.PREFETCH_ROWS,
+	);
+	const { top, bottom } = computeSpacerHeights(pureWin, rowH);
+	// 确保 spacer 存在（renderWindow 已建；兜底：缺失时补建，避免空引用）
+	let spacerTop = q(layer, ".pt-list-spacer-top") as HTMLElement | null;
+	let spacerBottom = q(layer, ".pt-list-spacer-bottom") as HTMLElement | null;
+	if (!spacerTop) { spacerTop = createDiv({ cls: "pt-list-spacer pt-list-spacer-top" }); }
+	if (!spacerBottom) { spacerBottom = createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" }); }
+	spacerTop.setCssStyles({ height: `${top}px` });
+	spacerBottom.setCssStyles({ height: `${bottom}px` });
+
+	// ── 4. 按索引顺序重写 layer 子节点：[spacerTop, ...窗口卡, spacerBottom] ──
+	// 复用同一批节点引用（不重建），仅调整其在 DOM 中的顺序与数量，避免闪烁/重排抖动。
+	const fragment = createFragment();
+	for (let i = win.start; i < win.end; i++) {
+		const id = ctx.visibleList[i]?.id;
+		if (!id) continue;
+		const card = ctx.cardById.get(id);
+		if (card) fragment.appendChild(card);
+	}
+	layer.replaceChildren(spacerTop, fragment, spacerBottom);
+}
+
+/** 卡片的 data-idx 是否落在窗口 [start,end) 内 */
+function isInWindow(card: HTMLElement, start: number, end: number): boolean {
+	const di = parseInt(card.getAttribute("data-idx") || "-1", 10);
+	return di >= start && di < end;
 }
 
 /** 构造卡片渲染上下文（renderWindow 与 fillVisibleWindow 共用，避免重复） */

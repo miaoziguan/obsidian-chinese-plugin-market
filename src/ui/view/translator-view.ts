@@ -125,7 +125,7 @@ export function getDefaultSettings(): ChinesePluginMarketSettings {
 import { loadAndRender, updateGuidance, updateFacetVisibility, showSearchGuide, showAIPendingHint, showAIConfigGuide, showLoadingState, updateStats, applyAIConfig, announceStatus, updateScrollButtons, updateScrollPosBadge } from "@ui/view/view-chrome";
 import { ensureDataLoaded, fetchPluginsWithFallback, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, updateAuthorBanner, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
 import { runAISearch } from "@ui/view/view-ai-search";
-import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, disposeRenderTimers } from "@ui/view/view-render";
+import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, updateWindow, disposeRenderTimers } from "@ui/view/view-render";
 import { startInstalledWatch } from "@ui/view/installed-watch";
 import { onCardClick, toggleFavorite, onCardKeydown, focusCardByIdx, flashAction, computeSimilarFor, openDetailDrawer as _openDetailDrawer } from "@ui/view/view-cards";
 import { renderFeaturedSection, ensureFeaturedSection, hideFeaturedSection } from "@ui/view/view-featured";
@@ -243,6 +243,9 @@ export class ChinesePluginMarketView extends ItemView {
 	public cardById: Map<string, HTMLElement> = new Map();
 	/** 列表身份签名（S2）：mode+query+id 序列一致时走原地刷新，不清 DOM、不回顶、不丢行高缓存 */
 	public lastListSignature = "";
+	/** #3 虚拟滚动：当前已渲染窗口 [windowStart, windowEnd)，滚动时若未越界则跳过重排 */
+	public windowStart = 0;
+	public windowEnd = 0;
 	/** 滚动位置指示徽标（S7）：滚动中显示「第 x / 共 n」，滚停淡出 */
 	public scrollPosEl: HTMLElement | null = null;
 	public scrollPosTimer: number | undefined;
@@ -806,6 +809,7 @@ public runAISearch = (searchInput: HTMLInputElement, aiBadge: HTMLElement) => ru
 	 * 这样无论卡片高度如何参差，translateY 与 grid 真实排版都严格对齐。
 	 */
 public renderWindow = (opts?: { measure?: boolean }) => renderWindow(this._ctx, opts);
+public updateWindow = () => updateWindow(this._ctx);
 
 	/** 操作按钮的瞬时反馈（短反馈，不依赖 toast） */
 public flashAction = (btn: HTMLElement) => flashAction(this._ctx, btn);
