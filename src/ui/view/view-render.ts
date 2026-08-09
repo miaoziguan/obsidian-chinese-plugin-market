@@ -347,6 +347,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 			if (ctx.aiSearchPending) {
 				layer.empty();
 				ctx.cardById.clear(); // 清层后持久化索引失效，整体清空
+				ctx.windowStart = -1; ctx.windowEnd = -1; // 清层后窗口守卫失效，防下次误跳过
 				const loading = layer.createDiv({ cls: "pt-empty pt-ai-loading-state" });
 				loading.createDiv({ cls: "pt-empty-icon" });
 				loading.createDiv({ cls: "pt-empty-title", text: ctx.t("notice.ai.analyzing") });
@@ -355,6 +356,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 			}
 			layer.empty();
 			ctx.cardById.clear(); // 清层后持久化索引失效，整体清空
+			ctx.windowStart = -1; ctx.windowEnd = -1; // 清层后窗口守卫失效，防下次误跳过
 			const empty = layer.createDiv({ cls: "pt-empty" });
 			empty.createDiv({ cls: "pt-empty-icon" });
 			const hasQuery = !!ctx.searchQuery;
@@ -449,6 +451,12 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 		const spacerBottom = createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" });
 		layer.appendChild(spacerTop);
 		layer.appendChild(spacerBottom);
+
+		// 关键：全量重建前必须让窗口守卫失效（设为 -1），否则 updateWindowImpl 的
+		// windowStart/End 守卫会因「上次窗口与本次相同」而直接 return，
+		// 导致 layer 只剩两个空 spacer、一张卡片都不渲染 → 白屏。
+		ctx.windowStart = -1;
+		ctx.windowEnd = -1;
 
 		// 填充窗口（结构 + 内容骨架），并补完内容填充
 		updateWindowImpl(ctx, renderCtx);
