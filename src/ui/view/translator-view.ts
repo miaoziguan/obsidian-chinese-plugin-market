@@ -8,6 +8,7 @@
 import {
 	ItemView,
 	WorkspaceLeaf,
+	Platform,
 } from "obsidian";
 import { toHTMLElement } from "@ui/dom/dom";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
@@ -95,6 +96,26 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	favorites: [],
 	compare: [],
 };
+
+/**
+ * 平台感知的默认设置工厂（#6：移动端语义搜索降级）。
+ * 桌面端沿用 DEFAULT_SETTINGS（embeddingSource = "local"）；
+ * 移动端默认 "keyword"（零 WASM），避免 26MB ONNX WASM 弱网下载慢 +
+ * 模型加载/推理吃内存拖垮整个 Obsidian，甚至 4 分钟 worker 初始化超时致语义搜索失效。
+ * 用户仍可在设置页手动切到 local（自担风险）。
+ */
+export function getDefaultSettings(): ChinesePluginMarketSettings {
+	// 测试/非常规环境下 Platform 可能未定义或访问抛错，统一按桌面端默认处理（embeddingSource = "local"）。
+	let isMobile = false;
+	try {
+		isMobile = typeof Platform !== "undefined" && Platform.isMobile === true;
+	} catch {
+		isMobile = false;
+	}
+	return isMobile
+		? { ...DEFAULT_SETTINGS, embeddingSource: "keyword" }
+		: { ...DEFAULT_SETTINGS };
+}
 
 // ──────────────────────────────────────────
 // 翻译视图
