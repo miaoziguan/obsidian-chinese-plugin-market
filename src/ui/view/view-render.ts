@@ -540,8 +540,8 @@ function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void 
 	);
 	const { top, bottom } = computeSpacerHeights(pureWin, rowH);
 	// 确保 spacer 存在（renderWindow 已建；兜底：缺失时补建，避免空引用）
-	let spacerTop = q(layer, ".pt-list-spacer-top") as HTMLElement | null;
-	let spacerBottom = q(layer, ".pt-list-spacer-bottom") as HTMLElement | null;
+	let spacerTop = q(layer, ".pt-list-spacer-top");
+	let spacerBottom = q(layer, ".pt-list-spacer-bottom");
 	if (!spacerTop) { spacerTop = createDiv({ cls: "pt-list-spacer pt-list-spacer-top" }); }
 	if (!spacerBottom) { spacerBottom = createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" }); }
 	spacerTop.setCssStyles({ height: `${top}px` });
