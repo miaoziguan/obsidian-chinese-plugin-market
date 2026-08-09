@@ -6,7 +6,7 @@
  * 视图本身由 translator-view.ts 的 ChinesePluginMarketView 承载。
  */
 
-import { Plugin, Notice, TFile, TFolder } from "obsidian";
+import { Plugin, Notice, TFile, TFolder, Platform } from "obsidian";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
@@ -25,7 +25,7 @@ import { setScrollDebug } from "@ui/view/view-render";
 import { TranslatorSettingTab } from "@app/settings-tab";
 import { debounce, mapWithConcurrency } from "@shared/utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
-import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS } from "@ui/view/translator-view";
+import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings } from "@ui/view/translator-view";
 import { VIEW_TYPE } from "@shared/constants";
 import { writeTMNote, removeTMNote, TM_FOLDER, parseTMNote, type TMEntry } from "@translation/memory/translation-memory";
 import { SqliteVectorStore, initSqlJsStatic, type PersistAdapter } from "@semantic/vec-store";
@@ -36,7 +36,7 @@ type LoadDataRaw = NonNullable<Parameters<Translator["loadData"]>[0]>;
 /** Translator.setPluginTags 的入参结构 */
 type PluginTagMap = NonNullable<Parameters<Translator["setPluginTags"]>[0]>;
 export default class ChinesePluginMarketPlugin extends Plugin {
-	settings: ChinesePluginMarketSettings = DEFAULT_SETTINGS;
+	settings: ChinesePluginMarketSettings = getDefaultSettings();
 	translator: Translator = new Translator();
 	/** 落盘 stats 缓存（onload 时恢复，供视图首屏合并，产品改进 #1 #6） */
 	cachedStats: Map<string, PluginStat> | null = null;
@@ -417,6 +417,19 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 自动迁移到 "local"，让本地语义/本地向量能力真正生效。
 		if (this.settings.embeddingSource === "keyword") {
 			this.settings.embeddingSource = "local";
+		}
+		// #6: 移动端语义搜索降级。上面 keyword→local 的迁移只针对「曾存储 keyword 的桌面老用户」，
+		// 会把本地向量能力打开；但移动端全新安装（data 里根本没有 embeddingSource 键）应默认
+		// "keyword"（零 WASM），避免 26MB WASM 弱网下载慢 + 模型推理吃内存拖垮 Obsidian。
+		// 判定条件：移动端 && data 未显式存过 embeddingSource（即用户从未主动选择过）。
+		if (!("embeddingSource" in data)) {
+			let isMobile = false;
+			try {
+				isMobile = typeof Platform !== "undefined" && Platform.isMobile === true;
+			} catch {
+				isMobile = false;
+			}
+			if (isMobile) this.settings.embeddingSource = "keyword";
 		}
 	}
 

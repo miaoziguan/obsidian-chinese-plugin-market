@@ -323,6 +323,8 @@ export const STRINGS = {
 	"settings.embedding.index.doneNotice": { zh: "✓ 本地向量索引构建完成（{p} 个插件），已可离线语义搜索。" },
 	"settings.embedding.index.error": { zh: "构建失败" },
 	"settings.embedding.index.errorNotice": { zh: "✗ 本地向量索引构建失败：" },
+	"settings.embedding.mobileWarn": { zh: "移动端提示：本地模型需下载约 26MB WASM 运行时并加载模型权重，可能占用大量内存、拖慢 Obsidian，弱网下首次加载也较慢。推荐使用「关键词」或「API 向量」模式。" },
+	"settings.embedding.mobileLocalNotice": { zh: "移动端本地模型可能占用大量内存，如遇卡顿请切回关键词或 API。" },
 	// 翻译引擎
 	"settings.engine.myMemory": { zh: "启用 MyMemory 免费翻译" },
 	"settings.engine.myMemory.desc": {

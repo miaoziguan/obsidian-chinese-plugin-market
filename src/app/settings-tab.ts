@@ -3,6 +3,7 @@ import {
 	Setting,
 	Notice,
 	requestUrl,
+	Platform,
 	type App,
 	type SettingDefinitionItem,
 } from "obsidian";
@@ -275,6 +276,14 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								},
 							},
 							{
+								// #6: 移动端语义搜索降级提示。仅移动端展示，提醒用户本地模型的内存/下载开销。
+								name: this.t("settings.embedding.mobileWarn"),
+								visible: () => Platform.isMobile,
+								render: (setting) => {
+									setting.descEl.setText(this.t("settings.embedding.mobileWarn"));
+								},
+							},
+							{
 								name: this.t("settings.embedding.baseUrl"),
 								desc: this.t("settings.embedding.baseUrl.desc"),
 								visible: () => s.embeddingSource === "api",
@@ -394,8 +403,16 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		return (this.plugin.settings as unknown as Record<string, unknown>)[key];
 	}
 
+	/** 移动端切到本地模型时，本设置页会话内已弹过的内存警告标记（#6：警告一次） */
+	private mobileLocalWarned = false;
+
 	/** 声明式控件写值：透传到 plugin.settings[key]，带 trim/类型收窄 + 副作用 + 持久化 */
 	setControlValue(key: string, value: unknown): void | Promise<void> {
+		// #6: 移动端用户手动切到本地模型时，弹一次内存占用警告（自担风险）。
+		if (key === "embeddingSource" && value === "local" && Platform.isMobile && !this.mobileLocalWarned) {
+			this.mobileLocalWarned = true;
+			new Notice(this.t("settings.embedding.mobileLocalNotice"), 8000);
+		}
 		const s = this.plugin.settings as unknown as Record<string, unknown>;
 		switch (key) {
 			case "mirrorCustomBase":
