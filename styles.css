@@ -4888,7 +4888,10 @@ button.pt-card-install-btn--installed {
  */
 @media (max-width: 480px) {
 	.pt-view .pt-card {
-		min-width: 100% !important;
+		/* 单列满宽：窄屏（≤480px，如 iPhone SE 375px）强制卡片占满一行，
+		   避免纯数学列数推导挤出 1.5 列导致横向撕裂。
+		   .pt-card 基础定义未设 min-width，此处为其唯一声明，无需 !important。 */
+		min-width: 100%;
 	}
 	.pt-view .pt-header-row {
 		flex-wrap: nowrap;
