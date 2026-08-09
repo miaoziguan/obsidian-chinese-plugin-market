@@ -49,9 +49,19 @@
 	--pt-accent: var(--interactive-accent, #7b61ff);
 	--pt-accent-hover: var(--interactive-accent-hover, #8a78ff);
 
+	/* 召回信号色（AI 搜索结果徽标：向量 / LLM / 标题命中各一色相）。
+	   title 档的描边/底色比文字更亮：亮色主题下橙黄文字需压暗才够对比度，
+	   故拆成 -title（文字）与 -title-tint（描边/底色）两个令牌。 */
+	--pt-signal-vector: #6c8cff;
+	--pt-signal-llm: #c78cff;
+	--pt-signal-title: #d99833;
+	--pt-signal-title-tint: #ffb454;
+
 	/* 推荐金色（推荐/收藏共用色相，统一引用） */
 	--pt-gold: #d99a1c;
-	--pt-gold-muted: color-mix(in srgb, #d99a1c 70%, var(--pt-text-strong, var(--text-normal)));
+	/* 派生自 --pt-gold：暗色主题在 .theme-dark .pt-view 覆盖 --pt-gold 后，
+	   本变量在同一元素上重新求值，自动跟随（勿写死 hex，否则暗色失配）。 */
+	--pt-gold-muted: color-mix(in srgb, var(--pt-gold) 70%, var(--pt-text-strong, var(--text-normal)));
 
 	/* 表面与描边（全部借用宿主变量） */
 	--pt-surface: var(--background-primary, #fff);
@@ -135,6 +145,11 @@
 	/* Apple DS 暗色色板补充：确保第三方暗色主题下关键对比度 */
 	--pt-color-success: var(--text-success, #30d158);
 	--pt-color-error: var(--text-error, #ff453a);
+	/* 召回信号色暗色适配：深底上需提亮文字才够对比度（与亮色主题压暗的方向相反） */
+	--pt-signal-vector: #8fa6ff;
+	--pt-signal-llm: #d4a8ff;
+	--pt-signal-title: #ffb454;
+	--pt-signal-title-tint: #ffb454;
 }
 
 /* ── 头部 ── */
@@ -1437,13 +1452,13 @@ button.pt-card-install-btn--installed {
 
 /* 官方推荐：卡片顶部独立标签行 + 推荐态描边（角标改为普通流，避免遮挡名称） */
 .pt-card.is-recommended {
-	border-color: color-mix(in srgb, #d99a1c 45%, var(--pt-border));
+	border-color: color-mix(in srgb, var(--pt-gold) 45%, var(--pt-border));
 }
 /* 收藏态卡片：虚线金色左边框（与推荐态实线区分） */
 .pt-card.is-favorited {
 	border-left: 3px dashed var(--pt-gold);
-	border-color: color-mix(in srgb, #d99a1c 45%, var(--pt-border));
-	box-shadow: 0 0 0 1px color-mix(in srgb, #d99a1c 20%, transparent);
+	border-color: color-mix(in srgb, var(--pt-gold) 45%, var(--pt-border));
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--pt-gold) 20%, transparent);
 }
 .pt-card-recommend-badge {
 	position: static;
@@ -1739,19 +1754,19 @@ button.pt-card-install-btn--installed {
 	white-space: nowrap;
 }
 .pt-match-signal--vector {
-	border-color: color-mix(in srgb, #6c8cff 35%, transparent);
-	color: #6c8cff;
-	background: color-mix(in srgb, #6c8cff 12%, transparent);
+	border-color: color-mix(in srgb, var(--pt-signal-vector) 35%, transparent);
+	color: var(--pt-signal-vector);
+	background: color-mix(in srgb, var(--pt-signal-vector) 12%, transparent);
 }
 .pt-match-signal--llm {
-	border-color: color-mix(in srgb, #c78cff 35%, transparent);
-	color: #c78cff;
-	background: color-mix(in srgb, #c78cff 12%, transparent);
+	border-color: color-mix(in srgb, var(--pt-signal-llm) 35%, transparent);
+	color: var(--pt-signal-llm);
+	background: color-mix(in srgb, var(--pt-signal-llm) 12%, transparent);
 }
 .pt-match-signal--title {
-	border-color: color-mix(in srgb, #ffb454 35%, transparent);
-	color: #d99833;
-	background: color-mix(in srgb, #ffb454 12%, transparent);
+	border-color: color-mix(in srgb, var(--pt-signal-title-tint) 35%, transparent);
+	color: var(--pt-signal-title);
+	background: color-mix(in srgb, var(--pt-signal-title-tint) 12%, transparent);
 }
 
 /* 元信息行（作者 + 已安装）：无上下边框/间距，依赖父级卡片栅格 */
@@ -4023,8 +4038,8 @@ button.pt-card-install-btn--installed {
 }
 /* 收藏按钮点击脉冲：仅通过一次性 class .pt-fav-pulse 触发，避免虚拟滚动复用时重播 */
 @keyframes pt-fav-pulse {
-	0%   { box-shadow: 0 0 0 0 color-mix(in srgb, #d99a1c 40%, transparent); }
-	100% { box-shadow: 0 0 0 10px color-mix(in srgb, #d99a1c 0%, transparent); }
+	0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pt-gold, #d99a1c) 40%, transparent); }
+	100% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--pt-gold, #d99a1c) 0%, transparent); }
 }
 .pt-fav-pulse {
 	animation: pt-fav-pulse 0.5s var(--pt-ease) forwards;
