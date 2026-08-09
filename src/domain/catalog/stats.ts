@@ -5,7 +5,7 @@
  * 真实结构：`{ "<plugin-id>": { downloads: number, versions?: Record<string,number>, updated?: number } }`
  * `updated` 为最近更新时间戳（毫秒）。
  */
-import { requestUrl } from "obsidian";
+import { netRequest } from "@data/net/net";
 
 /** 单个插件的统计信息 */
 export interface PluginStat {
@@ -67,6 +67,6 @@ export function formatUpdated(ts?: number): string {
 
 /** 从网络拉取并解析 stats（失败向上抛，由调用方静默降级） */
 export async function fetchPluginStats(url: string): Promise<Map<string, PluginStat>> {
-	const response = await requestUrl({ url, method: "GET" });
-	return parseStatsJson(response.json as unknown);
+	const response = await netRequest({ url, method: "GET" });
+	return parseStatsJson(response.json);
 }

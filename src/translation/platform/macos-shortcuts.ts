@@ -17,16 +17,31 @@
  * 仅 macOS 桌面端可用；非 Mac 调用 isMacOS() 返回 false，按钮不渲染、不调用。
  */
 
-import { Platform } from "obsidian";
 import { logger } from "@shared/logger";
 
 /** 约定快捷指令名（用户需在「快捷指令」App 导入/自建同名指令） */
 export const MACOS_TRANSLATE_SHORTCUT = "CPM 系统翻译";
 
+/**
+ * 平台能力端口（依赖倒置）——本文件不再 import "obsidian" 的 Platform。
+ * 由 app 层在装配期注入 Obsidian Platform 适配器；未注入时按「非 macOS 桌面端」处理，
+ * 按钮不渲染、通道不调用，等价于原来的防御性判断。
+ */
+export interface PlatformCapability {
+	isDesktopApp: boolean;
+	isMacOS: boolean;
+}
+
+let platform: PlatformCapability = { isDesktopApp: false, isMacOS: false };
+
+/** 装配期注入平台能力（app/plugin.ts onload 调用） */
+export function setPlatformCapability(cap: PlatformCapability): void {
+	platform = cap;
+}
+
 /** 是否运行在 macOS 桌面端（决定按钮是否渲染） */
 export function isMacOS(): boolean {
-	// 测试 / 非 Obsidian 环境可能无 Platform，做防御性判断
-	return Boolean(Platform?.isDesktopApp && Platform?.isMacOS);
+	return Boolean(platform.isDesktopApp && platform.isMacOS);
 }
 
 /** 清洗 shortcuts 输出的多余字符（BOM / 首尾空白 / 尾部换行） */
