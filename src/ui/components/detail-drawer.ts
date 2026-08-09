@@ -19,7 +19,7 @@ import {
 	requestUrl,
 	Notice,
 } from "obsidian";
-import { isMobileEnvironment } from "@shared/platform";
+import { isMobileEnvironment, requestIdle } from "@shared/platform";
 import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import { makeT, type I18nKey } from "@shared/i18n";
@@ -211,9 +211,7 @@ export class PluginDetailDrawer {
 			drawerEl?.remove();
 			backdropEl?.remove();
 		};
-		const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
-		if (typeof ric === "function") ric(teardown, { timeout: 1000 });
-		else window.setTimeout(teardown, 50);
+		requestIdle(teardown, 1000);
 	}
 
 	/**
@@ -610,6 +608,13 @@ export class PluginDetailDrawer {
 				updateCopyBtnContent();
 				copyBtnEl._restoreTimer = undefined;
 			}, 1200);
+			// 抽屉关闭/重建内容时清理定时器，避免对已 detach 按钮闭包执行写入（#30 B：资源/状态泄漏）
+			this._cleanupFns.push(() => {
+				if (copyBtnEl._restoreTimer !== undefined) {
+					window.clearTimeout(copyBtnEl._restoreTimer);
+					copyBtnEl._restoreTimer = undefined;
+				}
+			});
 		});
 		const updateCopyBtnContent = () => {
 			copyBtn.empty();

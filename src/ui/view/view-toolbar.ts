@@ -141,6 +141,17 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.sortFavoritesFirst = false;
 			ctx.authorFilter = null;
 			ctx.installFilter = "all";
+			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
+			// 「仅显示已安装」按钮：aria-pressed 与文案复位
+			const uninstalledToggleEl = q(ctx.contentEl, ".pt-toggle-uninstalled");
+			if (uninstalledToggleEl) {
+				uninstalledToggleEl.setAttribute("aria-pressed", "false");
+				uninstalledToggleEl.textContent = "仅显示已安装";
+			}
+			// 排序菜单「收藏优先」项 active 态复位
+			const favItemEl = q(ctx.contentEl, ".pt-sort-menu-item--fav");
+			if (favItemEl) favItemEl.classList.remove("pt-sort-menu-item--active");
+			// 作者筛选：下方会调用 ctx.renderAuthorFacet() 按 authorFilter=null 重建 chips，清空高亮
 			const modeDef = SEARCH_MODES.find((m) => m.id === newMode)!;
 			searchInput.setAttribute("placeholder", ctx.t(modeDef.placeholder));
 			if (newMode === "keyword") {

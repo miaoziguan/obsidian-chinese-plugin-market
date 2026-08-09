@@ -38,6 +38,7 @@ import type ChinesePluginMarketPlugin from "@app/plugin";
 // 全局常量（VIEW_TYPE / LAYOUT / SEARCH_MODES / PLUGINS_URL）已收敛至 ./constants，
 // 作为唯一来源，避免 view 模块跨文件引用本中枢模块的常量（审计 P2-4）。
 import { VIEW_TYPE, LAYOUT } from "@shared/constants";
+import { cancelIdle } from "@shared/platform";
 
 export interface ChinesePluginMarketSettings {
 	useMyMemory: boolean;
@@ -387,7 +388,7 @@ export class ChinesePluginMarketView extends ItemView {
 		}
 		// #4: 取消挂起的空闲分帧填充任务，避免对已销毁 DOM 写盘
 		if (this.fillIdleHandle !== null) {
-			cancelIdleCallback(this.fillIdleHandle);
+			cancelIdle(this.fillIdleHandle);
 			this.fillIdleHandle = null;
 		}
 		this.scrollVelocity = 0;

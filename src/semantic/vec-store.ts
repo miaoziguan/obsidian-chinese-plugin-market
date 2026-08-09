@@ -180,6 +180,8 @@ export class SqliteVectorStore {
 		}
 		const tDeq = Date.now();
 		for (const row of res[0].values) {
+			// 反量化原样返回（存储层保持通用契约：调用方决定是否需要归一化，
+			// 见 plugin.ts loadVectorIndex 加载索引时对召回向量做归一化，#28）
 			out.set(row[0] as string, dequantizeVec(row[1] as Uint8Array));
 		}
 		logger.debug(`[Chinese Plugin Market] 探针：getAllVecs SQL=${sqlMs}ms · 反量化 ${out.size} 条=${Date.now() - tDeq}ms`);

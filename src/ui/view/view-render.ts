@@ -15,6 +15,7 @@ import { setListState } from "@ui/dom/list-state";
 import { q, toHTMLElement } from "@ui/dom/dom";
 import type { ViewContext } from "@ui/view/view-context";
 import { LAYOUT } from "@shared/constants";
+import { requestIdle } from "@shared/platform";
 
 export function renderPluginList(ctx: ViewContext, preserveScroll = false) {
 		// 视图已卸载：不再渲染，避免对死 ctx 做无谓 DOM 工作
@@ -623,6 +624,6 @@ export function fillVisibleWindow(ctx: ViewContext): void {
 			if (ctx.disposed) return; // 视图已卸载：放弃幽灵写盘
 			fillVisibleWindow(ctx);
 		};
-		ctx.fillIdleHandle = requestIdleCallback(runIdle, { timeout: 100 });
+		ctx.fillIdleHandle = requestIdle(runIdle, 100);
 	}
 }

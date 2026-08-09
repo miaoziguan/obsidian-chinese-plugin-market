@@ -57,6 +57,8 @@ export class WorkerLocalBackend implements LocalModelBackend {
 	private nextId = 1;
 	private readonly pending = new Map<number, PendingEmbed>();
 	private failed = false;
+	/** 模型是否已完成 init（ready 收到）。区分「init 阶段」与「运行期」错误（#29）。 */
+	private ready = false;
 
 	constructor(
 		private readonly cfg: WorkerBackendConfig,
@@ -109,7 +111,19 @@ export class WorkerLocalBackend implements LocalModelBackend {
 
 		worker.onmessage = (event: MessageEvent) => this.handleMessage(event.data);
 		worker.onerror = (event: ErrorEvent) => {
-			this.failInit(new Error(event.message || "embedding worker error"));
+			// init 阶段（模型尚未就绪）：整体失败 fail-fast（符合单例自恢复设计）。
+			// 运行期错误：只 reject 在途 embed，保留 worker 供后续重试，不杀掉整个
+			// 会话的本地语义搜索（#29：原先任意 embed 崩溃就 failInit→dispose，后续
+			// getShared 新建实例重加载模型，冷启动可达 240s，语义搜索长时间不可用）。
+			if (!this.ready) {
+				this.failInit(new Error(event.message || "embedding worker error"));
+				return;
+			}
+			logger.warn("[Chinese Plugin Market] embedding worker 运行期错误（保留 worker 供重试）：", event.message);
+			for (const p of this.pending.values()) {
+				p.reject(new Error(event.message || "embedding worker error"));
+			}
+			this.pending.clear();
 		};
 
 		const initTimer = window.setTimeout(() => {
@@ -167,6 +181,7 @@ export class WorkerLocalBackend implements LocalModelBackend {
 				this.initTimer = null;
 			}
 			logger.debug(`[Chinese Plugin Market] 本地 embedding 就绪（dim=${m.dimension}）`);
+			this.ready = true;
 			this.initResolve?.();
 		} else if (m.type === "init-error") {
 			this.failInit(new Error(`本地模型加载失败：${m.message}`));

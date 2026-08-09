@@ -57,6 +57,8 @@ export function quantizeVec(v: number[] | Float32Array): Uint8Array {
 		if (x > max) max = x;
 	}
 	const range = max - min;
+	// 常量向量（range===0）时退化为 scale=1, zero=0：q=round(x) 对称可逆。
+	// 归一化 embedding 各维不全相等，几乎不会命中此分支；零向量(全0)也精确保真。
 	const scale = range === 0 ? 1 : range / (2 * Q_MAX);
 	const zero = range === 0 ? 0 : -min / scale - Q_MAX;
 
@@ -66,7 +68,9 @@ export function quantizeVec(v: number[] | Float32Array): Uint8Array {
 	dv.setFloat32(4, zero, true);
 	for (let i = 0; i < dim; i++) {
 		// 用 setInt8 写有符号 int8（Uint8Array 下标赋值会把负值按无符号存成 255+）
-		dv.setInt8(8 + i, Math.round(v[i] / scale + zero));
+		// clamp 到 ±127 防溢出静默截断（#28：极端 value 越界会丢符号/数值）
+		const q = Math.round(v[i] / scale + zero);
+		dv.setInt8(8 + i, Math.max(-127, Math.min(127, q)));
 	}
 	return out;
 }
