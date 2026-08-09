@@ -1317,7 +1317,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				if (vecs.size > 0) {
 					const ids = Array.from(vecs.keys());
 					// 直接复用 Float32Array，不再 Array.from 转 number[]（消除二次转换，节省 6000×512 次分配）
-					const vectors = ids.map((id) => vecs.get(id)!);
+					// 量化仿射映射非保范：反量化后模长偏离 1，召回侧 topKBySimilarity 假定
+					// norm=1 做纯点积（余弦≈dot）。此处加载时归一化一次，保证召回打分正确（#28）
+					const vectors = ids.map((id) => {
+						const v = vecs.get(id)!;
+						const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+						if (n === 0 || n === 1) return v; // 零向量原样返回；已是单位向量免拷贝
+						const inv = 1 / n;
+						return new Float32Array(v.length).map((_, i) => v[i] * inv);
+					});
 					const model = store.getMeta("model") || "";
 					const hash = store.getMeta("hash") || "";
 					let schema = store.getMeta("categorySchemaVersion") || undefined;

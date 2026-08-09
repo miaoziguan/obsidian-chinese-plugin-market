@@ -17,7 +17,6 @@
 import type { Database, SqlJsStatic } from "sql.js";
 import { logger } from "@shared/logger";
 import { quantizeVec, dequantizeVec, VectorCodecError } from "@semantic/vec-codec";
-import { normalizeVector } from "@shared/utils";
 
 /** 持久化适配器（由调用方注入，通常是 Obsidian vault.adapter） */
 export interface PersistAdapter {
@@ -181,10 +180,9 @@ export class SqliteVectorStore {
 		}
 		const tDeq = Date.now();
 		for (const row of res[0].values) {
-			// 反量化后重新归一化（#28）：量化仿射映射非保范，模长偏离 1 会引入
-			// 点积召回打分误差；召回侧假定「索引向量已归一化，余弦=纯点积」。
-			const v = dequantizeVec(row[1] as Uint8Array);
-			out.set(row[0] as string, new Float32Array(normalizeVector(v as unknown as number[])));
+			// 反量化原样返回（存储层保持通用契约：调用方决定是否需要归一化，
+			// 见 plugin.ts loadVectorIndex 加载索引时对召回向量做归一化，#28）
+			out.set(row[0] as string, dequantizeVec(row[1] as Uint8Array));
 		}
 		logger.debug(`[Chinese Plugin Market] 探针：getAllVecs SQL=${sqlMs}ms · 反量化 ${out.size} 条=${Date.now() - tDeq}ms`);
 		return out;
