@@ -248,7 +248,12 @@ function computeVisibleWindowRange(ctx: ViewContext): { start: number; end: numb
 		rowH = cardH + rowGap;
 	}
 	if (rowH <= 0) return { start: 0, end: total };
-	const PREFETCH_ROWS = LAYOUT.PREFETCH_ROWS;
+	// #4: 速度自适应预取。慢速滚动只预取 1 行（省填充成本），快速甩动时预取 3~5 行
+	// 保证窗口边缘不空白（滚动快时用户会快速越过缓冲区）。静止/初始（速度 0）回退到 LAYOUT 默认。
+	const v = ctx.scrollVelocity;
+	const PREFETCH_ROWS = v > 0
+		? (v < 500 ? 1 : v < 2000 ? 3 : 5)
+		: LAYOUT.PREFETCH_ROWS;
 	const firstRow = Math.max(0, Math.floor(vp.scrollTop / rowH) - PREFETCH_ROWS);
 	const visibleRows = Math.ceil(vp.clientHeight / rowH) + PREFETCH_ROWS * 2;
 	const start = Math.min(total, firstRow * ctx.colCount);
@@ -530,7 +535,12 @@ export function fillVisibleWindow(ctx: ViewContext): void {
 	if (start >= end) return;
 	const renderCtx = makeCardRenderCtx(ctx);
 	const filled: HTMLElement[] = [];
+	// #4: 单帧预算控制。窗口内 pending 卡片 ≤20 时一帧填完；超过则先填 20 张，
+	// 剩余挂入 requestIdleCallback 分帧填充，避免 5600 项快速滚动时单帧超 16ms。
+	const MAX_PER_FRAME = 20;
+	let count = 0;
 	for (const card of pending) {
+		if (count >= MAX_PER_FRAME) break;
 		const di = parseInt(card.getAttribute("data-idx") || "-1", 10);
 		if (di < start || di >= end) continue; // 仍屏外
 		const plugin = ctx.visibleList[di];
@@ -538,6 +548,16 @@ export function fillVisibleWindow(ctx: ViewContext): void {
 		applyCardState(card, plugin, ctx.translatedResults[plugin.id], renderCtx);
 		card.removeAttribute("data-fill-pending");
 		filled.push(card);
+		count++;
 	}
 	for (const card of filled) pending.delete(card);
+	// 窗口内仍有未填卡（本次超预算）→ 空闲期续填，不阻塞当前帧
+	if (pending.size > 0 && ctx.fillIdleHandle === null) {
+		const runIdle = () => {
+			ctx.fillIdleHandle = null;
+			if (ctx.disposed) return; // 视图已卸载：放弃幽灵写盘
+			fillVisibleWindow(ctx);
+		};
+		ctx.fillIdleHandle = requestIdleCallback(runIdle, { timeout: 100 });
+	}
 }

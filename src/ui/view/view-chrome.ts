@@ -471,6 +471,19 @@ export async function loadAndRender(ctx: ViewContext) {
 		// 滚动监听：原生滚动由浏览器接管位移，这里只做轻量 UI 同步（节流）。
 		// 懒翻译已废弃，滚动不再触发自动翻译（翻译仅由用户点单卡「翻译」按钮）。
 		listContainer.addEventListener("scroll", () => {
+			// #4: 滚动速度采样（ΔscrollTop / Δt），供 PREFETCH_ROWS 速度自适应预取。
+			const now = performance.now();
+			const top = listContainer.scrollTop;
+			if (ctx.lastScrollSampleAt > 0) {
+				const dt = now - ctx.lastScrollSampleAt;
+				if (dt > 0) {
+					const v = Math.abs(top - ctx.lastScrollTopSample) / (dt / 1000);
+					// 指数平滑，避免单帧噪声导致预取量抖动
+					ctx.scrollVelocity = ctx.scrollVelocity * 0.5 + v * 0.5;
+				}
+			}
+			ctx.lastScrollTopSample = top;
+			ctx.lastScrollSampleAt = now;
 			if (ctx.scrollRAF) return;
 			ctx.scrollRAF = window.requestAnimationFrame(() => {
 				ctx.scrollRAF = 0;
