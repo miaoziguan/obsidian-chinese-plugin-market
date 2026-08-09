@@ -1,5 +1,12 @@
 # UI 审计报告 — 中文区插件市场视图（obsidian-plugin-translator）
 
+> **状态：已闭环（2026-08-09，#8）** —— 本报告三条漂移均已修复，验收通过。
+> 复核时发现 P1 徽章金色、P2 字号标尺、P3 裸 `#fff` 在报告发布后的迭代中已陆续落地，
+> 但同一「裸色不随 `--pt-gold` 暗色覆盖」根因仍有 6 处残留（`.pt-card.is-recommended`、
+> `.pt-card.is-favorited`、`@keyframes pt-fav-pulse`、`--pt-gold-muted` 定义本身），
+> 以及 #13 新引入的召回信号徽标 3 色裸 hex —— 已一并收敛为令牌。详见文末「七、闭环记录」。
+> **下方行号为 2026-08-03 审计时的快照，现已漂移，仅作历史证据保留。**
+
 > 审计方式：严格只读源码（styles.css / src/*.ts 渲染路径），所有发现均附带「文件:行号」证据。
 > 审计日期：2026-08-03
 > 审计范围：主产品任务界面 —— 插件市场列表视图（卡片、工具栏、筛选、推荐徽章、字典行）。
@@ -124,3 +131,46 @@ background: linear-gradient(135deg,
 | 问题2：正确用法正例 | styles.css L1480（--pt-text-xs） |
 | 问题3：裸 #fff | styles.css L1483 / L1944 / L3978 |
 | 问题3：正确用法正例 | styles.css L1127 / L1800 / L2099 / L2106 / L3810 |
+
+---
+
+## 七、闭环记录（2026-08-09，#8）
+
+### 复核结论：三条主问题在本次施工前已部分落地
+
+| 项 | 报告时状态 | 复核时实际状态 |
+|---|---|---|
+| P1 推荐徽章金色 | 裸 `#e6b54a/#c8881a` | **已修**（`.pt-card-recommend-badge` 亮/暗均引用 `var(--pt-gold)`，与报告 §四给出的方案逐字一致） |
+| P2 字号标尺 | 22 处裸 px | **已修**（全文 184 处 `font-size`，裸 px 归零） |
+| P3 裸 `#fff` | L1483/L1944/L3978 | **已修**（全文 `color: #fff` 归零，均为 `var(--text-on-accent, #fff)`） |
+
+> 说明：现存 20 处 `font-size` 未引用 `--pt-text-*`，但全部使用宿主变量
+> （`--font-small` / `--font-smaller` / `--font-smallest` / `--font-ui-*`），
+> 符合 v5「借用宿主 CSS 变量」约束（L4），**不属于漂移，勿改**。
+> 其中 5 处形如 `var(--font-small, 12.5px)` 的 px 是 `var()` 回退值，非裸 px。
+
+### 本次实际修复：同根因残留 + 新增漂移
+
+报告 §二问题 1 的根因是「金色写死 hex，绕过 `--pt-gold`，导致 L134 暗色覆盖失效」。
+徽章本身已修，但**同根因在其他选择器仍有残留**，本次一并收敛：
+
+| 位置 | 修复前 | 修复后 |
+|---|---|---|
+| `.pt-card.is-recommended` 描边 | `color-mix(..., #d99a1c 45%, ...)` | `var(--pt-gold)` |
+| `.pt-card.is-favorited` 描边 + 光环 | `#d99a1c` ×2 | `var(--pt-gold)` |
+| `@keyframes pt-fav-pulse` | `#d99a1c` ×2 | `var(--pt-gold, #d99a1c)` |
+| `--pt-gold-muted` 定义（L54） | 派生自写死的 `#d99a1c` | 派生自 `var(--pt-gold)`，暗色自动跟随 |
+
+另修复 **#13（AI 搜索召回信号徽标）新引入的 3 色裸 hex**（`--vector/--llm/--title`），
+新增 4 个令牌 `--pt-signal-vector / --pt-signal-llm / --pt-signal-title / --pt-signal-title-tint`
+并补 `.theme-dark .pt-view` 暗色覆盖（深底提亮文字，与亮色主题压暗方向相反）。
+`title` 档拆 `-title`（文字，压暗保对比）与 `-title-tint`（描边/底色，保持原亮橙）两个令牌，
+以无损保留原设计的双色意图。
+
+### 验收结果
+
+- **P1**：推荐徽章 + 推荐/收藏卡片描边 + 收藏脉冲，暗色下全部走 `--pt-gold: #b8841a`。
+- **P2**：`grep 'font-size:\s*[0-9.]*px'` → 零结果。
+- **P3**：`grep 'color:\s*#fff'` → 零结果。
+- **全局**：令牌定义区（L17–L155）之外无任何裸 hex（`var()` 回退除外）。
+- **回归**：`npm run build` 通过；`vitest` 585/585 全绿（无视觉快照测试，逻辑无回归）。
