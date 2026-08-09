@@ -120,16 +120,23 @@ async function handleInit(msg: InitMsg): Promise<void> {
 		});
 
 	// 探针 embed 学习维度，带超时（部分模型在 WebGPU 上 probe 可能挂起，超时即降级）
+	// Web Worker 内没有 window 全局，定时器必须走 self（或 globalThis）。
+	const wself = self as unknown as {
+		setTimeout: (cb: () => void, ms: number) => unknown;
+		clearTimeout: (h: unknown) => void;
+	};
+	const setT = wself.setTimeout.bind(wself);
+	const clearT = wself.clearTimeout.bind(wself);
 	const probeWithTimeout = (ext: Extractor, ms: number): Promise<{ data: Float32Array; dims: number[] }> =>
 		new Promise((resolve, reject) => {
-			const timer = window.setTimeout(() => reject(new Error(`probe 超时（${ms / 1000}s）`)), ms);
+			const timer = setT(() => reject(new Error(`probe 超时（${ms / 1000}s）`)), ms);
 			ext("_", { pooling: "mean", normalize: true })
 				.then((r) => {
-					window.clearTimeout(timer);
+					clearT(timer);
 					resolve(r);
 				})
 				.catch((e) => {
-					window.clearTimeout(timer);
+					clearT(timer);
 					reject(e instanceof Error ? e : new Error(String(e)));
 				});
 		});
