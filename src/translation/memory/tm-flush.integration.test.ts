@@ -78,6 +78,7 @@ class FakeVault {
 }
 
 import { writeTMNote, parseTMNote, TM_FOLDER } from "@translation/memory/translation-memory";
+import { ObsidianNoteStorage } from "@app/obsidian-adapters";
 import { Translator } from "@domain/catalog/translator";
 import ChinesePluginMarketPlugin from "@app/plugin";
 
@@ -100,10 +101,11 @@ describe("TM 笔记落盘（集成）", () => {
 		t.markTMDirty("git");
 		expect(t.peekTMDirty()).toContain("git");
 
-		// 复刻 flushTMVault：写入脏标记对应的 tmApproved 条目
+		// 复刻 flushTMVault：写入脏标记对应的 tmApproved 条目（经 NoteStoragePort 适配器）
+		const notes = new ObsidianNoteStorage(app);
 		for (const id of t.peekTMDirty()) {
 			const e = t.tmApproved[id];
-			await writeTMNote(app, e!);
+			await writeTMNote(notes, e!);
 			t.clearTMDirty(id);
 		}
 

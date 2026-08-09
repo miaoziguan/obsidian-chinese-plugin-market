@@ -8,7 +8,6 @@
  * - callAITranslate — AI 翻译（复用 LLMClient）
  */
 
-import { requestUrl } from "obsidian";
 import { logger } from "@shared/logger";
 import { tencentTranslate, type TencentApiConfig } from "@translation/api/tencent-signer";
 import type { TranslateResult, PluginInfo } from "@domain/catalog/translator";
@@ -147,7 +146,7 @@ export class MyMemoryClient {
 		const encoded = encodeURIComponent(truncated);
 		const url = `https://api.mymemory.translated.net/get?q=${encoded}&langpair=en|zh-CN`;
 		const response = await withTimeout(
-			requestUrl({ url, method: "GET", headers: { "Accept": "application/json" } }),
+			netRequest({ url, method: "GET", headers: { "Accept": "application/json" } }),
 			MYMEMORY_TIMEOUT,
 			"MyMemory"
 		);

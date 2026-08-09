@@ -1,15 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// 让源码里的 requestUrl 可控，不连真实网络
-vi.mock("obsidian", () => ({
-	requestUrl: vi.fn(),
-}));
 // 让腾讯翻译走可控的桩
 vi.mock("@translation/api/tencent-signer", () => ({
 	tencentTranslate: vi.fn(),
 }));
 
-import { requestUrl } from "obsidian";
+import { setHttpClient, resetHttpClient } from "@data/net/http-port";
 import { tencentTranslate } from "@translation/api/tencent-signer";
 import {
 	MyMemoryClient,
@@ -19,15 +15,18 @@ import {
 } from "@translation/api/api";
 import { CircuitOpenError, TimeoutError } from "@translation/api/guard";
 
-const req = requestUrl as unknown as ReturnType<typeof vi.fn>;
+// 依赖倒置后：api 层统一走 netRequest → 注入的 HttpClient，单测直接注入 mock，无需 mock "obsidian"
+const req = vi.fn();
 const tc = tencentTranslate as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
 	req.mockReset();
 	tc.mockReset();
+	setHttpClient({ request: req });
 });
 afterEach(() => {
 	vi.useRealTimers();
+	resetHttpClient();
 });
 
 describe("LLMClient · 超时与熔断", () => {

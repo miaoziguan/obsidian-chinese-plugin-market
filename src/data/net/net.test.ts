@@ -1,21 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// mock obsidian 的 requestUrl（无代理路径）
-vi.mock("obsidian", () => ({
-	requestUrl: vi.fn(),
-}));
-
-import { requestUrl } from "obsidian";
+import { setHttpClient, resetHttpClient } from "@data/net/http-port";
 import { netRequest } from "@data/net/net";
 
-const req = requestUrl as unknown as ReturnType<typeof vi.fn>;
+// 依赖倒置后：下层不再依赖 "obsidian"，单测直接注入 mock HttpClient，无需 mock 整个模块
+const req = vi.fn();
 
 describe("netRequest", () => {
 	beforeEach(() => {
 		req.mockReset();
+		setHttpClient({ request: req });
+	});
+	afterEach(() => {
+		resetHttpClient();
 	});
 
-	it("无代理时走 Obsidian requestUrl，响应形状对齐", async () => {
+	it("委托注入的 HttpClient，响应形状对齐", async () => {
 		req.mockResolvedValue({
 			status: 200,
 			json: { ok: 1 },
@@ -27,5 +27,16 @@ describe("netRequest", () => {
 		expect(r.status).toBe(200);
 		expect(r.json).toEqual({ ok: 1 });
 		expect(req).toHaveBeenCalledOnce();
+	});
+
+	it("method 缺省时补 GET", async () => {
+		req.mockResolvedValue({ status: 200, json: null, text: "", headers: {} });
+		await netRequest({ url: "https://x.test/ping" });
+		expect(req).toHaveBeenCalledWith(expect.objectContaining({ method: "GET" }));
+	});
+
+	it("未注入实现时显式抛错（而非静默降级）", async () => {
+		resetHttpClient();
+		await expect(netRequest({ url: "https://x.test" })).rejects.toThrow(/HttpClient 未注入/);
 	});
 });

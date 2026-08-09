@@ -1,11 +1,49 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
 	protectMarkdown,
 	restoreMarkdown,
 	splitBatches,
 	splitBatchesDetailed,
 	joinBatches,
+	isMacOS,
+	setPlatformCapability,
+	macosSystemTranslate,
 } from "@translation/platform/macos-shortcuts";
+
+/**
+ * 平台解耦验收：不再依赖 Obsidian 的 Platform，
+ * 平台能力由装配期注入，单测可自由构造四种组合。
+ */
+describe("macos-shortcuts · PlatformCapability 端口注入", () => {
+	afterEach(() => {
+		setPlatformCapability({ isDesktopApp: false, isMacOS: false });
+	});
+
+	it("未注入（默认）时视为非 macOS 桌面端，按钮不渲染", () => {
+		expect(isMacOS()).toBe(false);
+	});
+
+	it("仅 desktop + macOS 同时成立才为 true", () => {
+		setPlatformCapability({ isDesktopApp: true, isMacOS: true });
+		expect(isMacOS()).toBe(true);
+
+		setPlatformCapability({ isDesktopApp: true, isMacOS: false });
+		expect(isMacOS()).toBe(false);
+
+		setPlatformCapability({ isDesktopApp: false, isMacOS: true });
+		expect(isMacOS()).toBe(false);
+	});
+
+	it("非 macOS 时 macosSystemTranslate 直接抛错，不进子进程分支", async () => {
+		setPlatformCapability({ isDesktopApp: false, isMacOS: false });
+		await expect(macosSystemTranslate("hello")).rejects.toThrow(/仅 macOS 桌面端/);
+	});
+
+	it("macOS 下空文本短路返回空串（不调用快捷指令）", async () => {
+		setPlatformCapability({ isDesktopApp: true, isMacOS: true });
+		await expect(macosSystemTranslate("   ")).resolves.toBe("");
+	});
+});
 
 describe("macos-shortcuts · Markdown 占位保护（方案 A）", () => {
 	it("保护围栏代码块并还原", () => {

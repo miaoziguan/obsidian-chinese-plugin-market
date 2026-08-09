@@ -11,6 +11,15 @@ import { logger } from "@shared/logger";
 import { Translator, type PluginInfo } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
 import { PluginStorage } from "@data/storage/plugin-storage";
+import { setHttpClient } from "@data/net/http-port";
+import { setPlatformCapability } from "@translation/platform/macos-shortcuts";
+import type { NoteStoragePort } from "@translation/memory/note-port";
+import {
+	ObsidianHttpClient,
+	ObsidianStoragePort,
+	ObsidianNoteStorage,
+	obsidianPlatformCapability,
+} from "@app/obsidian-adapters";
 import { makeT } from "@shared/i18n";
 import { setScrollDebug } from "@ui/view/view-render";
 import { TranslatorSettingTab } from "@app/settings-tab";
@@ -65,6 +74,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	recommendedIds: Set<string> = new Set();
 	/** 独立缓存文件存储层（stats / trending / 插件列表），见 plugin-storage.ts */
 	storage!: PluginStorage;
+	/** TM 笔记存储端口（Obsidian Vault 适配器），供 writeTMNote / removeTMNote 注入 */
+	private noteStorage!: NoteStoragePort;
 	/** 官方推荐区标题（由 plugin-recommend.json 的 title 字段提供，缺省回退 i18n） */
 	recommendedTitle: string = "官方推荐";
 	/**
@@ -114,6 +125,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	onPluginTagsLoaded: (() => void) | null = null;
 
 	async onload() {
+		// 依赖倒置装配点：把 Obsidian 具体 API 适配成端口实现注入下层。
+		// 必须在任何下层逻辑（网络 / 缓存 / TM / 平台判断）执行之前完成，
+		// 否则未注入的 HttpClient 会显式抛错。
+		setHttpClient(new ObsidianHttpClient());
+		setPlatformCapability(obsidianPlatformCapability());
+		this.noteStorage = new ObsidianNoteStorage(this.app);
+
 		// 防御：data.json 若因中断写盘而损坏（存在但 JSON 解析失败），
 		// Obsidian 的 loadData() 会从 JSON.parse 直接抛出，导致整个 onload 中止、
 		// 插件彻底无法加载。此处兜底为空白状态，保证插件始终能启动（数据可重建）。
@@ -130,7 +148,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this._data = loaded;
 		const allData = this._data;
 		// 独立缓存存储层（stats / trending / 插件列表），先行初始化以供后续加载使用
-		this.storage = new PluginStorage(this.app, this.manifest.id);
+		this.storage = new PluginStorage(new ObsidianStoragePort(this.app), this.manifest.id);
 		await this.loadSettings(allData);
 		await this.loadTranslatorData(allData);
 
@@ -594,7 +612,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		for (let i = 0; i < ids.length; i += BATCH) {
 			await Promise.all(
 				ids.slice(i, i + BATCH).map(async (id) => {
-					await removeTMNote(this.app, id);
+					await removeTMNote(this.noteStorage, id);
 					this.translator.removeTMApproved(id);
 				})
 			);
@@ -621,7 +639,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				return;
 			}
 			try {
-				await writeTMNote(this.app, e);
+				await writeTMNote(this.noteStorage, e);
 				this.translator.clearTMDirty(id);
 			} catch (err: unknown) {
 				logger.warn("[Chinese Plugin Market] 写入 TM 笔记失败，已保留待重试：", id, err);
@@ -630,7 +648,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const removed = this.translator.peekTMRemoved();
 		await mapWithConcurrency(removed, 20, async (id) => {
 			try {
-				await removeTMNote(this.app, id);
+				await removeTMNote(this.noteStorage, id);
 				this.translator.clearTMRemoved(id);
 			} catch (err: unknown) {
 				logger.warn("[Chinese Plugin Market] 删除 TM 笔记失败，已保留待重试：", id, err);

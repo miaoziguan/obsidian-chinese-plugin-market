@@ -1,16 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// 让源码里的 requestUrl 可控，模拟 LLM 不可达（超时/服务不可用）
-vi.mock("obsidian", () => ({
-	requestUrl: vi.fn(),
-}));
-
-import { requestUrl } from "obsidian";
+import { setHttpClient, resetHttpClient } from "@data/net/http-port";
 import { AISearcher } from "@domain/search/ai";
 import { LLMClient } from "@translation/api/api";
 import { PluginTagService } from "@domain/catalog/plugin-tags";
 
-const req = requestUrl as unknown as ReturnType<typeof vi.fn>;
+// 依赖倒置后：LLM 调用统一走注入的 HttpClient，直接注入 mock 模拟不可达/异常响应
+const req = vi.fn();
 
 const PLUGINS = [
 	{ id: "dataview", name: "Dataview", description: "Query your notes as a database" },
@@ -45,6 +41,10 @@ function makeSearcher() {
 describe("AISearcher 降级健壮性", () => {
 	beforeEach(() => {
 		req.mockReset();
+		setHttpClient({ request: req });
+	});
+	afterEach(() => {
+		resetHttpClient();
 	});
 
 	it("LLM 精排不可达时降级到本地关键词排序（rankFallback=true，结果非空）", async () => {

@@ -1,4 +1,4 @@
-import { TFile, normalizePath, type App } from "obsidian";
+import { type NoteStoragePort } from "@translation/memory/note-port";
 
 /**
  * 翻译记忆库（Translation Memory, TM）
@@ -29,10 +29,21 @@ export interface TMEntry {
 /** vault 中存放 TM 笔记的文件夹 */
 export const TM_FOLDER = "插件翻译记忆库";
 
+/**
+ * 路径归一化（对齐 Obsidian normalizePath 语义的纯函数实现）。
+ *
+ * 为什么不直接用 Obsidian 的 normalizePath：本文件属于「下层」，遵循依赖倒置不 import "obsidian"。
+ * TM 路径由自身拼接（TM_FOLDER + 转义后的 id），形态可控，只需处理反斜杠 / 重复斜杠 / 首尾斜杠，
+ * 与 Obsidian 的行为在本场景下等价。
+ */
+export function normalizeTMPath(path: string): string {
+	return path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
+}
+
 /** 安全文件名：插件 id 可能含 / : 等非法字符，统一转义 */
 export function tmNotePath(id: string): string {
 	const safe = id.replace(/[\\/:#^|[\]]/g, "_");
-	return normalizePath(`${TM_FOLDER}/${safe}.md`);
+	return normalizeTMPath(`${TM_FOLDER}/${safe}.md`);
 }
 
 /** 渲染 vault 笔记：frontmatter 机器可读，正文人类可读 */
@@ -88,25 +99,17 @@ export function parseTMNote(content: string): TMEntry | null {
 	};
 }
 
-/** 写入/更新单条 vault 笔记（Obsidian-native 单条 O(1) 写） */
-export async function writeTMNote(app: App, e: TMEntry): Promise<void> {
-	const folder = normalizePath(TM_FOLDER);
-	if (!app.vault.getAbstractFileByPath(folder)) {
+/** 写入/更新单条 vault 笔记（Obsidian-native 单条 O(1) 写，经 NoteStoragePort 落盘） */
+export async function writeTMNote(notes: NoteStoragePort, e: TMEntry): Promise<void> {
+	const folder = notes.normalizePath(TM_FOLDER);
+	if (!notes.exists(folder)) {
 		// 并发写入时可能竞态触发「已存在」，容错吞掉
-		await app.vault.createFolder(folder).catch(() => {});
+		await notes.createFolder(folder).catch(() => {});
 	}
-	const path = tmNotePath(e.id);
-	const file = app.vault.getAbstractFileByPath(path);
-	const content = renderTMNote(e);
-	if (file instanceof TFile) {
-		await app.vault.modify(file, content);
-	} else {
-		await app.vault.create(path, content);
-	}
+	await notes.writeNote(tmNotePath(e.id), renderTMNote(e));
 }
 
 /** 删除单条 vault 笔记 */
-export async function removeTMNote(app: App, id: string): Promise<void> {
-	const file = app.vault.getAbstractFileByPath(tmNotePath(id));
-	if (file instanceof TFile) await app.fileManager.trashFile(file);
+export async function removeTMNote(notes: NoteStoragePort, id: string): Promise<void> {
+	await notes.deleteNote(tmNotePath(id));
 }
