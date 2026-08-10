@@ -90,7 +90,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	embeddingModel: "text-embedding-3-small",
 	embeddingLocalModel: "Xenova/bge-small-zh-v1.5",
 	embeddingLocalWasmPaths: "",
-	mirrorSource: "jsdelivr", // 默认走 jsDelivr（国内可直连），失败时自动探测其它镜像
+	mirrorSource: "github", // 默认走 GitHub 原始源；不再自动探测/切换其它镜像
 	mirrorCustomBase: "",
 	selfHostedTranslators: [], // 默认无自托管翻译源，行为完全不变
 	sortBy: "relevance",
@@ -124,7 +124,7 @@ export function getDefaultSettings(): ChinesePluginMarketSettings {
 
 
 import { loadAndRender, updateGuidance, updateFacetVisibility, showSearchGuide, showAIPendingHint, showAIConfigGuide, showLoadingState, updateStats, applyAIConfig, announceStatus, updateScrollButtons, updateScrollPosBadge } from "@ui/view/view-chrome";
-import { ensureDataLoaded, fetchPluginsWithFallback, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, updateAuthorBanner, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
+import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, updateAuthorBanner, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
 import { runAISearch } from "@ui/view/view-ai-search";
 import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, updateWindow, disposeRenderTimers } from "@ui/view/view-render";
 import { startInstalledWatch } from "@ui/view/installed-watch";
@@ -618,12 +618,10 @@ public ensureDataLoaded = async () => {
 	};
 
 	/**
-	 * 带镜像容错探测的列表拉取：
-	 * 先按用户设置（默认 jsDelivr）拉取；失败且为网络/访问受限类错误时，
-	 * 依次自动尝试 ghproxy → github，命中即返回，全程对用户无感。
-	 * 仍全失败则抛原错误，由上层渲染错误态 + 手动切镜像入口。
+	 * 按当前设置的数据源拉取插件列表：
+	 * 不再做镜像容错探测/自动切换，失败直接抛错，由上层渲染错误态。
 	 */
-public fetchPluginsWithFallback = () => fetchPluginsWithFallback(this._ctx);
+public fetchPlugins = () => fetchPlugins(this._ctx);
 
 	/**
 	 * 手动刷新：重新拉取最新社区插件列表 + stats，覆盖本地快照。

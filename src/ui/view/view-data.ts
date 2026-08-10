@@ -8,7 +8,7 @@ import { Notice, requestUrl } from "obsidian";
 import { logger } from "@shared/logger";
 import { cleanChineseSpaces, isListStale, computePluginDelta } from "@shared/utils";
 import { type PluginInfo, type TranslateResult } from "@domain/catalog/translator";
-import { resolveUrl, classifyNetworkError, buildMirrorOrder, type MirrorConfig } from "@domain/catalog/mirror";
+import { resolveUrl, classifyNetworkError, type MirrorConfig } from "@domain/catalog/mirror";
 import { fetchPluginStats, PLUGIN_STATS_URL } from "@domain/catalog/stats";
 import { formatRelativeTime, type I18nKey } from "@shared/i18n";
 import { computeCoverage } from "@translation/lexicon/dictionary";
@@ -142,7 +142,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 		try {
 			// 首屏默认走 jsDelivr，但仍可能因网络/版本受限失败。
 			// 失败时按优先级自动探测其它镜像（jsDelivr→ghproxy→github），命中即用。
-			let data = await ctx.fetchPluginsWithFallback();
+			let data = await ctx.fetchPlugins();
 			// 拉取成功后缓存到本地（离线重启时秒开，不受网络影响）
 			// 性能：写独立文件而非内嵌 data.json（1.6MB 大对象曾拖慢每一次防抖保存）
 		void ctx.savePluginListCache(data);
@@ -313,29 +313,6 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 						if (ok) ctx.scheduleRender();
 					}).catch((e) => logger.warn("[Chinese Plugin Market] 重试数据加载失败：", e));
 				});
-				// 被墙/访问受限场景：一键切镜像后重试
-				if (info.suggestMirror) {
-					const mirrorBtn = actions.createEl("button", {
-						cls: "pt-guide-chip pt-error-mirror",
-						text: ctx.t("error.mirror"),
-					});
-				mirrorBtn.addEventListener("click", () => {
-					void (async () => {
-						const cur = ctx.settings.mirrorSource;
-						ctx.settings.mirrorSource =
-							cur === "github" ? "jsdelivr" : "github";
-						await ctx.flushSaveSettings();
-						new Notice(
-							`${ctx.t("notice.mirror.switched")} ${ctx.settings.mirrorSource === "jsdelivr" ? ctx.t("settings.mirror.jsdelivr") : ctx.t("settings.mirror.github")}${ctx.t("notice.mirror.retry")}`
-						);
-						ctx.dataLoaded = false;
-						ctx.dataLoading = false;
-						void ctx.ensureDataLoaded().then((ok) => {
-							if (ok) ctx.scheduleRender();
-						}).catch((e) => logger.warn("[Chinese Plugin Market] 切镜像后数据加载失败：", e));
-					})();
-				});
-				}
 				const guideBtn = actions.createEl("button", {
 					cls: "pt-guide-chip pt-error-guide",
 					text: ctx.t("error.guide"),
@@ -355,42 +332,18 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 	
 }
 
-export async function fetchPluginsWithFallback(ctx: ViewContext) : Promise<PluginInfo[]> {
-		const order = buildMirrorOrder(ctx.settings.mirrorSource);
-		let lastErr: unknown;
-		for (const src of order) {
-			try {
-				const url = resolveUrl(PLUGINS_URL, {
-					source: src,
-					customBase: ctx.settings.mirrorCustomBase,
-				});
-				const response = await Promise.race([
-					requestUrl({ url, method: "GET" }),
-					new Promise<never>((_, reject) =>
-						window.setTimeout(() => reject(new Error("timeout")), 4000)
-					),
-				]) as { json: unknown };
-				// 探测命中：若与用户设置不同，静默同步设置，下次直接命中
-				if (src !== ctx.settings.mirrorSource) {
-					ctx.settings.mirrorSource = src;
-					void ctx.saveSettings();
-					new Notice(ctx.t("notice.mirror.auto") + ctx.t(`settings.mirror.${src}`));
-				}
-				const arr = response.json as PluginInfo[];
-			// 注入清单数组下标：官方把新插件追加到尾部，下标越大越新；
-			// 「最新发布」排序据此倒序（与官方「New」标签一致）。
-			return arr.map((p, i) => ({ ...p, listIndex: i }));
-			} catch (e: unknown) {
-				const info = classifyNetworkError(e);
-				// 仅网络/访问受限类错误才继续探测，解析等错误直接抛出
-				if (!info.suggestMirror && info.kind !== "timeout" && info.kind !== "dns") {
-					throw e;
-				}
-				lastErr = e;
-			}
-		}
-		throw lastErr;
-	
+export async function fetchPlugins(ctx: ViewContext): Promise<PluginInfo[]> {
+	const url = resolveUrl(PLUGINS_URL, ctx.mirrorConfig());
+	const response = (await Promise.race([
+		requestUrl({ url, method: "GET" }),
+		new Promise<never>((_, reject) =>
+			window.setTimeout(() => reject(new Error("timeout")), 4000)
+		),
+	])) as { json: unknown };
+	const arr = response.json as PluginInfo[];
+	// 注入清单数组下标：官方把新插件追加到尾部，下标越大越新；
+	// 「最新发布」排序据此倒序（与官方「New」标签一致）。
+	return arr.map((p, i) => ({ ...p, listIndex: i }));
 }
 
 export async function refreshData(ctx: ViewContext) : Promise<void> {
@@ -401,8 +354,8 @@ export async function refreshData(ctx: ViewContext) : Promise<void> {
 		ctx.refreshBtn.disabled = true;
 		ctx.refreshBtn.addClass("pt-refreshing");
 		try {
-			// 手动刷新同样走镜像容错探测，避免用户手动刷新时卡死在某镜像
-			const data = await ctx.fetchPluginsWithFallback();
+			// 手动刷新按当前设置的数据源直接拉取，不再做镜像容错探测
+			const data = await ctx.fetchPlugins();
 			ctx.plugins = data;
 			ctx.buildAuthorFacet();
 	

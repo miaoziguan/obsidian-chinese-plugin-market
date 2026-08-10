@@ -159,7 +159,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 						control: {
 							type: "dropdown",
 							key: "mirrorSource",
-							defaultValue: "jsdelivr",
+							defaultValue: "github",
 							options: {
 								jsdelivr: this.t("settings.mirror.jsdelivr"),
 								github: this.t("settings.mirror.github"),

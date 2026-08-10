@@ -244,7 +244,7 @@ export interface ViewContext {
 	// ── 模块方法 ──
 	loadAndRender: () => Promise<void>;
 	ensureDataLoaded: () => Promise<boolean>;
-	fetchPluginsWithFallback: () => Promise<PluginInfo[]>;
+	fetchPlugins: () => Promise<PluginInfo[]>;
 	refreshData: () => Promise<void>;
 	updateRefreshTooltip: () => void;
 	relativeTime: (tsMs: number) => string;
@@ -562,7 +562,7 @@ get authorFacetList() { return view.authorFacetList; },
 		// ── 模块方法（一次性绑好 this）──
 		loadAndRender: view.loadAndRender.bind(view),
 		ensureDataLoaded: view.ensureDataLoaded.bind(view),
-		fetchPluginsWithFallback: view.fetchPluginsWithFallback.bind(view),
+		fetchPlugins: view.fetchPlugins.bind(view),
 		refreshData: view.refreshData.bind(view),
 		updateRefreshTooltip: view.updateRefreshTooltip.bind(view),
 		relativeTime: view.relativeTime.bind(view),

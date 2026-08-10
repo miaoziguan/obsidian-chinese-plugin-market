@@ -341,7 +341,7 @@ export const STRINGS = {
 	"settings.tencent.region.desc": { zh: "API 调用地域，默认 ap-guangzhou" },
 	"settings.mirror": { zh: "数据源镜像" },
 	"settings.mirror.desc": {
-		zh: "国内访问 GitHub 可能受限。切换镜像后，插件列表 / 统计 / README 均走对应镜像源。推荐 jsDelivr。",
+		zh: "默认使用 GitHub 原始源。若访问受限，可手动切换到 jsDelivr 等镜像源；插件列表 / 统计 / README 均走对应镜像源。",
 
 	},
 	"settings.mirror.github": { zh: "GitHub 原始" },
