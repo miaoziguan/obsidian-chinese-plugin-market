@@ -269,6 +269,8 @@ export function makeApp() {
 			getName: () => "vault",
 			getAbstractFileByPath: () => null,
 			read: async (): Promise<string> => "",
+			on: () => ({ unload: (): void => {} }),
+			off: (): void => {},
 		},
 	};
 }
