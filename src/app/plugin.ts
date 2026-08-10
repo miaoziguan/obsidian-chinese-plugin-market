@@ -636,10 +636,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			aiDict,
 			tmQueue: undefined,
 			tmApproved: undefined,
-			myMemoryBlockedDate: (fileData?.myMemoryBlockedDate as LoadDataRaw["myMemoryBlockedDate"]) ?? "",
+			myMemoryBlockedDate: fileData?.myMemoryBlockedDate ?? "",
 			pluginInsights: (fileData?.pluginInsights as LoadDataRaw["pluginInsights"]) ?? {},
 			compareInsights: (fileData?.compareInsights as LoadDataRaw["compareInsights"]) ?? {},
-			coverageSnapshots: (fileData?.coverageSnapshots as LoadDataRaw["coverageSnapshots"]) ?? [],
+			coverageSnapshots: fileData?.coverageSnapshots ?? [],
 		});
 		// 跨会话恢复列表拉取时间（修复：原 lastListFetchAt 是视图内存字段，重启归零
 		// 导致 isListStale(0, now, 6h) 恒真 → 每次启动都强制重拉列表 + 重译可见项）
