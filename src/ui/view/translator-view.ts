@@ -14,7 +14,6 @@ import { toHTMLElement } from "@ui/dom/dom";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
 import { type MirrorSource } from "@domain/catalog/mirror";
 import { type PluginStat } from "@domain/catalog/stats";
-import { computeFavoritesSet } from "@domain/catalog/seeded-favorites";
 import { type SortBy } from "@domain/filter/sort";
 import {
 	FilterCache,
@@ -70,12 +69,6 @@ export interface ChinesePluginMarketSettings {
 	sortBy: SortBy;
 	// 个人收藏集：用户主动收藏的插件 id（持久化，随使用时间复利）
 	favorites: string[];
-	/**
-	 * 用户对「内置预置收藏（种子）」的排除标记：被取消的内置种子 id 记录于此，
-	 * 持久化且与用户收藏（favorites）分离——预置种子本身只读、不写入用户数据，
-	 * 取消预置仅追加到此排除集，保证升级刷新种子时不污染用户态收藏。
-	 */
-	excludedSeeded: string[];
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
 }
@@ -102,7 +95,6 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	selfHostedTranslators: [], // 默认无自托管翻译源，行为完全不变
 	sortBy: "relevance",
 	favorites: [],
-	excludedSeeded: [],
 	compare: [],
 };
 
@@ -283,11 +275,8 @@ export class ChinesePluginMarketView extends ItemView {
 		// 恢复持久化的来源筛选与排序偏好（产品改进 #5）
 		this.sourceFilter = plugin.settings.sourceFilter;
 		this.sortBy = plugin.settings.sortBy;
-		// 水合收藏集：内置种子（只读，随包分发）∪ 用户收藏 − 用户排除的预置
-		this.favoritesSet = computeFavoritesSet(
-			plugin.settings.favorites,
-			plugin.settings.excludedSeeded
-		);
+		// 水合收藏集：用户主动收藏的插件 id
+		this.favoritesSet = new Set(plugin.settings.favorites);
 		// 水合对比集（从持久化 settings.compare 恢复为 Set，跨会话保留）
 		this.compareSet = new Set(plugin.settings.compare);
 		// 跨会话恢复列表拉取时间：避免 lastListFetchAt 重启归零导致 isListStale(0,now,6h)

@@ -65,8 +65,8 @@ export interface DrawerOptions {
 	openDetail: (pluginId: string) => void;
 	toggleFavorite: (pluginId: string) => boolean;
 	/**
-	 * 当前是否已收藏（合并内置预置种子后的状态）。供初始图标判定；
-	 * 未提供时回退到 plugin.settings.favorites.includes。
+	 * 当前是否已收藏（供初始图标判定）；未提供时回退到
+	 * plugin.settings.favorites.includes。
 	 */
 	isFavorited?: (pluginId: string) => boolean;
 	/** 已安装插件 id 集合（用于推荐卡片显示安装状态） */
