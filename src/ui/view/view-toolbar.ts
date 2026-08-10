@@ -141,12 +141,19 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.sortFavoritesFirst = false;
 			ctx.authorFilter = null;
 			ctx.installFilter = "all";
+			ctx.favoriteFilter = false;
 			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
 			// 「仅显示已安装」按钮：aria-pressed 与文案复位
 			const uninstalledToggleEl = q(ctx.contentEl, ".pt-toggle-uninstalled");
 			if (uninstalledToggleEl) {
 				uninstalledToggleEl.setAttribute("aria-pressed", "false");
 				uninstalledToggleEl.textContent = "仅显示已安装";
+			}
+			// 「仅看收藏」按钮：aria-pressed 与文案复位
+			const favToggleEl = q(ctx.contentEl, ".pt-toggle-favorites");
+			if (favToggleEl) {
+				favToggleEl.setAttribute("aria-pressed", "false");
+				favToggleEl.textContent = "仅看收藏";
 			}
 			// 排序菜单「收藏优先」项 active 态复位
 			const favItemEl = q(ctx.contentEl, ".pt-sort-menu-item--fav");
@@ -598,6 +605,23 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.scheduleRender(true);
 		});
 
+		// ── 收藏筛选（仅看收藏），与安装筛选同组 ──
+		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+		favRow.createSpan({ cls: "pt-facet-label", text: "收藏" });
+		const favChips = favRow.createDiv({ cls: "pt-facet-chips" });
+		const favToggle = favChips.createEl("button", {
+			cls: "pt-filter pt-toggle-favorites",
+			text: "仅看收藏",
+		});
+		favToggle.setAttribute("aria-pressed", ctx.favoriteFilter ? "true" : "false");
+		favToggle.addEventListener("click", () => {
+			ctx.favoriteFilter = !ctx.favoriteFilter;
+			favToggle.setAttribute("aria-pressed", ctx.favoriteFilter ? "true" : "false");
+			favToggle.textContent = ctx.favoriteFilter ? "显示全部" : "仅看收藏";
+			ctx.track(ctx.favoriteFilter ? "filter:favorites" : "filter:favorites_off");
+			ctx.scheduleRender(true);
+		});
+
 		// 重置筛选：移至标题行右侧（与「筛选与统计」同行右端对齐）
 		const resetBtn = advancedHeading.createEl("button", {
 			cls: "pt-toolbar-reset pt-toolbar-reset--inline",
@@ -619,6 +643,9 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.installFilter = "all";
 			uninstalledToggle.setAttribute("aria-pressed", "false");
 			uninstalledToggle.textContent = "仅显示已安装";
+			ctx.favoriteFilter = false;
+			favToggle.setAttribute("aria-pressed", "false");
+			favToggle.textContent = "仅看收藏";
 			ctx.renderAuthorFacet();
 			ctx.scheduleRender();
 		});

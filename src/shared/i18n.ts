@@ -521,6 +521,7 @@ export const STRINGS = {
 	"filter.active.label": { zh: "筛选中" },
 	"filter.active.source": { zh: "翻译：{value}" },
 	"filter.active.installed": { zh: "仅已安装" },
+	"filter.active.favorites": { zh: "仅看收藏" },
 	"filter.active.category": { zh: "分类：{value}" },
 	"filter.active.author": { zh: "作者：{value}" },
 	"filter.active.clear": { zh: "清除该筛选" },

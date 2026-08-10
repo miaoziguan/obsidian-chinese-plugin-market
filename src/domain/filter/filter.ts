@@ -122,6 +122,8 @@ export interface MatchOptions {
 	recommendedSet?: Set<string>;
 	/** 收藏优先排序：收藏项置顶而非隐藏未收藏项（RC-3） */
 	sortFavoritesFirst?: boolean;
+	/** 仅看收藏：只保留 favoritesSet 内的插件（独立于 sortFavoritesFirst） */
+	favoriteFilter?: boolean;
 	/** 用户收藏插件 id 集合（由 settings.favorites 加载为 Set） */
 	favoritesSet?: Set<string>;
 	/** 分类筛选：选中分类列表（多选取并集；空/undefined 不过滤） */
@@ -163,7 +165,8 @@ export function matchesPlugin(
 	if (opts.authorFilter && p.author !== opts.authorFilter) return false;
 	// 官方推荐：仅保留推荐清单内的插件（所有模式生效）
 	if (opts.recommendedOnly && opts.recommendedSet && !opts.recommendedSet.has(p.id)) return false;
-	// 收藏筛选：不再跳过未收藏插件，改为在排序阶段优先展示收藏项（RC-3）
+	// 收藏筛选：「仅看收藏」模式才真正跳过未收藏插件；否则在排序阶段优先展示（RC-3）
+	if (opts.favoriteFilter && opts.favoritesSet && !opts.favoritesSet.has(p.id)) return false;
 	// 分类筛选：仅保留分类匹配的插件（多选取并集；所有模式生效，作为全局发现维度）
 	if (opts.selectedCategories?.length && opts.pluginTagMap) {
 		const cat = opts.pluginTagMap.get(p.id);
@@ -214,6 +217,8 @@ export interface FilterParams {
 	recommendedSet?: Set<string>;
 	/** 收藏优先排序：收藏项置顶而非隐藏未收藏项（RC-3） */
 	sortFavoritesFirst?: boolean;
+	/** 仅看收藏：只保留 favoritesSet 内的插件（独立于 sortFavoritesFirst） */
+	favoriteFilter?: boolean;
 	/** 用户收藏插件 id 集合 */
 	favoritesSet?: Set<string>;
 	/** 分类筛选：选中分类列表（多选取并集） */
@@ -286,7 +291,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
   lastFilterInstall = "all", lastFilterRecommendedOnly = false, lastFilterCategories,
   lastFilterMode = "keyword",
 		recommendedOnly, recommendedSet,
-		sortFavoritesFirst, favoritesSet,
+		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		selectedCategories, pluginTagMap,
 		hasHistoryTranslation,
 	} = params;
@@ -294,7 +299,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	const matchOpts: MatchOptions = {
 		sourceFilter, installFilter, searchMode, installedIds, translatedResults, searchIndex, authorFilter,
 		recommendedOnly, recommendedSet,
-		sortFavoritesFirst, favoritesSet,
+		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		selectedCategories, pluginTagMap,
 		hasHistoryTranslation,
 	};
@@ -451,6 +456,8 @@ export interface EmptyStateInput {
 	aiSearchResult: AISearchResult | null;
 	sourceFilter: SourceFilter;
 	installFilter: InstallFilter;
+	/** 仅看收藏：空态「清除筛选」按钮可见 */
+	favoriteFilter?: boolean;
 	/** 是否已配置 AI API Key（用于判断能否推荐 AI 搜索桥接） */
 	hasAIKey: boolean;
 	/** 原始查询词（用于桥接启发式，如 keyword→AI / AI→keyword） */
@@ -478,7 +485,7 @@ export interface EmptyState {
  * （仅当「仅未安装」筛选生效时才算有可清除的筛选），曾因写成 `!==` 导致按钮恒显示。
  */
 export function resolveEmptyState(input: EmptyStateInput): EmptyState {
-	const { hasQuery, searchMode, aiSearchResult, sourceFilter, installFilter, hasAIKey } = input;
+	const { hasQuery, searchMode, aiSearchResult, sourceFilter, installFilter, favoriteFilter, hasAIKey } = input;
 
 	let titleKey: I18nKey;
 	let hintKey: I18nKey;
@@ -509,7 +516,7 @@ export function resolveEmptyState(input: EmptyStateInput): EmptyState {
 	}
 
 	const showClearAction =
-		hasQuery || sourceFilter !== "all" || installFilter === "installed";
+		hasQuery || sourceFilter !== "all" || installFilter === "installed" || !!favoriteFilter;
 
 	return { titleKey, hintKey, showClearAction, bridgeAction };
 }

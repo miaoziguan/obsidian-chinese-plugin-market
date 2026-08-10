@@ -103,6 +103,7 @@ export interface ViewContext {
 	searchMode: SearchMode;
 	sourceFilter: SourceFilter;
 	installFilter: InstallFilter;
+	favoriteFilter: boolean;
 	sortBy: SortBy;
 	dataLoaded: boolean;
 	dataLoading: boolean;
@@ -375,6 +376,8 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set sourceFilter(v) { view.sourceFilter = v; },
 		get installFilter() { return view.installFilter; },
 		set installFilter(v) { view.installFilter = v; },
+		get favoriteFilter() { return view.favoriteFilter; },
+		set favoriteFilter(v) { view.favoriteFilter = v; },
 		get sortBy() { return view.sortBy; },
 		set sortBy(v) { view.sortBy = v; },
 		get dataLoaded() { return view.dataLoaded; },

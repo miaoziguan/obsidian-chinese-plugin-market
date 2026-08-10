@@ -219,7 +219,8 @@ export function updateFacetVisibility(ctx: ViewContext) {
 			ctx.sourceFilter !== "all" ||
 			ctx.selectedCategories.length > 0 ||
 			ctx.authorFilter !== null ||
-			ctx.installFilter === "installed";
+			ctx.installFilter === "installed" ||
+			ctx.favoriteFilter;
 		resetBtn.classList.toggle("is-active", hasActive);
 	}
 
@@ -278,6 +279,22 @@ export function renderActiveFilters(ctx: ViewContext) {
 				if (t) {
 					t.setAttribute("aria-pressed", "false");
 					t.textContent = "仅显示已安装";
+				}
+				ctx.updateFacetVisibility();
+				ctx.scheduleRender();
+			},
+		});
+	}
+
+	if (ctx.favoriteFilter) {
+		chips.push({
+			text: ctx.t("filter.active.favorites"),
+			onClear: () => {
+				ctx.favoriteFilter = false;
+				const t = q(ctx.contentEl, ".pt-toggle-favorites");
+				if (t) {
+					t.setAttribute("aria-pressed", "false");
+					t.textContent = "仅看收藏";
 				}
 				ctx.updateFacetVisibility();
 				ctx.scheduleRender();

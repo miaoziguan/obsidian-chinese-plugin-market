@@ -140,6 +140,7 @@ export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[
 			recommendedOnly: ctx.recommendedOnly,
 			recommendedSet: ctx.getRecommendedIds(),
 			sortFavoritesFirst: ctx.sortFavoritesFirst,
+			favoriteFilter: ctx.favoriteFilter,
 			favoritesSet: ctx.favoritesSet,
 			selectedCategories: ctx.selectedCategories.length ? ctx.selectedCategories : undefined,
 			pluginTagMap: ctx.pluginTagMap,
@@ -368,6 +369,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 				aiSearchResult: ctx.aiSearchResult,
 				sourceFilter: ctx.sourceFilter,
 				installFilter: ctx.installFilter,
+				favoriteFilter: ctx.favoriteFilter,
 				hasAIKey: ctx.settings.aiSearchEnabled && !!ctx.settings.aiSearchApiKey,
 				_query: ctx.searchQuery,
 			});
