@@ -239,6 +239,14 @@ describe("filterAndSortPlugins", () => {
 		expect(r.list.map((p) => p.id)).toEqual([P_CAL.id, P_MIND.id, P_GIT.id]);
 	});
 
+	it("仅看收藏：只保留 favoritesSet 内的插件", () => {
+		const r = filterAndSortPlugins(baseFilterParams({ favoriteFilter: true, favoritesSet: new Set([P_CAL.id]) }));
+		expect(r.list.map((p) => p.id)).toEqual([P_CAL.id]);
+		// 无收藏时返回空列表
+		const r2 = filterAndSortPlugins(baseFilterParams({ favoriteFilter: true, favoritesSet: new Set() }));
+		expect(r2.list).toHaveLength(0);
+	});
+
 	it("分类筛选：仅返回分类匹配的插件", () => {
 		const tagMap = new Map<string, string>([["enhancing-mindmap", "思维导图"], ["calendar", "日历"]]);
 		const r = filterAndSortPlugins(baseFilterParams({ selectedCategories: ["日历"], pluginTagMap: tagMap }));

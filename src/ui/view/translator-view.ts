@@ -442,6 +442,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public sourceFilter: SourceFilter = "all";
 	/** 安装状态筛选（"all" / "uninstalled"，产品改进 #7） */
 	public installFilter: InstallFilter = "all";
+	/** 仅看收藏：只展示 favoritesSet 内的插件（独立于 sortFavoritesFirst 的「优先置顶」） */
+	public favoriteFilter = false;
 	/** AI/关键字模式：当前选中的分类 facet（空数组表示不筛选，零回归） */
 	public selectedCategories: string[] = [];
 	/** 作者维度：当前按作者精确筛选（null 表示不过滤）。卡片作者钻取与作者 facet 共用此状态 */
