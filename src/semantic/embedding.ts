@@ -270,6 +270,13 @@ export interface VectorIndex {
 	categorySchemaVersion?: string;
 	/** 每条文本的内容指纹（id → hash），用于增量更新：同 id 同 hash 则复用向量，不再重 embed。 */
 	perIdHash?: Record<string, string>;
+	/**
+	 * 原始字段指纹（id+name+description+category+tags，不含 t2s 转换与文本拼装）。
+	 * 用于稳态搜索的「零成本复用判定」：fieldsHash 一致即代表文本拼装 + t2s 结果
+	 * 必然不变，可跳过全库文本拼装 / t2s / contentHash 直接复用（PERF-2）。
+	 * 仅存内存（不进 SQLite），冷启动后首次搜索回填一次即可。
+	 */
+	fieldsHash?: string;
 }
 
 /** 构建索引的单条插件输入：基础字段 + 可选分类维度（用法 A）。 */
@@ -303,6 +310,20 @@ export async function buildVectorIndex(
 	prevIndex?: VectorIndex | null,
 	categorySchemaVersion?: string
 ): Promise<VectorIndex> {
+	// 稳态快速短路：先对「原始字段」算轻量指纹（不做 t2s / 文本拼装 / perIdHash），
+	// 与 prevIndex.fieldsHash 一致即代表最终文本必然不变，直接复用整个索引（PERF-2）。
+	// 这一步把每次搜索的全库 t2s + contentHash 重算（数十~上百 ms）降为一次字段拼接。
+	const fieldsHash = computeFieldsHash(plugins);
+	if (
+		prevIndex &&
+		prevIndex.fieldsHash === fieldsHash &&
+		prevIndex.model === model &&
+		prevIndex.categorySchemaVersion === categorySchemaVersion &&
+		prevIndex.ids.length === plugins.length
+	) {
+		return prevIndex;
+	}
+
 	const rawTexts = plugins.map((p) => {
 		const parts: string[] = [];
 		if (p.category && p.category.trim()) {
@@ -381,7 +402,30 @@ export async function buildVectorIndex(
 		model,
 		categorySchemaVersion,
 		perIdHash,
+		fieldsHash,
 	};
+}
+
+/**
+ * 对原始字段算轻量指纹（id+name+description+category+tags 顺序拼接 + djb2）。
+ * 不做 t2s / 文本拼装 / truncate —— 仅用于「内容是否变化」的粗判，命中即跳过
+ * 后续全库重算。与 contentHash 语义独立（后者基于 t2s 后文本，用于增量比对）。
+ */
+function computeFieldsHash(plugins: IndexPlugin[]): string {
+	let h = 5381;
+	const mix = (s: string) => {
+		for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+		h = ((h << 5) + h + 0x1f) | 0; // 字段分隔符，避免拼接歧义
+	};
+	for (const p of plugins) {
+		mix(p.id);
+		mix(p.name);
+		mix(p.description);
+		mix(p.category ?? "");
+		for (const t of p.tags ?? []) mix(t);
+		h = ((h << 5) + h + 0x1e) | 0; // 插件分隔符
+	}
+	return (h >>> 0).toString(16);
 }
 
 /**
@@ -399,6 +443,37 @@ export async function vectorRecall(
 	return m ? Array.from(m.keys()) : [];
 }
 
+/** query embedding LRU 缓存（PERF-9）：key = provider名+模型+query，命中则跳过重复 embed。 */
+const QUERY_VEC_CACHE = new Map<string, number[]>();
+const QUERY_VEC_CACHE_MAX = 64;
+
+function getCachedQueryVec(provider: EmbeddingProvider, query: string): number[] | undefined {
+	const key = `${provider.name}|${query}`;
+	const hit = QUERY_VEC_CACHE.get(key);
+	if (hit) {
+		// LRU：命中后移到末尾（最近使用）
+		QUERY_VEC_CACHE.delete(key);
+		QUERY_VEC_CACHE.set(key, hit);
+	}
+	return hit;
+}
+
+function setCachedQueryVec(provider: EmbeddingProvider, query: string, vec: number[]): void {
+	const key = `${provider.name}|${query}`;
+	if (QUERY_VEC_CACHE.has(key)) QUERY_VEC_CACHE.delete(key);
+	QUERY_VEC_CACHE.set(key, vec);
+	// 超出容量：淘汰最久未用（Map 迭代序 = 插入序，首个即最旧）
+	if (QUERY_VEC_CACHE.size > QUERY_VEC_CACHE_MAX) {
+		const oldest = QUERY_VEC_CACHE.keys().next().value;
+		if (oldest !== undefined) QUERY_VEC_CACHE.delete(oldest);
+	}
+}
+
+/** 测试专用：清空 query embedding 缓存（模块级缓存在测试间会泄漏状态）。 */
+export function __clearQueryVecCacheForTest(): void {
+	QUERY_VEC_CACHE.clear();
+}
+
 /**
  * 向量召回（带分数版）：同 vectorRecall，但返回 `Map<插件id, 余弦相似度>`，
  * 供上层做 RRF 融合（而非简单并集）。索引为空或 query 向量缺失时返回 null。
@@ -411,8 +486,14 @@ export async function vectorRecallScores(
 	minScore = -1
 ): Promise<Map<string, number> | null> {
 	if (!index.vectors.length) return null;
-	// query 同样转简体（与索引同空间）
-	const [queryVec] = await provider.embed([t2sForEmbed(query)]);
+	// query 同样转简体（与索引同空间）。PERF-9：命中缓存则跳过重复 embed（省一次 API 往返/推理）。
+	const t2sQuery = t2sForEmbed(query);
+	let queryVec = getCachedQueryVec(provider, t2sQuery);
+	if (!queryVec) {
+		const [vec] = await provider.embed([t2sQuery]);
+		queryVec = vec;
+		if (queryVec && queryVec.length > 0) setCachedQueryVec(provider, t2sQuery, queryVec);
+	}
 	if (!queryVec || queryVec.length === 0) return null;
 	const top = topKBySimilarity(queryVec, index.vectors, k, minScore);
 	const m = new Map<string, number>();

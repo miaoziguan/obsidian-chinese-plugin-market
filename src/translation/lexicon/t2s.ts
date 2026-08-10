@@ -10,8 +10,11 @@
  */
 import { T2S_TABLE } from "@translation/lexicon/t2s-table";
 
-/** 逐字符繁→简，表外字符原样通过（surrogate-safe）。 */
+/** 逐字符繁→简，表外字符原样通过（surrogate-safe）。纯 ASCII 直接短路返回。 */
 export function t2sForEmbed(text: string): string {
+	// 快速短路：无 CJK 即不可能含繁体字（繁体都在 CJK 区），原样返回，
+	// 避免对占多数的纯英文插件名/描述做无谓的逐字符遍历（PERF-2）。
+	if (!hasCJK(text)) return text;
 	let out = "";
 	for (const ch of text) {
 		out += T2S_TABLE[ch] ?? ch;

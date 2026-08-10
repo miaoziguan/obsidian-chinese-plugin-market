@@ -23,8 +23,9 @@ import {
 import { makeT } from "@shared/i18n";
 import { setScrollDebug } from "@ui/view/view-render";
 import { TranslatorSettingTab } from "@app/settings-tab";
-import { debounce, mapWithConcurrency } from "@shared/utils";
+import { debounce, mapWithConcurrency, contentHash } from "@shared/utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
+import { setWorkerSourceLoader } from "@semantic/workers/worker-backend";
 import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings } from "@ui/view/translator-view";
 import { VIEW_TYPE } from "@shared/constants";
 import { writeTMNote, removeTMNote, TM_FOLDER, parseTMNote, type TMEntry } from "@translation/memory/translation-memory";
@@ -58,6 +59,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	private buildLocalIndexPromise: Promise<void> | null = null;
 	/** 已「见过」的插件 id 集合（产品改进 #16，跨会话落盘，增量提示在重启后仍准确） */
 	seenPluginIds: Set<string> = new Set();
+	/** 上次落盘 translator-cache 的内容指纹（PERF-5：相同内容跳过全量序列化+写盘） */
+	private _lastTranslatorFingerprint = "";
 	/**
 	 * TM 回灌就绪信号：scanVaultTM 把 vault 翻译记忆笔记灌入 tmApproved 后 resolve。
 	 * 视图首屏 mergeOffline 必须 await 它，否则会在回灌完成前用「空 tmApproved」兜底，
@@ -133,6 +136,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		setHttpClient(new ObsidianHttpClient());
 		setPlatformCapability(obsidianPlatformCapability());
 		this.noteStorage = new ObsidianNoteStorage(this.app);
+		// PERF-3：注入 worker 源码加载器——运行时按需从插件目录读 embedding-worker.bundle.js
+		// 独立文件（不再构建期内联进 main.js），首次本地语义搜索时才付出读取成本。
+		const workerBundlePath = `.obsidian/plugins/${this.manifest.id}/embedding-worker.bundle.js`;
+		setWorkerSourceLoader(() => this.app.vault.adapter.read(workerBundlePath));
 
 		// 防御：data.json 若因中断写盘而损坏（存在但 JSON 解析失败），
 		// Obsidian 的 loadData() 会从 JSON.parse 直接抛出，导致整个 onload 中止、
@@ -378,12 +385,18 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			}
 		}
 		// 恢复落盘向量索引（跨会话复用，无则下次搜索时重建）
-		await this.loadVectorIndex();
+		// PERF-7：向量索引与 stats/trending/分类索引彼此无依赖，并行加载缩短延迟初始化耗时。
+		// loadVectorIndex 走 SQLite（反量化数千向量）最慢，与后三者并行可让 stats/trending 提前就绪。
+		const [, stats, trending] = await Promise.all([
+			this.loadVectorIndex(),
+			this.storage.loadStatsCache(),
+			this.storage.loadTrendingHistory(),
+		]);
 		// 注：本地 embedding 预热已在上方并行启动，无需在此再次触发。
 		// 恢复 stats 缓存（带 TTL，超期返回 null 由视图重新拉取）
-		this.cachedStats = await this.storage.loadStatsCache();
+		this.cachedStats = stats;
 		// 恢复趋势采样历史（跨会话累积才能算出真实下载增速，H1/H2 修复）
-		this.cachedTrendingHistory = await this.storage.loadTrendingHistory();
+		this.cachedTrendingHistory = trending;
 		// 后台异步加载插件分类索引（不阻塞视图启动，加载完成后同步更新 pluginTagMap）
 		this.loadPluginTags().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载分类索引失败：", e),
@@ -465,9 +478,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			legacyData.sourceFilter = "translated";
 		}
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		// PERF-7：credentials 与 favorites 两个独立文件无依赖，并行读取缩短启动耗时。
+		const [creds, loadedFavorites] = await Promise.all([
+			this.storage.loadCredentials(),
+			this.storage.loadFavorites(data),
+		]);
 		// 账号/密钥分离：敏感字段优先从独立 credentials.json 加载并覆盖 data.json 中的同名
 		// 字段（旧版把密钥内联在主 data.json，升级后首次保存即迁移到 credentials.json）。
-		const creds = await this.storage.loadCredentials();
 		if (creds) {
 			for (const k of CREDENTIAL_KEYS) {
 				(this.settings as unknown as Record<string, unknown>)[k] = creds[k];
@@ -479,7 +496,6 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 		// 个人收藏分离：优先从独立 favorites.json 加载并覆盖主 data.json 中的 favorites。
 		// 旧版把 favorites 内联在主 data.json，升级后首次保存即迁移到 favorites.json。
-		const loadedFavorites = await this.storage.loadFavorites(data);
 		if (loadedFavorites) {
 			this.settings.favorites = loadedFavorites;
 		}
@@ -693,9 +709,27 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		//（缩小写盘频率与损坏面；升级/迁移互不污染用户态设置）。
 		const translatorData = this.translator.getData();
 		const persistCache: Record<string, (typeof translatorData.cache)[string]> = {};
+		const fingerprintParts: string[] = [];
 		for (const [id, r] of Object.entries(translatorData.cache)) {
-			if (r.source !== "original") persistCache[id] = r;
+			if (r.source !== "original") {
+				persistCache[id] = r;
+				// 指纹纳入影响落盘内容的关键字段（id/source/译文），捕捉内容变化
+				fingerprintParts.push(id, r.source, r.translatedName, r.translatedDesc);
+			}
 		}
+		// 其它字段用「计数 + 长度」近似指纹（避免全量 stringify）
+		fingerprintParts.push(
+			String(Object.keys(translatorData.aiDict).length),
+			String(Object.keys(translatorData.pluginInsights).length),
+			String(Object.keys(translatorData.compareInsights).length),
+			String(translatorData.coverageSnapshots.length),
+			translatorData.myMemoryBlockedDate ?? "",
+			String(this.seenPluginIds.size),
+			String(this.lastListFetchAt),
+		);
+		// PERF-5：内容与上次落盘一致则跳过序列化+写盘（防抖只合并频率，不降单次成本）
+		const fingerprint = contentHash(fingerprintParts);
+		if (fingerprint === this._lastTranslatorFingerprint) return;
 		await this.storage.saveTranslatorCache({
 			cache: persistCache,
 			aiDict: translatorData.aiDict,
@@ -706,6 +740,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			seenPluginIds: Array.from(this.seenPluginIds),
 			lastListFetchAt: this.lastListFetchAt,
 		});
+		// 仅写盘成功后更新指纹（失败则下次仍会重试写盘）
+		this._lastTranslatorFingerprint = fingerprint;
 	}
 
 	/**

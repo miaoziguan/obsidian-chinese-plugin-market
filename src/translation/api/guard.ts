@@ -60,9 +60,9 @@ export class CircuitBreaker {
 	private cooldown = 0;
 
 	/**
-	 * @param threshold   连续失败多少次后开路（瞬时错误）
+	 * @param threshold   连续失败多少次后开路（瞬时错误，含超时）
 	 * @param baseCooldownMs 瞬时错误开路后的冷却时长
-	 * @param fatalCooldownMs fatal 错误（鉴权/配额/超时）开路后的冷却时长
+	 * @param fatalCooldownMs fatal 错误（鉴权/配额）开路后的冷却时长
 	 */
 	constructor(
 		private readonly threshold: number,
@@ -107,9 +107,15 @@ export class CircuitBreaker {
 	}
 }
 
-/** 从错误信息判断是否为「fatal」类（鉴权/配额/超时），应触发长冷却 */
+/**
+ * 从错误信息判断是否为「fatal」类（鉴权/配额），应触发长冷却。
+ *
+ * 注意：TimeoutError 不再视为 fatal。瞬时超时是弱网抖动，当天内会自己恢复，
+ * 走瞬时错误的短冷却（baseCooldownMs）即可；若也按 fatal 24h 开路，会让
+ * 「一次抖动 = 该来源整天被跳过」的错误降级。真正不会自愈的是鉴权（401/403）
+ * 与配额（429/quota），它们才用长冷却。
+ */
 export function isFatalError(e: unknown): boolean {
 	const msg = e instanceof Error ? e.message : String(e);
-	if (e instanceof TimeoutError) return true;
 	return /401|403|429|quota|额度|配额|rate.?limit|unauthorized|forbidden|api key/i.test(msg);
 }

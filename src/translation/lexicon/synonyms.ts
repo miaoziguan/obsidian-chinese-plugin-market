@@ -155,14 +155,31 @@ export function expandQuery(query: string): string {
 	let expanded = query;
 	for (const [cn, aliases] of Object.entries(PLUGIN_SYNONYMS)) {
 		const key = cn.toLowerCase();
-		const hit = /^[a-z0-9_-]+$/.test(key)
-			? new RegExp(`\\b${escapeRegExp(key)}\\b`).test(q)
+		// PERF micro：ASCII 键用词边界正则，预编译到模块级避免每次调用现场构造
+		const hit = isAsciiKey(key)
+			? getAsciiKeyRegex(key).test(q)
 			: q.includes(key);
 		if (hit) {
 			expanded += " " + aliases.join(" ");
 		}
 	}
 	return expanded;
+}
+
+const ASCII_KEY_RE = /^[a-z0-9_-]+$/;
+function isAsciiKey(key: string): boolean {
+	return ASCII_KEY_RE.test(key);
+}
+
+/** ASCII 键 → 预编译词边界正则（模块级缓存，键集合稳定）。 */
+const ASCII_KEY_REGEX_CACHE = new Map<string, RegExp>();
+function getAsciiKeyRegex(key: string): RegExp {
+	let re = ASCII_KEY_REGEX_CACHE.get(key);
+	if (!re) {
+		re = new RegExp(`\\b${escapeRegExp(key)}\\b`);
+		ASCII_KEY_REGEX_CACHE.set(key, re);
+	}
+	return re;
 }
 
 /** 转义正则特殊字符（key 含 -/_ 等时避免 RegExp 解析错误） */

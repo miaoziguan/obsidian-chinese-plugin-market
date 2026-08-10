@@ -1,7 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import path from "node:path";
-import { copyFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 
 const prod = process.argv[2] === "production";
 const PLUGIN_ROOT = path.resolve(".");
@@ -78,33 +78,13 @@ const stripNodeBuiltinsPlugin = {
 	},
 };
 
-// ── 把 worker bundle 源码内联为模块：`import src from "@inline-worker"` ──
-const inlineWorkerSourcePlugin = {
-	name: "inline-worker-source",
-	setup(build) {
-		build.onResolve({ filter: /^@inline-worker$/ }, () => ({
-			path: WORKER_BUNDLE_PATH,
-			namespace: "inline-worker",
-		}));
-		build.onLoad({ filter: /.*/, namespace: "inline-worker" }, () => {
-			if (!existsSync(WORKER_BUNDLE_PATH)) {
-				throw new Error(`Worker bundle not built yet at ${WORKER_BUNDLE_PATH}. Step 1 must run before Step 2.`);
-			}
-			const src = readFileSync(WORKER_BUNDLE_PATH, "utf-8");
-			return { contents: `export default ${JSON.stringify(src)};`, loader: "js" };
-		});
-	},
-};
+// 注（PERF-3）：worker bundle 不再内联进 main.js，而是作为独立文件
+// embedding-worker.bundle.js 随插件分发，运行时由 app 层经 adapter 读入再 Blob 实例化。
+// 纯关键词用户因此不再为内联 worker 源码付出 main.js 体积/解析成本（原 main.js 可缩减一半以上）。
 
-// ── main bundle 里 transformers 的别名：Obsidian 渲染进程 IS_NODE_ENV=true，
-//    用 node 构建，但 onnxruntime-node（原生 addon）重定向到纯 WASM ort bundle ──
-const transformersAliasesMain = {
-	"@huggingface/transformers":
-		"./node_modules/@huggingface/transformers/dist/transformers.node.min.cjs",
-	"onnxruntime-node": "./node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs",
-	"onnxruntime-web": "./node_modules/onnxruntime-web/dist/ort.all.bundle.min.mjs",
-	"onnxruntime-web/webgpu": "./node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs",
-};
+// 注（PERF micro）：主 bundle 曾配置 transformers/ort 别名，但主线程并无任何
+// @huggingface/transformers / onnxruntime import（全部跑在 Step 1 的 worker bundle 里），
+// 属死配置，已移除。Step 1 的 worker alias 仍保留（embedding-worker.ts 真正用到）。
 
 // ════════════════════════════════════════════════════════════════════════════
 // Step 1：打包 Embedding Worker（transformers + onnxruntime 全在 worker 里跑）
@@ -146,7 +126,6 @@ await esbuild.build({
 	bundle: true,
 	loader: { ".wasm": "binary" },
 	tsconfig: "tsconfig.json",
-	alias: transformersAliasesMain,
 	external: [
 		"obsidian",
 		"electron",
@@ -170,9 +149,9 @@ await esbuild.build({
 	sourcemap: prod ? "external" : "inline",
 	treeShaking: true,
 	outfile: path.join(PLUGIN_ROOT, "main.js"),
-	plugins: [nativeStubPlugin, inlineWorkerSourcePlugin, stripNodeBuiltinsPlugin],
+	plugins: [nativeStubPlugin, stripNodeBuiltinsPlugin],
 	define: { "process.env.NODE_ENV": JSON.stringify(prod ? "production" : "development") },
 });
 
-// worker 中间产物已内联进 main.js，删除
-if (existsSync(WORKER_BUNDLE_PATH)) unlinkSync(WORKER_BUNDLE_PATH);
+// worker bundle 作为独立文件保留（随插件分发，运行时按需读取），不再删除
+console.log(`✓ worker bundle 保留为独立文件：${path.basename(WORKER_BUNDLE_PATH)}`);

@@ -188,6 +188,37 @@ function tokenize(text: string): string[] {
 	return tokenizeBigram(text);
 }
 
+/**
+ * 候选插件的 token Set 缓存（PERF-12）：key=插件 id，value=去重后的 token 集合。
+ * desc 是稳定字段（英文原文），同一候选的 tokenSet 可跨多次打开抽屉复用，
+ * 避免「打开热门分类插件时对上千候选逐一 tokenize」的重复分词（数百 ms → 近即时）。
+ * LRU 限容，防内存膨胀。
+ */
+const CANDIDATE_TOKEN_CACHE = new Map<string, Set<string>>();
+const CANDIDATE_TOKEN_CACHE_MAX = 2048;
+
+function getCandidateTokenSet(id: string, desc: string): Set<string> {
+	const hit = CANDIDATE_TOKEN_CACHE.get(id);
+	if (hit) {
+		// LRU：命中移到末尾
+		CANDIDATE_TOKEN_CACHE.delete(id);
+		CANDIDATE_TOKEN_CACHE.set(id, hit);
+		return hit;
+	}
+	const set = new Set(tokenize(desc));
+	if (CANDIDATE_TOKEN_CACHE.size >= CANDIDATE_TOKEN_CACHE_MAX) {
+		const oldest = CANDIDATE_TOKEN_CACHE.keys().next().value;
+		if (oldest !== undefined) CANDIDATE_TOKEN_CACHE.delete(oldest);
+	}
+	CANDIDATE_TOKEN_CACHE.set(id, set);
+	return set;
+}
+
+/** 测试专用：清空候选 token 缓存（模块级缓存在测试间会泄漏状态）。 */
+export function __clearCandidateTokenCacheForTest(): void {
+	CANDIDATE_TOKEN_CACHE.clear();
+}
+
 // ───────── 核心评分 ─────────
 
 interface ScoredItem {
@@ -215,6 +246,7 @@ function scoreSimilarity(
 	sourceTagSet: Set<string> | null,
 	sourceTokenSet: Set<string>,
 	sourceTokensLen: number,
+	candidateId: string,
 	candidateDesc: string
 ): { score: number; descSimilar: boolean } {
 	let score = 0;
@@ -233,18 +265,14 @@ function scoreSimilarity(
 	}
 
 	// 描述关键词重叠（TF-IDF 稀释版）
-	const candidateTokens = tokenize(candidateDesc);
+	// PERF-12：候选 token Set 走 id 缓存（desc 稳定可跨次复用），不再每次现场 tokenize。
+	const candidateTokenSet = getCandidateTokenSet(candidateId, candidateDesc);
 
-	if (sourceTokensLen > 0 && candidateTokens.length > 0) {
-		// 单趟同时统计交集/并集的 distinct 计数。
-		// 修复：交集曾按「含重复」计数而并集按 distinct 计数，口径不一致，
-		// 重复词多的候选 Jaccard 可超过 1，描述重叠分数被系统性放大。
+	if (sourceTokensLen > 0 && candidateTokenSet.size > 0) {
+		// 单趟同时统计交集/并集的 distinct 计数（candidateTokenSet 已去重）。
 		let overlap = 0; // |A ∩ B|（distinct）
-		const candidateSeen = new Set<string>();
 		let distinctNotInSource = 0; // |B \ A|（distinct）
-		for (const t of candidateTokens) {
-			if (candidateSeen.has(t)) continue;
-			candidateSeen.add(t);
+		for (const t of candidateTokenSet) {
 			if (sourceTokenSet.has(t)) overlap++;
 			else distinctNotInSource++;
 		}
@@ -352,7 +380,7 @@ export function computeSimilar(
 	const scored: ScoredItem[] = [];
 	for (const p of candidates) {
 		const candidateTag = tagService.getTag(p.id);
-		const { score, descSimilar } = scoreSimilarity(sourceTag, candidateTag, sourceTagSet, sourceTokenSet, sourceTokens.length, p.description);
+		const { score, descSimilar } = scoreSimilarity(sourceTag, candidateTag, sourceTagSet, sourceTokenSet, sourceTokens.length, p.id, p.description);
 		if (score > 0) {
 			scored.push({ p, candidateTag, score, descSimilar });
 		}

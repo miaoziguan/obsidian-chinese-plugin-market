@@ -24,6 +24,7 @@ FILES=(
 	"plugin-recommend.json"
 	"sql-wasm.wasm"
 	"ort-wasm-simd-threaded.jsep.wasm"
+	"embedding-worker.bundle.js"
 )
 
 # ── 解析参数 ──

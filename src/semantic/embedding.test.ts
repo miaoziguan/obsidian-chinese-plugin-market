@@ -1,14 +1,20 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
 	buildVectorIndex,
 	vectorRecall,
 	LocalEmbeddingProvider,
 	DEFAULT_LOCAL_MODEL,
+	__clearQueryVecCacheForTest,
 	type EmbeddingProvider,
 	type VectorIndex,
 	type LocalModelBackend,
 } from "@semantic/embedding";
 import { Translator } from "@domain/catalog/translator";
+
+// PERF-9：模块级 query embedding 缓存在测试间会泄漏状态，每个测试前清空。
+beforeEach(() => {
+	__clearQueryVecCacheForTest();
+});
 
 /** 可注入的 FakeBackend：记录调用、可模拟失败，无需真实下载模型。 */
 function makeFakeBackend(opts?: {

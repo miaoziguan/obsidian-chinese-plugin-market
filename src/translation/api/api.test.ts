@@ -61,16 +61,20 @@ describe("LLMClient · 超时与熔断", () => {
 		expect(llm.isAvailable()).toBe(false); // 一次即开路（fatal）
 	});
 
-	it("超时（TimeoutError）触发熔断，避免逐条挂起", async () => {
+	it("超时（TimeoutError）按瞬时错误计数，连续达阈值才开路", async () => {
 		// 直接以 TimeoutError 模拟请求卡死（真实 15s 超时由 guard.test.ts 覆盖）
 		req.mockRejectedValue(new TimeoutError(1, "AI 翻译"));
 		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		// PERF-1：瞬时超时不再视为 fatal（鉴权/配额），单次超时不开路（走短冷却计数），
+		// 避免「一次弱网抖动 = 该来源当天被 24h 熔断跳过」的错误降级。
 		await expect(llm.call("s", "u", 10)).rejects.toThrow();
-		// 致命错误（超时/鉴权/配额）一次即开路，避免对死端点逐条重试
+		expect(llm.isAvailable()).toBe(true);
+		// 连续第二次超时达阈值（threshold=2）才开路
+		await expect(llm.call("s", "u", 10)).rejects.toThrow();
 		expect(llm.isAvailable()).toBe(false);
 		// 开路期间直接抛 CircuitOpenError，不再打真实请求
 		await expect(llm.call("s", "u", 10)).rejects.toBeInstanceOf(CircuitOpenError);
-		expect(req).toHaveBeenCalledTimes(1);
+		expect(req).toHaveBeenCalledTimes(2);
 	});
 });
 

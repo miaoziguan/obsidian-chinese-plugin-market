@@ -10,13 +10,25 @@
  */
 import type { LocalModelBackend } from "@semantic/embedding";
 import { logger } from "@shared/logger";
-import inlineWorkerSource from "@inline-worker";
 
 export type WorkerBackendConfig = {
 	model: string;
 	/** ONNX wasm 路径（WASM 回退路径用） */
 	wasmPaths?: string;
 };
+
+/**
+ * Worker 源码加载器（PERF-3）：由 app 层在启动时注入，运行时从插件目录读
+ * embedding-worker.bundle.js 独立文件，替代原先「构建期内联进 main.js 的巨字符串」。
+ * 纯关键词用户因此不再为内联 worker 源码付出 main.js 体积/解析成本。
+ */
+type WorkerSourceLoader = () => Promise<string>;
+let workerSourceLoader: WorkerSourceLoader | null = null;
+
+/** 注入 worker 源码加载器（app 层用 Obsidian adapter 读文件）。幂等。 */
+export function setWorkerSourceLoader(loader: WorkerSourceLoader): void {
+	workerSourceLoader = loader;
+}
 
 type PendingEmbed = {
 	resolve: (vecs: Float32Array[]) => void;
@@ -43,7 +55,7 @@ export class WorkerLocalBackend implements LocalModelBackend {
 		const key = `${model}`;
 		let inst = WorkerLocalBackend.instances.get(key);
 		if (!inst) {
-			inst = new WorkerLocalBackend({ ...cfg, model }, inlineWorkerSource, key);
+			inst = new WorkerLocalBackend({ ...cfg, model }, key);
 			WorkerLocalBackend.instances.set(key, inst);
 		}
 		return inst;
@@ -62,7 +74,6 @@ export class WorkerLocalBackend implements LocalModelBackend {
 
 	constructor(
 		private readonly cfg: WorkerBackendConfig,
-		private readonly workerSource: string = inlineWorkerSource,
 		modelKey = cfg.model || "Xenova/bge-small-zh-v1.5",
 	) {
 		this.modelKey = modelKey;
@@ -95,16 +106,21 @@ export class WorkerLocalBackend implements LocalModelBackend {
 			this.initReject = reject;
 		});
 		try {
-			this.bootWorker();
+			await this.bootWorker();
 		} catch (e: unknown) {
 			this.failInit(e instanceof Error ? e : new Error(String(e)));
 		}
 		return this.initPromise;
 	}
 
-	private bootWorker(): void {
+	private async bootWorker(): Promise<void> {
 		logger.debug(`[Chinese Plugin Market] boot embedding worker（model=${this.cfg.model}）`);
-		const blob = new Blob([this.workerSource], { type: "application/javascript" });
+		// PERF-3：worker 源码运行时从插件目录读独立文件（替代构建期内联巨字符串）
+		if (!workerSourceLoader) {
+			throw new Error("worker 源码加载器未注入（app 层需调用 setWorkerSourceLoader）");
+		}
+		const workerSource = await workerSourceLoader();
+		const blob = new Blob([workerSource], { type: "application/javascript" });
 		this.workerUrl = URL.createObjectURL(blob);
 		const worker = new Worker(this.workerUrl);
 		this.worker = worker;
