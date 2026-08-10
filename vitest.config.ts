@@ -17,7 +17,6 @@ export default defineConfig({
 			"@semantic": resolve(__dirname, "src/semantic"),
 			"@data": resolve(__dirname, "src/data"),
 			obsidian: resolve(__dirname, "test/mocks/obsidian.ts"),
-			"@inline-worker": resolve(__dirname, "test/mocks/inline-worker.ts"),
 		},
 	},
 	test: {

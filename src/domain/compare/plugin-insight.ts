@@ -249,11 +249,13 @@ export async function gatherInsightSources(
 	mirror: MirrorConfig,
 	readmeLimit = 5000
 ): Promise<InsightSources> {
-	const manifest = await fetchManifest(repo, mirror);
-	const [readmeRaw, mainSignals] = await Promise.all([
+	// PERF micro：README URL 不依赖 manifest，与 manifest 并行发出；仅 main.js 路径需 manifest.main。
+	// 省一次串行 RTT（manifest → README 的等待）。
+	const [manifest, readmeRaw] = await Promise.all([
+		fetchManifest(repo, mirror),
 		fetchReadmeText(repo, mirror),
-		fetchMainSignals(repo, manifest.main, mirror),
 	]);
+	const mainSignals = await fetchMainSignals(repo, manifest.main, mirror);
 	// 对比场景统一更短，避免多插件输入爆 token
 	const readme = readmeLimit < readmeRaw.length ? readmeRaw.slice(0, readmeLimit) : readmeRaw;
 	return { manifest, mainSignals, readme };

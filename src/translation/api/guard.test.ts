@@ -60,11 +60,12 @@ describe("CircuitBreaker", () => {
 });
 
 describe("isFatalError", () => {
-	it("识别鉴权/配额/超时类错误", () => {
-		expect(isFatalError(new TimeoutError(1))).toBe(true);
+	it("识别鉴权/配额类错误为 fatal；瞬时超时不算 fatal", () => {
 		expect(isFatalError(new Error("HTTP 401（API Key 无效）"))).toBe(true);
 		expect(isFatalError(new Error("rate limit 429"))).toBe(true);
 		expect(isFatalError(new Error("普通网络错误"))).toBe(false);
+		// 瞬时超时是弱网抖动，当天可自愈，走短冷却而非 fatal 24h 开路
+		expect(isFatalError(new TimeoutError(1))).toBe(false);
 	});
 });
 

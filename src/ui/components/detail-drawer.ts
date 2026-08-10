@@ -32,6 +32,17 @@ import { openInsightModal } from "@ui/view/view-cards";
 import { isMacOS, macosSystemTranslate, protectMarkdown, restoreMarkdown } from "@translation/platform/macos-shortcuts";
 import { appendSVG, appendIconText, toHTMLElement } from "@ui/dom/dom";
 
+/** README 会话级缓存（PERF micro）：按 raw url 缓存整篇 markdown，限容防内存膨胀。 */
+const README_CACHE = new Map<string, string>();
+const README_CACHE_MAX = 32;
+function cacheReadme(url: string, md: string): void {
+	if (README_CACHE.size >= README_CACHE_MAX && !README_CACHE.has(url)) {
+		const oldest = README_CACHE.keys().next().value;
+		if (oldest !== undefined) README_CACHE.delete(oldest);
+	}
+	README_CACHE.set(url, md);
+}
+
 /**
  * Drawer 宿主插件的最小端口（P2-2 收尾：切断对 plugin 完整形状的依赖）。
  * Drawer 实际只消费 settings（收藏/镜像源）与 translator（AI 能力/LLM）。
@@ -782,6 +793,15 @@ export class PluginDetailDrawer {
 			return;
 		}
 
+		// PERF micro：README 会话级缓存（按 url），重复打开同一插件的抽屉不再重复拉取整篇
+		const cachedMd = README_CACHE.get(url);
+		if (cachedMd !== undefined) {
+			this.readmeRaw = cachedMd;
+			this.readmeTranslated = false;
+			this.renderReadme(container, cachedMd, p.repo);
+			return;
+		}
+
 		const loading = container.createDiv({
 			cls: "pt-detail-readme-loading",
 			text: this.t("detail.readme.loading"),
@@ -792,6 +812,7 @@ export class PluginDetailDrawer {
 			if (!this.drawerEl || this.info.id !== p.id) return;
 			const md = resp.text || "";
 			loading.remove();
+			if (md.trim()) cacheReadme(url, md);
 			if (!md.trim()) {
 				container.createDiv({
 					cls: "pt-detail-readme-empty",

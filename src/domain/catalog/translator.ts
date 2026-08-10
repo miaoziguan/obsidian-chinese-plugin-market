@@ -403,14 +403,21 @@ export class Translator {
 
 	/** 判断插件是否有任何历史落盘译文（cache 非 original / TM 已采纳 / AI 固化资产）。
 	 *  供 isTranslated（"从未翻译"筛选）使用，排除所有已有译文的插件。 */
-	hasAnyTranslation(id: string, plugin: PluginInfo): boolean {
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars -- plugin 保留以兼容调用方签名（PERF-8 后判定不再依赖 name/description）
+	hasAnyTranslation(id: string, _plugin: PluginInfo): boolean {
 		// cache 命中且非 original 兜底
 		if (this.cache[id] && this.cache[id].source !== "original") return true;
-		// TM 已采纳可信层
-		if (this.lookupTMApproved(id, plugin.name, plugin.description)) return true;
+		// TM 已采纳可信层。PERF-8：只需布尔存在性，用 hasTMApproved 而非 lookupTMApproved，
+		// 避免每次判定都为 O(N) 渲染循环里的 5617 个插件新分配一个 TranslateResult 对象。
+		if (this.hasTMApproved(id)) return true;
 		// AI 固化资产
 		if (this.aiAssetStore.get(id)) return true;
 		return false;
+	}
+
+	/** 是否存在 TM 已采纳译名（仅布尔判定，不构造 TranslateResult，供高频存在性检查用）。 */
+	private hasTMApproved(id: string): boolean {
+		return id in this.tmApproved;
 	}
 
 	// ══════════════════════════════════════════════════
@@ -803,9 +810,12 @@ export class Translator {
 	}
 
 	if (needOnline.length > 0) {
-			// 并发=2：每插件发 name+desc 2 请求，2 并发=4 QPS，贴合 MyMemory 免费层建议（≤5 QPS）
-			// （3 并发=6 QPS 已超标，易触发 429/熔断 → 批量翻译被配额打断）
-			const CONCURRENCY = 2;
+			// 并发=4（PERF-4）：此路径仅供「AI 智能混合翻译」（translateBatchIncremental）调用，
+			// 用户已配置 LLM key，主走 LLM（DeepSeek 等端点 rate limit 远高于 MyMemory 免费层），
+			// 2 并发对 LLM 过于保守，数千条待译时耗时数十分钟级。提到 4 可缩批量耗时约一半。
+			// MyMemory 由熔断器兜底：一旦触发 429/超时即开路降级到腾讯/Google，不会因并发提高而
+			// 持续打爆配额。单插件内 name+desc 双段在 provider 内部已并行，故 4 并发 ≈ 8 QPS 上限。
+			const CONCURRENCY = 4;
 			let idx = 0;
 			const translateOne = async (): Promise<void> => {
 				while (idx < needOnline.length) {

@@ -103,28 +103,34 @@ export class SqliteVectorStore {
 
 	// ── 向量写入 / 读取 ──────────────────────────────────────────────────
 
-	/** 全量重建：清空 plugins 并插入所有行（索引重建用）。 */
+	/** 全量重建：清空 plugins 并插入所有行（索引重建用）。包事务提速（PERF-13）。 */
 	replaceAll(rows: VecRow[]): void {
 		if (this.disposed) return;
-		this.db.exec("DELETE FROM plugins");
-		if (rows.length === 0) {
-			this.touch();
-			return;
-		}
-		const stmt = this.db.prepare(
-			"INSERT INTO plugins (id, vec, category, tags) VALUES (?, ?, ?, ?)"
-		);
+		// PERF-13：批量写入包事务，避免 sql.js 每条语句自动提交的开销（全量重建数千行提速约 2-5 倍）
+		this.db.exec("BEGIN");
 		try {
-			for (const r of rows) {
-				stmt.run([
-					r.id,
-					quantizeVec(r.vec),
-					r.category ?? null,
-					r.tags && r.tags.length ? JSON.stringify(r.tags) : null,
-				]);
+			this.db.exec("DELETE FROM plugins");
+			if (rows.length > 0) {
+				const stmt = this.db.prepare(
+					"INSERT INTO plugins (id, vec, category, tags) VALUES (?, ?, ?, ?)"
+				);
+				try {
+					for (const r of rows) {
+						stmt.run([
+							r.id,
+							quantizeVec(r.vec),
+							r.category ?? null,
+							r.tags && r.tags.length ? JSON.stringify(r.tags) : null,
+						]);
+					}
+				} finally {
+					stmt.free();
+				}
 			}
-		} finally {
-			stmt.free();
+			this.db.exec("COMMIT");
+		} catch (e) {
+			this.db.exec("ROLLBACK");
+			throw e;
 		}
 		this.touch();
 	}
@@ -139,6 +145,8 @@ export class SqliteVectorStore {
 		const stmt = this.db.prepare(
 			"INSERT OR REPLACE INTO plugins (id, vec, category, tags) VALUES (?, ?, ?, ?)"
 		);
+		// PERF-13：批量增量写入同样包事务，避免逐条自动提交
+		this.db.exec("BEGIN");
 		try {
 			for (const r of rows) {
 				stmt.run([
@@ -148,6 +156,10 @@ export class SqliteVectorStore {
 					r.tags && r.tags.length ? JSON.stringify(r.tags) : null,
 				]);
 			}
+			this.db.exec("COMMIT");
+		} catch (e) {
+			this.db.exec("ROLLBACK");
+			throw e;
 		} finally {
 			stmt.free();
 		}
