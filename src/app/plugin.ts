@@ -8,9 +8,9 @@
 
 import { Plugin, Notice, TFile, TFolder, Platform, normalizePath } from "obsidian";
 import { logger } from "@shared/logger";
-import { Translator, type PluginInfo } from "@domain/catalog/translator";
+import { Translator, type PluginInfo, type CoverageSnapshot } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
-import { PluginStorage } from "@data/storage/plugin-storage";
+import { PluginStorage, CREDENTIAL_KEYS, type PluginCredentials } from "@data/storage/plugin-storage";
 import { setHttpClient } from "@data/net/http-port";
 import { setPlatformCapability } from "@translation/platform/macos-shortcuts";
 import type { NoteStoragePort } from "@translation/memory/note-port";
@@ -465,6 +465,28 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			legacyData.sourceFilter = "translated";
 		}
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		// 账号/密钥分离：敏感字段优先从独立 credentials.json 加载并覆盖 data.json 中的同名
+		// 字段（旧版把密钥内联在主 data.json，升级后首次保存即迁移到 credentials.json）。
+		const creds = await this.storage.loadCredentials();
+		if (creds) {
+			for (const k of CREDENTIAL_KEYS) {
+				(this.settings as unknown as Record<string, unknown>)[k] = creds[k];
+			}
+		}
+		// 无论 credentials 是否存在，均剔除 data.json 内联的敏感字段，避免反复写回/泄露
+		for (const k of CREDENTIAL_KEYS) {
+			if (k in data) delete data[k];
+		}
+		// 迁移清理：翻译缓存已移至独立文件 translator-cache.json（见 loadTranslatorData /
+		// saveTranslatorCache），旧主 data.json 内联字段在此剔除，避免残留被反复写回。
+		for (const k of [
+			"_translatorCache", "_translatorAiDict", "_translatorTMQueue",
+			"_translatorTMApproved", "_translatorPluginInsights", "_translatorCompareInsights",
+			"_translatorCoverageSnapshots", "_myMemoryBlockedDate", "_seenPluginIds",
+			"_lastListFetchAt", "_pluginListCache",
+		]) {
+			if (k in data) delete data[k];
+		}
 		// 本地模型名迁移：旧默认值（all-MiniLM-L6-v2，面向通用中英）已升级为
 		// bge-small-zh（面向中文，vault-curate 同款）。用户 data.json 可能仍存旧默认值，
 		// 自动迁移到新默认；仅当用户主动改成了其它模型名时才保留。
@@ -509,6 +531,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 性能：直接复用内存权威对象 _data，不再每次保存整读 data.json
 		const allData = this._data;
 		Object.assign(allData, this.settings);
+		// 账号/密钥分离：从主 data.json 抽离敏感字段，单独写入 credentials.json。
+		// 内存中 this.settings 仍保留这些值供设置页读取；落盘时主 data.json 不含密钥。
+		const creds = {} as Record<string, unknown>;
+		for (const k of CREDENTIAL_KEYS) {
+			creds[k] = (this.settings as unknown as Record<string, unknown>)[k];
+			delete allData[k];
+		}
+		await this.storage.saveCredentials(creds as unknown as PluginCredentials);
 		await this.saveData(allData);
 	}
 
@@ -520,25 +550,46 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 	private async loadTranslatorData(allData?: Record<string, unknown>) {
 		const data: Record<string, unknown> = allData ?? ((await this.loadData()) as Record<string, unknown>) ?? {};
-		this.translator.loadData({
+		// 翻译缓存优先从独立文件 translator-cache.json 读取；缺失时回退到旧版
+		// 主 data.json 内联字段（兼容老用户升级，首次加载后由保存逻辑迁移到独立文件）。
+		let cacheData = await this.storage.loadTranslatorCache();
+		const legacy: LoadDataRaw = {
 			cache: data._translatorCache as LoadDataRaw["cache"],
 			aiDict: data._translatorAiDict as LoadDataRaw["aiDict"],
 			tmQueue: data._translatorTMQueue as LoadDataRaw["tmQueue"],
 			tmApproved: data._translatorTMApproved as LoadDataRaw["tmApproved"],
 			myMemoryBlockedDate: data._myMemoryBlockedDate as LoadDataRaw["myMemoryBlockedDate"],
-			// 持久化洞察缓存与覆盖率快照（此前遗漏导致每次会话失效重算、重新烧 token）
 			pluginInsights: data._translatorPluginInsights as LoadDataRaw["pluginInsights"],
 			compareInsights: data._translatorCompareInsights as LoadDataRaw["compareInsights"],
 			coverageSnapshots: data._translatorCoverageSnapshots as LoadDataRaw["coverageSnapshots"],
+		};
+		if (!cacheData) {
+			cacheData = {
+				cache: (legacy.cache as Record<string, unknown>) ?? {},
+				aiDict: (legacy.aiDict as Record<string, unknown>) ?? {},
+				pluginInsights: (legacy.pluginInsights as Record<string, unknown>) ?? {},
+				compareInsights: (legacy.compareInsights as Record<string, unknown>) ?? {},
+				coverageSnapshots: (legacy.coverageSnapshots as CoverageSnapshot[]) ?? [],
+				myMemoryBlockedDate: (legacy.myMemoryBlockedDate as string) ?? "",
+				seenPluginIds: Array.isArray(data._seenPluginIds) ? (data._seenPluginIds as string[]) : [],
+				lastListFetchAt: typeof data._lastListFetchAt === "number" ? data._lastListFetchAt : 0,
+			};
+		}
+		this.translator.loadData({
+			cache: cacheData.cache as unknown as LoadDataRaw["cache"],
+			aiDict: cacheData.aiDict as unknown as LoadDataRaw["aiDict"],
+			tmQueue: legacy.tmQueue,
+			tmApproved: legacy.tmApproved,
+			myMemoryBlockedDate: cacheData.myMemoryBlockedDate as LoadDataRaw["myMemoryBlockedDate"],
+			pluginInsights: cacheData.pluginInsights as unknown as LoadDataRaw["pluginInsights"],
+			compareInsights: cacheData.compareInsights as unknown as LoadDataRaw["compareInsights"],
+			coverageSnapshots: cacheData.coverageSnapshots as LoadDataRaw["coverageSnapshots"],
 		});
 		// 跨会话恢复列表拉取时间（修复：原 lastListFetchAt 是视图内存字段，重启归零
 		// 导致 isListStale(0, now, 6h) 恒真 → 每次启动都强制重拉列表 + 重译可见项）
-		const saved = data._lastListFetchAt;
-		this.lastListFetchAt = typeof saved === "number" ? saved : 0;
+		this.lastListFetchAt = cacheData.lastListFetchAt;
 		// 已「见过」的插件 id 集合（产品改进 #16 跨会话落盘，避免重启后误报全量新插件）
-		this.seenPluginIds = new Set(
-			Array.isArray(data._seenPluginIds) ? (data._seenPluginIds as string[]) : []
-		);
+		this.seenPluginIds = new Set(cacheData.seenPluginIds);
 		if (this.settings.secretId && this.settings.secretKey) {
 			this.translator.setApiConfig({
 				secretId: this.settings.secretId,
@@ -623,34 +674,23 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	private async _saveTranslatorDataImmediate(flushVault = true) {
 		// 先把内存中变更的 TM 条目写盘到 vault 笔记（human 校正/反馈标记等同步来源）
 		if (flushVault) await this.flushTMVault();
-		// 性能：复用内存权威对象 _data，不再每次保存整读 data.json
-		const allData = this._data;
+		// 翻译缓存独立成 translator-cache.json，避免大对象随主 data.json 整体重写
+		//（缩小写盘频率与损坏面；升级/迁移互不污染用户态设置）。
 		const translatorData = this.translator.getData();
-		// 持久化所有非 original 的缓存条目（online / bulk / tm / ai）。
-		// 原"只存 online"假设 custom/bulk/tm 可在会话内由懒翻译/单卡按钮 O(1) 重算，
-		// 但这些入口均已废弃 → 重启后无人补回 → 大量插件变回英文。
-		// original 是临时兜底（= 英文原文），不值得落盘。
 		const persistCache: Record<string, (typeof translatorData.cache)[string]> = {};
 		for (const [id, r] of Object.entries(translatorData.cache)) {
 			if (r.source !== "original") persistCache[id] = r;
 		}
-		allData._translatorCache = persistCache;
-		allData._translatorAiDict = translatorData.aiDict;
-		// 持久化洞察缓存与覆盖率快照（此前遗漏导致每次会话失效重算、重新烧 token）
-		allData._translatorPluginInsights = translatorData.pluginInsights;
-		allData._translatorCompareInsights = translatorData.compareInsights;
-		allData._translatorCoverageSnapshots = translatorData.coverageSnapshots;
-		// 性能：tmApproved 不再双份持久化——vault 笔记是权威（1213KB 冗余），
-		// 启动时由 scanVaultTM 从 metadataCache 免 IO 回灌。
-		delete allData._translatorTMApproved;
-		// 迁移清理：插件列表缓存已移至独立文件（见 pluginListCacheFilePath）
-		delete allData._pluginListCache;
-		allData._myMemoryBlockedDate = translatorData.myMemoryBlockedDate;
-		allData._seenPluginIds = Array.from(this.seenPluginIds);
-		// 跨会话持久化列表拉取时间：视图在 fetch 成功后会写回 this.lastListFetchAt，
-		// 这里随 translator 数据一起落盘，避免重启后因归零而强制重拉 + 重译。
-		allData._lastListFetchAt = this.lastListFetchAt;
-		await this.saveData(allData);
+		await this.storage.saveTranslatorCache({
+			cache: persistCache,
+			aiDict: translatorData.aiDict,
+			pluginInsights: translatorData.pluginInsights,
+			compareInsights: translatorData.compareInsights,
+			coverageSnapshots: translatorData.coverageSnapshots,
+			myMemoryBlockedDate: translatorData.myMemoryBlockedDate ?? "",
+			seenPluginIds: Array.from(this.seenPluginIds),
+			lastListFetchAt: this.lastListFetchAt,
+		});
 	}
 
 	/**

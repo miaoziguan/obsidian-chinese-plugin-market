@@ -64,6 +64,11 @@ export interface DrawerOptions {
 	/** 打开新插件的详情（由 main.ts 处理 Drawer 生命周期管理） */
 	openDetail: (pluginId: string) => void;
 	toggleFavorite: (pluginId: string) => boolean;
+	/**
+	 * 当前是否已收藏（合并内置预置种子后的状态）。供初始图标判定；
+	 * 未提供时回退到 plugin.settings.favorites.includes。
+	 */
+	isFavorited?: (pluginId: string) => boolean;
 	/** 已安装插件 id 集合（用于推荐卡片显示安装状态） */
 	installedIds?: Set<string>;
 	/** Drawer 挂载的容器（视图 contentEl） */
@@ -94,6 +99,7 @@ export class PluginDetailDrawer {
 	private triggerCard: HTMLElement | null;
 	private openDetail: (pluginId: string) => void;
 	private toggleFavorite: (pluginId: string) => boolean;
+	private isFavorited: (pluginId: string) => boolean;
 	private installedIds: Set<string>;
 	private onCloseCb: () => void;
 
@@ -139,6 +145,7 @@ export class PluginDetailDrawer {
 		this.triggerCard = opts.triggerCard;
 		this.openDetail = opts.openDetail;
 		this.toggleFavorite = opts.toggleFavorite;
+		this.isFavorited = opts.isFavorited ?? ((pid: string) => this.plugin.settings.favorites.includes(pid));
 		this.installedIds = opts.installedIds ?? new Set();
 		this.container = opts.container;
 		this.onCloseCb = opts.onClose;
@@ -584,7 +591,7 @@ export class PluginDetailDrawer {
 				? `<svg viewBox="0 0 24 24" width="14" height="14" fill="#d99a1c" stroke="#d99a1c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
 				: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`, this.t("card.favorite"));
 		};
-		updateFavIcon(this.plugin.settings.favorites.includes(p.id));
+		updateFavIcon(this.isFavorited(p.id));
 		favBtn.addEventListener("click", () => {
 			const isFav = this.toggleFavorite(p.id);
 			updateFavIcon(isFav);

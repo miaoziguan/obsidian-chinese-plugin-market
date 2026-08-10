@@ -2,6 +2,39 @@ import { logger } from "@shared/logger";
 import { type StoragePort } from "@data/storage/storage-port";
 import { type PluginStat, parseStatsJson } from "@domain/catalog/stats";
 import { type TrendSnapshot } from "@domain/recommend/trending";
+import { type CoverageSnapshot } from "@domain/catalog/translator";
+
+/** 翻译缓存持久化结构（与主 data.json 分离，独立成 translator-cache.json）。 */
+export interface TranslatorPersistedData {
+	cache: Record<string, unknown>;
+	aiDict: Record<string, unknown>;
+	pluginInsights: Record<string, unknown>;
+	compareInsights: Record<string, unknown>;
+	coverageSnapshots: CoverageSnapshot[];
+	myMemoryBlockedDate: string;
+	seenPluginIds: string[];
+	lastListFetchAt: number;
+}
+
+/** 账号/密钥等敏感配置（独立成 credentials.json，避免随主 data.json 备份/分享时泄露）。 */
+export interface PluginCredentials {
+	secretId: string;
+	secretKey: string;
+	region: string;
+	aiSearchApiKey: string;
+	aiSearchBaseURL: string;
+	embeddingApiKey: string;
+	embeddingBaseURL: string;
+	selfHostedTranslators: { type: "deeplx" | "libretranslate"; baseUrl: string }[];
+}
+
+/** 主 data.json 中应抽离到 credentials.json 的敏感字段键名（用于迁移/剥离）。 */
+export const CREDENTIAL_KEYS: (keyof PluginCredentials)[] = [
+	"secretId", "secretKey", "region",
+	"aiSearchApiKey", "aiSearchBaseURL",
+	"embeddingApiKey", "embeddingBaseURL",
+	"selfHostedTranslators",
+];
 
 /**
  * 插件持久化缓存存储层（从 ChinesePluginMarketPlugin 抽离）。
@@ -117,6 +150,102 @@ export class PluginStorage {
 			return parseStatsJson(parsed.stats);
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取 stats 缓存失败：", e);
+			return null;
+		}
+	}
+
+	// ── 翻译缓存（高频写、体量大的派生数据，独立文件以免污染主 data.json） ──
+	private translatorCacheFilePath = "translator-cache.json";
+
+	/**
+	 * 写翻译缓存到独立文件（译名/AI 词典/洞察/覆盖率快照/MyMemory 熔断等）。
+	 * 不影响主 data.json，缩小其写盘频率与损坏面。
+	 */
+	async saveTranslatorCache(data: TranslatorPersistedData): Promise<void> {
+		try {
+			const adapter = this.storage;
+			const {
+				cache, aiDict, pluginInsights, compareInsights,
+				coverageSnapshots, myMemoryBlockedDate,
+				seenPluginIds, lastListFetchAt,
+			} = data;
+			await adapter.write(
+				this.translatorCacheFilePath,
+				JSON.stringify({
+					savedAt: Date.now(),
+					cache, aiDict, pluginInsights, compareInsights,
+					coverageSnapshots, myMemoryBlockedDate,
+					seenPluginIds, lastListFetchAt,
+				})
+			);
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 保存翻译缓存失败：", e);
+		}
+	}
+
+	/**
+	 * 读取翻译缓存；文件缺失/损坏返回 null（交由 translator 重建默认值）。
+	 */
+	async loadTranslatorCache(): Promise<TranslatorPersistedData | null> {
+		try {
+			const adapter = this.storage;
+			if (!(await adapter.exists(this.translatorCacheFilePath))) return null;
+			const text = await adapter.read(this.translatorCacheFilePath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (!parsed || typeof parsed !== "object") return null;
+			return {
+				cache: (parsed.cache as Record<string, unknown>) ?? {},
+				aiDict: (parsed.aiDict as Record<string, string>) ?? {},
+				pluginInsights: (parsed.pluginInsights as Record<string, unknown>) ?? {},
+				compareInsights: (parsed.compareInsights as Record<string, unknown>) ?? {},
+				coverageSnapshots: (parsed.coverageSnapshots as CoverageSnapshot[]) ?? [],
+				myMemoryBlockedDate: (parsed.myMemoryBlockedDate as string) ?? "",
+				seenPluginIds: (parsed.seenPluginIds as string[]) ?? [],
+				lastListFetchAt: (parsed.lastListFetchAt as number) ?? 0,
+			};
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 读取翻译缓存失败：", e);
+			return null;
+		}
+	}
+
+	// ── 账号/密钥（敏感，独立 credentials.json，避免随主 data.json 备份泄露） ──
+	private credentialsFilePath = "credentials.json";
+
+	/** 写敏感配置到独立 credentials.json。 */
+	async saveCredentials(creds: PluginCredentials): Promise<void> {
+		try {
+			const adapter = this.storage;
+			await adapter.write(
+				this.credentialsFilePath,
+				JSON.stringify({ savedAt: Date.now(), ...creds })
+			);
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 保存 credentials 失败：", e);
+		}
+	}
+
+	/** 读取 credentials.json；缺失/损坏返回 null（降级为未配置）。 */
+	async loadCredentials(): Promise<PluginCredentials | null> {
+		try {
+			const adapter = this.storage;
+			if (!(await adapter.exists(this.credentialsFilePath))) return null;
+			const text = await adapter.read(this.credentialsFilePath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (!parsed || typeof parsed !== "object") return null;
+			return {
+				secretId: (parsed.secretId as string) ?? "",
+				secretKey: (parsed.secretKey as string) ?? "",
+				region: (parsed.region as string) ?? "",
+				aiSearchApiKey: (parsed.aiSearchApiKey as string) ?? "",
+				aiSearchBaseURL: (parsed.aiSearchBaseURL as string) ?? "",
+				embeddingApiKey: (parsed.embeddingApiKey as string) ?? "",
+				embeddingBaseURL: (parsed.embeddingBaseURL as string) ?? "",
+				selfHostedTranslators:
+					(parsed.selfHostedTranslators as PluginCredentials["selfHostedTranslators"]) ?? [],
+			};
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 读取 credentials 失败：", e);
 			return null;
 		}
 	}
