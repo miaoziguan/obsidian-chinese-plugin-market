@@ -384,6 +384,23 @@ describe("filterAndSortPlugins", () => {
 		expect(r.list.map((p) => p.id)).toEqual([P_MIND.id]);
 	});
 
+	it("前缀缓存：仅看收藏关闭时必须恢复全部（缓存失效）", () => {
+		// 复现 bug：上次开启「仅看收藏」，缓存里只有收藏子集；本次关闭仅看收藏
+		const r = filterAndSortPlugins(
+			baseFilterParams({
+				query: "",
+				favoriteFilter: false, // 当前关闭仅看收藏
+				favoritesSet: new Set([P_CAL.id]),
+				lastFiltered: [P_CAL], // 缓存里只有收藏子集
+				lastFilterQuery: "",
+				lastFilterSource: "all",
+				lastFilterFavorites: true, // 上次是仅看收藏
+			})
+		);
+		// 必须恢复全部三个插件，而非停留在收藏子集
+		expect(r.list.map((p) => p.id).sort()).toEqual([P_MIND.id, P_CAL.id, P_GIT.id].sort());
+	});
+
 	it("H1 回归：AI 召回子集不污染关键词前缀缓存（切回关键词必须全量重滤）", () => {
 		// 第一步：AI 模式搜索 "map"，只召回 calendar → 回写缓存
 		const ai: AISearchResult = { rankedIds: [P_CAL.id] };
