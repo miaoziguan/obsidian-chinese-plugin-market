@@ -18,6 +18,7 @@ function makePlugin() {
 		loadFavorites: vi.fn(async () => null),
 		saveFavorites: vi.fn(async () => {}),
 		loadTranslatorCache: vi.fn(async () => null),
+		loadSeededTranslatorCache: vi.fn(async () => null),
 		saveTranslatorCache: vi.fn(async () => {}),
 	};
 	Object.assign(plugin, {
@@ -188,5 +189,37 @@ describe("Plugin 持久化契约（P0 回归）", () => {
 		// 且 translator 内存也拿到译名（重读独立文件得到）
 		const cache = (plugin as any).translator.cache as Record<string, unknown>;
 		expect(Object.keys(cache).sort()).toEqual(["a", "b"]);
+	});
+
+	it("种子译名库：本地文件为空时合并种子，用户运行时文件优先覆盖种子", async () => {
+		const { plugin, storage } = makePlugin();
+		// 用户本地运行时文件为空（新安装/首次升级）
+		(storage.loadTranslatorCache as any).mockResolvedValue(null);
+		// 随包分发的种子库含 2 条基础译名
+		(storage.loadSeededTranslatorCache as any).mockResolvedValue({
+			cache: {
+				"seed-1": { translatedName: "种子甲", translatedDesc: "d", source: "ai" },
+				"seed-2": { translatedName: "种子乙", translatedDesc: "d", source: "ai" },
+			},
+			aiDict: { "seed-1": { name: "种子甲", description: "d", source: "ai" } },
+			pluginInsights: {}, compareInsights: {}, coverageSnapshots: [],
+			myMemoryBlockedDate: "", seenPluginIds: [], lastListFetchAt: 0,
+		});
+		await (plugin as any).loadTranslatorData({});
+		const cache = (plugin as any).translator.cache as Record<string, any>;
+		// 用户无本地文件 → 直接用种子译名，首屏不再全英文
+		expect(Object.keys(cache).sort()).toEqual(["seed-1", "seed-2"]);
+		expect(cache["seed-1"].translatedName).toBe("种子甲");
+
+		// 用户本地文件含同名条目时，应以用户文件优先（覆盖种子）
+		(storage.loadTranslatorCache as any).mockResolvedValue({
+			cache: { "seed-1": { translatedName: "用户校正甲", translatedDesc: "d", source: "bulk" } },
+			aiDict: {}, pluginInsights: {}, compareInsights: {},
+			coverageSnapshots: [], myMemoryBlockedDate: "", seenPluginIds: [], lastListFetchAt: 0,
+		});
+		await (plugin as any).loadTranslatorData({});
+		const cache2 = (plugin as any).translator.cache as Record<string, any>;
+		expect(cache2["seed-1"].translatedName).toBe("用户校正甲"); // 用户覆盖种子
+		expect(cache2["seed-2"].translatedName).toBe("种子乙"); // 种子补充用户缺失项
 	});
 });
