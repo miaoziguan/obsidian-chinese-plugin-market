@@ -477,6 +477,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		for (const k of CREDENTIAL_KEYS) {
 			if (k in data) delete data[k];
 		}
+		// 个人收藏分离：优先从独立 favorites.json 加载并覆盖主 data.json 中的 favorites。
+		// 旧版把 favorites 内联在主 data.json，升级后首次保存即迁移到 favorites.json。
+		const loadedFavorites = await this.storage.loadFavorites(data);
+		if (loadedFavorites) {
+			this.settings.favorites = loadedFavorites;
+		}
+		// 无论 favorites.json 是否存在，均剔除 data.json 内联的 favorites 字段，避免反复写回
+		if ("favorites" in data) delete data["favorites"];
 		// 迁移清理：翻译缓存已移至独立文件 translator-cache.json（见 loadTranslatorData /
 		// saveTranslatorCache），旧主 data.json 内联字段在此剔除，避免残留被反复写回。
 		for (const k of [
@@ -539,6 +547,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			delete allData[k];
 		}
 		await this.storage.saveCredentials(creds as unknown as PluginCredentials);
+		// 个人收藏分离：favorites 从主 data.json 抽离，单独写入 favorites.json。
+		// 内存中 this.settings 仍保留该值供视图/卡片读取；落盘时主 data.json 不含收藏。
+		const favorites = (this.settings as unknown as Record<string, unknown>).favorites;
+		if (Array.isArray(favorites)) {
+			await this.storage.saveFavorites(favorites as string[]);
+			delete allData["favorites"];
+		}
 		await this.saveData(allData);
 	}
 

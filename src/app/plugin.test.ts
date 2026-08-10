@@ -10,17 +10,25 @@ import { Translator } from "@domain/catalog/translator";
  */
 function makePlugin() {
 	const plugin = new ChinesePluginMarketPlugin({} as never, {} as never);
-	const saveData = vi.fn(async () => {});
+	const saveData = vi.fn(async (_data?: Record<string, unknown>) => {});
+	// mock 持久化存储层：隔离 credentials/favorites 独立文件的读写，避免触碰真实文件系统
+	const storage = {
+		loadCredentials: vi.fn(async () => null),
+		saveCredentials: vi.fn(async () => {}),
+		loadFavorites: vi.fn(async () => null),
+		saveFavorites: vi.fn(async () => {}),
+	};
 	Object.assign(plugin, {
 		saveData,
 		loadData: vi.fn(async () => ({})),
+		storage,
 		_data: {} as Record<string, unknown>,
 		settings: {} as never,
 		translator: new Translator(),
 		app: { workspace: { getLeavesOfType: () => [] } },
 		_saveTranslatorDataTimer: null,
 	});
-	return { plugin, saveData };
+	return { plugin, saveData, storage };
 }
 
 describe("Plugin 持久化契约（P0 回归）", () => {
@@ -73,5 +81,21 @@ describe("Plugin 持久化契约（P0 回归）", () => {
 		plugin.onunload();
 		await vi.runAllTimersAsync();
 		expect(saveData).toHaveBeenCalled();
+	});
+
+	it("个人收藏分离：落盘时写入 favorites.json 且主 data.json 不含 favorites", async () => {
+		const { plugin, saveData, storage } = makePlugin();
+		// 旧版升级：favorites 内联在主 data.json 中
+		const allData: Record<string, unknown> = { favorites: ["foo", "bar"] };
+		await (plugin as any).loadSettings(allData);
+		expect(plugin.settings.favorites).toEqual(["foo", "bar"]);
+
+		await plugin.flushSaveSettings();
+		// 收藏应独立写 favorites.json
+		expect(storage.saveFavorites).toHaveBeenCalledWith(["foo", "bar"]);
+		// 主 data.json 落盘对象不应再内联 favorites
+		expect(saveData).toHaveBeenCalledWith(
+			expect.not.objectContaining({ favorites: expect.anything() })
+		);
 	});
 });

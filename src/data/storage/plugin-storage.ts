@@ -209,6 +209,45 @@ export class PluginStorage {
 		}
 	}
 
+	// ── 个人收藏（用户态，独立 favorites.json，与配置/缓存/账号解耦） ──
+	private favoritesFilePath = "favorites.json";
+
+	/** 写用户收藏集到独立 favorites.json。 */
+	async saveFavorites(favorites: string[]): Promise<void> {
+		try {
+			const adapter = this.storage;
+			await adapter.write(
+				this.favoritesFilePath,
+				JSON.stringify({ savedAt: Date.now(), favorites })
+			);
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 保存收藏失败：", e);
+		}
+	}
+
+	/**
+	 * 读取 favorites.json；缺失/损坏返回 null（降级为无收藏）。
+	 * @param legacyData 主 data.json 落盘对象（旧版把 favorites 内联在主 data.json，升级后首次保存即迁移）
+	 */
+	async loadFavorites(legacyData?: Record<string, unknown>): Promise<string[] | null> {
+		try {
+			const adapter = this.storage;
+			if (await adapter.exists(this.favoritesFilePath)) {
+				const parsed = JSON.parse(await adapter.read(this.favoritesFilePath)) as Record<string, unknown>;
+				if (parsed && typeof parsed === "object" && Array.isArray(parsed.favorites)) {
+					return parsed.favorites as string[];
+				}
+			}
+			// 旧版迁移路径：独立文件尚未生成时回退读主 data.json 内嵌键
+			if (Array.isArray(legacyData?.["favorites"])) {
+				return legacyData["favorites"] as string[];
+			}
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 读取收藏失败，将重置为空：", e);
+		}
+		return null;
+	}
+
 	// ── 账号/密钥（敏感，独立 credentials.json，避免随主 data.json 备份泄露） ──
 	private credentialsFilePath = "credentials.json";
 
