@@ -6,7 +6,6 @@
 
 import { App, Modal, Notice } from "obsidian";
 import { type PluginInfo, type Translator } from "@domain/catalog/translator";
-import { SEEDED_FAVORITES_SET, computeFavoritesSet } from "@domain/catalog/seeded-favorites";
 import { computeSimilar, type SimilarCandidate } from "@domain/recommend/similar";
 import { PluginDetailDrawer } from "@ui/components/detail-drawer";
 import type { ViewContext } from "@ui/view/view-context";
@@ -199,45 +198,22 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 }
 
 export function toggleFavorite(ctx: ViewContext, pid: string) : boolean {
-		// 是否内置预置种子：取消/恢复预置仅改 excludedSeeded，绝不写入或删除种子本身
-		const isSeeded = SEEDED_FAVORITES_SET.has(pid);
 		const isOn = ctx.favoritesSet.has(pid);
 
 		if (isOn) {
 			// 取消收藏
-			if (isSeeded) {
-				// 预置种子：追加到排除集（仅当用户未主动收藏过该 id 时）
-				if (!ctx.settings.favorites.includes(pid)) {
-					if (!ctx.settings.excludedSeeded.includes(pid)) {
-						ctx.settings.excludedSeeded = [...ctx.settings.excludedSeeded, pid];
-					}
-				} else {
-					// 用户曾主动收藏过该种子：从用户收藏移除（种子仍由 excludedSeeded 保留展示）
-					ctx.settings.favorites = ctx.settings.favorites.filter((id) => id !== pid);
-				}
-			} else {
-				ctx.settings.favorites = ctx.settings.favorites.filter((id) => id !== pid);
+			ctx.settings.favorites = ctx.settings.favorites.filter((id) => id !== pid);
+		} else {
+			// 恢复收藏
+			if (!ctx.settings.favorites.includes(pid)) {
+				ctx.settings.favorites = [...ctx.settings.favorites, pid];
 				// 信号门控：收藏此插件，把其 online 译文投入晋升队列（非 online 缓存为 no-op）
 				ctx.translator.enqueueOnlineTM(pid);
 			}
-		} else {
-			// 恢复收藏
-			if (isSeeded) {
-				// 从排除集移除（若用户此前主动收藏过该 id，保留在 favorites）
-				ctx.settings.excludedSeeded = ctx.settings.excludedSeeded.filter((id) => id !== pid);
-				if (!ctx.settings.favorites.includes(pid)) {
-					ctx.translator.enqueueOnlineTM(pid);
-				}
-			} else {
-				if (!ctx.settings.favorites.includes(pid)) {
-					ctx.settings.favorites = [...ctx.settings.favorites, pid];
-					ctx.translator.enqueueOnlineTM(pid);
-				}
-			}
 		}
 
-		// 重算合并收藏集（种子 ∪ 用户收藏 − 排除），保持单一事实来源
-		ctx.favoritesSet = computeFavoritesSet(ctx.settings.favorites, ctx.settings.excludedSeeded);
+		// 重算收藏集（保持单一事实来源）
+		ctx.favoritesSet = new Set(ctx.settings.favorites);
 		void ctx.flushSaveSettings();
 		return !isOn;
 }
