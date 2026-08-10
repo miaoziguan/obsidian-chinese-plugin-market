@@ -617,8 +617,20 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			// 迁移已把内联译名合入独立文件，重新读取以获得完整权威数据
 			fileData = await this.storage.loadTranslatorCache();
 		}
-		const cache = (fileData?.cache as Record<string, TranslateResult>) ?? {};
-		const aiDict = (fileData?.aiDict as Record<string, DictEntry>) ?? {};
+		// 种子译名库（随插件分发，作者导出快照）：新用户/本地文件为空时立即有译名，
+		// 不再首屏全英文。合并策略：种子作基础层，本地运行时文件作覆盖层（用户优先），
+		// 二者并集后注入 translator——用户产生的译名永不被动种子覆盖。
+		const seed = await this.storage.loadSeededTranslatorCache();
+		const fileCache = (fileData?.cache as Record<string, TranslateResult>) ?? {};
+		const fileAiDict = (fileData?.aiDict as Record<string, DictEntry>) ?? {};
+		const cache: Record<string, TranslateResult> = {
+			...(seed?.cache as Record<string, TranslateResult> | undefined),
+			...fileCache,
+		};
+		const aiDict: Record<string, DictEntry> = {
+			...(seed?.aiDict as Record<string, DictEntry> | undefined),
+			...fileAiDict,
+		};
 		this.translator.loadData({
 			cache,
 			aiDict,

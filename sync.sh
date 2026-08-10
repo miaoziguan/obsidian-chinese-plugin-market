@@ -25,6 +25,7 @@ FILES=(
 	"sql-wasm.wasm"
 	"ort-wasm-simd-threaded.jsep.wasm"
 	"embedding-worker.bundle.js"
+	"seeded-translator-cache.json"
 )
 
 # ── 解析参数 ──

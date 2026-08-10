@@ -68,6 +68,14 @@ export class PluginStorage {
 	private get translatorCacheFilePath(): string {
 		return `.obsidian/plugins/${this.pluginId}/translator-cache.json`;
 	}
+	/**
+	 * 随插件分发的种子译名库（构建期由作者导出的 translator-cache.json 快照）。
+	 * 用户安装/更新后即便本地运行时文件为空，也能立即拿到译名，而非全英文。
+	 * 与 plugin-tags.json / plugin-recommend.json 同目录（插件根），由 sync.sh 同步分发。
+	 */
+	private get seededTranslatorCachePath(): string {
+		return "seeded-translator-cache.json";
+	}
 	private get favoritesFilePath(): string {
 		return `.obsidian/plugins/${this.pluginId}/favorites.json`;
 	}
@@ -237,6 +245,36 @@ export class PluginStorage {
 			};
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取翻译缓存失败：", e);
+			return null;
+		}
+	}
+
+	/**
+	 * 读取随插件分发的种子译名库（seeded-translator-cache.json）。
+	 * 用于「新用户/本地文件为空」时立即获得基础译名，避免首屏全英文。
+	 * 文件缺失/损坏返回 null（交由调用方降级为无种子）。
+	 * 注：种子是只读基础库，运行时用户产生的译名写入独立 translator-cache.json，
+	 * 加载时以「种子 ∪ 用户文件」合并、用户文件优先，互不覆盖。
+	 */
+	async loadSeededTranslatorCache(): Promise<TranslatorPersistedData | null> {
+		try {
+			const adapter = this.storage;
+			if (!(await adapter.exists(this.seededTranslatorCachePath))) return null;
+			const text = await adapter.read(this.seededTranslatorCachePath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (!parsed || typeof parsed !== "object") return null;
+			return {
+				cache: (parsed.cache as Record<string, unknown>) ?? {},
+				aiDict: (parsed.aiDict as Record<string, string>) ?? {},
+				pluginInsights: (parsed.pluginInsights as Record<string, unknown>) ?? {},
+				compareInsights: (parsed.compareInsights as Record<string, unknown>) ?? {},
+				coverageSnapshots: (parsed.coverageSnapshots as CoverageSnapshot[]) ?? [],
+				myMemoryBlockedDate: (parsed.myMemoryBlockedDate as string) ?? "",
+				seenPluginIds: (parsed.seenPluginIds as string[]) ?? [],
+				lastListFetchAt: (parsed.lastListFetchAt as number) ?? 0,
+			};
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 读取种子译名库失败，已跳过：", e);
 			return null;
 		}
 	}
