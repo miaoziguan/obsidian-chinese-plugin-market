@@ -11,12 +11,14 @@ import { Translator } from "@domain/catalog/translator";
 function makePlugin() {
 	const plugin = new ChinesePluginMarketPlugin({} as never, {} as never);
 	const saveData = vi.fn(async (_data?: Record<string, unknown>) => {});
-	// mock 持久化存储层：隔离 credentials/favorites 独立文件的读写，避免触碰真实文件系统
+	// mock 持久化存储层：隔离 credentials/favorites/翻译缓存独立文件的读写，避免触碰真实文件系统
 	const storage = {
 		loadCredentials: vi.fn(async () => null),
 		saveCredentials: vi.fn(async () => {}),
 		loadFavorites: vi.fn(async () => null),
 		saveFavorites: vi.fn(async () => {}),
+		loadTranslatorCache: vi.fn(async () => null),
+		saveTranslatorCache: vi.fn(async () => {}),
 	};
 	Object.assign(plugin, {
 		saveData,
@@ -97,5 +99,94 @@ describe("Plugin 持久化契约（P0 回归）", () => {
 		expect(saveData).toHaveBeenCalledWith(
 			expect.not.objectContaining({ favorites: expect.anything() })
 		);
+	});
+
+	it("译名彻底解耦：data.json 内联译名经一次性迁移并入独立文件", async () => {
+		const { plugin, storage } = makePlugin();
+		// 独立文件已有 2 条（不完整快照）
+		(storage.loadTranslatorCache as any).mockResolvedValue({
+			cache: {
+				"only-in-file": { translatedName: "文件独有", translatedDesc: "d", source: "online", provider: "tencent" },
+				"both": { translatedName: "文件版", translatedDesc: "d", source: "online", provider: "tencent" },
+			},
+			aiDict: {},
+			pluginInsights: {},
+			compareInsights: {},
+			coverageSnapshots: [],
+			myMemoryBlockedDate: "",
+			seenPluginIds: [],
+			lastListFetchAt: 0,
+		});
+		// data.json 仍内联了 3 条（旧版残留）
+		const data: Record<string, unknown> = {
+			_translatorCache: {
+				"only-in-data": { translatedName: "数据独有", translatedDesc: "d", source: "bulk" },
+				"both": { translatedName: "数据版", translatedDesc: "d", source: "bulk" },
+				"third": { translatedName: "第三条", translatedDesc: "d", source: "online", provider: "tencent" },
+			},
+			_myMemoryBlockedDate: "2026-01-01",
+			_seenPluginIds: ["x"],
+			_lastListFetchAt: 123,
+		};
+		await (plugin as any).migrateTranslatorCacheFromData(data);
+		// 迁移应调用 saveTranslatorCache，写出合并后的全集（4 条，both 取独立文件优先）
+		expect(storage.saveTranslatorCache).toHaveBeenCalledTimes(1);
+		const written = (storage.saveTranslatorCache as any).mock.calls[0][0];
+		expect(Object.keys(written.cache).sort()).toEqual(["both", "only-in-data", "only-in-file", "third"].sort());
+		expect(written.cache["both"].translatedName).toBe("文件版");
+		expect(written.cache["only-in-data"].translatedName).toBe("数据独有");
+		expect(written.myMemoryBlockedDate).toBe("2026-01-01");
+		expect(written.seenPluginIds).toEqual(["x"]);
+	});
+
+	it("译名彻底解耦：loadTranslatorData 只信独立文件，不再与 data.json 合并", async () => {
+		const { plugin, storage } = makePlugin();
+		// 独立文件为权威源（2 条）
+		(storage.loadTranslatorCache as any).mockResolvedValue({
+			cache: {
+				"f1": { translatedName: "文件1", translatedDesc: "d", source: "online", provider: "tencent" },
+				"f2": { translatedName: "文件2", translatedDesc: "d", source: "bulk" },
+			},
+			aiDict: {},
+			pluginInsights: {},
+			compareInsights: {},
+			coverageSnapshots: [],
+			myMemoryBlockedDate: "",
+			seenPluginIds: [],
+			lastListFetchAt: 0,
+		});
+		// data.json 仍含过时内联译名（不应再被合并进 translator）
+		const allData: Record<string, unknown> = {
+			_translatorCache: {
+				"stale": { translatedName: "过时", translatedDesc: "d", source: "bulk" },
+			},
+		};
+		await (plugin as any).loadTranslatorData(allData);
+		const cache = (plugin as any).translator.cache as Record<string, unknown>;
+		expect(Object.keys(cache).sort()).toEqual(["f1", "f2"]); // 仅独立文件，不含 stale
+		expect(cache["stale"]).toBeUndefined();
+	});
+
+	it("译名彻底解耦：独立文件缺失但 data.json 有内联时，loadTranslatorData 兜底触发迁移", async () => {
+		const { plugin, storage } = makePlugin();
+		(storage.loadTranslatorCache as any).mockResolvedValue(null); // 独立文件尚未生成
+		// 迁移写回后，loadTranslatorCache 应返回刚写入的合并数据（模拟真实适配器落盘）
+		(storage.saveTranslatorCache as any).mockImplementation(async (data: any) => {
+			(storage.loadTranslatorCache as any).mockResolvedValue(data);
+		});
+		const allData: Record<string, unknown> = {
+			_translatorCache: {
+				"a": { translatedName: "甲", translatedDesc: "d", source: "bulk" },
+				"b": { translatedName: "乙", translatedDesc: "d", source: "online", provider: "tencent" },
+			},
+		};
+		await (plugin as any).loadTranslatorData(allData);
+		// 兜底迁移：把内联写入独立文件
+		expect(storage.saveTranslatorCache).toHaveBeenCalledTimes(1);
+		const written = (storage.saveTranslatorCache as any).mock.calls[0][0];
+		expect(Object.keys(written.cache).sort()).toEqual(["a", "b"]);
+		// 且 translator 内存也拿到译名（重读独立文件得到）
+		const cache = (plugin as any).translator.cache as Record<string, unknown>;
+		expect(Object.keys(cache).sort()).toEqual(["a", "b"]);
 	});
 });

@@ -59,6 +59,32 @@ export class PluginStorage {
 		return `.obsidian/plugins/${this.pluginId}/trending-history.json`;
 	}
 
+	/**
+	 * 独立数据文件统一落在「插件目录」下（与 stats-cache / plugin-list-cache 一致），
+	 * 避免相对路径被 Obsidian DataAdapter 解析到 vault 根目录而散落、且无法被 sync.sh 同步。
+	 * 旧版（v2.15.x）误用相对路径，把 translator-cache.json / favorites.json / credentials.json
+	 * 写到了 vault 根；读取时优先插件目录，缺失再回退 vault 根旧位置做一次性迁移。
+	 */
+	private get translatorCacheFilePath(): string {
+		return `.obsidian/plugins/${this.pluginId}/translator-cache.json`;
+	}
+	private get favoritesFilePath(): string {
+		return `.obsidian/plugins/${this.pluginId}/favorites.json`;
+	}
+	private get credentialsFilePath(): string {
+		return `.obsidian/plugins/${this.pluginId}/credentials.json`;
+	}
+	/** 旧版相对路径落点（vault 根），仅用于迁移读取回退 */
+	private get legacyTranslatorCachePath(): string {
+		return "translator-cache.json";
+	}
+	private get legacyFavoritesPath(): string {
+		return "favorites.json";
+	}
+	private get legacyCredentialsPath(): string {
+		return "credentials.json";
+	}
+
 	/** 写趋势采样历史（仅在引擎实际新增采样点时调用，fire-and-forget） */
 	async saveTrendingHistory(history: Record<string, TrendSnapshot[]>): Promise<void> {
 		try {
@@ -155,7 +181,6 @@ export class PluginStorage {
 	}
 
 	// ── 翻译缓存（高频写、体量大的派生数据，独立文件以免污染主 data.json） ──
-	private translatorCacheFilePath = "translator-cache.json";
 
 	/**
 	 * 写翻译缓存到独立文件（译名/AI 词典/洞察/覆盖率快照/MyMemory 熔断等）。
@@ -185,12 +210,19 @@ export class PluginStorage {
 
 	/**
 	 * 读取翻译缓存；文件缺失/损坏返回 null（交由 translator 重建默认值）。
+	 * 优先插件目录文件；旧版（v2.15.x）曾误写 vault 根相对路径，缺失时回退该旧位置。
 	 */
 	async loadTranslatorCache(): Promise<TranslatorPersistedData | null> {
 		try {
 			const adapter = this.storage;
-			if (!(await adapter.exists(this.translatorCacheFilePath))) return null;
-			const text = await adapter.read(this.translatorCacheFilePath);
+			let text: string | null = null;
+			if (await adapter.exists(this.translatorCacheFilePath)) {
+				text = await adapter.read(this.translatorCacheFilePath);
+			} else if (await adapter.exists(this.legacyTranslatorCachePath)) {
+				// 迁移：旧版写到了 vault 根，读出来后由下次 saveTranslatorCache 落回插件目录
+				text = await adapter.read(this.legacyTranslatorCachePath);
+			}
+			if (!text) return null;
 			const parsed = JSON.parse(text) as Record<string, unknown>;
 			if (!parsed || typeof parsed !== "object") return null;
 			return {
@@ -210,7 +242,6 @@ export class PluginStorage {
 	}
 
 	// ── 个人收藏（用户态，独立 favorites.json，与配置/缓存/账号解耦） ──
-	private favoritesFilePath = "favorites.json";
 
 	/** 写用户收藏集到独立 favorites.json。 */
 	async saveFavorites(favorites: string[]): Promise<void> {
@@ -238,6 +269,13 @@ export class PluginStorage {
 					return parsed.favorites as string[];
 				}
 			}
+			// 旧版（v2.15.x）曾把 favorites.json 写到 vault 根相对路径，回退读旧位置
+			if (await adapter.exists(this.legacyFavoritesPath)) {
+				const parsed = JSON.parse(await adapter.read(this.legacyFavoritesPath)) as Record<string, unknown>;
+				if (parsed && typeof parsed === "object" && Array.isArray(parsed.favorites)) {
+					return parsed.favorites as string[];
+				}
+			}
 			// 旧版迁移路径：独立文件尚未生成时回退读主 data.json 内嵌键
 			if (Array.isArray(legacyData?.["favorites"])) {
 				return legacyData["favorites"] as string[];
@@ -249,7 +287,6 @@ export class PluginStorage {
 	}
 
 	// ── 账号/密钥（敏感，独立 credentials.json，避免随主 data.json 备份泄露） ──
-	private credentialsFilePath = "credentials.json";
 
 	/** 写敏感配置到独立 credentials.json。 */
 	async saveCredentials(creds: PluginCredentials): Promise<void> {
@@ -268,8 +305,14 @@ export class PluginStorage {
 	async loadCredentials(): Promise<PluginCredentials | null> {
 		try {
 			const adapter = this.storage;
-			if (!(await adapter.exists(this.credentialsFilePath))) return null;
-			const text = await adapter.read(this.credentialsFilePath);
+			let text: string | null = null;
+			if (await adapter.exists(this.credentialsFilePath)) {
+				text = await adapter.read(this.credentialsFilePath);
+			} else if (await adapter.exists(this.legacyCredentialsPath)) {
+				// 旧版曾写到 vault 根，回退读旧位置
+				text = await adapter.read(this.legacyCredentialsPath);
+			}
+			if (!text) return null;
 			const parsed = JSON.parse(text) as Record<string, unknown>;
 			if (!parsed || typeof parsed !== "object") return null;
 			return {

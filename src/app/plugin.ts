@@ -8,7 +8,7 @@
 
 import { Plugin, Notice, TFile, TFolder, Platform, normalizePath } from "obsidian";
 import { logger } from "@shared/logger";
-import { Translator, type PluginInfo, type CoverageSnapshot } from "@domain/catalog/translator";
+import { Translator, type PluginInfo, type TranslateResult, type DictEntry, type CoverageSnapshot } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
 import { PluginStorage, CREDENTIAL_KEYS, type PluginCredentials } from "@data/storage/plugin-storage";
 import { setHttpClient } from "@data/net/http-port";
@@ -501,8 +501,22 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 		// 无论 favorites.json 是否存在，均剔除 data.json 内联的 favorites 字段，避免反复写回
 		if ("favorites" in data) delete data["favorites"];
-		// 迁移清理：翻译缓存已移至独立文件 translator-cache.json（见 loadTranslatorData /
-		// saveTranslatorCache），旧主 data.json 内联字段在此剔除，避免残留被反复写回。
+		// 翻译缓存彻底解耦：译名/AI词典/洞察/覆盖率等已统一存于独立文件
+		// translator-cache.json（见 loadTranslatorData / saveTranslatorCache）。
+		// 此处把 data.json 内联的译名字段【一次性迁移】进独立文件并剔除，使 data.json
+		// 只承载设置，不再冗余存放大体量译名（避免每次 saveData 重复序列化 1.9MB）。
+		// 迁移是幂等的：独立文件已含完整数据时，仅用 data.json 补全缺失条目后删除内联。
+		const dataHadTranslatorFields = !!(
+			data._translatorCache || data._translatorAiDict ||
+			data._translatorTMQueue || data._translatorTMApproved ||
+			data._translatorPluginInsights || data._translatorCompareInsights ||
+			data._translatorCoverageSnapshots || data._myMemoryBlockedDate ||
+			data._seenPluginIds || data._lastListFetchAt
+		);
+		if (dataHadTranslatorFields) {
+			await this.migrateTranslatorCacheFromData(data);
+		}
+		// 其余纯元数据字段（理论上已随上方迁移一并清除，这里兜底再删一次，防历史残留）
 		for (const k of [
 			"_translatorCache", "_translatorAiDict", "_translatorTMQueue",
 			"_translatorTMApproved", "_translatorPluginInsights", "_translatorCompareInsights",
@@ -510,6 +524,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			"_lastListFetchAt", "_pluginListCache",
 		]) {
 			if (k in data) delete data[k];
+		}
+		// 若本次发生了译名迁移（data.json 曾含内联译名），立即落盘瘦身版 data.json，
+		// 避免依赖后续交互才触发保存——否则重载后 data.json 仍残留 1.9MB 译名直至下次改动。
+		if (dataHadTranslatorFields) {
+			await this._saveSettingsImmediate();
 		}
 		// 本地模型名迁移：旧默认值（all-MiniLM-L6-v2，面向通用中英）已升级为
 		// bge-small-zh（面向中文，vault-curate 同款）。用户 data.json 可能仍存旧默认值，
@@ -581,46 +600,40 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 	private async loadTranslatorData(allData?: Record<string, unknown>) {
 		const data: Record<string, unknown> = allData ?? ((await this.loadData()) as Record<string, unknown>) ?? {};
-		// 翻译缓存优先从独立文件 translator-cache.json 读取；缺失时回退到旧版
-		// 主 data.json 内联字段（兼容老用户升级，首次加载后由保存逻辑迁移到独立文件）。
-		let cacheData = await this.storage.loadTranslatorCache();
-		const legacy: LoadDataRaw = {
-			cache: data._translatorCache as LoadDataRaw["cache"],
-			aiDict: data._translatorAiDict as LoadDataRaw["aiDict"],
-			tmQueue: data._translatorTMQueue as LoadDataRaw["tmQueue"],
-			tmApproved: data._translatorTMApproved as LoadDataRaw["tmApproved"],
-			myMemoryBlockedDate: data._myMemoryBlockedDate as LoadDataRaw["myMemoryBlockedDate"],
-			pluginInsights: data._translatorPluginInsights as LoadDataRaw["pluginInsights"],
-			compareInsights: data._translatorCompareInsights as LoadDataRaw["compareInsights"],
-			coverageSnapshots: data._translatorCoverageSnapshots as LoadDataRaw["coverageSnapshots"],
-		};
-		if (!cacheData) {
-			cacheData = {
-				cache: (legacy.cache as Record<string, unknown>) ?? {},
-				aiDict: (legacy.aiDict as Record<string, unknown>) ?? {},
-				pluginInsights: (legacy.pluginInsights as Record<string, unknown>) ?? {},
-				compareInsights: (legacy.compareInsights as Record<string, unknown>) ?? {},
-				coverageSnapshots: (legacy.coverageSnapshots as CoverageSnapshot[]) ?? [],
-				myMemoryBlockedDate: (legacy.myMemoryBlockedDate as string) ?? "",
-				seenPluginIds: Array.isArray(data._seenPluginIds) ? (data._seenPluginIds as string[]) : [],
-				lastListFetchAt: typeof data._lastListFetchAt === "number" ? data._lastListFetchAt : 0,
-			};
+		// 高维度解耦：译名缓存的唯一权威源是独立文件 translator-cache.json。
+		// data.json 内联的 _translatorCache 等仅在「迁移未完成」的极少数场景下残留，
+		// 此时 mergeTranslatorCache 会把它并入独立文件后再剔除（见 loadSettings 迁移），
+		// 故此处正常情况下只信独立文件，不再与 data.json 做运行时并集（避免双写脆弱性）。
+		// 一次性兜底：若独立文件为空或缺失、且 data.json 仍有内联译名，则触发迁移合入，
+		// 防止 loadSettings 迁移路径未跑时（如单独调用本方法）丢译名。
+		let fileData = await this.storage.loadTranslatorCache();
+		const dataHasLegacy =
+			!!data._translatorCache || !!data._translatorAiDict ||
+			!!data._translatorPluginInsights || !!data._translatorCompareInsights ||
+			!!data._translatorCoverageSnapshots || !!data._myMemoryBlockedDate ||
+			data._seenPluginIds != null || data._lastListFetchAt != null;
+		if ((!fileData || Object.keys(fileData.cache ?? {}).length === 0) && dataHasLegacy) {
+			await this.migrateTranslatorCacheFromData(data);
+			// 迁移已把内联译名合入独立文件，重新读取以获得完整权威数据
+			fileData = await this.storage.loadTranslatorCache();
 		}
+		const cache = (fileData?.cache as Record<string, TranslateResult>) ?? {};
+		const aiDict = (fileData?.aiDict as Record<string, DictEntry>) ?? {};
 		this.translator.loadData({
-			cache: cacheData.cache as unknown as LoadDataRaw["cache"],
-			aiDict: cacheData.aiDict as unknown as LoadDataRaw["aiDict"],
-			tmQueue: legacy.tmQueue,
-			tmApproved: legacy.tmApproved,
-			myMemoryBlockedDate: cacheData.myMemoryBlockedDate as LoadDataRaw["myMemoryBlockedDate"],
-			pluginInsights: cacheData.pluginInsights as unknown as LoadDataRaw["pluginInsights"],
-			compareInsights: cacheData.compareInsights as unknown as LoadDataRaw["compareInsights"],
-			coverageSnapshots: cacheData.coverageSnapshots as LoadDataRaw["coverageSnapshots"],
+			cache,
+			aiDict,
+			tmQueue: undefined,
+			tmApproved: undefined,
+			myMemoryBlockedDate: (fileData?.myMemoryBlockedDate as LoadDataRaw["myMemoryBlockedDate"]) ?? "",
+			pluginInsights: (fileData?.pluginInsights as LoadDataRaw["pluginInsights"]) ?? {},
+			compareInsights: (fileData?.compareInsights as LoadDataRaw["compareInsights"]) ?? {},
+			coverageSnapshots: (fileData?.coverageSnapshots as LoadDataRaw["coverageSnapshots"]) ?? [],
 		});
 		// 跨会话恢复列表拉取时间（修复：原 lastListFetchAt 是视图内存字段，重启归零
 		// 导致 isListStale(0, now, 6h) 恒真 → 每次启动都强制重拉列表 + 重译可见项）
-		this.lastListFetchAt = cacheData.lastListFetchAt;
+		this.lastListFetchAt = fileData?.lastListFetchAt ?? 0;
 		// 已「见过」的插件 id 集合（产品改进 #16 跨会话落盘，避免重启后误报全量新插件）
-		this.seenPluginIds = new Set(cacheData.seenPluginIds);
+		this.seenPluginIds = new Set(fileData?.seenPluginIds ?? []);
 		if (this.settings.secretId && this.settings.secretKey) {
 			this.translator.setApiConfig({
 				secretId: this.settings.secretId,
@@ -640,6 +653,57 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				apiKey: this.settings.aiSearchApiKey,
 				model: this.settings.aiSearchModel,
 			});
+		}
+	}
+
+	/**
+	 * 一次性迁移：把 data.json 内联的译名/缓存字段并入独立文件 translator-cache.json，
+	 * 使 data.json 彻底只承载设置。幂等：以「独立文件 ∪ data.json 内联」补全写回独立文件，
+	 * 不覆盖独立文件已有的更完整数据。
+	 *
+	 * 调用方（loadSettings）负责在调用后从 data 对象剔除这些内联键；本方法只负责
+	 * 把数据落到独立文件这一权威源，并兼容「独立文件尚未生成」的首次升级场景。
+	 *
+	 * @param data 主 data.json 落盘对象（会被读取内联译名，但不在此修改）
+	 */
+	private async migrateTranslatorCacheFromData(data: Record<string, unknown>): Promise<void> {
+		try {
+			const existing = (await this.storage.loadTranslatorCache()) ?? {
+				cache: {}, aiDict: {}, pluginInsights: {}, compareInsights: {},
+				coverageSnapshots: [], myMemoryBlockedDate: "", seenPluginIds: [], lastListFetchAt: 0,
+			};
+			const merged = {
+				cache: {
+					...(data._translatorCache as Record<string, TranslateResult> ?? {}),
+					...(existing.cache as Record<string, TranslateResult> ?? {}),
+				},
+				aiDict: {
+					...(data._translatorAiDict as Record<string, DictEntry> ?? {}),
+					...(existing.aiDict as Record<string, DictEntry> ?? {}),
+				},
+				pluginInsights: {
+					...(data._translatorPluginInsights as Record<string, unknown> ?? {}),
+					...(existing.pluginInsights as Record<string, unknown> ?? {}),
+				},
+				compareInsights: {
+					...(data._translatorCompareInsights as Record<string, unknown> ?? {}),
+					...(existing.compareInsights as Record<string, unknown> ?? {}),
+				},
+				coverageSnapshots: (existing.coverageSnapshots as CoverageSnapshot[]) ?? [],
+				myMemoryBlockedDate: (existing.myMemoryBlockedDate as string) ||
+					(data._myMemoryBlockedDate as string) || "",
+				seenPluginIds: existing.seenPluginIds?.length
+					? existing.seenPluginIds
+					: (Array.isArray(data._seenPluginIds) ? (data._seenPluginIds as string[]) : []),
+				lastListFetchAt: existing.lastListFetchAt ||
+					(typeof data._lastListFetchAt === "number" ? data._lastListFetchAt : 0),
+			};
+			await this.storage.saveTranslatorCache(merged);
+			logger.debug(
+				`[Chinese Plugin Market] 已把 data.json 内联译名迁移至 translator-cache.json（合并后 ${Object.keys(merged.cache).length} 条）。`
+			);
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 译名迁移到独立文件失败（不影响本次启动，下个 reload 会重试）：", e);
 		}
 	}
 
