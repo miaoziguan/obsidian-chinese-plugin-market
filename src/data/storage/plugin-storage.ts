@@ -2,12 +2,12 @@ import { logger } from "@shared/logger";
 import { type StoragePort } from "@data/storage/storage-port";
 import { type PluginStat, parseStatsJson } from "@domain/catalog/stats";
 import { type TrendSnapshot } from "@domain/recommend/trending";
-import { type CoverageSnapshot } from "@domain/catalog/translator";
+import { type TranslateResult, type DictEntry, type CoverageSnapshot } from "@domain/catalog/translator";
 
 /** 翻译缓存持久化结构（与主 data.json 分离，独立成 translator-cache.json）。 */
 export interface TranslatorPersistedData {
-	cache: Record<string, unknown>;
-	aiDict: Record<string, unknown>;
+	cache: Record<string, TranslateResult>;
+	aiDict: Record<string, DictEntry>;
 	pluginInsights: Record<string, unknown>;
 	compareInsights: Record<string, unknown>;
 	coverageSnapshots: CoverageSnapshot[];
@@ -234,8 +234,8 @@ export class PluginStorage {
 			const parsed = JSON.parse(text) as Record<string, unknown>;
 			if (!parsed || typeof parsed !== "object") return null;
 			return {
-				cache: (parsed.cache as Record<string, unknown>) ?? {},
-				aiDict: (parsed.aiDict as Record<string, string>) ?? {},
+				cache: (parsed.cache as Record<string, TranslateResult>) ?? {},
+				aiDict: (parsed.aiDict as Record<string, DictEntry>) ?? {},
 				pluginInsights: (parsed.pluginInsights as Record<string, unknown>) ?? {},
 				compareInsights: (parsed.compareInsights as Record<string, unknown>) ?? {},
 				coverageSnapshots: (parsed.coverageSnapshots as CoverageSnapshot[]) ?? [],
@@ -264,8 +264,8 @@ export class PluginStorage {
 			const parsed = JSON.parse(text) as Record<string, unknown>;
 			if (!parsed || typeof parsed !== "object") return null;
 			return {
-				cache: (parsed.cache as Record<string, unknown>) ?? {},
-				aiDict: (parsed.aiDict as Record<string, string>) ?? {},
+				cache: (parsed.cache as Record<string, TranslateResult>) ?? {},
+				aiDict: (parsed.aiDict as Record<string, DictEntry>) ?? {},
 				pluginInsights: (parsed.pluginInsights as Record<string, unknown>) ?? {},
 				compareInsights: (parsed.compareInsights as Record<string, unknown>) ?? {},
 				coverageSnapshots: (parsed.coverageSnapshots as CoverageSnapshot[]) ?? [],

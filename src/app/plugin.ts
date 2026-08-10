@@ -8,7 +8,7 @@
 
 import { Plugin, Notice, TFile, TFolder, Platform, normalizePath } from "obsidian";
 import { logger } from "@shared/logger";
-import { Translator, type PluginInfo, type TranslateResult, type DictEntry, type CoverageSnapshot } from "@domain/catalog/translator";
+import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
 import { PluginStorage, CREDENTIAL_KEYS, type PluginCredentials } from "@data/storage/plugin-storage";
 import { setHttpClient } from "@data/net/http-port";
@@ -621,14 +621,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 不再首屏全英文。合并策略：种子作基础层，本地运行时文件作覆盖层（用户优先），
 		// 二者并集后注入 translator——用户产生的译名永不被动种子覆盖。
 		const seed = await this.storage.loadSeededTranslatorCache();
-		const fileCache = (fileData?.cache as Record<string, TranslateResult>) ?? {};
-		const fileAiDict = (fileData?.aiDict as Record<string, DictEntry>) ?? {};
+		const fileCache: Record<string, TranslateResult> = fileData?.cache ?? {};
+		const fileAiDict: Record<string, DictEntry> = fileData?.aiDict ?? {};
 		const cache: Record<string, TranslateResult> = {
-			...(seed?.cache as Record<string, TranslateResult> | undefined),
+			...seed?.cache,
 			...fileCache,
 		};
 		const aiDict: Record<string, DictEntry> = {
-			...(seed?.aiDict as Record<string, DictEntry> | undefined),
+			...seed?.aiDict,
 			...fileAiDict,
 		};
 		this.translator.loadData({
@@ -687,22 +687,22 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			const merged = {
 				cache: {
 					...(data._translatorCache as Record<string, TranslateResult> ?? {}),
-					...(existing.cache as Record<string, TranslateResult> ?? {}),
+					...existing.cache,
 				},
 				aiDict: {
 					...(data._translatorAiDict as Record<string, DictEntry> ?? {}),
-					...(existing.aiDict as Record<string, DictEntry> ?? {}),
+					...existing.aiDict,
 				},
 				pluginInsights: {
 					...(data._translatorPluginInsights as Record<string, unknown> ?? {}),
-					...(existing.pluginInsights as Record<string, unknown> ?? {}),
+					...(existing.pluginInsights ?? {}),
 				},
 				compareInsights: {
 					...(data._translatorCompareInsights as Record<string, unknown> ?? {}),
-					...(existing.compareInsights as Record<string, unknown> ?? {}),
+					...(existing.compareInsights ?? {}),
 				},
-				coverageSnapshots: (existing.coverageSnapshots as CoverageSnapshot[]) ?? [],
-				myMemoryBlockedDate: (existing.myMemoryBlockedDate as string) ||
+				coverageSnapshots: existing.coverageSnapshots ?? [],
+				myMemoryBlockedDate: existing.myMemoryBlockedDate ||
 					(data._myMemoryBlockedDate as string) || "",
 				seenPluginIds: existing.seenPluginIds?.length
 					? existing.seenPluginIds
