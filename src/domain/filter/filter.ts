@@ -28,6 +28,7 @@ export class FilterCache {
 	private _install: InstallFilter = "all";
 	private _recommendedOnly = false;
 	private _categories?: string[];
+	private _favorites = false;
 	/** 上一次过滤所处的搜索模式（H1：AI 召回子集不得被关键词模式当前缀基础集复用） */
 	private _mode: SearchMode = "keyword";
 
@@ -40,6 +41,7 @@ export class FilterCache {
 		this._install = result.nextFilterInstall;
 		this._recommendedOnly = result.nextFilterRecommendedOnly ?? false;
 		this._categories = result.nextFilterCategories;
+		this._favorites = result.nextFilterFavorites ?? false;
 		this._mode = result.nextFilterMode ?? "keyword";
 	}
 
@@ -48,7 +50,7 @@ export class FilterCache {
 		| "lastFiltered" | "lastFilterQuery" | "lastFilterSource"
 		| "lastFilterAuthor" | "lastFilterInstall"
 		| "lastFilterRecommendedOnly" | "lastFilterCategories"
-		| "lastFilterMode"> {
+		| "lastFilterFavorites" | "lastFilterMode"> {
 		return {
 			lastFiltered: this._list,
 			lastFilterQuery: this._query,
@@ -57,6 +59,7 @@ export class FilterCache {
 			lastFilterInstall: this._install,
 			lastFilterRecommendedOnly: this._recommendedOnly,
 			lastFilterCategories: this._categories,
+			lastFilterFavorites: this._favorites,
 			lastFilterMode: this._mode,
 		};
 	}
@@ -250,6 +253,8 @@ export interface FilterParams {
 	lastFilterInstall?: InstallFilter;
 	/** 上一次的 recommendedOnly */
 	lastFilterRecommendedOnly?: boolean;
+	/** 上一次的 favoriteFilter（缓存失效判断，避免切回「全部」时复用收藏子集） */
+	lastFilterFavorites?: boolean;
 	/** 上一次选中的分类（数组引用比对，变化时使缓存失效） */
 	lastFilterCategories?: string[];
 	/** 上一次过滤所处的搜索模式（缺省视为 keyword，向后兼容） */
@@ -268,6 +273,7 @@ export interface FilterResult {
 	/** 回写的 installFilter（供下次缓存失效判断） */
 	nextFilterInstall: InstallFilter;
 	nextFilterRecommendedOnly?: boolean;
+	nextFilterFavorites?: boolean;
 	nextFilterCategories?: string[];
 	/** 回写的搜索模式（供下次缓存复用判定：AI 子集不得被关键词模式复用） */
 	nextFilterMode: SearchMode;
@@ -288,8 +294,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		translatedResults, searchIndex, sortBy,
 		aiSearchResult, aiSearchQueryCache,
   lastFiltered, lastFilterQuery, lastFilterSource, lastFilterAuthor, authorFilter,
-  lastFilterInstall = "all", lastFilterRecommendedOnly = false, lastFilterCategories,
-  lastFilterMode = "keyword",
+  lastFilterInstall = "all", lastFilterRecommendedOnly = false, lastFilterFavorites = false,
+  lastFilterCategories, lastFilterMode = "keyword",
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		selectedCategories, pluginTagMap,
@@ -311,6 +317,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	let nextFilterAuthor: string | null;
 	let nextFilterInstall: InstallFilter;
 	let nextFilterRecommendedOnly: boolean | undefined;
+	let nextFilterFavorites: boolean | undefined;
 	let nextFilterCategories: string[] | undefined;
 	let clearAiResult = false;
 
@@ -389,6 +396,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 			lastFilterAuthor === authorFilter &&
 			lastFilterInstall === installFilter &&
 			lastFilterRecommendedOnly === recommendedOnly &&
+			lastFilterFavorites === favoriteFilter &&
 			sameCategories &&
 			(lastFilterQuery === "" || query.startsWith(lastFilterQuery));
 
@@ -410,6 +418,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	// 回写缓存状态（与分支无关，统一在此赋值）
 	nextFilterInstall = installFilter;
 	nextFilterRecommendedOnly = recommendedOnly;
+	nextFilterFavorites = favoriteFilter;
 	nextFilterCategories = selectedCategories;
 
 	// 应用排序。relevance 保持来源顺序（AI=rankedIds 序 / 本地=过滤序）；其余维度覆盖之。
@@ -443,6 +452,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		nextFilterAuthor,
 		nextFilterInstall,
 		nextFilterRecommendedOnly,
+		nextFilterFavorites,
 		nextFilterCategories,
 		nextFilterMode: searchMode,
 		clearAiResult,
