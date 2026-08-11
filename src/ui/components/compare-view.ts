@@ -1,4 +1,5 @@
 import { formatDownloads } from "@domain/catalog/stats";
+import { formatOfficialTag } from "@domain/catalog/official-tags";
 import { compareTagsMulti, compareCommandsMulti } from "@domain/compare/compare";
 import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/translator";
 import { App, MarkdownRenderer, Notice, Component } from "obsidian";
@@ -204,12 +205,12 @@ export function renderComparePage(
 			body.createDiv({ cls: "pt-compare-card-desc", text: vm.desc });
 		}
 
-		// 功能标签
+		// 功能标签（官方英文 tag 渲染为「中文(英文)」对照）
 		const tags = vm.tag?.tags ?? [];
 		if (tags.length > 0) {
 			const tagsRow = body.createDiv({ cls: "pt-compare-card-tags" });
 			for (const tag of tags) {
-				tagsRow.createSpan({ cls: "pt-compare-card-tag", text: tag });
+				tagsRow.createSpan({ cls: "pt-compare-card-tag", text: formatOfficialTag(tag) });
 			}
 		}
 	}
