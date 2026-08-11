@@ -1360,6 +1360,19 @@ button.pt-facet-letter-btn.is-active {
 	cursor: default;
 	pointer-events: none;
 }
+/* 安装中：纯展示 chip 胶囊（强调色淡底 + 脉冲），不可交互 */
+.pt-card-install-btn--installing {
+	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
+	color: var(--pt-accent);
+	border: none;
+	cursor: default;
+	pointer-events: none;
+	animation: pt-pulse-opacity 1.4s ease-in-out infinite;
+}
+@keyframes pt-pulse-opacity {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.55; }
+}
 /* 关键：button 元素的 UA/主题默认样式需要更高具体性才能被覆盖。
    仅靠 .pt-card-install-btn 不够，必须用 button. 前缀。
    注意：不要在这里写 font: shorthand，否则会用更高具体性把类的字号字重冲掉；

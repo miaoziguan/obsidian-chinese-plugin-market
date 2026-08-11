@@ -211,6 +211,8 @@ export interface ViewContext {
 	outdatedIds: Set<string>;
 	/** 可更新详情（id → {local, latest}） */
 	outdatedInfo: Map<string, { local: string; latest: string }>;
+	/** 正在一键安装中的插件 id 集合（安装中按钮显示「安装中…」并防重点） */
+	installingIds: Set<string>;
 
 	// ── 智能信号 ──
 	smartSignals: Map<string, SignalId[]>;
@@ -538,6 +540,8 @@ get authorFacetList() { return view.authorFacetList; },
 		set installedVersions(v) { view.installedVersions = v; },
 		get outdatedIds() { return view.outdatedIds; },
 		get outdatedInfo() { return view.outdatedInfo; },
+		get installingIds() { return view.installingIds; },
+		set installingIds(v) { view.installingIds = v; },
 
 		// ── 智能信号 ──
 		get smartSignals() { return view.smartSignals; },

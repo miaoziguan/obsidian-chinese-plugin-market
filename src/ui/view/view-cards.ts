@@ -14,6 +14,7 @@ import { fetchManifest, fetchReadmeText, fetchMainSignals, generateInsight } fro
 import type { I18nKey } from "@shared/i18n";
 import { LAYOUT } from "@shared/constants";
 import type { MirrorConfig } from "@domain/catalog/mirror";
+import { installCommunityPlugin } from "@data/platform/plugin-installer";
 
 export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard: HTMLElement | null = null) {
 	const info = ctx.plugins.find((p) => p.id === pluginId);
@@ -149,12 +150,18 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 		} else if (action === "insight") {
 			openInsightModal(ctx, plugin);
 		} else if (action === "market") {
-			// 跳转 Obsidian 社区市场
-			const url = actionEl.getAttribute("data-url");
-			if (url) {
-				window.open(url, "_self");
-				new Notice(ctx.t("notice.market.opened"));
-			}
+			// 一键安装：后台下载 release 资产并加载启用（失败回退到跳转市场）
+			if (ctx.installedIds.has(plugin.id) || ctx.installingIds.has(plugin.id)) return;
+			ctx.installingIds.add(plugin.id);
+			ctx.scheduleRender(true);
+			void (async () => {
+				try {
+					await installCommunityPlugin(ctx, plugin);
+				} finally {
+					ctx.installingIds.delete(plugin.id);
+					ctx.scheduleRender(true);
+				}
+			})();
 		} else if (action === "author") {
 			// 作者钻取：点卡片作者名 → 只看该作者全部插件（与作者 facet 共用 authorFilter）
 			ctx.authorFilter = plugin.author;

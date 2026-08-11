@@ -94,6 +94,8 @@ export interface CardRenderContext {
 	outdatedInfo?: Map<string, { local: string; latest: string }>;
 	/** Obsidian App 引用（用于「可更新」徽标点击跳社区插件更新入口） */
 	app?: import("obsidian").App;
+	/** 正在一键安装中的插件 id 集合（用于按钮显示「安装中…」并防重点） */
+	installingIds?: Set<string>;
 	/** 描述展开/收起时的回调（用于虚拟滚动重测行高） */
 	onDescToggle?: () => void;
 	/** 「🍎 系统翻译」成功后落库回调（由视图注入，调用 translator.persistSystemTranslation） */
@@ -394,6 +396,22 @@ function updateInstallButton(
 	const t = ctx.t;
 	const isInstalled = ctx.installedIds.has(plugin.id);
 	const isEnabled = ctx.enabledIds.has(plugin.id);
+	const isInstalling = !!ctx.installingIds?.has(plugin.id);
+
+	// 安装中：统一显示为 span（不可点击，防重点）
+	if (isInstalling) {
+		if (existing.tagName === "SPAN" && existing.classList.contains("pt-card-install-btn--installing")) {
+			existing.textContent = t("card.installing");
+			return existing;
+		}
+		const el = createSpan();
+		el.className = "pt-card-install-btn pt-card-install-btn--installing";
+		el.textContent = t("card.installing");
+		el.setAttribute("aria-label", `${t("card.installing")} ${plugin.name}`);
+		existing.replaceWith(el);
+		return el;
+	}
+
 	// enabled 是 span，其余是 button——结构不同需重建
 	if (isEnabled) {
 		if (existing.tagName === "SPAN" && existing.classList.contains("pt-card-install-btn--enabled")) {
