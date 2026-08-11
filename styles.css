@@ -1361,18 +1361,43 @@ button.pt-facet-letter-btn.is-active {
 .pt-card-install-btn--enabled:hover {
 	filter: brightness(0.92);
 }
-/* 安装中：纯展示 chip 胶囊（强调色淡底 + 脉冲），不可交互 */
+/* 安装中：纯展示 chip 胶囊（强调色淡底 + 描边流光），不可交互。
+   克制动效：胶囊本体静止不透明，仅一道高亮带从左缓缓扫到右循环，
+   暗示「进度在推进」而不显示具体数字/百分比/旋转。优于整胶囊呼吸与 spinner。 */
 .pt-card-install-btn--installing {
+	position: relative;
+	overflow: hidden;
 	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
 	color: var(--pt-accent);
 	border: none;
 	cursor: default;
 	pointer-events: none;
-	animation: pt-pulse-opacity 1.4s ease-in-out infinite;
+	/* 极淡内描边，给流光一个可见的边界载体，显得更精致 */
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pt-accent) 22%, transparent);
 }
-@keyframes pt-pulse-opacity {
-	0%, 100% { opacity: 1; }
-	50% { opacity: 0.55; }
+/* 流光层：覆盖胶囊，文字在其上（文字无 z-index 即自然位于伪元素之上）。
+   一道偏亮的高亮带从左扫到右，linear 匀速循环，无旋转。 */
+.pt-card-install-btn--installing::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		transparent 30%,
+		color-mix(in srgb, var(--pt-accent) 58%, transparent) 50%,
+		transparent 70%,
+		transparent 100%
+	);
+	background-size: 220% 100%;
+	background-repeat: no-repeat;
+	animation: pt-install-shimmer 2.2s linear infinite;
+	pointer-events: none;
+}
+@keyframes pt-install-shimmer {
+	0% { background-position: 160% 0; }
+	100% { background-position: -60% 0; }
 }
 /* 关键：button 元素的 UA/主题默认样式需要更高具体性才能被覆盖。
    仅靠 .pt-card-install-btn 不够，必须用 button. 前缀。
