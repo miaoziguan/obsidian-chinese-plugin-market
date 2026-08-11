@@ -9,6 +9,7 @@ import {
 	ItemView,
 	WorkspaceLeaf,
 	Platform,
+	Notice,
 } from "obsidian";
 import { toHTMLElement } from "@ui/dom/dom";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
@@ -131,7 +132,7 @@ import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, rela
 import { runAISearch } from "@ui/view/view-ai-search";
 import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, updateWindow, disposeRenderTimers } from "@ui/view/view-render";
 import { startInstalledWatch } from "@ui/view/installed-watch";
-import { onCardClick, toggleFavorite, onCardKeydown, focusCardByIdx, flashAction, computeSimilarFor, openDetailDrawer as _openDetailDrawer } from "@ui/view/view-cards";
+import { onCardClick, handleToggleEnabled, toggleFavorite, onCardKeydown, focusCardByIdx, flashAction, computeSimilarFor, openDetailDrawer as _openDetailDrawer } from "@ui/view/view-cards";
 import { renderFeaturedSection, ensureFeaturedSection, hideFeaturedSection } from "@ui/view/view-featured";
 import { createViewContext, type ViewContext } from "@ui/view/view-context";
 import { updateCompareTray, openCompareModal, enterCompareMode, exitCompareMode } from "@ui/view/view-compare";
@@ -338,6 +339,11 @@ export class ChinesePluginMarketView extends ItemView {
 				self.translator.persistSystemTranslation(pid, name, desc);
 				self.plugin.saveTranslatorData();
 			},
+			// 卡片电源按钮：切换已安装插件启用/禁用
+			onToggleEnabled: (pid) => {
+				const plugin = self.plugins.find((p) => p.id === pid);
+				if (plugin) void handleToggleEnabled(self._ctx, plugin);
+			},
 		};
 		await this.loadAndRender();
 		// #14：启动已安装状态实时同步（桌面 fs.watch / 移动轮询），视图关闭时释放
@@ -353,6 +359,14 @@ export class ChinesePluginMarketView extends ItemView {
 		if (this.plugin.translator.tagService.getAllCategories().length > 0) {
 			this._ctx?.refreshFacets?.();
 		}
+		// 延迟补一次快照：Obsidian 启动/重载时插件的 enabledPlugins 可能在视图 onOpen 后才完全就绪，
+		// 延迟兜底确保开关状态读全（避免重启后误判为未启用）。
+		window.setTimeout(() => {
+			if (this.disposed) return;
+			snapshotInstalled(this._ctx);
+			const n = (this._ctx.enabledIds as Set<string> | undefined)?.size ?? 0;
+			new Notice(`[DBG] 延迟snapshot enabledIds 共 ${n} 个`);
+		}, 2500);
 	}
 
 	async onClose() {

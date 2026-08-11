@@ -6,6 +6,7 @@
 
 import { createPluginCard } from "@ui/components/card-render";
 import type { ViewContext } from "@ui/view/view-context";
+import { handleToggleEnabled } from "@ui/view/view-cards";
 
 import { computeFeaturedIds as computeFeaturedIdsPure } from "@domain/recommend/featured";
 
@@ -111,6 +112,11 @@ export function renderFeaturedSection(ctx: ViewContext) {
 				onSysTranslatePersist: (pid, name, desc) => {
 					ctx.translator.persistSystemTranslation(pid, name, desc);
 					ctx.saveTranslatorData();
+				},
+				// 卡片电源按钮：切换已安装插件启用/禁用
+				onToggleEnabled: (pid) => {
+					const p = ctx.plugins.find((x) => x.id === pid);
+					if (p) void handleToggleEnabled(ctx, p);
 				},
 			});
 			grid.appendChild(card);

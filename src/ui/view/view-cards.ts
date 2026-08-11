@@ -14,7 +14,7 @@ import { fetchManifest, fetchReadmeText, fetchMainSignals, generateInsight } fro
 import type { I18nKey } from "@shared/i18n";
 import { LAYOUT } from "@shared/constants";
 import type { MirrorConfig } from "@domain/catalog/mirror";
-import { installCommunityPlugin } from "@data/platform/plugin-installer";
+import { installCommunityPlugin, togglePluginEnabled, uninstallCommunityPlugin } from "@data/platform/plugin-installer";
 
 export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard: HTMLElement | null = null) {
 	const info = ctx.plugins.find((p) => p.id === pluginId);
@@ -90,14 +90,95 @@ export function computeSimilarFor(ctx: ViewContext, info: PluginInfo) : SimilarC
 	
 }
 
+/**
+ * 切换已安装插件的启用/禁用状态（供事件委托与卡片直接回调共用）。
+ */
+export async function handleToggleEnabled(ctx: ViewContext, plugin: PluginInfo): Promise<void> {
+	if (ctx.installingIds.has(plugin.id)) return;
+	ctx.installingIds.add(plugin.id);
+	ctx.scheduleRender(true);
+	try {
+		await togglePluginEnabled(ctx, plugin);
+	} finally {
+		ctx.installingIds.delete(plugin.id);
+		// S2 增量签名优化会导致 renderPluginList 跳过无变化列表，
+		// 但 installingIds 变化属于单卡状态变化，必须显式刷新该卡。
+		ctx.refreshCardState(plugin.id);
+		ctx.scheduleRender(true);
+	}
+}
+
+/**
+ * 卸载确认弹窗（破坏性操作二次确认）。
+ */
+class UninstallConfirmModal extends Modal {
+	private readonly plugin: PluginInfo;
+	private readonly resolve: (v: boolean) => void;
+
+	constructor(ctx: ViewContext, plugin: PluginInfo, resolve: (v: boolean) => void) {
+		super(ctx.app);
+		this.plugin = plugin;
+		this.resolve = resolve;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		this.setTitle(this.plugin.name ? `卸载 ${this.plugin.name}` : "卸载插件");
+		contentEl.createEl("p", { text: "确定卸载该插件？插件文件将从磁盘删除，此操作不可撤销。" });
+		const actions = contentEl.createDiv({ cls: "modal-button-row" });
+		actions.createEl("button", { text: "取消", cls: "mod-cta" }).addEventListener("click", () => {
+			this.close();
+			this.resolve(false);
+		});
+		actions.createEl("button", { text: "卸载", cls: "mod-warning" }).addEventListener("click", () => {
+			this.close();
+			this.resolve(true);
+		});
+	}
+}
+
+/**
+ * 卸载已安装插件（供事件委托与卡片直接回调共用）。
+ * 卸载是破坏性操作，先二次确认再执行；卸载中加锁防重复点击。
+ */
+export async function handleUninstall(ctx: ViewContext, plugin: PluginInfo): Promise<void> {
+	if (ctx.installingIds.has(plugin.id)) return;
+	ctx.installingIds.add(plugin.id);
+	ctx.scheduleRender(true);
+	try {
+		const confirmed = await new Promise<boolean>((resolve) => {
+			new UninstallConfirmModal(ctx, plugin, resolve).open();
+		});
+		if (!confirmed) return;
+		const ok = await uninstallCommunityPlugin(ctx, plugin);
+		if (ok) {
+			new Notice(ctx.t("card.uninstall.done", { name: plugin.name }));
+		}
+	} finally {
+		ctx.installingIds.delete(plugin.id);
+		ctx.refreshCardState(plugin.id);
+		ctx.invalidateAndRender(true);
+	}
+}
+
 export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 
 		const target = ev.target as HTMLElement;
-		const actionEl = toHTMLElement(target.closest("[data-action]"));
+		// 子弹开关兜底：直接 listener 因故未拦截时，事件委托层识别 .pt-card-toggle-switch，
+		// 避免误开详情页（开关自身也带 data-action=toggle-enabled，会被下一段命中）。
+		const toggleBtn = toHTMLElement(target.closest(".pt-card-toggle-switch"));
+		const actionEl = toggleBtn ?? toHTMLElement(target.closest("[data-action]"));
+		const actionsRow = toHTMLElement(target.closest(".pt-card-actions-row"));
+		const card = toHTMLElement((actionEl ?? target).closest(".pt-card--clickable"));
+		const pid = card?.getAttribute("data-plugin-id");
+		const hasToggle = card ? Boolean(card.querySelector(".pt-card-toggle-switch")) : false;
+		// 操作行空白处点击：若卡片有开关，不跳详情（用户可能误点图标间隙）
+		if (!actionEl && actionsRow && hasToggle) {
+			return;
+		}
 		// 整卡点击打开详情（非按钮区域点击）
 		if (!actionEl) {
-			const card = toHTMLElement(target.closest(".pt-card--clickable"));
-			const pid = card?.getAttribute("data-plugin-id");
 			if (pid) {
 				ev.stopPropagation();
 				const plugin = ctx.plugins.find((p) => p.id === pid);
@@ -108,8 +189,6 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			}
 			return;
 		}
-		const card = toHTMLElement(actionEl.closest(".pt-card"));
-		const pid = card?.getAttribute("data-plugin-id");
 		if (!pid) return;
 		ev.stopPropagation();
 		const action = actionEl.getAttribute("data-action");
@@ -149,6 +228,13 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			ctx.openDetailDrawer(pid, card);
 		} else if (action === "insight") {
 			openInsightModal(ctx, plugin);
+		} else if (action === "toggle-enabled") {
+			// 已安装插件：切换启用/禁用
+			new Notice(`[DBG] 事件委托 toggle-enabled pid=${pid}`);
+			void handleToggleEnabled(ctx, plugin);
+		} else if (action === "uninstall") {
+			// 已安装插件：卸载（含二次确认）
+			void handleUninstall(ctx, plugin);
 		} else if (action === "market") {
 			// 一键安装：后台下载 release 资产并加载启用（失败回退到跳转市场）
 			if (ctx.installedIds.has(plugin.id) || ctx.installingIds.has(plugin.id)) return;
@@ -158,8 +244,14 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 				try {
 					await installCommunityPlugin(ctx, plugin);
 				} finally {
+					// 安装流程结束：先删除 installing 标记，再同步刷新当前卡片，最后兜底重建窗口。
+					// 注意：不要只依赖 scheduleRender，renderPluginList 的签名优化会跳过列表重绘；
+					// 也不要只依赖 invalidateAndRender，虚拟滚动 pending 填充可能把本卡推到 requestIdleCallback 才更新。
+					// 这里先 refreshCardState 直接原地更新当前卡片按钮，再 invalidateAndRender 重建窗口保一致性。
 					ctx.installingIds.delete(plugin.id);
-					ctx.scheduleRender(true);
+					ctx.snapshotInstalled();
+					ctx.refreshCardState(plugin.id);
+					ctx.invalidateAndRender(true);
 				}
 			})();
 		} else if (action === "author") {

@@ -147,6 +147,8 @@ export const STRINGS = {
 	"card.market": { zh: "社区市场" },
 	"card.install": { zh: "安装" },
 	"card.installing": { zh: "安装中…" },
+	"card.enable": { zh: "启用插件" },
+	"card.disable": { zh: "禁用插件" },
 	"card.favorite": { zh: "收藏" },
 	"card.insight": { zh: "了解功能" },
 	"card.sysTranslate": { zh: "系统翻译" },
@@ -163,7 +165,11 @@ export const STRINGS = {
 	"card.author.tip": { zh: "作者：{author}（点击只看该作者的插件）" },
 	"card.matchSignal.title": { zh: "该结果因「{sig}」命中而被召回" },
 	"card.installed.off": { zh: "已安装" },
-	"card.enable": { zh: "启用" },
+	"card.uninstall": { zh: "卸载插件" },
+	"card.uninstalling": { zh: "卸载中…" },
+	"card.uninstall.confirm": { zh: "确定卸载「{name}」？插件文件将从磁盘删除，此操作不可撤销。" },
+	"card.uninstall.done": { zh: "已卸载 {name}" },
+	"card.uninstall.fail": { zh: "卸载 {name} 失败：{reason}" },
 	"favorite.added": { zh: "已收藏" },
 	"favorite.removed": { zh: "已取消收藏" },
 
@@ -426,6 +432,9 @@ export const STRINGS = {
 	"notice.install.success": { zh: "「{name}」安装完成并已启用" },
 	"notice.install.needReload": { zh: "「{name}」已下载，重启 Obsidian 后生效" },
 	"notice.install.reloadHint": { zh: "（可重启 Obsidian 后使用）" },
+	"notice.install.manualEnable": { zh: "「{name}」已安装，请手动到「设置 → 第三方插件」开启" },
+	"notice.install.disabled": { zh: "「{name}」已禁用" },
+	"notice.install.disableFail": { zh: "「{name}」禁用失败" },
 	"notice.ai.loadFail": {
 		zh: "插件列表加载失败，无法执行 AI 搜索。请检查网络后重试。",
 

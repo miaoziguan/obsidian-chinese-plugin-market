@@ -97,7 +97,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		const updateModeBadge = () => {
 			if (!isAIMode(ctx) && !isLocalMode(ctx)) {
 				aiBadge.setCssStyles({ display: "none" });
-				clearBtn.style.right = ""; // keyword 模式：恢复 CSS 默认 right
+				clearBtn.setCssStyles({ right: "" }); // keyword 模式：恢复 CSS 默认 right
 				return;
 			}
 			aiBadge.setCssStyles({ display: "" });
@@ -123,7 +123,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				// 本地语义：无需 Key、无需联网；且 badge 与左侧下拉标签重复，本地模式直接隐藏
 				aiBadge.setCssStyles({ display: "none" });
 				aiBadge.setAttribute("title", "");
-				clearBtn.style.right = ""; // 本地语义 badge 已隐藏，清除按钮用默认 right
+				clearBtn.setCssStyles({ right: "" }); // 本地语义 badge 已隐藏，清除按钮用默认 right
 			}
 		};
 		// 无 Key 的 AI 模式点击徽章跳设置；本地模式不显示 badge
