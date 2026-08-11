@@ -13,7 +13,6 @@ import { asAppInternals, type AppPlugins } from "@data/platform/obsidian-interna
 import { fetchManifest } from "@domain/compare/plugin-insight";
 import type { PluginInfo } from "@domain/catalog/translator";
 import type { ViewContext } from "@ui/view/view-context";
-import { netRequest } from "@data/net/net";
 import type { MirrorConfig } from "@domain/catalog/mirror";
 import { mirrorConfig } from "@ui/view/view-data";
 import { logger } from "@shared/logger";
@@ -55,40 +54,24 @@ function buildReleaseAssetUrl(
 	return base;
 }
 
-/** 读取响应文本，兼容 netRequest 返回结构 */
-function responseText(resp: { text?: string; json?: unknown }): string {
-	if (typeof resp.text === "string") return resp.text;
-	return "";
-}
-
 /**
- * 单次下载（含手动重定向跟随）。
+ * 单次下载（用全局 fetch，而非 requestUrl）。
  *
- * 关键：GitHub Release 资产返回 302 重定向到 release-assets.githubusercontent.com 的
- * 签名 CDN，而 Obsidian 的 requestUrl（throw:false）**不会自动跟随这个跨域重定向**，
- * 直接返回 302。故这里手动跟随 3xx（取响应头 location）到最终 200，最多 5 跳防环。
+ * 关键：Obsidian 的 requestUrl 对 2xx 的 JS 文本响应会尝试 JSON.parse 并抛
+ * “Unexpected token '/'” 错误，导致 main.js 永远取不到文本。全局 fetch 的
+ * Response.text() 不会对内容做 JSON 解析，且默认 redirect:"follow" 会自动跟随
+ * GitHub Release 资产的 302 → release-assets CDN，一次拿到最终字节。
  */
 async function downloadWithRedirect(
-	url: string,
-	depth = 0
+	url: string
 ): Promise<{ ok: boolean; text: string; finalUrl: string }> {
-	if (depth > 5) return { ok: false, text: "", finalUrl: url };
 	try {
-		const resp = await netRequest({ url, method: "GET" });
-		// 2xx：成功
+		const resp = await fetch(url, { method: "GET", redirect: "follow" });
 		if (resp.status >= 200 && resp.status < 300) {
-			return { ok: true, text: responseText(resp), finalUrl: url };
+			const text = await resp.text();
+			return { ok: true, text, finalUrl: resp.url || url };
 		}
-		// 3xx：手动跟随 Location（requestUrl 不跟跨域重定向）
-		if (resp.status >= 300 && resp.status < 400) {
-			const loc =
-				(resp.headers && (resp.headers["location"] || resp.headers["Location"])) || "";
-			if (loc) {
-				const next = new URL(loc, url).toString();
-				logger.debug(`[Chinese Plugin Market] 下载跟随重定向 ${resp.status}: ${url} → ${next}`);
-				return downloadWithRedirect(next, depth + 1);
-			}
-		}
+		logger.warn(`[Chinese Plugin Market] 下载失败：HTTP ${resp.status} @ ${url}`);
 		return { ok: false, text: "", finalUrl: url };
 	} catch (e: unknown) {
 		const msg = e instanceof Error ? e.message : String(e);
@@ -123,15 +106,10 @@ async function fetchReleaseAsset(
 		const candidates: string[] = [];
 		const primary = buildReleaseAssetUrl(repo, file, tag, mirror);
 		if (primary) candidates.push(primary);
-		// 公共代理兜底（gh-proxy.com 已停服，补充仍在运行的镜像站，命中一个即可）
+		// 公共代理兜底（仅 gh-proxy.com 仍可能可用；ghproxy.net / mirror.ghproxy.com 已失效）
 		const direct = githubDirect(tag);
-		for (const prefix of [
-			"https://ghproxy.net/",
-			"https://mirror.ghproxy.com/",
-			"https://gh-proxy.com/",
-		]) {
-			if (primary !== `${prefix}${direct}`) candidates.push(`${prefix}${direct}`);
-		}
+		const ghproxyFallback = `https://gh-proxy.com/${direct}`;
+		if (primary !== ghproxyFallback) candidates.push(ghproxyFallback);
 
 		for (const url of candidates) {
 			const r = await downloadWithRedirect(url);
