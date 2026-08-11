@@ -69,6 +69,8 @@ export interface ChinesePluginMarketSettings {
 	sortBy: SortBy;
 	// 个人收藏集：用户主动收藏的插件 id（持久化，随使用时间复利）
 	favorites: string[];
+	/** 仅看收藏筛选：是否只展示收藏集内的插件（跨会话持久化，与 favorites 数据正交） */
+	favoriteFilter: boolean;
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
 }
@@ -96,6 +98,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	sortBy: "relevance",
 	favorites: [],
 	compare: [],
+	favoriteFilter: false,
 };
 
 /**

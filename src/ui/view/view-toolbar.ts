@@ -142,6 +142,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.authorFilter = null;
 			ctx.installFilter = "all";
 			ctx.favoriteFilter = false;
+			ctx.settings.favoriteFilter = false;
 			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
 			// 「仅显示已安装」按钮：aria-pressed 与文案复位
 			const uninstalledToggleEl = q(ctx.contentEl, ".pt-toggle-uninstalled");
@@ -618,7 +619,10 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.favoriteFilter = !ctx.favoriteFilter;
 			favToggle.setAttribute("aria-pressed", ctx.favoriteFilter ? "true" : "false");
 			favToggle.textContent = ctx.favoriteFilter ? "显示全部" : "仅看收藏";
+			// 持久化跨会话：与 sourceFilter 同款处理，回写 settings 并落盘
+			ctx.settings.favoriteFilter = ctx.favoriteFilter;
 			ctx.track(ctx.favoriteFilter ? "filter:favorites" : "filter:favorites_off");
+			ctx.saveSettings();
 			ctx.scheduleRender(true);
 		});
 
@@ -644,6 +648,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			uninstalledToggle.setAttribute("aria-pressed", "false");
 			uninstalledToggle.textContent = "仅显示已安装";
 			ctx.favoriteFilter = false;
+			ctx.settings.favoriteFilter = false;
 			favToggle.setAttribute("aria-pressed", "false");
 			favToggle.textContent = "仅看收藏";
 			ctx.renderAuthorFacet();
