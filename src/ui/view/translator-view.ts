@@ -267,6 +267,8 @@ export class ChinesePluginMarketView extends ItemView {
 	// ── 已安装/已启用状态（产品改进 #7）──
 	public installedIds: Set<string> = new Set();
 	public enabledIds: Set<string> = new Set();
+	/** 正在一键安装中的插件 id 集合（安装中按钮显示「安装中…」并防重点） */
+	public installingIds: Set<string> = new Set();
 	/** 已装插件本地版本号（id → manifest.version），供「可更新」检测对比 */
 	public installedVersions: Map<string, string> = new Map();
 	/** 官方版本领先本地的插件 id 集合（有新版可更） */
@@ -327,6 +329,7 @@ export class ChinesePluginMarketView extends ItemView {
 			get aiSearchResult() { return self.aiSearchResult; },
 			get outdatedIds() { return self.outdatedIds; },
 			get outdatedInfo() { return self.outdatedInfo; },
+			get installingIds() { return self.installingIds; },
 			app: self.app,
 			// 卡片高度已固定（CSS contain + 锁高），描述展开不再改变布局，无需重绘
 			onDescToggle: () => {},

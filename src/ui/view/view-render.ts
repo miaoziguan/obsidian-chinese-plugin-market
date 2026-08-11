@@ -580,6 +580,7 @@ function makeCardRenderCtx(ctx: ViewContext): CardRenderContext {
 		outdatedIds: ctx.outdatedIds,
 		outdatedInfo: ctx.outdatedInfo,
 		app: ctx.app,
+		installingIds: ctx.installingIds,
 		recommendedIds: ctx.getRecommendedIds(),
 		// 固定卡片高度：描述展开不改变行高，无需重排整列 → 空实现
 		onDescToggle: () => {},
