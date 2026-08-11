@@ -13,6 +13,7 @@ import { asAppInternals, type AppPlugins } from "@data/platform/obsidian-interna
 import { fetchManifest } from "@domain/compare/plugin-insight";
 import type { PluginInfo } from "@domain/catalog/translator";
 import type { ViewContext } from "@ui/view/view-context";
+import { netRequest } from "@data/net/net";
 import type { MirrorConfig } from "@domain/catalog/mirror";
 import { mirrorConfig } from "@ui/view/view-data";
 import { logger } from "@shared/logger";
@@ -55,29 +56,108 @@ function buildReleaseAssetUrl(
 }
 
 /**
- * 单次下载（用全局 fetch，而非 requestUrl）。
- *
- * 关键：Obsidian 的 requestUrl 对 2xx 的 JS 文本响应会尝试 JSON.parse 并抛
- * “Unexpected token '/'” 错误，导致 main.js 永远取不到文本。全局 fetch 的
- * Response.text() 不会对内容做 JSON 解析，且默认 redirect:"follow" 会自动跟随
- * GitHub Release 资产的 302 → release-assets CDN，一次拿到最终字节。
+ * 取 Node 内置 https 模块（桌面端可用，移动端无）。
+ * Obsidian 渲染进程暴露 window.require，与 installed-watch.ts 用 require("fs") 同理。
+ * 用 Node https 发请求可同时绕开两个坑：
+ *   - CORS：渲染进程 fetch 受 app://obsidian.md 的 CORS 限制，github release 资产不带 ACAO 头；
+ *   - JSON 解析：Obsidian requestUrl 对 JS 文本响应会尝试 JSON.parse 而抛错。
+ * Node https 返回原始文本，且不受 CORS 约束。
+ */
+function getNodeHttps(): { get: (url: string, opts: unknown, cb: (res: unknown) => void) => { on: (e: string, cb: (err: Error) => void) => void } } | null {
+	const req = (window as unknown as { require?: (id: string) => unknown }).require;
+	if (!req) return null;
+	try {
+		return req("https") as never;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * 用 Node https 下载（桌面端主路径）。手动跟随 302 → release-assets CDN，
+ * 取响应原始文本（utf8，Accept-Encoding: identity 避免 gzip）。最多 5 跳防环。
+ */
+function nodeDownload(url: string, depth = 0): Promise<{ ok: boolean; text: string; finalUrl: string }> {
+	return new Promise((resolve) => {
+		const https = getNodeHttps();
+		if (!https || depth > 5) {
+			resolve({ ok: false, text: "", finalUrl: url });
+			return;
+		}
+		let req: { on: (e: string, cb: (err: Error) => void) => void } | null = null;
+		try {
+			req = https.get(
+				url,
+				{
+					headers: {
+						"Accept-Encoding": "identity",
+						"User-Agent": "obsidian-chinese-plugin-market",
+					},
+				},
+				(res: {
+					statusCode?: number;
+					headers: Record<string, string>;
+					setEncoding: (e: string) => void;
+					on: (e: string, cb: (d: string | Error) => void) => void;
+					resume: () => void;
+				}) => {
+					const code = res.statusCode ?? 0;
+					// 3xx：手动跟随 Location
+					if (code >= 300 && code < 400 && res.headers.location) {
+						res.resume();
+						const next = new URL(res.headers.location, url).toString();
+						logger.debug(`[Chinese Plugin Market] Node 下载跟随重定向 ${code}: ${url} → ${next}`);
+						resolve(nodeDownload(next, depth + 1));
+						return;
+					}
+					if (code !== 200) {
+						res.resume();
+						resolve({ ok: false, text: "", finalUrl: url });
+						return;
+					}
+					let data = "";
+					res.setEncoding("utf8");
+					res.on("data", (chunk: string) => { data += chunk; });
+					res.on("end", () => resolve({ ok: true, text: data, finalUrl: url }));
+				}
+			);
+		} catch (e: unknown) {
+			const msg = e instanceof Error ? e.message : String(e);
+			logger.warn(`[Chinese Plugin Market] Node 下载异常：${msg} @ ${url}`);
+			resolve({ ok: false, text: "", finalUrl: url });
+			return;
+		}
+		if (req) {
+			req.on("error", (e: Error) => {
+				logger.warn(`[Chinese Plugin Market] Node 下载错误：${e.message} @ ${url}`);
+				resolve({ ok: false, text: "", finalUrl: url });
+			});
+		}
+	});
+}
+
+/**
+ * 单次下载：桌面端优先 Node https（绕开 CORS / JSON 解析），移动端降级用 Obsidian requestUrl。
  */
 async function downloadWithRedirect(
 	url: string
 ): Promise<{ ok: boolean; text: string; finalUrl: string }> {
+	// 桌面端主路径：Node https
+	const nodeRes = await nodeDownload(url);
+	if (nodeRes.ok) return nodeRes;
+
+	// 移动端 / Node 不可用：降级 requestUrl（fetch 受 CORS 限制不可用）
 	try {
-		const resp = await fetch(url, { method: "GET", redirect: "follow" });
+		const resp = await netRequest({ url, method: "GET" });
 		if (resp.status >= 200 && resp.status < 300) {
-			const text = await resp.text();
-			return { ok: true, text, finalUrl: resp.url || url };
+			return { ok: true, text: typeof resp.text === "string" ? resp.text : "", finalUrl: url };
 		}
 		logger.warn(`[Chinese Plugin Market] 下载失败：HTTP ${resp.status} @ ${url}`);
-		return { ok: false, text: "", finalUrl: url };
 	} catch (e: unknown) {
 		const msg = e instanceof Error ? e.message : String(e);
 		logger.warn(`[Chinese Plugin Market] 下载异常：${msg} @ ${url}`);
-		return { ok: false, text: "", finalUrl: url };
 	}
+	return { ok: false, text: "", finalUrl: url };
 }
 
 /**
