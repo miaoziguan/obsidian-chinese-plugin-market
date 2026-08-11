@@ -4217,44 +4217,85 @@ button.pt-card-install-btn--installed {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
-	gap: var(--pt-space-xs);
+	gap: var(--pt-space-xs) var(--pt-space-sm);
 	padding: var(--pt-space-xs) var(--pt-space-md) 0;
 }
 .pt-active-filters-label {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--pt-space-2xs);
 	font-size: var(--pt-text-xs);
 	font-weight: var(--pt-weight-semibold);
 	color: var(--pt-text-faint, var(--text-faint));
 	margin-right: var(--pt-space-2xs);
 }
+.pt-active-filters-label .svg-icon {
+	width: 11px;
+	height: 11px;
+	stroke-width: 2.25;
+	opacity: 0.75;
+}
 .pt-active-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	padding: 2px 4px 2px var(--pt-space-sm);
+	gap: var(--pt-space-2xs);
+	padding: 1px 2px 1px var(--pt-space-sm);
 	font-size: var(--pt-text-xs);
-	line-height: 1.4;
+	line-height: 1.35;
 	color: var(--pt-text-strong, var(--text-normal));
-	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
-	border: 1px solid color-mix(in srgb, var(--pt-accent) 28%, transparent);
-	border-radius: 999px;
+	background: color-mix(in srgb, var(--pt-accent) 9%, var(--background-primary));
+	border: 1px solid color-mix(in srgb, var(--pt-accent) 22%, transparent);
+	border-radius: var(--pt-radius-pill);
+	box-shadow: 0 1px 2px color-mix(in srgb, var(--pt-accent) 6%, transparent);
 	animation: pt-author-banner-in 160ms var(--pt-ease);
+	transition: background var(--pt-duration-fast) var(--pt-ease),
+		border-color var(--pt-duration-fast) var(--pt-ease),
+		box-shadow var(--pt-duration-fast) var(--pt-ease);
+}
+.pt-active-chip:hover {
+	background: color-mix(in srgb, var(--pt-accent) 14%, var(--background-primary));
+	border-color: color-mix(in srgb, var(--pt-accent) 32%, transparent);
+	box-shadow: 0 1px 3px color-mix(in srgb, var(--pt-accent) 10%, transparent);
+}
+.pt-active-chip-key {
+	color: var(--pt-text-muted, var(--text-muted));
+	font-weight: var(--pt-weight-medium);
+}
+.pt-active-chip-sep {
+	color: var(--pt-text-faint, var(--text-faint));
+	font-weight: var(--pt-weight-bold);
+	transform: translateY(-0.5px);
+}
+.pt-active-chip-value {
+	color: var(--pt-text-strong, var(--text-normal));
+	font-weight: var(--pt-weight-semibold);
 }
 .pt-active-chip-clear {
 	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
 	border: none;
+	border-radius: var(--pt-radius-pill);
 	background: transparent;
 	color: var(--pt-text-muted, var(--text-muted));
-	font: inherit;
-	font-size: var(--pt-text-xs);
-	line-height: 1;
-	padding: 2px 4px;
-	border-radius: 999px;
 	cursor: pointer;
 	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease);
 }
+.pt-active-chip-clear .svg-icon {
+	width: 10px;
+	height: 10px;
+	stroke-width: 2.5;
+}
 .pt-active-chip-clear:hover {
-	background: color-mix(in srgb, var(--pt-accent) 22%, transparent);
+	background: color-mix(in srgb, var(--pt-accent) 20%, transparent);
 	color: var(--pt-accent, var(--interactive-accent));
+}
+.pt-active-chip-clear:focus-visible {
+	outline: none;
+	box-shadow: var(--pt-focus-ring);
 }
 
 /* 相似推荐卡片键盘聚焦样式（统一光环） */

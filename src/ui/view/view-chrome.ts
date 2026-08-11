@@ -15,6 +15,7 @@ import type { ViewContext } from "@ui/view/view-context";
 import { buildToolbar, alignFacetLabels, type ToolbarState } from "@ui/view/view-toolbar";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { LAYOUT } from "@shared/constants";
+import { setIcon } from "obsidian";
 
 export function showSearchGuide(ctx: ViewContext) {
 
@@ -334,15 +335,25 @@ export function renderActiveFilters(ctx: ViewContext) {
 		return;
 	}
 	box.setCssStyles({ display: "" });
-	box.createSpan({ cls: "pt-active-filters-label", text: ctx.t("filter.active.label") });
+	const labelEl = box.createSpan({ cls: "pt-active-filters-label" });
+	setIcon(labelEl, "filter");
+	labelEl.appendText(ctx.t("filter.active.label"));
 	for (const c of chips) {
 		const chip = box.createSpan({ cls: "pt-active-chip" });
-		chip.createSpan({ cls: "pt-active-chip-text", text: c.text });
+		// 把 "翻译：从未翻译" 拆成 key/value 两段，视觉层次更清晰
+		const sepIdx = c.text.indexOf("：");
+		if (sepIdx >= 0) {
+			chip.createSpan({ cls: "pt-active-chip-key", text: c.text.slice(0, sepIdx) });
+			chip.createSpan({ cls: "pt-active-chip-sep", text: "·" });
+			chip.createSpan({ cls: "pt-active-chip-value", text: c.text.slice(sepIdx + 1) });
+		} else {
+			chip.createSpan({ cls: "pt-active-chip-value", text: c.text });
+		}
 		const x = chip.createEl("button", {
 			cls: "pt-active-chip-clear",
-			text: "✕",
 			attr: { type: "button", "aria-label": ctx.t("filter.active.clear"), title: ctx.t("filter.active.clear") },
 		});
+		setIcon(x, "x");
 		x.addEventListener("click", c.onClear);
 	}
 }
