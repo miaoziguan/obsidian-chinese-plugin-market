@@ -14,7 +14,7 @@ import { fetchManifest } from "@domain/compare/plugin-insight";
 import type { PluginInfo } from "@domain/catalog/translator";
 import type { ViewContext } from "@ui/view/view-context";
 import { netRequest } from "@data/net/net";
-import { resolveUrl, type MirrorConfig } from "@domain/catalog/mirror";
+import type { MirrorConfig } from "@domain/catalog/mirror";
 import { mirrorConfig } from "@ui/view/view-data";
 import { logger } from "@shared/logger";
 
@@ -28,8 +28,15 @@ export interface InstallResult {
 }
 
 /**
- * 构造 GitHub raw release 资产 URL（按 tag = version），并应用镜像映射。
- * 社区插件通常以 manifest.version 作为 release tag。
+ * 构造 GitHub Release 资产下载 URL（install 用），并应用镜像映射。
+ *
+ * 关键：main.js / styles.css 是 build 产物，仅存在于 GitHub Release 资产里，
+ * 不在源码树（raw.githubusercontent.com 会 404）。社区插件市场的官方安装方式
+ * 就是从 `github.com/{repo}/releases/download/{version}/{file}` 下载。
+ *
+ * 镜像适配：jsDelivr / custom 仅服务源码树（gh），不支持 release 资产，
+ * 故 release 资产统一走 github.com 直连（Obsidian 的 fetch 走系统代理）；
+ * ghproxy 源则用 `gh-proxy.com/` 前缀。
  */
 function buildReleaseAssetUrl(
 	repo: string | undefined,
@@ -42,8 +49,10 @@ function buildReleaseAssetUrl(
 	const parts = cleaned.split("/");
 	if (parts.length !== 2 || !parts[0] || !parts[1]) return "";
 	const [owner, name] = parts;
-	const rawUrl = `https://raw.githubusercontent.com/${owner}/${name}/${version}/${file}`;
-	return resolveUrl(rawUrl, mirror);
+	const base = `https://github.com/${owner}/${name}/releases/download/${version}/${file}`;
+	if (mirror.source === "ghproxy") return `https://gh-proxy.com/${base}`;
+	// github / jsdelivr / custom：release 资产直连 github.com
+	return base;
 }
 
 /** 读取响应文本，兼容 netRequest 返回结构 */
@@ -53,8 +62,9 @@ function responseText(resp: { text?: string; json?: unknown }): string {
 }
 
 /**
- * 尝试多种 tag 变体下载 release 资产（先 version，再 v{version}）。
+ * 尝试多种 tag 变体 + 镜像兜底下载 release 资产（先 version，再 v{version}）。
  * 某些社区插件的 release tag 带 "v" 前缀，而 manifest.version 不带。
+ * 按顺序：① 用户镜像构造（github 直连 / ghproxy 前缀）② gh-proxy.com 公共兜底。
  */
 async function fetchReleaseAsset(
 	repo: string,
@@ -66,16 +76,30 @@ async function fetchReleaseAsset(
 	if (!version.startsWith("v")) variants.push(`v${version}`);
 	else variants.push(version.slice(1));
 
+	const cleaned = repo.replace(/^\/+|\/+$/g, "");
+	const parts = cleaned.split("/");
+	if (parts.length !== 2) return { ok: false, text: "", url: "" };
+	const [owner, name] = parts;
+	const githubDirect = (tag: string) =>
+		`https://github.com/${owner}/${name}/releases/download/${tag}/${file}`;
+
 	for (const tag of variants) {
-		const url = buildReleaseAssetUrl(repo, file, tag, mirror);
-		if (!url) continue;
-		try {
-			const resp = await netRequest({ url, method: "GET" });
-			if (resp.status >= 200 && resp.status < 300) {
-				return { ok: true, text: responseText(resp), url };
+		const candidates: string[] = [];
+		const primary = buildReleaseAssetUrl(repo, file, tag, mirror);
+		if (primary) candidates.push(primary);
+		// gh-proxy.com 公共兜底（仅当其不是 primary 时补充，避免重复）
+		const ghproxyFallback = `https://gh-proxy.com/${githubDirect(tag)}`;
+		if (primary !== ghproxyFallback) candidates.push(ghproxyFallback);
+
+		for (const url of candidates) {
+			try {
+				const resp = await netRequest({ url, method: "GET" });
+				if (resp.status >= 200 && resp.status < 300) {
+					return { ok: true, text: responseText(resp), url };
+				}
+			} catch {
+				/* 尝试下一个候选 URL */
 			}
-		} catch {
-			/* 继续尝试下一个 tag 变体 */
 		}
 	}
 	return { ok: false, text: "", url: "" };
