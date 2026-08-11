@@ -1091,9 +1091,8 @@ button.pt-facet-letter-btn.is-active {
 	height: 14px;
 	stroke-width: 2px;
 }
-/* 语义模式（AI / 本地）下 badge 占据最右，清除按钮左移让位 */
-.pt-search.pt-search-ai .pt-search-clear,
-.pt-search.pt-search-local .pt-search-clear { right: 44px; }
+/* 语义模式（AI）下 badge 占据最右，清除按钮左移让位；本地语义 badge 已隐藏，无需让位 */
+.pt-search.pt-search-ai .pt-search-clear { right: 44px; }
 
 /* AI 搜索进行时：整个组合框边框高亮 + 输入区流光反馈 */
 .pt-search.pt-search--ai-loading {

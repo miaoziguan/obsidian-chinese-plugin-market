@@ -113,13 +113,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 					aiBadge.setAttribute("title", "点击配置 AI 搜索，用自然语言描述需求，按 Enter 触发");
 				}
 			} else {
-				// 本地语义：无需 Key、无需联网
-				aiBadge.className = "pt-ai-badge pt-ai-ready";
-				aiBadge.setText("本地 · Enter 触发");
-				aiBadge.setAttribute("title", "本地语义搜索：输入需求后按 Enter 触发（无需联网）");
+				// 本地语义：无需 Key、无需联网；且 badge 与左侧下拉标签重复，本地模式直接隐藏
+				aiBadge.setCssStyles({ display: "none" });
+				aiBadge.setAttribute("title", "");
 			}
 		};
-		// 无 Key 的 AI 模式点击徽章跳设置；本地模式不跳（无需配置）
+		// 无 Key 的 AI 模式点击徽章跳设置；本地模式不显示 badge
 		aiBadge.addEventListener("click", () => {
 			if (ctx.searchMode === "ai" && !(ctx.settings.aiSearchEnabled && ctx.settings.aiSearchApiKey)) {
 				asAppInternals(ctx.app).setting?.openTabById?.(ctx.manifest.id);
