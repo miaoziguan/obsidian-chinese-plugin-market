@@ -62,6 +62,42 @@ function responseText(resp: { text?: string; json?: unknown }): string {
 }
 
 /**
+ * 单次下载（含手动重定向跟随）。
+ *
+ * 关键：GitHub Release 资产返回 302 重定向到 release-assets.githubusercontent.com 的
+ * 签名 CDN，而 Obsidian 的 requestUrl（throw:false）**不会自动跟随这个跨域重定向**，
+ * 直接返回 302。故这里手动跟随 3xx（取响应头 location）到最终 200，最多 5 跳防环。
+ */
+async function downloadWithRedirect(
+	url: string,
+	depth = 0
+): Promise<{ ok: boolean; text: string; finalUrl: string }> {
+	if (depth > 5) return { ok: false, text: "", finalUrl: url };
+	try {
+		const resp = await netRequest({ url, method: "GET" });
+		// 2xx：成功
+		if (resp.status >= 200 && resp.status < 300) {
+			return { ok: true, text: responseText(resp), finalUrl: url };
+		}
+		// 3xx：手动跟随 Location（requestUrl 不跟跨域重定向）
+		if (resp.status >= 300 && resp.status < 400) {
+			const loc =
+				(resp.headers && (resp.headers["location"] || resp.headers["Location"])) || "";
+			if (loc) {
+				const next = new URL(loc, url).toString();
+				logger.debug(`[Chinese Plugin Market] 下载跟随重定向 ${resp.status}: ${url} → ${next}`);
+				return downloadWithRedirect(next, depth + 1);
+			}
+		}
+		return { ok: false, text: "", finalUrl: url };
+	} catch (e: unknown) {
+		const msg = e instanceof Error ? e.message : String(e);
+		logger.warn(`[Chinese Plugin Market] 下载异常：${msg} @ ${url}`);
+		return { ok: false, text: "", finalUrl: url };
+	}
+}
+
+/**
  * 尝试多种 tag 变体 + 镜像兜底下载 release 资产（先 version，再 v{version}）。
  * 某些社区插件的 release tag 带 "v" 前缀，而 manifest.version 不带。
  * 按顺序：① 用户镜像构造（github 直连 / ghproxy 前缀）② gh-proxy.com 公共兜底。
@@ -87,19 +123,20 @@ async function fetchReleaseAsset(
 		const candidates: string[] = [];
 		const primary = buildReleaseAssetUrl(repo, file, tag, mirror);
 		if (primary) candidates.push(primary);
-		// gh-proxy.com 公共兜底（仅当其不是 primary 时补充，避免重复）
-		const ghproxyFallback = `https://gh-proxy.com/${githubDirect(tag)}`;
-		if (primary !== ghproxyFallback) candidates.push(ghproxyFallback);
+		// 公共代理兜底（gh-proxy.com 已停服，补充仍在运行的镜像站，命中一个即可）
+		const direct = githubDirect(tag);
+		for (const prefix of [
+			"https://ghproxy.net/",
+			"https://mirror.ghproxy.com/",
+			"https://gh-proxy.com/",
+		]) {
+			if (primary !== `${prefix}${direct}`) candidates.push(`${prefix}${direct}`);
+		}
 
 		for (const url of candidates) {
-			try {
-				const resp = await netRequest({ url, method: "GET" });
-				if (resp.status >= 200 && resp.status < 300) {
-					return { ok: true, text: responseText(resp), url };
-				}
-			} catch {
-				/* 尝试下一个候选 URL */
-			}
+			const r = await downloadWithRedirect(url);
+			if (r.ok) return { ok: true, text: r.text, url: r.finalUrl };
+			logger.warn(`[Chinese Plugin Market] 下载 ${file} 失败：非 2xx @ ${url}`);
 		}
 	}
 	return { ok: false, text: "", url: "" };
