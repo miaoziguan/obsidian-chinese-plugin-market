@@ -127,6 +127,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 		updateModeBadge();
 		searchBar.toggleClass("pt-search-ai", isAIMode(ctx));
+		searchBar.toggleClass("pt-search-local", isLocalMode(ctx));
 		
 		// 模式切换处理（下拉已内嵌于搜索框左段，见上方 searchBar 构建）
 		modeSelect.addEventListener("change", () => {
