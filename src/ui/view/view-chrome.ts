@@ -143,7 +143,10 @@ export function showAIConfigGuide(ctx: ViewContext, reason: "disabled" | "noKey"
 			text: "打开设置",
 		});
 		openSettingsBtn.addEventListener("click", () => {
-			asAppInternals(ctx.app).setting?.openTabById?.(ctx.manifest.id);
+			const setting = asAppInternals(ctx.app).setting;
+			// 必须先打开设置面板，再切到本插件 tab，否则设置面板未弹出时 openTabById 不生效
+			setting?.open?.();
+			setting?.openTabById?.(ctx.manifest.id);
 		});
 	
 }
