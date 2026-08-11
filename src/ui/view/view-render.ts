@@ -13,6 +13,7 @@ import { computeSmartSignals } from "@domain/filter/smart-signal";
 import { scoreAllPlugins } from "@domain/recommend/engine";
 import { setListState } from "@ui/dom/list-state";
 import { q, toHTMLElement } from "@ui/dom/dom";
+import { handleToggleEnabled } from "@ui/view/view-cards";
 import type { ViewContext } from "@ui/view/view-context";
 import { LAYOUT } from "@shared/constants";
 import { requestIdle } from "@shared/platform";
@@ -215,18 +216,26 @@ export function postRenderSync(ctx: ViewContext) {
 }
 
 export function refreshCardState(ctx: ViewContext, pluginId: string) {
+	// 必须 CSS.escape：插件 id 可能含引号等特殊字符，直接内插会抛 SyntaxError 中断刷新
+	const card = toHTMLElement(
+		ctx.scrollCardLayer?.querySelector(`.pt-card[data-plugin-id="${CSS.escape(pluginId)}"]`) ?? null
+	);
+	if (!card) return;
+	// 更新收藏态
+	card.classList.toggle("is-favorited", ctx.favoritesSet.has(pluginId));
+	// 更新对比态
+	const compareIcon = q(card, "[data-action='compare']");
+	compareIcon?.classList.toggle("is-compare-on", ctx.compareSet.has(pluginId));
 
-		// 必须 CSS.escape：插件 id 可能含引号等特殊字符，直接内插会抛 SyntaxError 中断刷新
-		const card = toHTMLElement(
-			ctx.scrollCardLayer?.querySelector(`.pt-card[data-plugin-id="${CSS.escape(pluginId)}"]`) ?? null
-		);
-		if (!card) return;
-		// 更新收藏态
-		card.classList.toggle("is-favorited", ctx.favoritesSet.has(pluginId));
-		// 更新对比态
-		const compareIcon = q(card, "[data-action='compare']");
-		compareIcon?.classList.toggle("is-compare-on", ctx.compareSet.has(pluginId));
-	
+	// 更新安装按钮等完整卡片状态（ installed/enabled 变化后必须重刷按钮）
+	// 优先从 pluginMap 取，缺失时回退到全量列表查找（pluginMap 可能未构建/未含新装插件）
+	const plugin =
+		ctx.pluginMap?.get(pluginId) ??
+		ctx.plugins.find((p) => p.id === pluginId);
+	if (plugin) {
+		const renderCtx = makeCardRenderCtx(ctx);
+		applyCardState(card, plugin, ctx.translatedResults[pluginId], renderCtx);
+	}
 }
 
 /**
@@ -588,6 +597,11 @@ function makeCardRenderCtx(ctx: ViewContext): CardRenderContext {
 		onSysTranslatePersist: (pid, name, desc) => {
 			ctx.translator.persistSystemTranslation(pid, name, desc);
 			ctx.saveTranslatorData();
+		},
+		// 卡片电源按钮：切换已安装插件启用/禁用
+		onToggleEnabled: (pid) => {
+			const plugin = ctx.plugins.find((p) => p.id === pid);
+			if (plugin) void handleToggleEnabled(ctx, plugin);
 		},
 	};
 }

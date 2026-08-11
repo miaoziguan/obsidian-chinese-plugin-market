@@ -1352,13 +1352,14 @@ button.pt-facet-letter-btn.is-active {
 	color: var(--pt-text-strong, var(--text-normal));
 	filter: none;
 }
-/* 已启用：纯展示 chip 胶囊（成功色 tint），不可交互 */
+/* 已启用：实心成功色胶囊（白字，纯展示状态） */
 .pt-card-install-btn--enabled {
-	background: color-mix(in srgb, var(--pt-color-success) 14%, transparent);
-	color: var(--pt-color-success);
+	background: var(--pt-color-success);
+	color: #fff;
 	border: none;
-	cursor: default;
-	pointer-events: none;
+}
+.pt-card-install-btn--enabled:hover {
+	filter: brightness(0.92);
 }
 /* 安装中：纯展示 chip 胶囊（强调色淡底 + 脉冲），不可交互 */
 .pt-card-install-btn--installing {
@@ -1411,6 +1412,8 @@ button.pt-card-install-btn--installed {
 	align-items: center;
 	gap: var(--pt-space-2xs);
 	flex-wrap: wrap;
+	/* 右侧留出灯泡开关空间，避免与右下角开关重叠 */
+	padding-right: 42px;
 	opacity: 1;
 	transform: translateY(0);
 	transition: opacity var(--pt-duration-normal) var(--pt-ease), transform var(--pt-duration-normal) var(--pt-ease);
@@ -1887,25 +1890,6 @@ button.pt-card-install-btn--installed {
 }
 .pt-author-name {
 	line-height: 1.4;
-}
-
-/* 已安装 / 已启用状态标识（产品改进 #7） */
-.pt-card-installed {
-	font-size: var(--pt-text-xs);
-	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
-	font-weight: var(--pt-weight-semibold);
-	white-space: nowrap;
-	flex: none;
-}
-.pt-installed-on {
-	color: var(--text-on-accent, #fff);
-	background: var(--interactive-accent, #7b61ff);
-}
-.pt-installed-off {
-	color: var(--pt-text-muted);
-	background: var(--pt-surface-3);
-	border: 1px solid var(--pt-border);
 }
 
 /* 操作图标按钮（用于 .pt-card-actions-row 常驻行）—— 幽灵风格，降低视觉噪音 */
@@ -4215,6 +4199,56 @@ button.pt-card-install-btn--installed {
 /* 卡片收藏按钮选中态（金色星标，呼应官方推荐）。(0,2,0) 高于主题图标默认色，无需 !important。 */
 .pt-card-favorite.is-fav-on {
 	color: var(--pt-gold);
+}
+
+/* 启用/禁用子弹开关：卡片右下角，仅已安装插件显示 */
+.pt-card-toggle-switch {
+	position: absolute;
+	right: var(--pt-space-md);
+	bottom: var(--pt-space-sm);
+	width: 34px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	z-index: 2;
+	-webkit-tap-highlight-color: transparent;
+}
+.pt-card-toggle-switch:focus-visible {
+	outline: none;
+}
+.pt-card-toggle-switch:focus-visible .pt-card-toggle-track {
+	box-shadow: var(--pt-focus-ring);
+}
+.pt-card-toggle-track {
+	position: relative;
+	width: 34px;
+	height: 18px;
+	border-radius: 999px;
+	background: var(--pt-border-strong);
+	border: 1px solid color-mix(in srgb, var(--pt-border-strong) 60%, transparent);
+	transition: background var(--pt-duration-fast) var(--pt-ease), box-shadow var(--pt-duration-fast) var(--pt-ease), border-color var(--pt-duration-fast) var(--pt-ease);
+}
+.pt-card-toggle-knob {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 13px;
+	height: 13px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+	transition: transform var(--pt-duration-fast) var(--pt-ease);
+}
+/* 已启用：主题色淡雅绿轨道 + 微光 */
+.pt-card-toggle-switch.is-on .pt-card-toggle-track {
+	background: var(--pt-accent, var(--pt-accent-green, #2ecc71));
+	border-color: transparent;
+	box-shadow: 0 0 6px 1px color-mix(in srgb, var(--pt-accent, var(--pt-accent-green, #2ecc71)) 30%, transparent);
+}
+.pt-card-toggle-switch.is-on .pt-card-toggle-knob {
+	transform: translateX(16px);
 }
 
 /* 收藏卡片：金色描边轮廓（替代左侧竖条，与 hover 描边方案统一） */

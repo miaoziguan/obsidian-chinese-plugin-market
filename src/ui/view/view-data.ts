@@ -531,11 +531,11 @@ export function snapshotInstalled(ctx: ViewContext) {
 			if (plugins.enabledPlugins && typeof plugins.enabledPlugins.forEach === "function") {
 				ctx.enabledIds = new Set(plugins.enabledPlugins as Set<string>);
 			}
-		} catch (e: unknown) {
+			} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取已安装插件失败：", e);
-		}
-	
-}
+			}
+
+			}
 
 export function buildSearchIndex(ctx: ViewContext, ids?: Set<string>) {
 

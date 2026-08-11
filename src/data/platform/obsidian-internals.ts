@@ -10,21 +10,39 @@
  * 若 Obsidian 未来调整这些内部字段，只需在此一处更新形状。
  */
 
+/**
+ * 插件 manifest 的最小形状（对齐 Obsidian PluginManifest）。
+ * enablePlugin / loadPlugin 官方签名接受该 manifest 对象而非纯 id。
+ */
+export interface PluginManifestLike {
+	id: string;
+	version?: string;
+	[name: string]: unknown;
+}
+
 /** 已安装插件仓库（app.plugins）的最小可读形状 */
 export interface AppPlugins {
-	manifests?: Record<string, { version?: string; [k: string]: unknown }>;
+	/** 已安装插件 manifest 映射（id → manifest） */
+	manifests?: Record<string, PluginManifestLike>;
 	enabledPlugins?: {
 		has?: (pluginId: string) => boolean;
 		forEach?: (cb: (id: string) => void) => void;
 	};
 	/** 重新扫描 plugins 目录并刷新 manifests（半官方 API，可选） */
 	loadManifests?: () => Promise<unknown> | unknown;
-	/** 加载单个插件（签名在不同 Obsidian 版本可能不同，仅做可选调用） */
-	loadPlugin?: (id: string) => Promise<unknown> | unknown;
-	/** 启用单个插件（签名在不同 Obsidian 版本可能不同，仅做可选调用） */
-	enablePlugin?: (id: string) => Promise<unknown> | unknown;
+	/**
+	 * 加载单个插件。官方签名为 loadPlugin(plugin: PluginManifest)，
+	 * 个别旧版可能接受 id 字符串；调用方应绑定 this=app.plugins。
+	 */
+	loadPlugin?: (arg: PluginManifestLike | string) => Promise<unknown> | unknown;
+	/**
+	 * 启用单个插件。官方签名为 enablePlugin(plugin: PluginManifest)，
+	 * 内部会自行调用 loadPlugin；个别旧版可能接受 id 字符串。
+	 * 调用方务必用 .bind(plugins) 绑定 this，否则内部 this.app 为 undefined。
+	 */
+	enablePlugin?: (arg: PluginManifestLike | string) => Promise<unknown> | unknown;
 	/** 禁用单个插件（半官方 API，可选） */
-	disablePlugin?: (id: string) => Promise<unknown> | unknown;
+	disablePlugin?: (arg: PluginManifestLike | string) => Promise<unknown> | unknown;
 }
 
 /** 设置面板（app.setting）的最小可读形状 */

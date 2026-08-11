@@ -10,7 +10,7 @@
 
 import { Notice } from "obsidian";
 import { asAppInternals, type AppPlugins } from "@data/platform/obsidian-internals";
-import { fetchManifest } from "@domain/compare/plugin-insight";
+
 import type { PluginInfo } from "@domain/catalog/translator";
 import type { ViewContext } from "@ui/view/view-context";
 import { netRequest } from "@data/net/net";
@@ -53,6 +53,77 @@ function buildReleaseAssetUrl(
 	if (mirror.source === "ghproxy") return `https://gh-proxy.com/${base}`;
 	// github / jsdelivr / custom：release 资产直连 github.com
 	return base;
+}
+
+/**
+ * 构造 manifest.json 的 raw URL（与官方社区市场一致，从源码树 HEAD 读取）。
+ */
+function buildManifestUrl(repo: string, mirror: MirrorConfig): string {
+	const cleaned = repo.replace(/^\/+|\/+$/g, "");
+	const parts = cleaned.split("/");
+	if (parts.length !== 2 || !parts[0] || !parts[1]) return "";
+	const [owner, name] = parts;
+	const base = `https://raw.githubusercontent.com/${owner}/${name}/HEAD/manifest.json`;
+	if (mirror.source === "ghproxy") return `https://gh-proxy.com/${base}`;
+	if (mirror.source === "jsdelivr") {
+		return `https://cdn.jsdelivr.net/gh/${owner}/${name}@HEAD/manifest.json`;
+	}
+	if (mirror.source === "custom" && mirror.customBase) {
+		const withSlash = mirror.customBase.replace(/\/$/, "");
+		return `${withSlash}/${owner}/${name}/HEAD/manifest.json`;
+	}
+	return base;
+}
+
+/** 完整插件 manifest（安装时必须原样保留所有字段，否则 Obsidian 会忽略该插件）。 */
+interface FullPluginManifest {
+	id: string;
+	name: string;
+	version: string;
+	minAppVersion?: string;
+	main?: string;
+	description?: string;
+	author?: string;
+	authorUrl?: string;
+	isDesktopOnly?: boolean;
+	// 允许官方 manifest 中的其他字段透传
+	[key: string]: unknown;
+}
+
+/**
+ * 下载完整 manifest.json（不精简字段，与官方安装行为一致）。
+ * 官方社区市场也是从 raw.githubusercontent.com/{repo}/HEAD/manifest.json 读取 manifest。
+ */
+async function downloadFullManifest(
+	repo: string,
+	mirror: MirrorConfig
+): Promise<FullPluginManifest | null> {
+	const url = buildManifestUrl(repo, mirror);
+	if (!url) return null;
+	try {
+		const resp = await netRequest({ url, method: "GET" });
+		if (resp.status < 200 || resp.status >= 300) return null;
+		const json = resp.json;
+		if (!json || typeof json !== "object") return null;
+		// 仅 id/name/version 为真正必需字段；minAppVersion 官方容忍缺失（视为兼容所有版本），
+		// 但写入磁盘时为兼容 Obsidian 扫描，缺失时补默认 "1.0.0"。
+		if (
+			typeof (json as FullPluginManifest).id !== "string" ||
+			typeof (json as FullPluginManifest).name !== "string" ||
+			typeof (json as FullPluginManifest).version !== "string"
+		) {
+			logger.warn("[Chinese Plugin Market] manifest.json 缺少必要字段：", json);
+			return null;
+		}
+		const manifest = json as FullPluginManifest;
+		if (typeof manifest.minAppVersion !== "string") {
+			manifest.minAppVersion = "1.0.0";
+		}
+		return manifest;
+	} catch (e: unknown) {
+		logger.warn("[Chinese Plugin Market] 下载 manifest.json 失败：", e);
+		return null;
+	}
 }
 
 /**
@@ -137,26 +208,29 @@ function nodeDownload(url: string, depth = 0): Promise<{ ok: boolean; text: stri
 }
 
 /**
- * 单次下载：桌面端优先 Node https（绕开 CORS / JSON 解析），移动端降级用 Obsidian requestUrl。
+ * 单次下载：优先 Obsidian requestUrl（走 Electron 主进程，跟随系统代理、不受 CORS 限制，
+ * 是官方社区市场下载的同源通道，对用户网络环境最可靠），Node https 作为兜底
+ * （某些环境下 requestUrl 对文本响应会尝试 JSON.parse 而抛错，Node https 返回原始文本更稳）。
  */
 async function downloadWithRedirect(
 	url: string
 ): Promise<{ ok: boolean; text: string; finalUrl: string }> {
-	// 桌面端主路径：Node https
-	const nodeRes = await nodeDownload(url);
-	if (nodeRes.ok) return nodeRes;
-
-	// 移动端 / Node 不可用：降级 requestUrl（fetch 受 CORS 限制不可用）
+	// 主路径：requestUrl（跟随系统代理，可访问 github）
 	try {
 		const resp = await netRequest({ url, method: "GET" });
 		if (resp.status >= 200 && resp.status < 300) {
 			return { ok: true, text: typeof resp.text === "string" ? resp.text : "", finalUrl: url };
 		}
-		logger.warn(`[Chinese Plugin Market] 下载失败：HTTP ${resp.status} @ ${url}`);
+		logger.debug(`[Chinese Plugin Market] requestUrl HTTP ${resp.status} @ ${url}`);
 	} catch (e: unknown) {
 		const msg = e instanceof Error ? e.message : String(e);
-		logger.warn(`[Chinese Plugin Market] 下载异常：${msg} @ ${url}`);
+		logger.debug(`[Chinese Plugin Market] requestUrl 异常：${msg} @ ${url}`);
 	}
+
+	// 兜底：Node https（返回原始文本，绕开 requestUrl 的 JSON.parse 行为）
+	const nodeRes = await nodeDownload(url);
+	if (nodeRes.ok) return nodeRes;
+
 	return { ok: false, text: "", finalUrl: url };
 }
 
@@ -194,7 +268,7 @@ async function fetchReleaseAsset(
 		for (const url of candidates) {
 			const r = await downloadWithRedirect(url);
 			if (r.ok) return { ok: true, text: r.text, url: r.finalUrl };
-			logger.warn(`[Chinese Plugin Market] 下载 ${file} 失败：非 2xx @ ${url}`);
+			logger.debug(`[Chinese Plugin Market] 下载 ${file} 候选失败 @ ${url}`);
 		}
 	}
 	return { ok: false, text: "", url: "" };
@@ -226,11 +300,11 @@ export async function installCommunityPlugin(
 		return fallbackToMarket(ctx, plugin, t("notice.install.noPluginManager"));
 	}
 
-	// 2. 拉取 manifest（HEAD）拿到版本与入口信息
+	// 2. 拉取完整 manifest（HEAD）拿到版本与入口信息；写入磁盘时必须保留所有字段
 	const mirror = mirrorConfig(ctx);
 	new Notice(t("notice.install.downloading", { name: plugin.name }));
-	const manifest = await fetchManifest(plugin.repo, mirror);
-	if (!manifest.version) {
+	const manifest = await downloadFullManifest(plugin.repo, mirror);
+	if (!manifest) {
 		return fallbackToMarket(ctx, plugin, t("notice.install.manifestFail"));
 	}
 
@@ -272,50 +346,62 @@ export async function installCommunityPlugin(
 		return fallbackToMarket(ctx, plugin, t("notice.install.writeMainJsFail"));
 	}
 
-	// 6. styles.css 可选（很多插件没有）
+	// 6. styles.css 可选（很多插件没有；GitHub 返回 404 属正常，静默跳过）
 	const stylesAsset = await fetchReleaseAsset(plugin.repo, "styles.css", manifest.version, mirror);
-	if (stylesAsset.ok && stylesAsset.text) {
+	if (stylesAsset.ok && stylesAsset.text && stylesAsset.text.trim()) {
 		try {
 			await adapter.write(`${dir}/styles.css`, stylesAsset.text);
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 写入 styles.css 失败：", e);
 			/* styles.css 可选，不阻断安装 */
 		}
+	} else {
+		logger.debug("[Chinese Plugin Market] 跳过 styles.css（插件未提供或 404）");
 	}
 
-	// 7. 让 Obsidian 识别并启用插件
+	// 6.5 关键：把 id 写入 vault 本地的 community-plugins.json。
+	// 这是 Obsidian 启动时判定「哪些插件已安装、需要加载」的唯一真相源。
+	// 只写 app.json.enabledPlugins 而不写它，重启后 Obsidian 不会加载该插件，
+	// 导致刚装/刚启用的插件「重启后变关」。官方社区市场安装时正是同时维护两者。
+	await syncCommunityPluginsJson(ctx, plugin.id, true);
+
+	// 7. 让 Obsidian 识别并启用插件（与官方社区市场安装流程保持一致）。
+	// 官方顺序：loadManifests() → enablePlugin(manifest)。
+	// 由于 Obsidian 版本间签名差异较大，这里做多重兼容尝试；
+	// 只要文件写入成功，即便启用失败也视为「安装成功」，提示用户手动开启即可。
+	let recognized = false;
+	let enabled = false;
 	try {
-		await plugins.loadManifests?.();
+		await plugins.loadManifests?.call(plugins);
+		// 给 Obsidian 一点时间完成磁盘扫描与内部状态更新
+		await new Promise((r) => setTimeout(r, 50));
+		recognized = Boolean(plugins.manifests?.[plugin.id]);
 	} catch (e: unknown) {
 		logger.warn("[Chinese Plugin Market] loadManifests 失败：", e);
 	}
 
-	try {
-		// loadPlugin 签名在不同版本 Obsidian 中可能不同（id 或 plugin 实例）
-		const loadFn = (plugins as unknown as { loadPlugin?: (id: string) => Promise<unknown> }).loadPlugin;
-		if (typeof loadFn === "function") await loadFn(plugin.id);
-	} catch (e: unknown) {
-		logger.warn("[Chinese Plugin Market] loadPlugin 失败：", e);
-	}
-
-	try {
-		// enablePlugin 可能是 (id) 或 (plugin) 签名
-		const enableFn = (plugins as unknown as { enablePlugin?: (id: string) => Promise<unknown> }).enablePlugin;
-		if (typeof enableFn === "function") await enableFn(plugin.id);
-	} catch (e: unknown) {
-		logger.warn("[Chinese Plugin Market] enablePlugin 失败：", e);
+	if (recognized) {
+		enabled = await tryEnablePlugin(ctx, plugins, plugin.id);
 	}
 
 	// 8. 刷新本地状态并通知用户
+	// 真正清除 installingIds 的调用方在 view-cards.ts 的 finally 里，那里会同步删除并刷新。
 	ctx.snapshotInstalled();
+	ctx.refreshCardState(plugin.id);
 	ctx.scheduleRender(true);
 
-	if (ctx.installedIds.has(plugin.id)) {
+	if (enabled) {
 		new Notice(t("notice.install.success", { name: plugin.name }));
 		return { ok: true };
 	}
 
-	// 文件已写入但 Obsidian 未成功加载：提示用户重载
+	if (recognized) {
+		// 文件已写入且 Obsidian 已识别，只是未能自动启用
+		new Notice(t("notice.install.manualEnable", { name: plugin.name }));
+		return { ok: true };
+	}
+
+	// 文件已写入但 Obsidian 未识别：提示重载
 	return fallbackToMarket(
 		ctx,
 		plugin,
@@ -325,9 +411,305 @@ export async function installCommunityPlugin(
 }
 
 /**
+ * 启用插件。
+ *
+ * 1.13 行为实测（见 issue 排查）：官方 `app.plugins.enablePlugin(id)` 在非用户交互上下文
+ * （非设置面板点开关）下会返回 `true` 但**不真正把 id 加进运行时 enabledPlugins、也不持久化**——
+ * 它仅启动了一个异步加载（内部置 loadingPluginId），同步检查 isEnabled() 永远为 false。
+ * 因此这里采用「官方 enablePlugin 触发加载 + 显式维护 enabledPlugins + 写 app.json」双轨策略：
+ *   1) 调 enablePlugin/loadPlugin 让 Obsidian 真正加载插件实例；
+ *   2) 显式把 id 加进运行时 enabledPlugins（本次会话 UI 立即显示启用）；
+ *   3) 写 app.json.enabledPlugins（重启后 Obsidian 读它重新加载，保证持久化）。
+ */
+async function tryEnablePlugin(
+	ctx: ViewContext,
+	plugins: AppPlugins,
+	id: string
+): Promise<boolean> {
+	const manifestEntry = plugins.manifests?.[id];
+	const enableFn = plugins.enablePlugin?.bind(plugins);
+	const loadFn = plugins.loadPlugin?.bind(plugins);
+	logger.debug(`[Chinese Plugin Market] tryEnable: enablePlugin=${typeof enableFn} loadPlugin=${typeof loadFn} manifestEntry=${Boolean(manifestEntry)}`);
+
+	const isEnabled = () => Boolean(plugins.enabledPlugins?.has?.(id));
+
+	// 主路径：官方 enablePlugin 触发加载（manifest 或 id 两种签名都试），不据此判定成功。
+	try {
+		if (typeof enableFn === "function" && manifestEntry) {
+			await enableFn(manifestEntry);
+		} else if (typeof enableFn === "function") {
+			await enableFn(id);
+		}
+	} catch (e: unknown) {
+		const msg = e instanceof Error ? e.message : String(e);
+		logger.warn("[Chinese Plugin Market] enablePlugin 调用异常（继续手动维护）：", msg);
+	}
+
+	// 让事件循环推进，给 enablePlugin 内部异步加载一点时间
+	await new Promise((r) => setTimeout(r, 60));
+	if (isEnabled()) {
+		// 官方已成功启用：双写两个真相源持久化（1.13 非交互调用不自动持久化）。
+		// community-plugins.json（已安装集）必须包含该 id，否则重启后 Obsidian
+		// 不会把它纳入「已安装∩启用」加载交集，启用状态无法持久化。
+		await syncCommunityPluginsJson(ctx, id, true);
+		await persistEnabledPlugins(ctx, id);
+		return true;
+	}
+
+	// 官方未启用（1.13 非交互早退）：显式把 id 加入运行时 enabledPlugins 并写 app.json。
+	const ep = plugins.enabledPlugins as unknown as Set<string> | string[] | undefined;
+	let added = false;
+	if (ep) {
+		if (Array.isArray(ep)) {
+			if (!ep.includes(id)) ep.push(id);
+			added = true;
+		} else if (typeof (ep as Set<string>).add === "function") {
+			(ep as Set<string>).add(id);
+			added = true;
+		}
+	}
+	// 确保插件实例已加载（enablePlugin 异步可能尚未完成，主动 loadPlugin 兜底）
+	if (typeof loadFn === "function") {
+		try {
+			await loadFn(manifestEntry ?? id);
+		} catch {
+			/* loadPlugin 可能已加载或签名差异，忽略 */
+		}
+	}
+	if (added) {
+		// 双写：community-plugins.json（已安装集）+ app.json.enabledPlugins（启用集）。
+		// 只写 app.json 不写 community-plugins.json 是此前「重启后变关」的根因——
+		// Obsidian 启动只加载两者交集，缺已安装清单则不加载。
+		await syncCommunityPluginsJson(ctx, id, true);
+		await persistEnabledPlugins(ctx, id);
+		logger.debug(`[Chinese Plugin Market] 已显式启用 ${id} 并持久化（community-plugins.json + app.json）`);
+		return true;
+	}
+	logger.warn(`[Chinese Plugin Market] enabledPlugins 类型不可写入：${Object.prototype.toString.call(ep)}`);
+	return false;
+}
+
+/**
+ * 同步 vault 本地的 `.obsidian/community-plugins.json`。
+ * 这是 Obsidian 启动时判定「哪些插件已安装、需要加载」的唯一真相源——
+ * 只写 `app.json.enabledPlugins` 而不写它，重启后 Obsidian 不会去加载该插件，
+ * 导致启用状态「无法持久化」。官方社区市场安装插件时正是同时维护这两个文件。
+ * @param add true=把 id 追加进清单；false=从清单移除
+ */
+async function syncCommunityPluginsJson(
+	ctx: ViewContext,
+	id: string,
+	add: boolean
+): Promise<void> {
+	try {
+		const adapter = ctx.app.vault.adapter as unknown as {
+			read?: (path: string) => Promise<string>;
+			write?: (path: string, data: string) => Promise<unknown>;
+		};
+		if (typeof adapter.read !== "function" || typeof adapter.write !== "function") return;
+		const path = `${ctx.app.vault.configDir}/community-plugins.json`;
+		let list: string[] = [];
+		try {
+			const raw = await adapter.read(path);
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(parsed)) list = parsed as string[];
+		} catch {
+			/* 文件不存在或损坏则用空数组 */
+		}
+		const has = list.includes(id);
+		if (add && !has) {
+			list.push(id);
+			await adapter.write(path, JSON.stringify(list));
+			logger.debug(`[Chinese Plugin Market] 已把 ${id} 写入 community-plugins.json`);
+		} else if (!add && has) {
+			list = list.filter((x) => x !== id);
+			await adapter.write(path, JSON.stringify(list));
+			logger.debug(`[Chinese Plugin Market] 已从 community-plugins.json 移除 ${id}`);
+		}
+	} catch (e: unknown) {
+		logger.warn("[Chinese Plugin Market] 同步 community-plugins.json 失败：", e);
+	}
+}
+
+/**
+ * 把 id 追加进 app.json.enabledPlugins 并写盘。
+ * 1.13 下官方 enablePlugin 在非交互上下文不自动持久化，需我们显式写盘，
+ * 确保重启后 Obsidian 读 app.json 重新加载该插件。
+ */
+async function persistEnabledPlugins(ctx: ViewContext, id: string): Promise<void> {
+	try {
+		const adapter = ctx.app.vault.adapter as unknown as {
+			read?: (path: string) => Promise<string>;
+			write?: (path: string, data: string) => Promise<unknown>;
+		};
+		if (typeof adapter.read !== "function" || typeof adapter.write !== "function") return;
+		const appJsonPath = `${ctx.app.vault.configDir}/app.json`;
+		let appJson: Record<string, unknown> = {};
+		try {
+			const raw = await adapter.read(appJsonPath);
+			appJson = JSON.parse(raw);
+		} catch {
+			/* app.json 不存在则用空对象 */
+		}
+		const enabled = Array.isArray(appJson.enabledPlugins)
+			? (appJson.enabledPlugins as string[])
+			: [];
+		if (!enabled.includes(id)) {
+			enabled.push(id);
+			appJson.enabledPlugins = enabled;
+			await adapter.write(appJsonPath, JSON.stringify(appJson, null, 2));
+			logger.debug(`[Chinese Plugin Market] 已持久化 ${id} 到 app.json.enabledPlugins`);
+		}
+	} catch (e: unknown) {
+		logger.warn("[Chinese Plugin Market] 持久化 enabledPlugins 失败：", e);
+	}
+}
+
+/**
+ * 把 id 从 app.json.enabledPlugins 中移除并写盘（持久化禁用状态，重启后保持）。
+ */
+async function removeEnabledPlugin(ctx: ViewContext, id: string): Promise<void> {
+	try {
+		const adapter = ctx.app.vault.adapter as unknown as {
+			read?: (path: string) => Promise<string>;
+			write?: (path: string, data: string) => Promise<unknown>;
+		};
+		if (typeof adapter.read !== "function" || typeof adapter.write !== "function") return;
+		const appJsonPath = `${ctx.app.vault.configDir}/app.json`;
+		let appJson: Record<string, unknown> = {};
+		try {
+			const raw = await adapter.read(appJsonPath);
+			appJson = JSON.parse(raw);
+		} catch {
+			/* app.json 不存在则用空对象 */
+		}
+		const enabled = Array.isArray(appJson.enabledPlugins)
+			? (appJson.enabledPlugins as string[])
+			: [];
+		if (enabled.includes(id)) {
+			appJson.enabledPlugins = enabled.filter((x) => x !== id);
+			await adapter.write(appJsonPath, JSON.stringify(appJson, null, 2));
+			logger.debug(`[Chinese Plugin Market] 已从 app.json.enabledPlugins 移除 ${id}`);
+		}
+	} catch (e: unknown) {
+		logger.warn("[Chinese Plugin Market] 持久化禁用状态失败：", e);
+	}
+}
+
+/**
+ * 卸载一个已安装的插件（对应卡片「卸载」按钮）。
+ * 顺序与官方社区市场一致：
+ *   1. 若仍在启用，先 disablePlugin 并清 app.json.enabledPlugins；
+ *   2. 删除磁盘 `.obsidian/plugins/<id>/` 目录；
+ *   3. 从 community-plugins.json 移除 id（否则重启后 Obsidian 仍会尝试加载已删除的目录）。
+ * @returns 是否卸载成功
+ */
+export async function uninstallCommunityPlugin(
+	ctx: ViewContext,
+	plugin: PluginInfo
+): Promise<boolean> {
+	const t = ctx.t;
+	const adapter = ctx.app.vault.adapter as unknown as {
+		rmdir?: (path: string, recursive: boolean) => Promise<unknown>;
+	};
+	const internals = asAppInternals(ctx.app);
+	const plugins = internals.plugins;
+
+	// 1. 若启用中，先禁用（官方 disablePlugin 会自行更新内存并持久化到 app.json）
+	if (plugins?.enabledPlugins?.has?.(plugin.id)) {
+		try {
+			await plugins.disablePlugin?.call(plugins, plugin.id);
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 卸载前 disablePlugin 失败：", e);
+		}
+	}
+
+	// 2. 删除磁盘目录
+	if (typeof adapter.rmdir !== "function") {
+		new Notice(t("card.uninstall.fail", { name: plugin.name, reason: "adapter.rmdir 不可用" }));
+		return false;
+	}
+	const dir = `${ctx.app.vault.configDir}/plugins/${plugin.id}`;
+	try {
+		await adapter.rmdir(dir, true);
+	} catch (e: unknown) {
+		const msg = e instanceof Error ? e.message : String(e);
+		logger.warn("[Chinese Plugin Market] 删除插件目录失败：", e);
+		new Notice(t("card.uninstall.fail", { name: plugin.name, reason: msg }));
+		return false;
+	}
+
+	// 3. 从 community-plugins.json 移除（关键：否则重启后仍会被视为已安装）
+	await syncCommunityPluginsJson(ctx, plugin.id, false);
+
+	logger.debug(`[Chinese Plugin Market] 已卸载插件 ${plugin.id}`);
+	ctx.snapshotInstalled();
+	ctx.refreshCardState(plugin.id);
+	return true;
+}
+
+/**
+ * 切换插件的启用/禁用状态（卡片「已启用/已禁用」按钮）。
+ * 已启用 → 禁用；已禁用 → 启用。与官方社区市场开关行为一致。
+ * @returns 切换后是否处于启用状态
+ */
+export async function togglePluginEnabled(
+	ctx: ViewContext,
+	plugin: PluginInfo
+): Promise<boolean> {
+	const t = ctx.t;
+	const internals = asAppInternals(ctx.app);
+	const plugins = internals.plugins;
+	if (!plugins) return ctx.enabledIds.has(plugin.id);
+
+	const disableFn = plugins.disablePlugin?.bind(plugins);
+	const isEnabled = () => Boolean(plugins.enabledPlugins?.has?.(plugin.id));
+
+	if (isEnabled()) {
+		// 当前启用 → 禁用。依赖官方 disablePlugin 自身更新内存 enabledPlugins 并持久化
+		// 到 app.json（Obsidian 关闭时会以内存为准回写，手动改 app.json 会被覆盖，故必须用官方方法）。
+		let disabled = false;
+		if (typeof disableFn === "function") {
+			try {
+				await disableFn(plugin.id);
+			} catch (e: unknown) {
+				logger.warn("[Chinese Plugin Market] disablePlugin(id) 失败：", e);
+			}
+		}
+		// 1.13 下 disablePlugin 在非交互上下文也可能不真正移除，显式维护运行时 Set + 写 app.json
+		const ep = plugins.enabledPlugins as unknown as Set<string> | undefined;
+		if (ep && typeof ep.delete === "function") {
+			ep.delete(plugin.id);
+			disabled = true;
+		}
+		if (disabled) {
+			await removeEnabledPlugin(ctx, plugin.id);
+			new Notice(t("notice.install.disabled", { name: plugin.name }));
+			ctx.snapshotInstalled();
+			ctx.refreshCardState(plugin.id);
+			return false;
+		}
+		new Notice(t("notice.install.disableFail", { name: plugin.name }));
+		return true;
+	}
+
+	// 当前禁用 → 启用
+	const enabled = await tryEnablePlugin(ctx, plugins, plugin.id);
+	if (enabled) {
+		new Notice(t("notice.install.success", { name: plugin.name }));
+		ctx.snapshotInstalled();
+		ctx.refreshCardState(plugin.id);
+		return true;
+	}
+	new Notice(t("notice.install.manualEnable", { name: plugin.name }));
+	ctx.snapshotInstalled();
+	ctx.refreshCardState(plugin.id);
+	return false;
+}
+
+/**
  * 安装失败时回退到打开 Obsidian 社区市场页面。
- * @param reason 失败原因，用于 Notice
- * @param fileWritten 是否已把文件写入 plugins 目录（用户重载即可用）
+ * 仅在网络/写入失败时跳转；文件已写入时改为提示用户手动开启或重载。
  */
 function fallbackToMarket(
 	ctx: ViewContext,
@@ -337,6 +719,10 @@ function fallbackToMarket(
 ): InstallResult {
 	const t = ctx.t;
 	new Notice(`${reason}${fileWritten ? t("notice.install.reloadHint") : ""}`);
+	if (fileWritten) {
+		// 文件已写入 plugins 目录，用户重载即可使用，无需跳转社区市场
+		return { ok: false, reason, fallback: false };
+	}
 	try {
 		window.open(`obsidian://show-plugin?id=${plugin.id}`, "_self");
 	} catch (e: unknown) {
