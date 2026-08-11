@@ -205,6 +205,12 @@ export interface ViewContext {
 	statsMap: Map<string, PluginStat>;
 	installedIds: Set<string>;
 	enabledIds: Set<string>;
+	/** 已装插件本地版本号（id → manifest.version） */
+	installedVersions: Map<string, string>;
+	/** 官方版本领先本地的插件 id 集合（有新版可更） */
+	outdatedIds: Set<string>;
+	/** 可更新详情（id → {local, latest}） */
+	outdatedInfo: Map<string, { local: string; latest: string }>;
 
 	// ── 智能信号 ──
 	smartSignals: Map<string, SignalId[]>;
@@ -522,10 +528,13 @@ get authorFacetList() { return view.authorFacetList; },
 		get recommendedOnly() { return view.recommendedOnly; },
 		set recommendedOnly(v) { view.recommendedOnly = v; },
 
-		// ── 统计 ──
+		// ── 统计 ─
 		get statsMap() { return view.statsMap; },
 		get installedIds() { return view.installedIds; },
 		get enabledIds() { return view.enabledIds; },
+		get installedVersions() { return view.installedVersions; },
+		get outdatedIds() { return view.outdatedIds; },
+		get outdatedInfo() { return view.outdatedInfo; },
 
 		// ── 智能信号 ──
 		get smartSignals() { return view.smartSignals; },
