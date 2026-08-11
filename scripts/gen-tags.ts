@@ -18,10 +18,24 @@
  * 用法：npm run gen-tags
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const SRC = process.env.TAG_SRC ?? "obsidian-translator-full-dict.json";
+/**
+ * 输入源：
+ *   - 默认从官方 community-plugins.json 拉取（含 id/name/author/description/repo，
+ *     不含 tags——官方 tags 仅在各插件 manifest.json 里）。
+ *   - 可用 TAG_SRC 指定本地 community-plugins.json 路径（离线构建）。
+ * 注意：旧的 obsidian-translator-full-dict.json（仅含译名）已弃用，不再作为数据源。
+ */
+const SRC = process.env.TAG_SRC ?? "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json";
 const OUT = process.env.TAG_OUT ?? "plugin-tags.json";
+
+/** 是否联网补全官方 manifest tags（增量对齐）。默认关，纯离线生成（category + 中文 tags）。 */
+const ENABLE_OFFICIAL_TAGS = process.env.ENABLE_OFFICIAL_TAGS === "1";
+/** 官方插件清单地址（与 SRC 默认同源） */
+const PLUGINS_URL = SRC;
 
 /** 一级分类（功能域，UI 已绑定，保持稳定）。
  *  在自有细分体系基础上，吸收了 Obsidian 官方社区市场（community.obsidian.md/categories）
@@ -184,7 +198,9 @@ function classify(id: string, name: string, desc: string): { category: string; t
 		}
 	}
 
-	// 3. 标签抽取（译名优先 + 译描补充），去重最多 4
+	// 3. 标签抽取（译名优先 + 译描补充），去重最多 4——这是【中文自造词标签】，
+	//    作为基础标签层。官方 manifest 的英文 tags 由 main() 在联网模式下【增量追加】
+	//    （双轨并存，零覆盖损失，见 fetchOfficialTags）。
 	const tags: string[] = [];
 	const addTag = (t: string) => {
 		if (t && !tags.includes(t) && tags.length < 4) tags.push(t);
@@ -199,20 +215,135 @@ function classify(id: string, name: string, desc: string): { category: string; t
 	return { category, tags };
 }
 
-function main() {
-	console.log(`[gen-tags] 读取词典: ${SRC}`);
-	const raw = readFileSync(SRC, "utf-8");
-	const dict = JSON.parse(raw) as Record<string, { name: string; description: string }>;
+/** 读取 community-plugins.json（本地文件或联网 URL） */
+async function loadPlugins(): Promise<Record<string, { name: string; description: string; repo?: string }>> {
+	if (existsSync(SRC)) {
+		console.log(`[gen-tags] 读取本地清单: ${SRC}`);
+		const arr = JSON.parse(readFileSync(SRC, "utf-8")) as { id: string; name: string; description: string; repo?: string }[];
+		const map: Record<string, { name: string; description: string; repo?: string }> = {};
+		for (const p of arr) map[p.id] = { name: p.name, description: p.description, repo: p.repo };
+		return map;
+	}
+	console.log(`[gen-tags] 联网拉取清单: ${SRC}`);
+	const res = await fetch(SRC);
+	if (!res.ok) throw new Error(`下载社区清单失败: HTTP ${res.status}`);
+	const arr = (await res.json()) as { id: string; name: string; description: string; repo?: string }[];
+	const map: Record<string, { name: string; description: string; repo?: string }> = {};
+	for (const p of arr) map[p.id] = { name: p.name, description: p.description, repo: p.repo };
+	return map;
+}
+
+/** 若配置了 HTTPS_PROXY/https_proxy，启用代理 dispatcher（Node 18 原生 fetch 不读 env） */
+async function setupProxy(): Promise<void> {
+	const proxy = process.env.HTTPS_PROXY ?? process.env.https_proxy;
+	if (!proxy) return;
+	try {
+		const { ProxyAgent, setGlobalDispatcher } = await import("undici");
+		setGlobalDispatcher(new ProxyAgent(proxy));
+		console.log(`[gen-tags] 已启用代理: ${proxy}`);
+	} catch {
+		console.warn(`[gen-tags] 警告：设置了代理但未安装 undici，将尝试直连（可能失败）`);
+	}
+}
+
+/** 并发上限下的 map（避免一次性 5617 个请求打爆 GitHub raw） */
+async function mapWithConcurrency<T, R>(
+	items: T[],
+	limit: number,
+	fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let cursor = 0;
+	async function worker() {
+		while (cursor < items.length) {
+			const i = cursor++;
+			results[i] = await fn(items[i], i);
+		}
+	}
+	const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+	await Promise.all(workers);
+	return results;
+}
+
+/**
+ * 联网补全官方 manifest tags（增量对齐，双轨并存）。
+ * 仅当插件 manifest 真带 tags 时，把官方英文 tag 追加到既有中文 tags 之后（去重）。
+ * 失败/超时/无 tag 的插件保持原样（不阻断、不降级分类）。
+ */
+async function fetchOfficialTags(
+	ids: string[],
+	repoOf: (id: string) => string | undefined,
+	out: Record<string, { category: string; tags: string[] }>,
+): Promise<number> {
+	let appended = 0;
+	const CONCURRENCY = 8;
+	await mapWithConcurrency(ids, CONCURRENCY, async (id) => {
+		const repo = repoOf(id);
+		if (!repo) return;
+		const rawUrl = `https://raw.githubusercontent.com/${repo}/HEAD/manifest.json`;
+		try {
+			const res = await fetch(rawUrl);
+			if (!res.ok) return;
+			const manifest = (await res.json()) as { tags?: unknown };
+			if (!Array.isArray(manifest.tags)) return;
+			const official = manifest.tags.filter((t): t is string => typeof t === "string");
+			if (official.length === 0) return;
+			const cur = out[id].tags;
+			for (const t of official) {
+				if (!cur.includes(t)) {
+					cur.push(t); // 官方英文 tag 追加在后
+					appended++;
+				}
+			}
+		} catch {
+			/* 单插件失败容错：跳过，不影响整体 */
+		}
+	});
+	return appended;
+}
+
+async function main() {
+	await setupProxy();
+	console.log(`[gen-tags] 读取插件清单: ${SRC}`);
+	const dict = await loadPlugins();
 	const ids = Object.keys(dict);
 	console.log(`[gen-tags] 共 ${ids.length} 个插件`);
 
+	// 基准：已有 plugin-tags.json（正确的中文分类体系，基于译名训练）。
+	// 直接透传 category + 中文 tags，避免「换成英文原文输入」导致中文关键词分类体系失真。
+	// 仅社区清单里【新增】的插件才用英文轻量分类（占比小，略糙可接受）。
+	let base: Record<string, { category: string; tags: string[] }> = {};
+	if (existsSync(OUT)) {
+		base = JSON.parse(readFileSync(OUT, "utf-8"));
+		console.log(`[gen-tags] 以现有 plugin-tags.json 为分类基准（${Object.keys(base).length} 条）`);
+	}
+
 	const out: Record<string, { category: string; tags: string[] }> = {};
 	const dist: Record<string, number> = {};
+	let newCount = 0;
 	for (const id of ids) {
-		const entry = dict[id];
-		const { category, tags } = classify(id, entry.name, entry.description);
-		out[id] = { category, tags };
-		dist[category] = (dist[category] ?? 0) + 1;
+		if (base[id]?.category) {
+			// 透传：保留既有正确中文分类 + 中文 tags（官方 tag 补全阶段会在此之上追加）
+			out[id] = { category: base[id].category, tags: [...base[id].tags] };
+		} else {
+			// 新增插件：英文输入轻量分类（中文关键词命中率低，仅作兜底）
+			const entry = dict[id];
+			const { category, tags } = classify(id, entry.name, entry.description);
+			out[id] = { category, tags };
+			newCount++;
+		}
+		dist[out[id].category] = (dist[out[id].category] ?? 0) + 1;
+	}
+	console.log(`[gen-tags] 透传 ${ids.length - newCount} 条，新增分类 ${newCount} 条`);
+
+	// 增量补全官方 manifest tags（需 ENABLE_OFFICIAL_TAGS=1 + 联网；幂等：已追加过的不重复）
+	if (ENABLE_OFFICIAL_TAGS) {
+		console.log("[gen-tags] 联网补全官方 manifest tags（增量追加）...");
+		const repoOf = (id: string) => dict[id]?.repo;
+		const appended = await fetchOfficialTags(ids, repoOf, out);
+		console.log(`[gen-tags] 官方 tag 追加完成，本次新增 ${appended} 个标签映射`);
+	} else {
+		console.log("[gen-tags] 跳过官方 tag 补全（默认离线模式；如需补全设 ENABLE_OFFICIAL_TAGS=1）");
 	}
 
 	writeFileSync(OUT, JSON.stringify(out, null, 0), "utf-8");
@@ -224,4 +355,7 @@ function main() {
 	console.log(`[gen-tags] 已写入 ${OUT}（${ids.length} 条）`);
 }
 
-main();
+main().catch((e) => {
+	console.error("[gen-tags] 失败:", e);
+	process.exit(1);
+});
