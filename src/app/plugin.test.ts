@@ -78,6 +78,24 @@ describe("Plugin 持久化契约（P0 回归）", () => {
 		expect(plugin.settings.embeddingLocalModel).toBe("Xenova/custom-model");
 	});
 
+	it("仅看收藏筛选（favoriteFilter）随 settings 持久化并恢复", async () => {
+		const { plugin, saveData } = makePlugin();
+		// 模拟用户开启「仅看收藏」后落盘：data.json 含 favoriteFilter=true
+		await (plugin as any).loadSettings({ favoriteFilter: true } as Record<string, unknown>);
+		expect(plugin.settings.favoriteFilter).toBe(true);
+		// 关闭后落盘：应写回 favoriteFilter=false
+		await (plugin as any).loadSettings({ favoriteFilter: false } as Record<string, unknown>);
+		expect(plugin.settings.favoriteFilter).toBe(false);
+		// 缺省（旧版无该字段）应回落到默认 false，而非 undefined
+		await (plugin as any).loadSettings({} as Record<string, unknown>);
+		expect(plugin.settings.favoriteFilter).toBe(false);
+		// saveSettings 经 Object.assign(allData, settings) 把 favoriteFilter 写回 data.json
+		(plugin as any).settings.favoriteFilter = true;
+		await (plugin as any).flushSaveSettings();
+		const written = (saveData as any).mock.calls.at(-1)[0] as Record<string, unknown>;
+		expect(written.favoriteFilter).toBe(true);
+	});
+
 	it("onunload 对挂起的 settings 兜底落盘", async () => {
 		const { plugin, saveData } = makePlugin();
 		plugin.saveSettings(); // 挂起，未到 300ms

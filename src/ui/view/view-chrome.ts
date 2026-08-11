@@ -427,6 +427,7 @@ export async function loadAndRender(ctx: ViewContext) {
 
 		// 从持久化设置恢复筛选状态
 		ctx.sourceFilter = ctx.settings.sourceFilter ?? "all";
+		ctx.favoriteFilter = ctx.settings.favoriteFilter ?? false;
 
 		// 头部（折叠式：默认只露搜索，高级控件收起）
 		// 注意：不渲染自有 h2 标题——Obsidian 的 tab 已经显示「插件搜索」，
