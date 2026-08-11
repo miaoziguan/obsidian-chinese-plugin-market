@@ -20,6 +20,7 @@ import { setListState } from "@ui/dom/list-state";
 import { isAIMode } from "@domain/search/search-mode";
 import type { ViewContext } from "@ui/view/view-context";
 import { LAYOUT, PLUGINS_URL } from "@shared/constants";
+import { fetchManifest } from "@domain/compare/plugin-insight";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 
 // 插件 id → PluginInfo 查表缓存：消除 refreshCardTranslation 内 ctx.plugins.find 的 O(n) 线性扫描
@@ -507,6 +508,12 @@ export function snapshotInstalled(ctx: ViewContext) {
 			if (!plugins) return;
 			if (plugins.manifests) {
 				const next = new Set(Object.keys(plugins.manifests));
+				// 同时收集已装插件本地版本号（供「可更新」检测对比官方最新版）
+				const versions = new Map<string, string>();
+				for (const [id, m] of Object.entries(plugins.manifests)) {
+					if (m?.version) versions.set(id, m.version);
+				}
+				ctx.installedVersions = versions;
 				// H2：安装集合内容变化（装/卸插件）会改变「仅已安装」筛选的匹配集，
 				// 前缀缓存只减不增，必须失效，否则新装插件在带搜索词时不出现。
 				// 精化：installedIds 仅参与 installFilter==="installed" 的成员判定
@@ -563,6 +570,74 @@ export function buildAuthorFacet(ctx: ViewContext) {
 			.map(([name, count]) => ({ name, count }));
 		ctx.authorFacetList = groupAuthorsByName(multi);
 	
+}
+
+/**
+ * 比较两个 semver 版本号（major.minor.patch，忽略前缀 v）。
+ * @returns 负数 = a<b（a 旧），0 = 相等，正数 = a>b（a 新）
+ */
+function compareVersion(a: string, b: string): number {
+	const pa = a.replace(/^v/i, "").split(".").map((x) => parseInt(x, 10) || 0);
+	const pb = b.replace(/^v/i, "").split(".").map((x) => parseInt(x, 10) || 0);
+	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+		const da = pa[i] ?? 0;
+		const db = pb[i] ?? 0;
+		if (da !== db) return da - db;
+	}
+	return 0;
+}
+
+// 防重入锁：视图生命周期内只跑一次（已装插件数量少，结果内存缓存即可，不落盘）
+let outdatedRefreshing = false;
+
+/**
+ * 检测「可更新」：对【已安装】插件，拉官方 manifest 取最新 version，与本地对比。
+ * 只对已装插件拉取（通常几十个），成本低；官方 community-plugins.json 不含 version 字段，
+ * 故逐个 fetchManifest（带镜像容错 + 并发控制 + 单插件失败容错）。
+ *
+ * 完成后填充 ctx.outdatedIds / ctx.outdatedInfo，并触发可见窗口重渲染（不回顶）。
+ */
+export async function refreshOutdated(ctx: ViewContext): Promise<void> {
+	if (outdatedRefreshing) return;
+	if (!ctx.installedVersions || ctx.installedVersions.size === 0) return;
+	outdatedRefreshing = true;
+	try {
+		// 构建 id → repo 映射（仅已装且官方列表有记录的插件）
+		const repoOf = new Map<string, string>();
+		for (const p of ctx.plugins) {
+			if (ctx.installedVersions.has(p.id) && p.repo) repoOf.set(p.id, p.repo);
+		}
+		if (repoOf.size === 0) return;
+
+		const mirror = ctx.mirrorConfig();
+		const CONCURRENCY = 6;
+		const ids = [...repoOf.keys()];
+		let cursor = 0;
+		const worker = async () => {
+			while (cursor < ids.length) {
+				const id = ids[cursor++];
+				const local = ctx.installedVersions.get(id) ?? "";
+				try {
+					const manifest = await fetchManifest(repoOf.get(id), mirror);
+					if (manifest.version && compareVersion(manifest.version, local) > 0) {
+						ctx.outdatedIds.add(id);
+						ctx.outdatedInfo.set(id, { local, latest: manifest.version });
+					}
+				} catch {
+					/* 单插件失败容错：跳过，不影响整体 */
+				}
+			}
+		};
+		const workers = Array.from({ length: Math.min(CONCURRENCY, ids.length) }, () => worker());
+		await Promise.all(workers);
+
+		// 重渲染可见窗口（仅更新徽标，不回顶，避免列表跳动）
+		if (ctx.outdatedIds.size > 0) ctx.scheduleRender();
+	} catch (e: unknown) {
+		logger.warn("[Chinese Plugin Market] 检测可更新插件失败：", e);
+	} finally {
+		outdatedRefreshing = false;
+	}
 }
 
 export function renderAuthorFacet(ctx: ViewContext) {

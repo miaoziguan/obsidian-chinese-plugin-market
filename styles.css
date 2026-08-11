@@ -1495,6 +1495,41 @@ button.pt-card-install-btn--installed {
 	border: 1px solid color-mix(in srgb, var(--pt-gold) 40%, transparent);
 }
 
+/* ── 「可更新」徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口 ──
+   设计：绿色升级提示，区别于金色推荐；可点击（pointer-events: auto）。 */
+.pt-card-update-badge {
+	position: static;
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--pt-space-2xs);
+	padding: var(--pt-space-2xs) var(--pt-space-sm);
+	border-radius: 999px;
+	font-size: var(--pt-text-xs);
+	font-weight: var(--pt-weight-bold);
+	letter-spacing: 0.02em;
+	color: var(--text-on-accent, #fff);
+	background: linear-gradient(135deg,
+		color-mix(in srgb, var(--pt-accent-green, #2ecc71) 85%, #fff),
+		var(--pt-accent-green, #2ecc71));
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--pt-accent-green, #2ecc71) 40%, transparent);
+	cursor: pointer;
+	pointer-events: auto;
+}
+.pt-card-update-badge:hover {
+	filter: brightness(1.08);
+}
+/* 暗色主题下降低可更新徽章亮度，避免刺眼 */
+.theme-dark .pt-card-update-badge {
+	color: var(--text-on-accent, #fff);
+	background: linear-gradient(135deg,
+		color-mix(in srgb, var(--pt-accent-green, #2ecc71) 50%, var(--pt-surface-2, var(--background-secondary))),
+		color-mix(in srgb, var(--pt-accent-green, #2ecc71) 50%, var(--pt-surface-2, var(--background-secondary)))
+	);
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--pt-accent-green, #2ecc71) 25%, transparent);
+	border: 1px solid color-mix(in srgb, var(--pt-accent-green, #2ecc71) 40%, transparent);
+}
+
 /* ── 顶部「官方推荐」置顶区（默认无搜索词时强曝光） ──
    设计：融入页面的分区标题，去掉厚边框/背景盒子，从根本上消除「框内居中」对齐难题。
    头部为一行 flex（标题左 + 展开/收起右），标题含金色强调竖条；

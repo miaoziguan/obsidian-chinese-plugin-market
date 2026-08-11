@@ -12,7 +12,7 @@
 
 /** 已安装插件仓库（app.plugins）的最小可读形状 */
 export interface AppPlugins {
-	manifests?: Record<string, unknown>;
+	manifests?: Record<string, { version?: string; [k: string]: unknown }>;
 	enabledPlugins?: {
 		has?: (pluginId: string) => boolean;
 		forEach?: (cb: (id: string) => void) => void;

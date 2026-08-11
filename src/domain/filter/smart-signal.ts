@@ -2,9 +2,17 @@ import type { PluginInfo } from "@domain/catalog/translator";
 import type { PluginStat } from "@domain/catalog/stats";
 
 /** 离线可算的轻量推荐信号 ID（无需 AI Key 即可展示，降低 AI 差异化价值感知门槛） */
-export type SignalId = "top1" | "top5" | "hot10" | "recentActive" | "velocityRising";
+export type SignalId =
+	| "top1"
+	| "top5"
+	| "hot10"
+	| "recentActive"
+	| "recentUpdate"
+	| "velocityRising";
 
 const RECENT_ACTIVE_DAYS = 90;
+/** 近期更新信号：官方在近 N 天内发布过新版本（比 recentActive 的 90 天更聚焦「刚更新」） */
+const RECENT_UPDATE_DAYS = 30;
 const MS_PER_DAY = 86400000;
 
 /**
@@ -57,6 +65,15 @@ export function computeSmartSignals(
 		// 近期活跃（可共存）
 		if (sigs.length < 2 && p.updated != null && p.updated > activeThreshold) {
 			sigs.push("recentActive");
+		}
+
+		// 近期更新（可共存）：官方近 30 天内发过新版，比 recentActive 更聚焦「刚更新」
+		if (
+			sigs.length < 3 &&
+			p.updated != null &&
+			p.updated > now - RECENT_UPDATE_DAYS * MS_PER_DAY
+		) {
+			sigs.push("recentUpdate");
 		}
 
 		// 趋势上升（可共存）

@@ -16,6 +16,7 @@ import { appendSVG } from "@ui/dom/dom";
 import { isMacOS, macosSystemTranslate } from "@translation/platform/macos-shortcuts";
 import { formatDownloads, formatUpdated } from "@domain/catalog/stats";
 import type { SignalId } from "@domain/filter/smart-signal";
+import { asAppInternals } from "@data/platform/obsidian-internals";
 
 /** 离线信号 → 中文标签（无需 AI Key 即可展示） */
 const SIGNAL_LABELS: Record<SignalId, string> = {
@@ -23,6 +24,7 @@ const SIGNAL_LABELS: Record<SignalId, string> = {
 	top5: "Top 5%",
 	hot10: "热门",
 	recentActive: "近期活跃",
+	recentUpdate: "近期更新",
 	velocityRising: "增速飙升",
 };
 
@@ -86,6 +88,12 @@ export interface CardRenderContext {
 	favoritesSet?: Set<string>;
 	/** 离线智能信号：插件 id → 信号列表（下载量分位 / 近期活跃等，无需 AI Key） */
 	smartSignals?: Map<string, SignalId[]>;
+	/** 「可更新」检测：官方版本领先本地的插件 id 集合（仅已装插件） */
+	outdatedIds?: Set<string>;
+	/** 「可更新」详情：插件 id → {local, latest}，供徽标 tooltip 展示版本差 */
+	outdatedInfo?: Map<string, { local: string; latest: string }>;
+	/** Obsidian App 引用（用于「可更新」徽标点击跳社区插件更新入口） */
+	app?: import("obsidian").App;
 	/** 描述展开/收起时的回调（用于虚拟滚动重测行高） */
 	onDescToggle?: () => void;
 	/** 「🍎 系统翻译」成功后落库回调（由视图注入，调用 translator.persistSystemTranslation） */
@@ -156,6 +164,8 @@ interface CardRefs {
 	recommendBadge: HTMLElement;
 	/** 排序可解释性：召回信号徽标行（向量/关键词/标题/AI 精排） */
 	matchSignals: HTMLElement;
+	/** 可更新徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口 */
+	updateBadge?: HTMLElement;
 }
 
 const cardRefsMap = new WeakMap<HTMLElement, CardRefs>();
@@ -216,6 +226,14 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const authorName = authorSpan.createSpan({ cls: "pt-author-name" });
 	const installedMeta = metaInfo.createSpan({ cls: "pt-card-installed" });
 	installedMeta.setCssStyles({ display: "none" });
+
+	// 「可更新」徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口；初始隐藏
+	const updateBadge = metaInfo.createSpan({ cls: "pt-card-update-badge" });
+	updateBadge.setCssStyles({ display: "none" });
+	updateBadge.addEventListener("click", (e: MouseEvent) => {
+		e.stopPropagation();
+		asAppInternals(ctx.app).setting?.openTabById?.("community-plugins");
+	});
 
 	// ── 描述（固定行数截断，hover 浮层展示完整描述） ──
 	const descEl = card.createDiv({ cls: "pt-card-desc pt-card-desc--clamped" });
@@ -360,6 +378,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		nameSpan, originalName, installBtn, insightBtn, compareBtn, favBtn, macosBtn,
 		descEl, statline, dlChip, dlText, clkChip, clkText,
 		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, installedMeta, recommendBadge, matchSignals,
+		updateBadge,
 	});
 	cardCtxMap.set(card, ctx);
 	return card;
@@ -584,5 +603,18 @@ export function applyCardState(
 		refs.installedMeta.setAttribute("title", txt);
 	} else {
 		refs.installedMeta.setCssStyles({ display: "none" });
+	}
+
+	// 可更新徽标：官方版本领先本地（仅已装插件），点击跳 Obsidian 社区插件更新入口
+	const ub = refs.updateBadge;
+	const outdated = !!ctx.outdatedIds?.has(plugin.id);
+	if (outdated && ub) {
+		const info = ctx.outdatedInfo?.get(plugin.id);
+		const label = info ? `可更新 ${info.local} → ${info.latest}` : "可更新";
+		ub.textContent = ("↑ " + (info ? `可更新 ${info.latest}` : "可更新"));
+		ub.setAttribute("title", label);
+		ub.setCssStyles({ display: "" });
+	} else if (ub) {
+		ub.setCssStyles({ display: "none" });
 	}
 }

@@ -127,7 +127,7 @@ export function getDefaultSettings(): ChinesePluginMarketSettings {
 
 
 import { loadAndRender, updateGuidance, updateFacetVisibility, showSearchGuide, showAIPendingHint, showAIConfigGuide, showLoadingState, updateStats, applyAIConfig, announceStatus, updateScrollButtons, updateScrollPosBadge } from "@ui/view/view-chrome";
-import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, updateAuthorBanner, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
+import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, refreshOutdated, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, updateAuthorBanner, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
 import { runAISearch } from "@ui/view/view-ai-search";
 import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, updateWindow, disposeRenderTimers } from "@ui/view/view-render";
 import { startInstalledWatch } from "@ui/view/installed-watch";
@@ -267,6 +267,12 @@ export class ChinesePluginMarketView extends ItemView {
 	// ── 已安装/已启用状态（产品改进 #7）──
 	public installedIds: Set<string> = new Set();
 	public enabledIds: Set<string> = new Set();
+	/** 已装插件本地版本号（id → manifest.version），供「可更新」检测对比 */
+	public installedVersions: Map<string, string> = new Map();
+	/** 官方版本领先本地的插件 id 集合（有新版可更） */
+	public outdatedIds: Set<string> = new Set();
+	/** 可更新详情（id → {local, latest}），供徽标 tooltip 展示版本差 */
+	public outdatedInfo: Map<string, { local: string; latest: string }> = new Map();
 
 	// ── 结果排序（产品改进 #5）。初值来自持久化设置，UI 切换即时生效并保存。──
 	public sortBy: SortBy = "relevance";
@@ -319,6 +325,9 @@ export class ChinesePluginMarketView extends ItemView {
 			get installedIds() { return self.installedIds; },
 			get enabledIds() { return self.enabledIds; },
 			get aiSearchResult() { return self.aiSearchResult; },
+			get outdatedIds() { return self.outdatedIds; },
+			get outdatedInfo() { return self.outdatedInfo; },
+			app: self.app,
 			// 卡片高度已固定（CSS contain + 锁高），描述展开不再改变布局，无需重绘
 			onDescToggle: () => {},
 			// 「🍎 系统翻译」成功 → 落库沉淀（cache + tmApproved），下次直接命中复用
@@ -330,6 +339,8 @@ export class ChinesePluginMarketView extends ItemView {
 		await this.loadAndRender();
 		// #14：启动已安装状态实时同步（桌面 fs.watch / 移动轮询），视图关闭时释放
 		this.installedWatchDispose = startInstalledWatch(this._ctx);
+		// A 方案：后台检测「可更新」插件（拉官方 manifest 对比本地版本），完成后自动重渲徽标
+		if (!this.disposed) this.refreshOutdated();
 		// T4(#7): 注册分类标签加载完成回调，刷新 facet（标签可能晚于首屏就绪）；
 		// 若打开视图时标签已就绪（竞态：加载早于视图打开），立即补刷一次。
 		this.plugin.onPluginTagsLoaded = () => {
@@ -673,6 +684,12 @@ public mergeStatsFromCache = () => mergeStatsFromCache(this._ctx);
 	 * app.plugins 为半官方 API，整体 try/catch 容错，缺失时静默不打标。
 	 */
 public snapshotInstalled = () => snapshotInstalled(this._ctx);
+
+	/**
+	 * 后台检测「可更新」：对【已安装】插件拉官方 manifest 取最新 version，与本地对比。
+	 * 异步、容错、带防重入锁；完成后自动重渲染可见窗口的徽标（不回顶）。
+	 */
+public refreshOutdated = () => { void refreshOutdated(this._ctx).catch(() => {}); };
 
 	/** 预计算搜索索引：每个插件的小写化搜索串（委托 filter.ts 的 buildSearchBlob，保证口径一致） */
 public buildSearchIndex = (ids?: Set<string>) => buildSearchIndex(this._ctx, ids);
