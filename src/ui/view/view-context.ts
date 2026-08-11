@@ -531,8 +531,11 @@ get authorFacetList() { return view.authorFacetList; },
 		// ── 统计 ─
 		get statsMap() { return view.statsMap; },
 		get installedIds() { return view.installedIds; },
+		set installedIds(v) { view.installedIds = v; },
 		get enabledIds() { return view.enabledIds; },
+		set enabledIds(v) { view.enabledIds = v; },
 		get installedVersions() { return view.installedVersions; },
+		set installedVersions(v) { view.installedVersions = v; },
 		get outdatedIds() { return view.outdatedIds; },
 		get outdatedInfo() { return view.outdatedInfo; },
 
