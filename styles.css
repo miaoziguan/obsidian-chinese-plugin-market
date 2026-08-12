@@ -706,12 +706,11 @@
 	background: color-mix(in srgb, var(--pt-accent) 8%, transparent);
 }
 
-/* 分类 facet 选中态视觉反馈（keyword 模式下也可作为筛选条件） */
+/* 分类 facet 选中态视觉反馈：与「来源/翻译」维度统一（accent 色文字 + 加粗，无背景填充，border/background 由下方 .pt-view 覆盖块置透明） */
 .pt-facet-chip.pt-active,
 .pt-facet-chip[aria-pressed="true"] {
-	background: var(--pt-accent, var(--interactive-accent));
-	color: var(--pt-on-accent, var(--text-on-accent));
-	border-color: var(--pt-accent, var(--interactive-accent));
+	color: var(--pt-accent, var(--interactive-accent));
+	font-weight: var(--pt-weight-semibold);
 }
 .pt-facet-hint {
 	font-size: var(--font-smallest);
@@ -760,8 +759,8 @@ button.pt-facet-letter-btn:hover {
 	box-shadow: none;
 }
 button.pt-facet-letter-btn.is-active {
-	color: inherit;
-	font-weight: inherit;
+	color: var(--pt-accent, var(--interactive-accent));
+	font-weight: var(--pt-weight-semibold);
 	background: transparent;
 	border: none;
 	box-shadow: none;
@@ -948,18 +947,17 @@ button.pt-facet-letter-btn.is-active {
 .pt-view .pt-toolbar-reset:focus-visible,
 .pt-view .pt-toggle-filters[aria-expanded="true"],
 .pt-view .pt-toggle-filters--text[aria-expanded="true"],
+/* 工具条/筛选区按钮（来源/安装/收藏等 .pt-filter）选中时去边框去背景；分类 facet chip 走方案 B（accent 字+加粗+保留细边框），不在此覆盖 */
 .pt-view .pt-filter[aria-pressed="true"],
-.pt-view .pt-filter.pt-filter-recommended[aria-pressed="true"],
-.pt-view .pt-facet-chip.pt-active,
-.pt-view .pt-facet-chip[aria-pressed="true"] {
+.pt-view .pt-filter.pt-filter-recommended[aria-pressed="true"] {
 	border: none;
 	box-shadow: none;
 	background: transparent;
 }
-/* 字母索引 active态 覆盖：保持纯字母，不加任何装饰 */
+/* 字母索引 active态：与分类/翻译维度统一（accent 色文字 + 加粗，无背景填充） */
 .pt-view button.pt-facet-letter-btn.is-active {
-	color: inherit;
-	font-weight: inherit;
+	color: var(--pt-accent, var(--interactive-accent));
+	font-weight: var(--pt-weight-semibold);
 	background: transparent;
 	border: none;
 	box-shadow: none;
@@ -1330,8 +1328,8 @@ button.pt-facet-letter-btn.is-active {
 	line-height: inherit;
 	min-height: 0; /* UA/某些主题会给 button 一个 min-height */
 	height: auto;
-	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
-	color: var(--pt-accent);
+	background: color-mix(in srgb, var(--pt-text-muted) 12%, transparent);
+	color: var(--pt-text-muted, var(--text-muted));
 	border: none;
 	border-radius: 999px;
 	box-shadow: none;
@@ -1342,28 +1340,31 @@ button.pt-facet-letter-btn.is-active {
 	transition: background var(--pt-duration-fast) var(--pt-ease);
 }
 .pt-card-install-btn:hover {
-	background: color-mix(in srgb, var(--pt-accent) 24%, transparent);
+	background: color-mix(in srgb, var(--pt-text-muted) 20%, transparent);
 	filter: none;
 }
-/* 已安装但未启用：次要 CTA（同款 tint 视觉语言，但用中性 muted 色） */
+/* 已安装但未启用：accent tint（与「已启用」视觉语言统一） */
 .pt-card-install-btn--installed {
-	background: color-mix(in srgb, var(--pt-text-muted) 12%, transparent);
-	color: var(--pt-text-muted, var(--text-muted));
+	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
+	color: var(--pt-accent);
 	border: none;
 }
 .pt-card-install-btn--installed:hover {
-	background: color-mix(in srgb, var(--pt-text-muted) 20%, transparent);
-	color: var(--pt-text-strong, var(--text-normal));
+	background: color-mix(in srgb, var(--pt-accent) 24%, transparent);
+	color: var(--pt-accent);
 	filter: none;
 }
-/* 已启用：实心成功色胶囊（白字，纯展示状态） */
+/* 已启用：强调色 tint 胶囊（accent 14% 透明底 + accent 色文字）；
+   纯展示状态，不可交互。 */
 .pt-card-install-btn--enabled {
-	background: var(--pt-color-success);
-	color: #fff;
+	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
+	color: var(--pt-accent);
 	border: none;
 }
 .pt-card-install-btn--enabled:hover {
-	filter: brightness(0.92);
+	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
+	color: var(--pt-accent);
+	filter: none;
 }
 /* 安装中：纯展示 chip 胶囊（强调色淡底），不可交互。
    进行中提示用 JS 驱动的三点省略号（安装中···）循环，不依赖 CSS 动画，
@@ -1383,8 +1384,8 @@ button.pt-facet-letter-btn.is-active {
    注意：不要在这里写 font: shorthand，否则会用更高具体性把类的字号字重冲掉；
    必须用 font-family / font-size / font-weight 单独覆盖。 */
 button.pt-card-install-btn {
-	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
-	color: var(--pt-accent);
+	background: color-mix(in srgb, var(--pt-text-muted) 12%, transparent);
+	color: var(--pt-text-muted, var(--text-muted));
 	border: none;
 	box-shadow: none;
 	appearance: none;
@@ -1414,10 +1415,9 @@ button.pt-card-install-btn--installed {
 .pt-card-actions-row {
 	display: flex;
 	align-items: center;
-	gap: var(--pt-space-2xs);
+	justify-content: flex-start;
+	gap: 2px;
 	flex-wrap: wrap;
-	/* 右侧留出灯泡开关空间，避免与右下角开关重叠 */
-	padding-right: 42px;
 	opacity: 1;
 	transform: translateY(0);
 	transition: opacity var(--pt-duration-normal) var(--pt-ease), transform var(--pt-duration-normal) var(--pt-ease);
@@ -2383,7 +2383,6 @@ button.pt-card-install-btn--installed {
 	.pt-card--flash,
 	.pt-back-top,
 	.pt-scroll-bottom,
-	.pt-author-banner,
 	.pt-ai-badge,
 	.pt-refreshing,
 	.pt-search.pt-search--ai,
@@ -4205,19 +4204,27 @@ button.pt-card-install-btn--installed {
 	color: #d99a1c;
 }
 
-/* 启用/禁用子弹开关：卡片右下角，仅已安装插件显示 */
+/* 启用/禁用子弹开关：与左侧图标组（26px）严格上下对齐，
+   容器高度撑到 26px，内部 track 居中（34×18），仅已安装插件显示。
+   margin-left: auto 把开关推到行末，图标组紧凑靠左。 */
 .pt-card-toggle-switch {
-	position: absolute;
-	right: var(--pt-space-md);
-	bottom: var(--pt-space-sm);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	align-self: center;
+	flex-shrink: 0;
+	margin-left: auto;
 	width: 34px;
-	height: 18px;
+	height: 26px;
 	padding: 0;
+	margin-top: 0;
+	margin-right: 0;
+	margin-bottom: 0;
 	border: none;
 	background: transparent;
 	cursor: pointer;
-	z-index: 2;
 	-webkit-tap-highlight-color: transparent;
+	vertical-align: middle;
 }
 .pt-card-toggle-switch:focus-visible {
 	outline: none;
@@ -4255,100 +4262,12 @@ button.pt-card-install-btn--installed {
 	transform: translateX(16px);
 }
 
-/* ===== 卸载确认弹窗（破坏性操作二次确认）专属样式 ===== */
-.pt-uninstall-modal {
-	max-width: 420px;
-}
-.pt-uninstall-modal .modal-content {
-	padding: var(--pt-space-lg) var(--pt-space-lg) var(--pt-space-md);
-}
-/* 警告正文：左侧强调线 + 低饱和背景，弱化为提示而非告警横幅 */
-.pt-uninstall-warn {
-	margin: 0;
-	padding: var(--pt-space-md) var(--pt-space-md);
-	border-radius: var(--pt-radius-sm);
-	background: color-mix(in srgb, var(--text-error) 6%, transparent);
-	border: none;
-	border-left: 4px solid var(--text-error);
-	color: var(--text-normal);
-	font-size: var(--font-ui-small);
-	line-height: 1.7;
-}
-.pt-uninstall-warn strong {
-	color: var(--text-error);
-	font-weight: var(--pt-weight-semibold);
-}
-/* 按钮行：右对齐、等宽、统一间距，确认（危险）按钮视觉权重更高 */
-.pt-uninstall-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: var(--pt-space-sm);
-	margin-top: var(--pt-space-lg);
-}
-.pt-uninstall-actions .pt-detail-btn {
-	min-width: 80px;
-	justify-content: center;
-}
-/* 危险操作按钮（卸载/删除）：与 .mod-cta 同形，仅色变为 --text-error */
-.pt-detail-btn.mod-warning {
-	color: var(--text-on-accent);
-	background: var(--text-error);
-	border: none;
-	border-radius: var(--pt-radius-pill);
-	font-weight: var(--pt-weight-semibold);
-	padding: var(--pt-space-sm) var(--pt-space-xl);
-	font-size: var(--pt-text-base);
-	box-shadow: 0 1px 3px color-mix(in srgb, var(--text-error) 30%, transparent);
-}
-.pt-detail-btn.mod-warning:hover {
-	background: color-mix(in srgb, var(--text-error) 88%, var(--background-primary));
-	box-shadow: 0 2px 8px color-mix(in srgb, var(--text-error) 40%, transparent);
-}
-
 /* 收藏卡片：金色描边轮廓（替代左侧竖条，与 hover 描边方案统一） */
-/* 作者钻取状态条：常驻工具栏下方，告知用户当前处于作者筛选态 */
-.pt-author-banner {
-	display: flex;
-	align-items: center;
-	gap: var(--pt-space-sm);
-	padding: var(--pt-space-xs) var(--pt-space-md);
-	margin-top: var(--pt-space-xs);
-	background: color-mix(in srgb, var(--pt-accent) 8%, transparent);
-	border: 1px solid color-mix(in srgb, var(--pt-accent) 25%, transparent);
-	border-radius: var(--pt-radius);
-	font-size: var(--pt-text-sm);
-	color: var(--pt-text);
-	animation: pt-author-banner-in 200ms var(--pt-ease);
-}
-@keyframes pt-author-banner-in {
+/* 活跃筛选条件 chips：折叠面板收起后仍常驻搜索行下方，避免「隐藏状态」反模式 */
+@keyframes pt-chip-in {
 	from { opacity: 0; transform: translateY(-4px); }
 	to { opacity: 1; transform: translateY(0); }
 }
-.pt-author-banner-text {
-	flex: 1 1 auto;
-	min-width: 0;
-	font-weight: var(--pt-weight-medium);
-}
-.pt-author-banner-clear {
-	appearance: none;
-	flex: none;
-	font: inherit;
-	font-size: var(--pt-text-xs);
-	font-weight: var(--pt-weight-semibold);
-	padding: var(--pt-space-2xs) var(--pt-space-md);
-	color: var(--pt-accent);
-	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
-	border: 1px solid color-mix(in srgb, var(--pt-accent) 30%, transparent);
-	border-radius: 999px;
-	cursor: pointer;
-	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease);
-}
-.pt-author-banner-clear:hover {
-	background: color-mix(in srgb, var(--pt-accent) 20%, transparent);
-	border-color: color-mix(in srgb, var(--pt-accent) 50%, transparent);
-}
-
-/* 活跃筛选条件 chips：折叠面板收起后仍常驻搜索行下方，避免「隐藏状态」反模式 */
 .pt-active-filters {
 	display: flex;
 	align-items: center;
@@ -4383,7 +4302,7 @@ button.pt-card-install-btn--installed {
 	border: 1px solid color-mix(in srgb, var(--pt-accent) 22%, transparent);
 	border-radius: var(--pt-radius-pill);
 	box-shadow: 0 1px 2px color-mix(in srgb, var(--pt-accent) 6%, transparent);
-	animation: pt-author-banner-in 160ms var(--pt-ease);
+	animation: pt-chip-in 160ms var(--pt-ease);
 	transition: background var(--pt-duration-fast) var(--pt-ease),
 		border-color var(--pt-duration-fast) var(--pt-ease),
 		box-shadow var(--pt-duration-fast) var(--pt-ease);

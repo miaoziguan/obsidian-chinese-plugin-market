@@ -279,9 +279,9 @@ export function renderActiveFilters(ctx: ViewContext) {
 		const currentInstall = ctx.installFilter;
 		const installLabelMap: Record<InstallFilter, string> = {
 			all: "",
-			installed: "仅显示已安装",
-			enabled: "仅显示已启动",
-			installedNotEnabled: "仅显示已安装未启动",
+			installed: "已安装",
+			enabled: "已启动",
+			installedNotEnabled: "已安装未启动",
 		};
 		const installClsMap: Record<InstallFilter, string> = {
 			all: "",
@@ -308,8 +308,8 @@ export function renderActiveFilters(ctx: ViewContext) {
 		const currentFav = ctx.favoriteFilter;
 		const favLabelMap: Record<FavoriteFilter, string> = {
 			all: "",
-			favorited: "仅看收藏",
-			unfavorited: "仅看未收藏",
+			favorited: "已收藏",
+			unfavorited: "未收藏",
 		};
 		const favClsMap: Record<FavoriteFilter, string> = {
 			all: "",
@@ -339,19 +339,6 @@ export function renderActiveFilters(ctx: ViewContext) {
 				if (idx >= 0) ctx.selectedCategories.splice(idx, 1);
 				const chip = q(ctx.contentEl, `.pt-facet-chip[data-cat="${CSS.escape(cat)}"]`);
 				if (chip) chip.setAttribute("aria-pressed", "false");
-				ctx.updateFacetVisibility();
-				ctx.scheduleRender();
-			},
-		});
-	}
-
-	if (ctx.authorFilter) {
-		chips.push({
-			text: ctx.t("filter.active.author", { value: ctx.authorFilter }),
-			onClear: () => {
-				ctx.authorFilter = null;
-				ctx.updateAuthorBanner();
-				ctx.renderAuthorFacet();
 				ctx.updateFacetVisibility();
 				ctx.scheduleRender();
 			},

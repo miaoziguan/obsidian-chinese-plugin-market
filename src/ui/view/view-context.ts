@@ -186,7 +186,6 @@ export interface ViewContext {
 	authorRowEl: HTMLElement | null;
 	guidanceEl: HTMLElement | null;
 	authorFacetEl: HTMLElement | null;
-	authorBannerEl: HTMLElement | null;
 	featuredSectionEl: HTMLElement | null;
 	featuredGridEl: HTMLElement | null;
 
@@ -197,7 +196,6 @@ export interface ViewContext {
 	authorFilter: string | null;
 	authorFacetList: AuthorGroup[];
 	authorExpanded: boolean;
-	authorCounts: Map<string, number>;
 	activeAuthorLetter: string | null;
 	recommendedOnly: boolean;
 
@@ -267,7 +265,6 @@ export interface ViewContext {
 	buildAuthorFacet: () => void;
 	renderAuthorFacet: () => void;
 	toggleAuthorFilter: (author: string) => void;
-	updateAuthorBanner: () => void;
 	applySearchInput: (raw?: string) => void;
 	showAIPendingHint: () => void;
 	showAIConfigGuide: (reason?: "disabled" | "noKey") => void;
@@ -507,8 +504,6 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set guidanceEl(v) { view.guidanceEl = v; },
 		get authorFacetEl() { return view.authorFacetEl; },
 		set authorFacetEl(v) { view.authorFacetEl = v; },
-		get authorBannerEl() { return view.authorBannerEl; },
-		set authorBannerEl(v) { view.authorBannerEl = v; },
 		get featuredSectionEl() { return view.featuredSectionEl; },
 		set featuredSectionEl(v) { view.featuredSectionEl = v; },
 		get featuredGridEl() { return view.featuredGridEl; },
@@ -525,7 +520,6 @@ get authorFacetList() { return view.authorFacetList; },
 	set authorFacetList(v) { view.authorFacetList = v; },
 	get authorExpanded() { return view.authorExpanded; },
 	set authorExpanded(v) { view.authorExpanded = v; },
-		get authorCounts() { return view.authorCounts; },
 		get activeAuthorLetter() { return view.activeAuthorLetter; },
 		set activeAuthorLetter(v) { view.activeAuthorLetter = v; },
 		get recommendedOnly() { return view.recommendedOnly; },
@@ -596,7 +590,6 @@ get authorFacetList() { return view.authorFacetList; },
 		buildAuthorFacet: view.buildAuthorFacet.bind(view),
 		renderAuthorFacet: view.renderAuthorFacet.bind(view),
 		toggleAuthorFilter: view.toggleAuthorFilter.bind(view),
-		updateAuthorBanner: view.updateAuthorBanner.bind(view),
 		applySearchInput: view.applySearchInput.bind(view),
 		showAIPendingHint: view.showAIPendingHint.bind(view),
 		showAIConfigGuide: view.showAIConfigGuide.bind(view),

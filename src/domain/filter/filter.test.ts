@@ -261,7 +261,7 @@ describe("filterAndSortPlugins", () => {
 		expect(r.list.map((p) => p.id)).toEqual([P_CAL.id, P_MIND.id, P_GIT.id]);
 	});
 
-	it("仅看收藏：只保留 favoritesSet 内的插件", () => {
+	it("仅已收藏：只保留 favoritesSet 内的插件", () => {
 		const r = filterAndSortPlugins(baseFilterParams({ favoriteFilter: "favorited", favoritesSet: new Set([P_CAL.id]) }));
 		expect(r.list.map((p) => p.id)).toEqual([P_CAL.id]);
 		// 无收藏时返回空列表
@@ -269,7 +269,7 @@ describe("filterAndSortPlugins", () => {
 		expect(r2.list).toHaveLength(0);
 	});
 
-	it("仅看未收藏：只排除 favoritesSet 内的插件", () => {
+	it("仅未收藏：只排除 favoritesSet 内的插件", () => {
 		const r = filterAndSortPlugins(baseFilterParams({ favoriteFilter: "unfavorited", favoritesSet: new Set([P_CAL.id]) }));
 		expect(r.list.map((p) => p.id).sort()).toEqual([P_GIT.id, P_MIND.id].sort());
 		// 全部收藏时返回空列表
@@ -415,17 +415,17 @@ describe("filterAndSortPlugins", () => {
 		expect(r.list.map((p) => p.id)).toEqual([P_MIND.id]);
 	});
 
-	it("前缀缓存：仅看收藏关闭时必须恢复全部（缓存失效）", () => {
-		// 复现 bug：上次开启「仅看收藏」，缓存里只有收藏子集；本次关闭仅看收藏
+	it("前缀缓存：仅已收藏关闭时必须恢复全部（缓存失效）", () => {
+		// 复现 bug：上次开启「仅已收藏」，缓存里只有收藏子集；本次关闭仅已收藏
 		const r = filterAndSortPlugins(
 			baseFilterParams({
 				query: "",
-				favoriteFilter: "all", // 当前关闭仅看收藏
+				favoriteFilter: "all", // 当前关闭仅已收藏
 				favoritesSet: new Set([P_CAL.id]),
 				lastFiltered: [P_CAL], // 缓存里只有收藏子集
 				lastFilterQuery: "",
 				lastFilterSource: "all",
-				lastFilterFavorites: "favorited", // 上次是仅看收藏
+				lastFilterFavorites: "favorited", // 上次是仅已收藏
 			})
 		);
 		// 必须恢复全部三个插件，而非停留在收藏子集
@@ -611,7 +611,7 @@ describe("resolveEmptyState", () => {
 			expect(resolveEmptyState({ ...base, sourceFilter: "translated" }).showClearAction).toBe(true);
 		});
 
-		it("「仅显示已安装」生效时显示（installFilter === installed）", () => {
+		it("「已安装」生效时显示（installFilter === installed）", () => {
 			expect(resolveEmptyState({ ...base, installFilter: "installed" }).showClearAction).toBe(true);
 		});
 

@@ -71,7 +71,7 @@ export interface ChinesePluginMarketSettings {
 	sortBy: SortBy;
 	// 个人收藏集：用户主动收藏的插件 id（持久化，随使用时间复利）
 	favorites: string[];
-	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部（跨会话持久化） */
+	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部（跨会话持久化） */
 	favoriteFilter: FavoriteFilter;
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
@@ -129,7 +129,7 @@ export function getDefaultSettings(): ChinesePluginMarketSettings {
 
 
 import { loadAndRender, updateGuidance, updateFacetVisibility, showSearchGuide, showAIPendingHint, showAIConfigGuide, showLoadingState, updateStats, applyAIConfig, announceStatus, updateScrollButtons, updateScrollPosBadge } from "@ui/view/view-chrome";
-import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, refreshOutdated, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, updateAuthorBanner, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
+import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, refreshOutdated, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
 import { runAISearch } from "@ui/view/view-ai-search";
 import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, updateWindow, disposeRenderTimers } from "@ui/view/view-render";
 import { startInstalledWatch } from "@ui/view/installed-watch";
@@ -211,7 +211,7 @@ export class ChinesePluginMarketView extends ItemView {
 	public compareSet: Set<string> = new Set();
 	// 个人收藏集：持久化到 settings.favorites，开视图时水合为 Set 供 O(1) 判定
 	public favoritesSet: Set<string> = new Set();
-	// 「仅看收藏」筛选开关（工具栏 toggle，不持久化）
+	// 「仅已收藏」筛选开关（工具栏 toggle，不持久化）
 	public sortFavoritesFirst = false;
 	public compareTrayEl: HTMLElement | null = null;
 	public scrollRAF = 0;
@@ -474,7 +474,7 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public sourceFilter: SourceFilter = "all";
 	/** 安装状态筛选（"all" / "uninstalled"，产品改进 #7） */
 	public installFilter: InstallFilter = "all";
-	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部 */
+	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部 */
 	public favoriteFilter: FavoriteFilter = "all";
 	/** AI/关键字模式：当前选中的分类 facet（空数组表示不筛选，零回归） */
 	public selectedCategories: string[] = [];
@@ -482,8 +482,6 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public authorFilter: string | null = null;
 	/** 作者维度：作品数≥2 的多插件作者列表（facet 快捷筛选；长尾单插件作者走卡片钻取/搜索） */
 	public authorFacetList: AuthorGroup[] = [];
-	/** 作者 → 作品数（全量统计，供 author banner 显示作者真实作品数，不受当前筛选影响） */
-	public authorCounts: Map<string, number> = new Map();
 	/** 作者字母筛选：选中的首字母（null = 不展开任何组，只显示字母条） */
 	public activeAuthorLetter: string | null = null;
 	/** 作者 facet 展开态（字母组作者 > maxVisible 时「更多 ▾/收起 ▴」状态） */
@@ -513,8 +511,6 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public authorFacetEl: HTMLElement | null = null;
 	/** 键盘导航：当前聚焦的卡片在 visibleList 中的索引（-1 表示无聚焦） */
 	public focusedCardIdx = -1;
-	/** 作者过滤状态 banner（显示「正在查看 XXX 的 N 个插件 | ✕ 清除」） */
-	public authorBannerEl: HTMLElement | null = null;
 
 	/** 掩埋点：从本地缓存恢复插件列表（网络不可用时应急） */
 	public async tryLoadCachedPluginList(): Promise<PluginInfo[] | null> {
@@ -721,12 +717,6 @@ public renderAuthorFacet = () => renderAuthorFacet(this._ctx);
 	/** 切换作者筛选：再次点同一作者则取消，并刷新 facet 选中态与列表 */
 public toggleAuthorFilter = (author: string) => toggleAuthorFilter(this._ctx, author);
 
-	/**
-	 * 作者钻取状态条：当 authorFilter 活跃时，在工具栏下方显示
-	 * 「正在查看作者 XXX 的 N 个插件 | ✕ 清除」，让用户知道当前处于筛选态。
-	 * N 使用全量 authorCounts（不受其他筛选影响），避免与搜索/来源筛选交叉后显示 0。
-	 */
-public updateAuthorBanner = () => updateAuthorBanner(this._ctx);
 
 	
 

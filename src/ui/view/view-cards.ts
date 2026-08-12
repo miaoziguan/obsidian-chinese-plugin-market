@@ -111,42 +111,8 @@ export async function handleToggleEnabled(ctx: ViewContext, plugin: PluginInfo):
 }
 
 /**
- * 卸载确认弹窗（破坏性操作二次确认）。
- */
-class UninstallConfirmModal extends Modal {
-	private readonly plugin: PluginInfo;
-	private readonly resolve: (v: boolean) => void;
-
-	constructor(ctx: ViewContext, plugin: PluginInfo, resolve: (v: boolean) => void) {
-		super(ctx.app);
-		this.plugin = plugin;
-		this.resolve = resolve;
-		this.contentEl.addClass("pt-uninstall-modal");
-	}
-
-	onOpen(): void {
-		const { contentEl } = this;
-		contentEl.empty();
-		this.setTitle(this.plugin.name ? `卸载 ${this.plugin.name}` : "卸载插件");
-		const warn = contentEl.createEl("p", { cls: "pt-uninstall-warn" });
-		warn.append("确定卸载该插件？插件文件将从磁盘删除，此操作");
-		warn.createEl("strong", { text: "不可撤销" });
-		warn.append("。");
-		const actions = contentEl.createDiv({ cls: "modal-button-row pt-uninstall-actions" });
-		actions.createEl("button", { text: "取消", cls: "pt-detail-btn" }).addEventListener("click", () => {
-			this.close();
-			this.resolve(false);
-		});
-		actions.createEl("button", { text: "卸载", cls: "pt-detail-btn mod-warning" }).addEventListener("click", () => {
-			this.close();
-			this.resolve(true);
-		});
-	}
-}
-
-/**
  * 卸载已安装插件（供事件委托与卡片直接回调共用）。
- * 卸载是破坏性操作，先二次确认再执行；卸载中加锁防重复点击。
+ * 点击卸载图标即直接卸载，不再弹二次确认（产品改进：省去多余面板）；卸载中加锁防重复点击。
  */
 export async function handleUninstall(ctx: ViewContext, plugin: PluginInfo): Promise<void> {
 	if (ctx.installingIds.has(plugin.id)) return;
@@ -154,10 +120,6 @@ export async function handleUninstall(ctx: ViewContext, plugin: PluginInfo): Pro
 	ctx.refreshCardState(plugin.id);
 	ctx.scheduleRender(true);
 	try {
-		const confirmed = await new Promise<boolean>((resolve) => {
-			new UninstallConfirmModal(ctx, plugin, resolve).open();
-		});
-		if (!confirmed) return;
 		const ok = await uninstallCommunityPlugin(ctx, plugin);
 		if (ok) {
 			new Notice(ctx.t("card.uninstall.done", { name: plugin.name }));
@@ -300,7 +262,7 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			ctx.flashAction(actionEl);
 			new Notice(isOn ? ctx.t("favorite.removed") : ctx.t("favorite.added"));
 			if (ctx.sortFavoritesFirst && !newState) {
-				// 仅看收藏模式下取消收藏：从列表中移除该卡片（带过渡动画）
+				// 仅已收藏模式下取消收藏：从列表中移除该卡片（带过渡动画）
 				const card = toHTMLElement(actionEl.closest(".pt-card"));
 				if (card) {
 					card.setCssStyles({ transition: "opacity 200ms ease, transform 200ms ease", opacity: "0", transform: "scale(0.95)" });

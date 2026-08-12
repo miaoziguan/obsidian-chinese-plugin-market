@@ -152,18 +152,18 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.favoriteFilter = "all";
 			ctx.settings.favoriteFilter = "all";
 			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
-			// 「仅显示已安装/已启动/已安装未启动」按钮：aria-pressed 与文案复位
+			// 「已安装/已启动/已安装未启动」按钮：aria-pressed 与文案复位
 			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setText("仅显示已安装");
+			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setText("已安装");
 			q(ctx.contentEl, ".pt-toggle-enabled")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-enabled")?.setText("仅显示已启动");
+			q(ctx.contentEl, ".pt-toggle-enabled")?.setText("已启动");
 			q(ctx.contentEl, ".pt-toggle-installed-off")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-installed-off")?.setText("仅显示已安装未启动");
-			// 「仅看收藏/仅看未收藏」按钮：aria-pressed 与文案复位
+			q(ctx.contentEl, ".pt-toggle-installed-off")?.setText("已安装未启动");
+			// 「已收藏/未收藏」按钮：aria-pressed 与文案复位
 			q(ctx.contentEl, ".pt-toggle-favorites")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-favorites")?.setText("仅看收藏");
+			q(ctx.contentEl, ".pt-toggle-favorites")?.setText("已收藏");
 			q(ctx.contentEl, ".pt-toggle-unfavorites")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-unfavorites")?.setText("仅看未收藏");
+			q(ctx.contentEl, ".pt-toggle-unfavorites")?.setText("未收藏");
 			// 排序菜单「收藏优先」项 active 态复位
 			const favItemEl = q(ctx.contentEl, ".pt-sort-menu-item--fav");
 			if (favItemEl) favItemEl.classList.remove("pt-sort-menu-item--active");
@@ -456,7 +456,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				} else if (ctx.authorFilter) {
 					// 搜索框为空但处于作者筛选态：Esc 退出作者筛选
 					ctx.authorFilter = null;
-					ctx.updateAuthorBanner();
 					ctx.renderAuthorFacet();
 					ctx.updateFacetVisibility();
 					ctx.scheduleRender();
@@ -597,15 +596,15 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 
-		// ── 安装筛选（仅显示已安装 / 仅显示已启动 / 仅显示已安装未启动），收进面板统一筛选入口 ──
+		// ── 安装筛选（已安装 / 已启动 / 已安装未启动），收进面板统一筛选入口 ──
 		const installRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		installRow.createSpan({ cls: "pt-facet-label", text: "安装" });
 		const installChips = installRow.createDiv({ cls: "pt-facet-chips" });
 
 		const installToggleDefs: { cls: string; on: InstallFilter; label: string; track: string }[] = [
-			{ cls: "pt-toggle-uninstalled", on: "installed", label: "仅显示已安装", track: "filter:installed" },
-			{ cls: "pt-toggle-enabled", on: "enabled", label: "仅显示已启动", track: "filter:enabled" },
-			{ cls: "pt-toggle-installed-off", on: "installedNotEnabled", label: "仅显示已安装未启动", track: "filter:installedNotEnabled" },
+			{ cls: "pt-toggle-uninstalled", on: "installed", label: "已安装", track: "filter:installed" },
+			{ cls: "pt-toggle-enabled", on: "enabled", label: "已启动", track: "filter:enabled" },
+			{ cls: "pt-toggle-installed-off", on: "installedNotEnabled", label: "已安装未启动", track: "filter:installedNotEnabled" },
 		];
 		const installToggles = installToggleDefs.map((def) =>
 			installChips.createEl("button", { cls: `pt-filter ${def.cls}`, text: def.label })
@@ -631,14 +630,14 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			});
 		});
 
-		// ── 收藏筛选（仅看收藏 / 仅看未收藏），与安装筛选同组 ──
+		// ── 收藏筛选（已收藏 / 未收藏），与安装筛选同组 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		favRow.createSpan({ cls: "pt-facet-label", text: "收藏" });
 		const favChips = favRow.createDiv({ cls: "pt-facet-chips" });
 
 		const favToggleDefs: { cls: string; on: FavoriteFilter; label: string; track: string }[] = [
-			{ cls: "pt-toggle-favorites", on: "favorited", label: "仅看收藏", track: "filter:favorites" },
-			{ cls: "pt-toggle-unfavorites", on: "unfavorited", label: "仅看未收藏", track: "filter:unfavorites" },
+			{ cls: "pt-toggle-favorites", on: "favorited", label: "已收藏", track: "filter:favorites" },
+			{ cls: "pt-toggle-unfavorites", on: "unfavorited", label: "未收藏", track: "filter:unfavorites" },
 		];
 		const favToggles = favToggleDefs.map((def) =>
 			favChips.createEl("button", { cls: `pt-filter ${def.cls}`, text: def.label })

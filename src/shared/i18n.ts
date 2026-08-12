@@ -536,17 +536,13 @@ export const STRINGS = {
 	"compare.dl.closeMulti": { zh: "下载量接近：{ranking}。" },
 	"compare.daysAgo": { zh: "{n} 天前" },
 	"compare.suggest.need": { zh: "如果你需要 {tags} → 选 {name}" },
-	// 作者钻取状态条
-	"author.filter.active": { zh: "正在查看作者 {author} 的 {n} 个插件" },
-	"author.filter.clear": { zh: "✕ 清除" },
 	"filter.reset": { zh: "重置" },
 	// 活跃筛选条件 chips（折叠面板收起时，在搜索行下方常驻显示已生效的筛选）
 	"filter.active.label": { zh: "筛选中" },
 	"filter.active.source": { zh: "翻译：{value}" },
 	"filter.active.installed": { zh: "仅已安装" },
-	"filter.active.favorites": { zh: "仅看收藏" },
+			"filter.active.favorites": { zh: "已收藏" },
 	"filter.active.category": { zh: "分类：{value}" },
-	"filter.active.author": { zh: "作者：{value}" },
 	"filter.active.clear": { zh: "清除该筛选" },
 } as const;
 
