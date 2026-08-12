@@ -334,6 +334,10 @@ export function toggleFavorite(ctx: ViewContext, pid: string) : boolean {
 
 		// 重算收藏集（保持单一事实来源）
 		ctx.favoritesSet = new Set(ctx.settings.favorites);
+		// 若当前收藏筛选生效，集合内容变化必须失效前缀缓存（只减不增）
+		if (ctx.favoriteFilter !== "all") {
+			ctx.filterCache.reset();
+		}
 		void ctx.flushSaveSettings();
 		return !isOn;
 }

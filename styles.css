@@ -356,7 +356,9 @@
 /* 工具栏「仅已安装」/「仅已启动」/「仅已安装未启动」 toggle */
 .pt-toggle-uninstalled,
 .pt-toggle-enabled,
-.pt-toggle-installed-off {
+.pt-toggle-installed-off,
+.pt-toggle-favorites,
+.pt-toggle-unfavorites {
 	flex-shrink: 0;
 }
 

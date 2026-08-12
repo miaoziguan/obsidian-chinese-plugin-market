@@ -21,7 +21,7 @@
 
 import type { PluginInfo, TranslateResult, AISearchResult, Translator } from "@domain/catalog/translator";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
-import type { SearchMode, SourceFilter, InstallFilter, FilterCache, EmptyState } from "@domain/filter/filter";
+import type { SearchMode, SourceFilter, InstallFilter, FavoriteFilter, FilterCache, EmptyState } from "@domain/filter/filter";
 import type { SortBy } from "@domain/filter/sort";
 import type { PluginStat } from "@domain/catalog/stats";
 import type { SimilarCandidate } from "@domain/recommend/similar";
@@ -103,7 +103,7 @@ export interface ViewContext {
 	searchMode: SearchMode;
 	sourceFilter: SourceFilter;
 	installFilter: InstallFilter;
-	favoriteFilter: boolean;
+	favoriteFilter: FavoriteFilter;
 	sortBy: SortBy;
 	dataLoaded: boolean;
 	dataLoading: boolean;

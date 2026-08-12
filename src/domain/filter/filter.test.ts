@@ -262,10 +262,19 @@ describe("filterAndSortPlugins", () => {
 	});
 
 	it("仅看收藏：只保留 favoritesSet 内的插件", () => {
-		const r = filterAndSortPlugins(baseFilterParams({ favoriteFilter: true, favoritesSet: new Set([P_CAL.id]) }));
+		const r = filterAndSortPlugins(baseFilterParams({ favoriteFilter: "favorited", favoritesSet: new Set([P_CAL.id]) }));
 		expect(r.list.map((p) => p.id)).toEqual([P_CAL.id]);
 		// 无收藏时返回空列表
-		const r2 = filterAndSortPlugins(baseFilterParams({ favoriteFilter: true, favoritesSet: new Set() }));
+		const r2 = filterAndSortPlugins(baseFilterParams({ favoriteFilter: "favorited", favoritesSet: new Set() }));
+		expect(r2.list).toHaveLength(0);
+	});
+
+	it("仅看未收藏：只排除 favoritesSet 内的插件", () => {
+		const r = filterAndSortPlugins(baseFilterParams({ favoriteFilter: "unfavorited", favoritesSet: new Set([P_CAL.id]) }));
+		expect(r.list.map((p) => p.id).sort()).toEqual([P_GIT.id, P_MIND.id].sort());
+		// 全部收藏时返回空列表
+		const allIds = new Set(PLUGINS.map((p) => p.id));
+		const r2 = filterAndSortPlugins(baseFilterParams({ favoriteFilter: "unfavorited", favoritesSet: allIds }));
 		expect(r2.list).toHaveLength(0);
 	});
 
@@ -411,12 +420,12 @@ describe("filterAndSortPlugins", () => {
 		const r = filterAndSortPlugins(
 			baseFilterParams({
 				query: "",
-				favoriteFilter: false, // 当前关闭仅看收藏
+				favoriteFilter: "all", // 当前关闭仅看收藏
 				favoritesSet: new Set([P_CAL.id]),
 				lastFiltered: [P_CAL], // 缓存里只有收藏子集
 				lastFilterQuery: "",
 				lastFilterSource: "all",
-				lastFilterFavorites: true, // 上次是仅看收藏
+				lastFilterFavorites: "favorited", // 上次是仅看收藏
 			})
 		);
 		// 必须恢复全部三个插件，而非停留在收藏子集

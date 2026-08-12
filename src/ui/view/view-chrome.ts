@@ -12,6 +12,7 @@ import { setListState } from "@ui/dom/list-state";
 import { isAIMode, isKeywordMode } from "@domain/search/search-mode";
 import { q, appendSVG } from "@ui/dom/dom";
 import type { ViewContext } from "@ui/view/view-context";
+import type { InstallFilter, FavoriteFilter } from "@domain/filter/filter";
 import { buildToolbar, alignFacetLabels, type ToolbarState } from "@ui/view/view-toolbar";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { LAYOUT } from "@shared/constants";
@@ -223,8 +224,8 @@ export function updateFacetVisibility(ctx: ViewContext) {
 			ctx.sourceFilter !== "all" ||
 			ctx.selectedCategories.length > 0 ||
 			ctx.authorFilter !== null ||
-			ctx.installFilter === "installed" ||
-			ctx.favoriteFilter;
+			ctx.installFilter !== "all" ||
+			ctx.favoriteFilter !== "all";
 		resetBtn.classList.toggle("is-active", hasActive);
 	}
 
@@ -274,15 +275,28 @@ export function renderActiveFilters(ctx: ViewContext) {
 		});
 	}
 
-	if (ctx.installFilter === "installed") {
+	if (ctx.installFilter !== "all") {
+		const currentInstall = ctx.installFilter;
+		const installLabelMap: Record<InstallFilter, string> = {
+			all: "",
+			installed: "仅显示已安装",
+			enabled: "仅显示已启动",
+			installedNotEnabled: "仅显示已安装未启动",
+		};
+		const installClsMap: Record<InstallFilter, string> = {
+			all: "",
+			installed: ".pt-toggle-uninstalled",
+			enabled: ".pt-toggle-enabled",
+			installedNotEnabled: ".pt-toggle-installed-off",
+		};
 		chips.push({
-			text: ctx.t("filter.active.installed"),
+			text: installLabelMap[currentInstall],
 			onClear: () => {
 				ctx.installFilter = "all";
-				const t = q(ctx.contentEl, ".pt-toggle-uninstalled");
+				const t = q(ctx.contentEl, installClsMap[currentInstall]);
 				if (t) {
 					t.setAttribute("aria-pressed", "false");
-					t.textContent = "仅显示已安装";
+					t.setText(installLabelMap[currentInstall]);
 				}
 				ctx.updateFacetVisibility();
 				ctx.scheduleRender();
@@ -290,15 +304,26 @@ export function renderActiveFilters(ctx: ViewContext) {
 		});
 	}
 
-	if (ctx.favoriteFilter) {
+	if (ctx.favoriteFilter !== "all") {
+		const currentFav = ctx.favoriteFilter;
+		const favLabelMap: Record<FavoriteFilter, string> = {
+			all: "",
+			favorited: "仅看收藏",
+			unfavorited: "仅看未收藏",
+		};
+		const favClsMap: Record<FavoriteFilter, string> = {
+			all: "",
+			favorited: ".pt-toggle-favorites",
+			unfavorited: ".pt-toggle-unfavorites",
+		};
 		chips.push({
-			text: ctx.t("filter.active.favorites"),
+			text: favLabelMap[currentFav],
 			onClear: () => {
-				ctx.favoriteFilter = false;
-				const t = q(ctx.contentEl, ".pt-toggle-favorites");
+				ctx.favoriteFilter = "all";
+				const t = q(ctx.contentEl, favClsMap[currentFav]);
 				if (t) {
 					t.setAttribute("aria-pressed", "false");
-					t.textContent = "仅看收藏";
+					t.setText(favLabelMap[currentFav]);
 				}
 				ctx.updateFacetVisibility();
 				ctx.scheduleRender();

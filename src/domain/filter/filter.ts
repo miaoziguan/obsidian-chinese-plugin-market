@@ -28,7 +28,7 @@ export class FilterCache {
 	private _install: InstallFilter = "all";
 	private _recommendedOnly = false;
 	private _categories?: string[];
-	private _favorites = false;
+	private _favorites: FavoriteFilter = "all";
 	/** 上一次过滤所处的搜索模式（H1：AI 召回子集不得被关键词模式当前缀基础集复用） */
 	private _mode: SearchMode = "keyword";
 
@@ -41,7 +41,7 @@ export class FilterCache {
 		this._install = result.nextFilterInstall;
 		this._recommendedOnly = result.nextFilterRecommendedOnly ?? false;
 		this._categories = result.nextFilterCategories;
-		this._favorites = result.nextFilterFavorites ?? false;
+		this._favorites = result.nextFilterFavorites ?? "all";
 		this._mode = result.nextFilterMode ?? "keyword";
 	}
 
@@ -79,6 +79,7 @@ export class FilterCache {
 		this._install = "all";
 		this._recommendedOnly = false;
 		this._categories = undefined;
+		this._favorites = "all";
 		this._mode = "keyword";
 	}
 }
@@ -91,6 +92,9 @@ export type SourceFilter = "all" | "translated" | "original";
 
 /** 安装状态筛选（enabled 仅显示已启用的已安装插件；installedNotEnabled 仅显示已安装未启用的插件） */
 export type InstallFilter = "all" | "installed" | "enabled" | "installedNotEnabled";
+
+/** 收藏筛选（"all" 表示全部；"favorited" 仅看收藏；"unfavorited" 仅看未收藏） */
+export type FavoriteFilter = "all" | "favorited" | "unfavorited";
 
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。
@@ -127,8 +131,8 @@ export interface MatchOptions {
 	recommendedSet?: Set<string>;
 	/** 收藏优先排序：收藏项置顶而非隐藏未收藏项（RC-3） */
 	sortFavoritesFirst?: boolean;
-	/** 仅看收藏：只保留 favoritesSet 内的插件（独立于 sortFavoritesFirst） */
-	favoriteFilter?: boolean;
+	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部 */
+	favoriteFilter?: FavoriteFilter;
 	/** 用户收藏插件 id 集合（由 settings.favorites 加载为 Set） */
 	favoritesSet?: Set<string>;
 	/** 分类筛选：选中分类列表（多选取并集；空/undefined 不过滤） */
@@ -179,8 +183,9 @@ export function matchesPlugin(
 	if (opts.authorFilter && p.author !== opts.authorFilter) return false;
 	// 官方推荐：仅保留推荐清单内的插件（所有模式生效）
 	if (opts.recommendedOnly && opts.recommendedSet && !opts.recommendedSet.has(p.id)) return false;
-	// 收藏筛选：「仅看收藏」模式才真正跳过未收藏插件；否则在排序阶段优先展示（RC-3）
-	if (opts.favoriteFilter && opts.favoritesSet && !opts.favoritesSet.has(p.id)) return false;
+	// 收藏筛选：仅看收藏 / 仅看未收藏
+	if (opts.favoriteFilter === "favorited" && opts.favoritesSet && !opts.favoritesSet.has(p.id)) return false;
+	if (opts.favoriteFilter === "unfavorited" && opts.favoritesSet && opts.favoritesSet.has(p.id)) return false;
 	// 分类筛选：仅保留分类匹配的插件（多选取并集；所有模式生效，作为全局发现维度）
 	if (opts.selectedCategories?.length && opts.pluginTagMap) {
 		const cat = opts.pluginTagMap.get(p.id);
@@ -231,8 +236,8 @@ export interface FilterParams {
 	recommendedSet?: Set<string>;
 	/** 收藏优先排序：收藏项置顶而非隐藏未收藏项（RC-3） */
 	sortFavoritesFirst?: boolean;
-	/** 仅看收藏：只保留 favoritesSet 内的插件（独立于 sortFavoritesFirst） */
-	favoriteFilter?: boolean;
+	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部 */
+	favoriteFilter?: FavoriteFilter;
 	/** 用户收藏插件 id 集合 */
 	favoritesSet?: Set<string>;
 	/** 分类筛选：选中分类列表（多选取并集） */
@@ -267,7 +272,7 @@ export interface FilterParams {
 	/** 上一次的 recommendedOnly */
 	lastFilterRecommendedOnly?: boolean;
 	/** 上一次的 favoriteFilter（缓存失效判断，避免切回「全部」时复用收藏子集） */
-	lastFilterFavorites?: boolean;
+	lastFilterFavorites?: FavoriteFilter;
 	/** 上一次选中的分类（数组引用比对，变化时使缓存失效） */
 	lastFilterCategories?: string[];
 	/** 上一次过滤所处的搜索模式（缺省视为 keyword，向后兼容） */
@@ -286,7 +291,7 @@ export interface FilterResult {
 	/** 回写的 installFilter（供下次缓存失效判断） */
 	nextFilterInstall: InstallFilter;
 	nextFilterRecommendedOnly?: boolean;
-	nextFilterFavorites?: boolean;
+	nextFilterFavorites?: FavoriteFilter;
 	nextFilterCategories?: string[];
 	/** 回写的搜索模式（供下次缓存复用判定：AI 子集不得被关键词模式复用） */
 	nextFilterMode: SearchMode;
@@ -307,7 +312,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		translatedResults, searchIndex, sortBy,
 		aiSearchResult, aiSearchQueryCache,
   lastFiltered, lastFilterQuery, lastFilterSource, lastFilterAuthor, authorFilter,
-  lastFilterInstall = "all", lastFilterRecommendedOnly = false, lastFilterFavorites = false,
+  lastFilterInstall = "all", lastFilterRecommendedOnly = false, lastFilterFavorites = "all",
   lastFilterCategories, lastFilterMode = "keyword",
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
@@ -330,7 +335,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	let nextFilterAuthor: string | null;
 	let nextFilterInstall: InstallFilter;
 	let nextFilterRecommendedOnly: boolean | undefined;
-	let nextFilterFavorites: boolean | undefined;
+	let nextFilterFavorites: FavoriteFilter | undefined;
 	let nextFilterCategories: string[] | undefined;
 	let clearAiResult = false;
 
@@ -479,8 +484,8 @@ export interface EmptyStateInput {
 	aiSearchResult: AISearchResult | null;
 	sourceFilter: SourceFilter;
 	installFilter: InstallFilter;
-	/** 仅看收藏：空态「清除筛选」按钮可见 */
-	favoriteFilter?: boolean;
+	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部 */
+	favoriteFilter?: FavoriteFilter;
 	/** 是否已配置 AI API Key（用于判断能否推荐 AI 搜索桥接） */
 	hasAIKey: boolean;
 	/** 原始查询词（用于桥接启发式，如 keyword→AI / AI→keyword） */
@@ -538,8 +543,9 @@ export function resolveEmptyState(input: EmptyStateInput): EmptyState {
 		}
 	}
 
+	const activeFavorite = favoriteFilter ?? "all";
 	const showClearAction =
-		hasQuery || sourceFilter !== "all" || installFilter === "installed" || installFilter === "enabled" || installFilter === "installedNotEnabled" || !!favoriteFilter;
+		hasQuery || sourceFilter !== "all" || installFilter === "installed" || installFilter === "enabled" || installFilter === "installedNotEnabled" || activeFavorite !== "all";
 
 	return { titleKey, hintKey, showClearAction, bridgeAction };
 }
