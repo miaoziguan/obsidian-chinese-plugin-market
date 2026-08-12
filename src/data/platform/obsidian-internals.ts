@@ -29,20 +29,20 @@ export interface AppPlugins {
 		forEach?: (cb: (id: string) => void) => void;
 	};
 	/** 重新扫描 plugins 目录并刷新 manifests（半官方 API，可选） */
-	loadManifests?: () => Promise<unknown> | unknown;
+	loadManifests?: () => Promise<void>;
 	/**
 	 * 加载单个插件。官方签名为 loadPlugin(plugin: PluginManifest)，
 	 * 个别旧版可能接受 id 字符串；调用方应绑定 this=app.plugins。
 	 */
-	loadPlugin?: (arg: PluginManifestLike | string) => Promise<unknown> | unknown;
+	loadPlugin?: (arg: PluginManifestLike | string) => Promise<void>;
 	/**
 	 * 启用单个插件。官方签名为 enablePlugin(plugin: PluginManifest)，
 	 * 内部会自行调用 loadPlugin；个别旧版可能接受 id 字符串。
 	 * 调用方务必用 .bind(plugins) 绑定 this，否则内部 this.app 为 undefined。
 	 */
-	enablePlugin?: (arg: PluginManifestLike | string) => Promise<unknown> | unknown;
+	enablePlugin?: (arg: PluginManifestLike | string) => Promise<void>;
 	/** 禁用单个插件（半官方 API，可选） */
-	disablePlugin?: (arg: PluginManifestLike | string) => Promise<unknown> | unknown;
+	disablePlugin?: (arg: PluginManifestLike | string) => Promise<void>;
 }
 
 /** 设置面板（app.setting）的最小可读形状 */

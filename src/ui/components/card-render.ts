@@ -451,12 +451,12 @@ function updateInstallButton(
 				let n = 0;
 				const tick = () => {
 					if (!el.isConnected) {
-						window.clearInterval((el as unknown as { _ptDots?: number })._ptDots!);
+						window.clearInterval((el as unknown as { _ptDots?: number })._ptDots);
 						(el as unknown as { _ptDots?: number })._ptDots = undefined;
 						return;
 					}
 					n = (n + 1) % 4;
-					label!.textContent = t("card.installing") + "·".repeat(n);
+					label.textContent = t("card.installing") + "·".repeat(n);
 				};
 				(el as unknown as { _ptDots?: number })._ptDots = window.setInterval(tick, 500);
 			}
