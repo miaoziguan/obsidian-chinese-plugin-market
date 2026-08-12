@@ -661,6 +661,11 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			const def = installToggleDefs[i];
 			el.addEventListener("click", () => {
 				ctx.installFilter = ctx.installFilter === def.on ? "all" : def.on;
+				// 语言 facet 是「已安装」的下级筛选：切回全量(all)时清除残留的语言筛选
+				if (ctx.installFilter === "all" && ctx.languageFilter !== null) {
+					ctx.languageFilter = null;
+					ctx.renderLanguageFacet();
+				}
 				updateInstallToggles();
 				ctx.track(ctx.installFilter === def.on ? def.track : `${def.track}_off`);
 				ctx.scheduleRender(true);

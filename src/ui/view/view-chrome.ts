@@ -211,7 +211,10 @@ export function updateFacetVisibility(ctx: ViewContext) {
 
 		const showCat = isAIMode(ctx) || isKeywordMode(ctx);
 		const showAuthor = (isAIMode(ctx) || isKeywordMode(ctx)) && ctx.authorFacetList.reduce((n, g) => n + g.authors.length, 0) > 0;
-		const showLanguage = isAIMode(ctx) || isKeywordMode(ctx);
+		// 语言 facet 是「已安装插件」的下级筛选：仅当用户切到任一已装相关视图
+		// （已安装/已启动/已安装未启动）时才显示；全量(all)视图下隐藏，因 languages
+		// 仅来自本地已装 manifest，对全量插件无意义。
+		const showLanguage = (isAIMode(ctx) || isKeywordMode(ctx)) && ctx.installFilter !== "all";
 		if (ctx.facetContainerEl) {
 			ctx.facetContainerEl.setCssStyles({ display: showCat || showAuthor || showLanguage ? "" : "none" });
 		}
@@ -227,7 +230,8 @@ export function updateFacetVisibility(ctx: ViewContext) {
 			ctx.selectedCategories.length > 0 ||
 			ctx.authorFilter !== null ||
 			ctx.installFilter !== "all" ||
-			ctx.favoriteFilter !== "all";
+			ctx.favoriteFilter !== "all" ||
+			(ctx.installFilter !== "all" && ctx.languageFilter !== null);
 		resetBtn.classList.toggle("is-active", hasActive);
 	}
 

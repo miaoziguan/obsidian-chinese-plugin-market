@@ -940,7 +940,10 @@ export function renderLanguageFacet(ctx: ViewContext) {
 	const langMap = ctx.pluginLanguages;
 	const countLang = (key: string): number => {
 		let n = 0;
+		// 语言 facet 是「已安装插件」的下级筛选，计数仅针对已安装插件
+		// （languages 仅来自本地已装 manifest，对全量插件无数据）。
 		for (const p of ctx.allPlugins) {
+			if (!ctx.installedIds.has(p.id)) continue;
 			const langs = langMap.get(p.id);
 			const matched =
 				key === "other"
