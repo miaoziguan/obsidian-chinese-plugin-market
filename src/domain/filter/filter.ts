@@ -89,8 +89,8 @@ export type SearchMode = "keyword" | "local" | "ai";
 /** 翻译来源筛选（"all" 表示全部；"translated" 表示任意已有译文，含批量/在线/AI/自定义） */
 export type SourceFilter = "all" | "translated" | "original";
 
-/** 安装状态筛选（enabled 仅显示已启用的已安装插件） */
-export type InstallFilter = "all" | "installed" | "enabled";
+/** 安装状态筛选（enabled 仅显示已启用的已安装插件；installedNotEnabled 仅显示已安装未启用的插件） */
+export type InstallFilter = "all" | "installed" | "enabled" | "installedNotEnabled";
 
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。
@@ -167,6 +167,12 @@ export function matchesPlugin(
 		return false;
 	}
 	if (opts.installFilter === "enabled" && !opts.enabledIds.has(p.id)) {
+		return false;
+	}
+	if (
+		opts.installFilter === "installedNotEnabled" &&
+		(!opts.installedIds.has(p.id) || opts.enabledIds.has(p.id))
+	) {
 		return false;
 	}
 	// 作者维度：按作者精确筛选（所有模式生效；null 表示不过滤）
@@ -533,7 +539,7 @@ export function resolveEmptyState(input: EmptyStateInput): EmptyState {
 	}
 
 	const showClearAction =
-		hasQuery || sourceFilter !== "all" || installFilter === "installed" || installFilter === "enabled" || !!favoriteFilter;
+		hasQuery || sourceFilter !== "all" || installFilter === "installed" || installFilter === "enabled" || installFilter === "installedNotEnabled" || !!favoriteFilter;
 
 	return { titleKey, hintKey, showClearAction, bridgeAction };
 }
