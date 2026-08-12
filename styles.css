@@ -4251,6 +4251,56 @@ button.pt-card-install-btn--installed {
 	transform: translateX(16px);
 }
 
+/* ===== 卸载确认弹窗（破坏性操作二次确认）专属样式 ===== */
+.pt-uninstall-modal {
+	max-width: 420px;
+}
+.pt-uninstall-modal .modal-content {
+	padding: var(--pt-space-lg) var(--pt-space-lg) var(--pt-space-md);
+}
+/* 警告正文：左侧强调线 + 低饱和背景，弱化为提示而非告警横幅 */
+.pt-uninstall-warn {
+	margin: 0;
+	padding: var(--pt-space-md) var(--pt-space-md);
+	border-radius: var(--pt-radius-sm);
+	background: color-mix(in srgb, var(--text-error) 6%, transparent);
+	border: none;
+	border-left: 4px solid var(--text-error);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	line-height: 1.7;
+}
+.pt-uninstall-warn strong {
+	color: var(--text-error);
+	font-weight: var(--pt-weight-semibold);
+}
+/* 按钮行：右对齐、等宽、统一间距，确认（危险）按钮视觉权重更高 */
+.pt-uninstall-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--pt-space-sm);
+	margin-top: var(--pt-space-lg);
+}
+.pt-uninstall-actions .pt-detail-btn {
+	min-width: 80px;
+	justify-content: center;
+}
+/* 危险操作按钮（卸载/删除）：与 .mod-cta 同形，仅色变为 --text-error */
+.pt-detail-btn.mod-warning {
+	color: var(--text-on-accent);
+	background: var(--text-error);
+	border: none;
+	border-radius: var(--pt-radius-pill);
+	font-weight: var(--pt-weight-semibold);
+	padding: var(--pt-space-sm) var(--pt-space-xl);
+	font-size: var(--pt-text-base);
+	box-shadow: 0 1px 3px color-mix(in srgb, var(--text-error) 30%, transparent);
+}
+.pt-detail-btn.mod-warning:hover {
+	background: color-mix(in srgb, var(--text-error) 88%, var(--background-primary));
+	box-shadow: 0 2px 8px color-mix(in srgb, var(--text-error) 40%, transparent);
+}
+
 /* 收藏卡片：金色描边轮廓（替代左侧竖条，与 hover 描边方案统一） */
 /* 作者钻取状态条：常驻工具栏下方，告知用户当前处于作者筛选态 */
 .pt-author-banner {
