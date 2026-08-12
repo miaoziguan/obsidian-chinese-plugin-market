@@ -233,7 +233,7 @@ function nodeDownload(url: string, depth = 0): Promise<{ ok: boolean; text: stri
 			// 超时兜底：连接或读取超过 15s 视为失败，主动销毁避免半开挂起
 			req.setTimeout(15_000, () => {
 				fail("timeout 15s");
-				try { req!.destroy(); } catch { /* 已结束 */ }
+				try { req.destroy(); } catch { /* 已结束 */ }
 			});
 		} else {
 			fail("https.get 返回空（运行时不支持）");
@@ -408,7 +408,7 @@ export async function installCommunityPlugin(
 	try {
 		await plugins.loadManifests?.call(plugins);
 		// 给 Obsidian 一点时间完成磁盘扫描与内部状态更新
-		await new Promise((r) => setTimeout(r, 50));
+		await new Promise((r) => window.setTimeout(r, 50));
 		recognized = Boolean(plugins.manifests?.[plugin.id]);
 	} catch (e: unknown) {
 		logger.warn("[Chinese Plugin Market] loadManifests 失败：", e);
@@ -480,7 +480,7 @@ async function tryEnablePlugin(
 	}
 
 	// 让事件循环推进，给 enablePlugin 内部异步加载一点时间
-	await new Promise((r) => setTimeout(r, 60));
+	await new Promise((r) => window.setTimeout(r, 60));
 	if (isEnabled()) {
 		// 官方已成功启用：双写两个真相源持久化（1.13 非交互调用不自动持久化）。
 		// community-plugins.json（已安装集）必须包含该 id，否则重启后 Obsidian
@@ -497,8 +497,8 @@ async function tryEnablePlugin(
 		if (Array.isArray(ep)) {
 			if (!ep.includes(id)) ep.push(id);
 			added = true;
-		} else if (typeof (ep as Set<string>).add === "function") {
-			(ep as Set<string>).add(id);
+		} else if (typeof ep.add === "function") {
+			ep.add(id);
 			added = true;
 		}
 	}
@@ -545,7 +545,7 @@ async function syncCommunityPluginsJson(
 		let list: string[] = [];
 		try {
 			const raw = await adapter.read(path);
-			const parsed = JSON.parse(raw);
+			const parsed: unknown = JSON.parse(raw);
 			if (Array.isArray(parsed)) list = parsed as string[];
 		} catch {
 			/* 文件不存在或损坏则用空数组 */
@@ -581,7 +581,7 @@ async function persistEnabledPlugins(ctx: ViewContext, id: string): Promise<void
 		let appJson: Record<string, unknown> = {};
 		try {
 			const raw = await adapter.read(appJsonPath);
-			appJson = JSON.parse(raw);
+			appJson = JSON.parse(raw) as Record<string, unknown>;
 		} catch {
 			/* app.json 不存在则用空对象 */
 		}
@@ -613,7 +613,7 @@ async function removeEnabledPlugin(ctx: ViewContext, id: string): Promise<void> 
 		let appJson: Record<string, unknown> = {};
 		try {
 			const raw = await adapter.read(appJsonPath);
-			appJson = JSON.parse(raw);
+			appJson = JSON.parse(raw) as Record<string, unknown>;
 		} catch {
 			/* app.json 不存在则用空对象 */
 		}

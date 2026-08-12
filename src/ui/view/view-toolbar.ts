@@ -115,7 +115,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				}
 				// 清除按钮在 badge 左侧动态让位，避免不同文案长度导致重叠
 				// 用 requestAnimationFrame 等一次布局，确保 offsetWidth 已包含新文案
-				requestAnimationFrame(() => {
+				window.requestAnimationFrame(() => {
 					const w = aiBadge.offsetWidth;
 					clearBtn.style.right = w > 0 ? `${w + 10}px` : "";
 				});
