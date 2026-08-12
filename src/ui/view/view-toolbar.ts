@@ -719,6 +719,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.settings.favoriteFilter = "all";
 			updateFavToggles();
 			ctx.renderAuthorFacet();
+			// 同步顶部「筛选中」chips 与重置按钮高亮态（仅 scheduleRender 不会触发）
+			ctx.updateFacetVisibility();
 			ctx.scheduleRender();
 		});
 
