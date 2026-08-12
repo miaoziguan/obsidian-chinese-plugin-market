@@ -57,6 +57,7 @@ function baseMatchOpts(over: Partial<MatchOptions> = {}): MatchOptions {
 		installFilter: "all",
 		searchMode: "keyword",
 		installedIds: new Set(),
+		enabledIds: new Set(),
 		translatedResults: RESULTS,
 		searchIndex: mkIndex(),
 		authorFilter: null,
@@ -73,6 +74,7 @@ function baseFilterParams(over: Partial<FilterParams> = {}): FilterParams {
 		installFilter: "all",
 		authorFilter: null,
 		installedIds: new Set(),
+		enabledIds: new Set(),
 		translatedResults: RESULTS,
 		searchIndex: mkIndex(),
 		sortBy: "relevance",
@@ -172,6 +174,16 @@ describe("matchesPlugin", () => {
 		const opts = baseMatchOpts({
 			installFilter: "installed",
 			installedIds: new Set([P_CAL.id]),
+		});
+		expect(matchesPlugin(P_CAL, "", opts)).toBe(true);
+		expect(matchesPlugin(P_MIND, "", opts)).toBe(false);
+	});
+
+	it("安装筛选：仅已启动时排除未启用插件", () => {
+		const opts = baseMatchOpts({
+			installFilter: "enabled",
+			installedIds: new Set([P_CAL.id, P_MIND.id]),
+			enabledIds: new Set([P_CAL.id]),
 		});
 		expect(matchesPlugin(P_CAL, "", opts)).toBe(true);
 		expect(matchesPlugin(P_MIND, "", opts)).toBe(false);

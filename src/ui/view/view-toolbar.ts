@@ -158,6 +158,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				uninstalledToggleEl.setAttribute("aria-pressed", "false");
 				uninstalledToggleEl.textContent = "仅显示已安装";
 			}
+			// 「仅显示已启动」按钮：aria-pressed 与文案复位
+			const enabledToggleEl = q(ctx.contentEl, ".pt-toggle-enabled");
+			if (enabledToggleEl) {
+				enabledToggleEl.setAttribute("aria-pressed", "false");
+				enabledToggleEl.textContent = "仅显示已启动";
+			}
 			// 「仅看收藏」按钮：aria-pressed 与文案复位
 			const favToggleEl = q(ctx.contentEl, ".pt-toggle-favorites");
 			if (favToggleEl) {
@@ -597,20 +603,38 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 
-		// ── 安装筛选（仅显示已安装），收进面板统一筛选入口 ──
+		// ── 安装筛选（仅显示已安装 / 仅显示已启动），收进面板统一筛选入口 ──
 		const installRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		installRow.createSpan({ cls: "pt-facet-label", text: "安装" });
 		const installChips = installRow.createDiv({ cls: "pt-facet-chips" });
+
 		const uninstalledToggle = installChips.createEl("button", {
 			cls: "pt-filter pt-toggle-uninstalled",
 			text: "仅显示已安装",
 		});
-		uninstalledToggle.setAttribute("aria-pressed", ctx.installFilter === "installed" ? "true" : "false");
-		uninstalledToggle.addEventListener("click", () => {
-			ctx.installFilter = ctx.installFilter === "installed" ? "all" : "installed";
+		const enabledToggle = installChips.createEl("button", {
+			cls: "pt-filter pt-toggle-enabled",
+			text: "仅显示已启动",
+		});
+
+		const updateInstallToggles = () => {
 			uninstalledToggle.setAttribute("aria-pressed", ctx.installFilter === "installed" ? "true" : "false");
 			uninstalledToggle.textContent = ctx.installFilter === "installed" ? "显示全部" : "仅显示已安装";
+			enabledToggle.setAttribute("aria-pressed", ctx.installFilter === "enabled" ? "true" : "false");
+			enabledToggle.textContent = ctx.installFilter === "enabled" ? "显示全部" : "仅显示已启动";
+		};
+		updateInstallToggles();
+
+		uninstalledToggle.addEventListener("click", () => {
+			ctx.installFilter = ctx.installFilter === "installed" ? "all" : "installed";
+			updateInstallToggles();
 			ctx.track(ctx.installFilter === "installed" ? "filter:installed" : "filter:installed_off");
+			ctx.scheduleRender(true);
+		});
+		enabledToggle.addEventListener("click", () => {
+			ctx.installFilter = ctx.installFilter === "enabled" ? "all" : "enabled";
+			updateInstallToggles();
+			ctx.track(ctx.installFilter === "enabled" ? "filter:enabled" : "filter:enabled_off");
 			ctx.scheduleRender(true);
 		});
 
@@ -655,6 +679,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.installFilter = "all";
 			uninstalledToggle.setAttribute("aria-pressed", "false");
 			uninstalledToggle.textContent = "仅显示已安装";
+			enabledToggle.setAttribute("aria-pressed", "false");
+			enabledToggle.textContent = "仅显示已启动";
 			ctx.favoriteFilter = false;
 			ctx.settings.favoriteFilter = false;
 			favToggle.setAttribute("aria-pressed", "false");
