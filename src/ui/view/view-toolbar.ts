@@ -652,33 +652,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			const def = installToggleDefs[i];
 			el.addEventListener("click", () => {
 				ctx.installFilter = ctx.installFilter === def.on ? "all" : def.on;
-				// 语言 facet 仅对「已安装」插件有意义（languages 来自本地已装 manifest）：
-				// 切回全量(all)时清除残留的语言筛选，避免对全量列表施加无数据可依据的过滤。
-				if (ctx.installFilter === "all" && ctx.languageFilter !== null) {
-					ctx.languageFilter = null;
-				}
 				updateInstallToggles();
-				// 切视图后重算 facet 可见性与语言桶（切到已安装才显示语言子行，且桶按已装集合计数）
 				ctx.updateFacetVisibility();
-				ctx.renderLanguageFacet();
 				ctx.track(ctx.installFilter === def.on ? def.track : `${def.track}_off`);
 				ctx.scheduleRender(true);
 			});
 		});
-
-		// 语言子行：作为「安装」的下级维度，缩进紧贴安装行下方显示。
-		// 关键 DOM 决策：放在 advancedInner（installRow 平级）而非 installRow 内部。
-		// 这样语言行是独立块级元素，自动独占一行；margin-left 模拟"安装行子级"缩进。
-		// （若放进 installRow，会被 installRow 的 flex 流和 toggle chips 并排挤压，
-		//   flex: 1 0 100% 也救不回来——兄弟元素的 flex: 1 1 auto 会继续在同一行排。）
-		const languageRow = advancedInner.createDiv({
-			cls: "pt-facet-subrow pt-facet-language-subrow",
-		});
-		ctx.languageRowEl = languageRow;
-		languageRow.createSpan({ cls: "pt-facet-sublabel", text: ctx.t("facet.language") });
-		const languageChips = languageRow.createDiv({ cls: "pt-facet-chips" });
-		ctx.languageFacetEl = languageChips;
-		ctx.renderLanguageFacet();
 
 		// ── 收藏筛选（已收藏 / 未收藏），与安装筛选同组 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });

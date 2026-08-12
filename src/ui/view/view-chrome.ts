@@ -211,29 +211,23 @@ export function updateFacetVisibility(ctx: ViewContext) {
 
 		const showCat = isAIMode(ctx) || isKeywordMode(ctx);
 		const showAuthor = (isAIMode(ctx) || isKeywordMode(ctx)) && ctx.authorFacetList.reduce((n, g) => n + g.authors.length, 0) > 0;
-		// 语言 facet 是「已安装插件」的下级筛选：仅当用户切到任一已装相关视图
-		// （已安装/已启动/已安装未启动）时才显示；全量(all)视图下隐藏，因 languages
-		// 仅来自本地已装 manifest，对全量插件无意义。
-		const showLanguage = (isAIMode(ctx) || isKeywordMode(ctx)) && ctx.installFilter !== "all";
 		if (ctx.facetContainerEl) {
-			ctx.facetContainerEl.setCssStyles({ display: showCat || showAuthor || showLanguage ? "" : "none" });
+			ctx.facetContainerEl.setCssStyles({ display: showCat || showAuthor ? "" : "none" });
 		}
 		if (ctx.catRowEl) ctx.catRowEl.setCssStyles({ display: showCat ? "" : "none" });
-	if (ctx.authorRowEl) ctx.authorRowEl.setCssStyles({ display: showAuthor ? "" : "none" });
-	if (ctx.languageRowEl) ctx.languageRowEl.setCssStyles({ display: showLanguage ? "" : "none" });
+		if (ctx.authorRowEl) ctx.authorRowEl.setCssStyles({ display: showAuthor ? "" : "none" });
 
-	// 重置按钮状态反馈：有任何筛选激活时高亮，让用户一眼知道「可以清空」
-	const resetBtn = q(ctx.contentEl, ".pt-toolbar-reset--inline");
-	if (resetBtn) {
-		const hasActive =
-			ctx.sourceFilter !== "all" ||
-			ctx.selectedCategories.length > 0 ||
-			ctx.authorFilter !== null ||
-			ctx.installFilter !== "all" ||
-			ctx.favoriteFilter !== "all" ||
-			(ctx.installFilter !== "all" && ctx.languageFilter !== null);
-		resetBtn.classList.toggle("is-active", hasActive);
-	}
+		// 重置按钮状态反馈：有任何筛选激活时高亮，让用户一眼知道「可以清空」
+		const resetBtn = q(ctx.contentEl, ".pt-toolbar-reset--inline");
+		if (resetBtn) {
+			const hasActive =
+				ctx.sourceFilter !== "all" ||
+				ctx.selectedCategories.length > 0 ||
+				ctx.authorFilter !== null ||
+				ctx.installFilter !== "all" ||
+				ctx.favoriteFilter !== "all";
+			resetBtn.classList.toggle("is-active", hasActive);
+		}
 
 	// 兜底：JS 强制统一所有 facet 标签列宽，保证多行标签左缘严格对齐。
 	// 即便 CSS 解析失败或被主题覆盖，此处按实测最大宽度重排，杜绝"差一大截"。
