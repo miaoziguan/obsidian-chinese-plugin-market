@@ -621,12 +621,21 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		const authorChips = authorRow.createDiv({ cls: "pt-facet-chips" });
 		ctx.authorFacetEl = authorChips;
 		ctx.renderAuthorFacet();
+
+		// 语言行：与分类/作者平级的独立 facet 栏（形态同「作者」），按插件支持语言
+		// 筛选（中文/英文/日文/韩文/其他）。仅已安装插件有 languages 信息，故仅当
+		// 用户切到任一已装相关视图（已安装/已启动/已安装未启动）时才显示。
+		const languageRow = facetContainer.createDiv({ cls: "pt-facet-row" });
+		ctx.languageRowEl = languageRow;
+		languageRow.createSpan({ cls: "pt-facet-label", text: ctx.t("facet.language") });
+		const languageChips = languageRow.createDiv({ cls: "pt-facet-chips" });
+		ctx.languageFacetEl = languageChips;
+		ctx.renderLanguageFacet();
+
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 
 		// ── 安装筛选（已安装 / 已启动 / 已安装未启动），收进面板统一筛选入口 ──
-		// 语言是「安装」的下级维度：仅当用户切到任一已装相关视图才出现，故把它
-		// 作为安装行的缩进子行内嵌（而非与分类/作者平级成栏），强化从属关系。
 		const installRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		installRow.createSpan({ cls: "pt-facet-label", text: "安装" });
 		const installChips = installRow.createDiv({ cls: "pt-facet-chips" });
@@ -654,7 +663,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			const def = installToggleDefs[i];
 			el.addEventListener("click", () => {
 				ctx.installFilter = ctx.installFilter === def.on ? "all" : def.on;
-				// 语言 facet 是「已安装」的下级筛选：切回全量(all)时清除残留的语言筛选
+				// 语言 facet 仅对「已安装」插件有意义（languages 来自本地已装 manifest）：
+				// 切回全量(all)时清除残留的语言筛选，避免对全量列表施加无数据可依据的过滤。
 				if (ctx.installFilter === "all" && ctx.languageFilter !== null) {
 					ctx.languageFilter = null;
 				}
@@ -666,15 +676,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.scheduleRender(true);
 			});
 		});
-
-		// 语言子行：缩进内嵌于安装行下方，仅在 installFilter≠all 时可见。
-		// 仅已安装插件有 languages 信息，故它是「安装」的下级维度而非全局 facet。
-		const languageRow = installRow.createDiv({ cls: "pt-facet-subrow pt-facet-language-subrow" });
-		ctx.languageRowEl = languageRow;
-		languageRow.createSpan({ cls: "pt-facet-sublabel", text: ctx.t("facet.language") });
-		const languageChips = languageRow.createDiv({ cls: "pt-facet-chips" });
-		ctx.languageFacetEl = languageChips;
-		ctx.renderLanguageFacet();
 
 		// ── 收藏筛选（已收藏 / 未收藏），与安装筛选同组 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
