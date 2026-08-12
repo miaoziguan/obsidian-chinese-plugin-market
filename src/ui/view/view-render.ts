@@ -146,6 +146,7 @@ export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[
 			selectedCategories: ctx.selectedCategories.length ? ctx.selectedCategories : undefined,
 			pluginTagMap: ctx.pluginTagMap,
 			installedIds: ctx.installedIds,
+			enabledIds: ctx.enabledIds,
 			translatedResults: ctx.translatedResults,
 			searchIndex: ctx.searchIndex,
 			sortBy: ctx.sortBy,

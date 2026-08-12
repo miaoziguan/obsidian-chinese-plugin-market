@@ -89,8 +89,8 @@ export type SearchMode = "keyword" | "local" | "ai";
 /** 翻译来源筛选（"all" 表示全部；"translated" 表示任意已有译文，含批量/在线/AI/自定义） */
 export type SourceFilter = "all" | "translated" | "original";
 
-/** 安装状态筛选 */
-export type InstallFilter = "all" | "installed";
+/** 安装状态筛选（enabled 仅显示已启用的已安装插件） */
+export type InstallFilter = "all" | "installed" | "enabled";
 
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。
@@ -115,6 +115,8 @@ export interface MatchOptions {
 	installFilter: InstallFilter;
 	searchMode: SearchMode;
 	installedIds: Set<string>;
+	/** 已启用插件 id 集合（installFilter="enabled" 时使用） */
+	enabledIds: Set<string>;
 	translatedResults: Record<string, TranslateResult>;
 	searchIndex: Map<string, string>;
 	/** 作者维度：按作者精确筛选（作者钻取 / 作者 facet），null 表示不过滤 */
@@ -162,6 +164,9 @@ export function matchesPlugin(
 	}
 	// 安装状态筛选
 	if (opts.installFilter === "installed" && !opts.installedIds.has(p.id)) {
+		return false;
+	}
+	if (opts.installFilter === "enabled" && !opts.enabledIds.has(p.id)) {
 		return false;
 	}
 	// 作者维度：按作者精确筛选（所有模式生效；null 表示不过滤）
@@ -229,6 +234,8 @@ export interface FilterParams {
 	/** 插件 id → 一级分类映射 */
 	pluginTagMap?: Map<string, string>;
 	installedIds: Set<string>;
+	/** 已启用插件 id 集合（installFilter="enabled" 时使用） */
+	enabledIds: Set<string>;
 	translatedResults: Record<string, TranslateResult>;
 	searchIndex: Map<string, string>;
 	/**
@@ -290,7 +297,7 @@ export interface FilterResult {
  */
 export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	const {
-		plugins, searchMode, query, sourceFilter, installFilter, installedIds,
+		plugins, searchMode, query, sourceFilter, installFilter, installedIds, enabledIds,
 		translatedResults, searchIndex, sortBy,
 		aiSearchResult, aiSearchQueryCache,
   lastFiltered, lastFilterQuery, lastFilterSource, lastFilterAuthor, authorFilter,
@@ -303,7 +310,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	} = params;
 
 	const matchOpts: MatchOptions = {
-		sourceFilter, installFilter, searchMode, installedIds, translatedResults, searchIndex, authorFilter,
+		sourceFilter, installFilter, searchMode, installedIds, enabledIds, translatedResults, searchIndex, authorFilter,
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		selectedCategories, pluginTagMap,
@@ -526,7 +533,7 @@ export function resolveEmptyState(input: EmptyStateInput): EmptyState {
 	}
 
 	const showClearAction =
-		hasQuery || sourceFilter !== "all" || installFilter === "installed" || !!favoriteFilter;
+		hasQuery || sourceFilter !== "all" || installFilter === "installed" || installFilter === "enabled" || !!favoriteFilter;
 
 	return { titleKey, hintKey, showClearAction, bridgeAction };
 }

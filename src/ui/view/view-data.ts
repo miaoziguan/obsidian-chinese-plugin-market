@@ -514,9 +514,13 @@ export function snapshotInstalled(ctx: ViewContext) {
 					if (m?.version) versions.set(id, m.version);
 				}
 				ctx.installedVersions = versions;
-				// H2：安装集合内容变化（装/卸插件）会改变「仅已安装」筛选的匹配集，
-				// 前缀缓存只减不增，必须失效，否则新装插件在带搜索词时不出现。
-				// 精化：installedIds 仅参与 installFilter==="installed" 的成员判定
+				const nextEnabled =
+					plugins.enabledPlugins && typeof plugins.enabledPlugins.forEach === "function"
+						? new Set(plugins.enabledPlugins as Set<string>)
+						: ctx.enabledIds;
+				// H2：安装/启用集合内容变化会改变「仅已安装」/「仅已启动」筛选的匹配集，
+				// 前缀缓存只减不增，必须失效，否则新装/新启插件在带搜索词时不出现。
+				// 精化：installedIds/enabledIds 仅参与对应 installFilter 的成员判定
 				// （搜索 blob 不含安装态，排序不走缓存），当前筛选为 "all" 时
 				// 集合变化不影响缓存正确性，跳过 reset 保留前缀复用。
 				if (
@@ -526,11 +530,16 @@ export function snapshotInstalled(ctx: ViewContext) {
 				) {
 					ctx.filterCache.reset();
 				}
+				if (
+					ctx.installFilter === "enabled" &&
+					(nextEnabled.size !== ctx.enabledIds.size ||
+						[...nextEnabled].some((id) => !ctx.enabledIds.has(id)))
+				) {
+					ctx.filterCache.reset();
+				}
 				ctx.installedIds = next;
-			}
-			if (plugins.enabledPlugins && typeof plugins.enabledPlugins.forEach === "function") {
-				ctx.enabledIds = new Set(plugins.enabledPlugins as Set<string>);
-			}
+				ctx.enabledIds = nextEnabled;
+				}
 			} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取已安装插件失败：", e);
 			}

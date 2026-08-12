@@ -353,8 +353,9 @@
 	outline: none;
 }
 
-/* 工具栏「仅未安装」 toggle */
-.pt-toggle-uninstalled {
+/* 工具栏「仅未安装」/「仅已启动」 toggle */
+.pt-toggle-uninstalled,
+.pt-toggle-enabled {
 	flex-shrink: 0;
 }
 
