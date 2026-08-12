@@ -212,9 +212,8 @@ export function postRenderSync(ctx: ViewContext) {
 		// 不再自动预翻译。这里只做 UI 同步态刷新。
 		ctx.updateAiTranslateButton();
 		ctx.updateScrollButtons();
-		ctx.updateAuthorBanner();
 
-}
+		}
 
 export function refreshCardState(ctx: ViewContext, pluginId: string) {
 	// 必须 CSS.escape：插件 id 可能含引号等特殊字符，直接内插会抛 SyntaxError 中断刷新
@@ -409,7 +408,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 				const toggle = q(ctx.contentEl, ".pt-toggle-uninstalled");
 				if (toggle) {
 					toggle.setAttribute("aria-pressed", "false");
-					toggle.textContent = "仅显示已安装";
+					toggle.textContent = "已安装";
 				}
 					const clearBtn = q(ctx.contentEl, ".pt-search-clear");
 					if (clearBtn) clearBtn.setCssStyles({ display: "none" });

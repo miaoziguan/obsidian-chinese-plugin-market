@@ -90,10 +90,10 @@ export type SearchMode = "keyword" | "local" | "ai";
 /** 翻译来源筛选（"all" 表示全部；"translated" 表示任意已有译文，含批量/在线/AI/自定义） */
 export type SourceFilter = "all" | "translated" | "original";
 
-/** 安装状态筛选（enabled 仅显示已启用的已安装插件；installedNotEnabled 仅显示已安装未启用的插件） */
+/** 安装状态筛选（enabled 仅已启用的已安装插件；installedNotEnabled 仅已安装未启用的插件） */
 export type InstallFilter = "all" | "installed" | "enabled" | "installedNotEnabled";
 
-/** 收藏筛选（"all" 表示全部；"favorited" 仅看收藏；"unfavorited" 仅看未收藏） */
+/** 收藏筛选（"all" 表示全部；"favorited" 仅已收藏；"unfavorited" 仅未收藏） */
 export type FavoriteFilter = "all" | "favorited" | "unfavorited";
 
 /**
@@ -131,7 +131,7 @@ export interface MatchOptions {
 	recommendedSet?: Set<string>;
 	/** 收藏优先排序：收藏项置顶而非隐藏未收藏项（RC-3） */
 	sortFavoritesFirst?: boolean;
-	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部 */
+	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部 */
 	favoriteFilter?: FavoriteFilter;
 	/** 用户收藏插件 id 集合（由 settings.favorites 加载为 Set） */
 	favoritesSet?: Set<string>;
@@ -183,7 +183,7 @@ export function matchesPlugin(
 	if (opts.authorFilter && p.author !== opts.authorFilter) return false;
 	// 官方推荐：仅保留推荐清单内的插件（所有模式生效）
 	if (opts.recommendedOnly && opts.recommendedSet && !opts.recommendedSet.has(p.id)) return false;
-	// 收藏筛选：仅看收藏 / 仅看未收藏
+	// 收藏筛选：仅已收藏 / 仅未收藏
 	if (opts.favoriteFilter === "favorited" && opts.favoritesSet && !opts.favoritesSet.has(p.id)) return false;
 	if (opts.favoriteFilter === "unfavorited" && opts.favoritesSet && opts.favoritesSet.has(p.id)) return false;
 	// 分类筛选：仅保留分类匹配的插件（多选取并集；所有模式生效，作为全局发现维度）
@@ -236,7 +236,7 @@ export interface FilterParams {
 	recommendedSet?: Set<string>;
 	/** 收藏优先排序：收藏项置顶而非隐藏未收藏项（RC-3） */
 	sortFavoritesFirst?: boolean;
-	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部 */
+	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部 */
 	favoriteFilter?: FavoriteFilter;
 	/** 用户收藏插件 id 集合 */
 	favoritesSet?: Set<string>;
@@ -484,7 +484,7 @@ export interface EmptyStateInput {
 	aiSearchResult: AISearchResult | null;
 	sourceFilter: SourceFilter;
 	installFilter: InstallFilter;
-	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部 */
+	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部 */
 	favoriteFilter?: FavoriteFilter;
 	/** 是否已配置 AI API Key（用于判断能否推荐 AI 搜索桥接） */
 	hasAIKey: boolean;

@@ -386,7 +386,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	// 启用/禁用切换（子弹开关，放在卡片右下角，仅已安装插件显示）。
 	// 直接绑 click + stopPropagation：开关是自定义 DOM（非 SVG），closest 在最外层
 	// 容器上稳定命中；stopPropagation 阻止冒泡到卡片层（避免误开详情页）。
-	const toggleSwitch = card.createDiv({ cls: "pt-card-toggle-switch", attr: { "data-action": "toggle-enabled", role: "switch", tabindex: "0", "aria-label": ctx.t("card.enable") } });
+	const toggleSwitch = actionsRow.createDiv({ cls: "pt-card-toggle-switch", attr: { "data-action": "toggle-enabled", role: "switch", tabindex: "0", "aria-label": ctx.t("card.enable") } });
 	toggleSwitch.setCssStyles({ display: "none" });
 	const toggleTrack = toggleSwitch.createDiv({ cls: "pt-card-toggle-track" });
 	toggleTrack.createDiv({ cls: "pt-card-toggle-knob" });

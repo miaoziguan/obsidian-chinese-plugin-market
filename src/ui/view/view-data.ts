@@ -574,8 +574,6 @@ export function buildAuthorFacet(ctx: ViewContext) {
 		for (const p of ctx.plugins) {
 			counts.set(p.author, (counts.get(p.author) ?? 0) + 1);
 		}
-		// 保存全量计数（含单插件作者），供 author banner 显示真实作品数
-		ctx.authorCounts = counts;
 		const multi = Array.from(counts.entries())
 			.filter(([, c]) => c >= 2)
 			.map(([name, count]) => ({ name, count }));
@@ -713,51 +711,10 @@ export function toggleAuthorFilter(ctx: ViewContext, author: string) {
 		ctx.renderAuthorFacet();
 		ctx.updateFacetVisibility();
 		ctx.scheduleRender(true);
-		ctx.updateAuthorBanner();
-	
-}
 
-export function updateAuthorBanner(ctx: ViewContext) {
+		}
 
-		if (!ctx.authorFilter) {
-			if (ctx.authorBannerEl) {
-				ctx.authorBannerEl.remove();
-				ctx.authorBannerEl = null;
-			}
-			return;
-		}
-		const count = ctx.authorCounts.get(ctx.authorFilter) ?? 0;
-		if (!ctx.authorBannerEl) {
-			const header = q(ctx.containerEl, ".pt-header");
-			if (!header) return;
-			const banner = header.createDiv({ cls: "pt-author-banner" });
-			banner.setAttribute("role", "status");
-			banner.setAttribute("aria-live", "polite");
-			banner.createSpan({ cls: "pt-author-banner-text" });
-			const clearBtn = banner.createEl("button", {
-				cls: "pt-author-banner-clear",
-				text: ctx.t("author.filter.clear"),
-			});
-			clearBtn.addEventListener("click", () => {
-				ctx.authorFilter = null;
-				ctx.updateAuthorBanner();
-				ctx.renderAuthorFacet();
-				ctx.updateFacetVisibility();
-				ctx.scheduleRender();
-			});
-			ctx.authorBannerEl = banner;
-		}
-		const textSpan = q(ctx.authorBannerEl, ".pt-author-banner-text");
-		if (textSpan) {
-			textSpan.textContent = ctx.t("author.filter.active", {
-				author: ctx.authorFilter,
-				n: String(count),
-			});
-		}
-	
-}
-
-export function updateAiTranslateButton(ctx: ViewContext) {
+		export function updateAiTranslateButton(ctx: ViewContext) {
 
 		const btn = ctx.aiTranslateBtnEl;
 		if (!btn) return;
