@@ -8,7 +8,7 @@
 import { setIcon, Menu } from "obsidian";
 import { isMobileEnvironment } from "@shared/platform";
 import { type I18nKey } from "@shared/i18n";
-import { type SearchMode, type InstallFilter } from "@domain/filter/filter";
+import { type SearchMode, type InstallFilter, type FavoriteFilter } from "@domain/filter/filter";
 import { renderFacetChips } from "@ui/components/facet-chips";
 import { setListState } from "@ui/dom/list-state";
 import { isAIMode, isKeywordMode, isLocalMode } from "@domain/search/search-mode";
@@ -149,8 +149,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.sortFavoritesFirst = false;
 			ctx.authorFilter = null;
 			ctx.installFilter = "all";
-			ctx.favoriteFilter = false;
-			ctx.settings.favoriteFilter = false;
+			ctx.favoriteFilter = "all";
+			ctx.settings.favoriteFilter = "all";
 			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
 			// 「仅显示已安装/已启动/已安装未启动」按钮：aria-pressed 与文案复位
 			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setAttribute("aria-pressed", "false");
@@ -159,12 +159,11 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			q(ctx.contentEl, ".pt-toggle-enabled")?.setText("仅显示已启动");
 			q(ctx.contentEl, ".pt-toggle-installed-off")?.setAttribute("aria-pressed", "false");
 			q(ctx.contentEl, ".pt-toggle-installed-off")?.setText("仅显示已安装未启动");
-			// 「仅看收藏」按钮：aria-pressed 与文案复位
-			const favToggleEl = q(ctx.contentEl, ".pt-toggle-favorites");
-			if (favToggleEl) {
-				favToggleEl.setAttribute("aria-pressed", "false");
-				favToggleEl.textContent = "仅看收藏";
-			}
+			// 「仅看收藏/仅看未收藏」按钮：aria-pressed 与文案复位
+			q(ctx.contentEl, ".pt-toggle-favorites")?.setAttribute("aria-pressed", "false");
+			q(ctx.contentEl, ".pt-toggle-favorites")?.setText("仅看收藏");
+			q(ctx.contentEl, ".pt-toggle-unfavorites")?.setAttribute("aria-pressed", "false");
+			q(ctx.contentEl, ".pt-toggle-unfavorites")?.setText("仅看未收藏");
 			// 排序菜单「收藏优先」项 active 态复位
 			const favItemEl = q(ctx.contentEl, ".pt-sort-menu-item--fav");
 			if (favItemEl) favItemEl.classList.remove("pt-sort-menu-item--active");
@@ -632,24 +631,40 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			});
 		});
 
-		// ── 收藏筛选（仅看收藏），与安装筛选同组 ──
+		// ── 收藏筛选（仅看收藏 / 仅看未收藏），与安装筛选同组 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		favRow.createSpan({ cls: "pt-facet-label", text: "收藏" });
 		const favChips = favRow.createDiv({ cls: "pt-facet-chips" });
-		const favToggle = favChips.createEl("button", {
-			cls: "pt-filter pt-toggle-favorites",
-			text: "仅看收藏",
-		});
-		favToggle.setAttribute("aria-pressed", ctx.favoriteFilter ? "true" : "false");
-		favToggle.addEventListener("click", () => {
-			ctx.favoriteFilter = !ctx.favoriteFilter;
-			favToggle.setAttribute("aria-pressed", ctx.favoriteFilter ? "true" : "false");
-			favToggle.textContent = ctx.favoriteFilter ? "显示全部" : "仅看收藏";
-			// 持久化跨会话：与 sourceFilter 同款处理，回写 settings 并落盘
-			ctx.settings.favoriteFilter = ctx.favoriteFilter;
-			ctx.track(ctx.favoriteFilter ? "filter:favorites" : "filter:favorites_off");
-			ctx.saveSettings();
-			ctx.scheduleRender(true);
+
+		const favToggleDefs: { cls: string; on: FavoriteFilter; label: string; track: string }[] = [
+			{ cls: "pt-toggle-favorites", on: "favorited", label: "仅看收藏", track: "filter:favorites" },
+			{ cls: "pt-toggle-unfavorites", on: "unfavorited", label: "仅看未收藏", track: "filter:unfavorites" },
+		];
+		const favToggles = favToggleDefs.map((def) =>
+			favChips.createEl("button", { cls: `pt-filter ${def.cls}`, text: def.label })
+		);
+
+		const updateFavToggles = () => {
+			favToggles.forEach((el, i) => {
+				const def = favToggleDefs[i];
+				const active = ctx.favoriteFilter === def.on;
+				el.setAttribute("aria-pressed", active ? "true" : "false");
+				el.textContent = active ? "显示全部" : def.label;
+			});
+		};
+		updateFavToggles();
+
+		favToggles.forEach((el, i) => {
+			const def = favToggleDefs[i];
+			el.addEventListener("click", () => {
+				ctx.favoriteFilter = ctx.favoriteFilter === def.on ? "all" : def.on;
+				updateFavToggles();
+				// 持久化跨会话：与 sourceFilter 同款处理，回写 settings 并落盘
+				ctx.settings.favoriteFilter = ctx.favoriteFilter;
+				ctx.track(ctx.favoriteFilter === def.on ? def.track : `${def.track}_off`);
+				ctx.saveSettings();
+				ctx.scheduleRender(true);
+			});
 		});
 
 		// 重置筛选：移至标题行右侧（与「筛选与统计」同行右端对齐）
@@ -672,10 +687,9 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.authorFilter = null;
 			ctx.installFilter = "all";
 			updateInstallToggles();
-			ctx.favoriteFilter = false;
-			ctx.settings.favoriteFilter = false;
-			favToggle.setAttribute("aria-pressed", "false");
-			favToggle.textContent = "仅看收藏";
+			ctx.favoriteFilter = "all";
+			ctx.settings.favoriteFilter = "all";
+			updateFavToggles();
 			ctx.renderAuthorFacet();
 			ctx.scheduleRender();
 		});

@@ -477,6 +477,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		if (["bulk", "online", "ai"].includes(legacyData.sourceFilter ?? "")) {
 			legacyData.sourceFilter = "translated";
 		}
+		// 收藏筛选从 boolean 迁移为枚举（旧 true/false 分别对应 favorited/all）
+		if (typeof legacyData.favoriteFilter === "boolean") {
+			legacyData.favoriteFilter = legacyData.favoriteFilter ? "favorited" : "all";
+		}
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 		// PERF-7：credentials 与 favorites 两个独立文件无依赖，并行读取缩短启动耗时。
 		const [creds, loadedFavorites] = await Promise.all([

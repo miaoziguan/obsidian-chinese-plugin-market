@@ -21,6 +21,7 @@ import {
 	type SearchMode,
 	type SourceFilter,
 	type InstallFilter,
+	type FavoriteFilter,
 } from "@domain/filter/filter";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { type CardRenderContext } from "@ui/components/card-render";
@@ -70,8 +71,8 @@ export interface ChinesePluginMarketSettings {
 	sortBy: SortBy;
 	// 个人收藏集：用户主动收藏的插件 id（持久化，随使用时间复利）
 	favorites: string[];
-	/** 仅看收藏筛选：是否只展示收藏集内的插件（跨会话持久化，与 favorites 数据正交） */
-	favoriteFilter: boolean;
+	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部（跨会话持久化） */
+	favoriteFilter: FavoriteFilter;
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
 }
@@ -99,7 +100,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	sortBy: "relevance",
 	favorites: [],
 	compare: [],
-	favoriteFilter: false,
+	favoriteFilter: "all",
 };
 
 /**
@@ -473,8 +474,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public sourceFilter: SourceFilter = "all";
 	/** 安装状态筛选（"all" / "uninstalled"，产品改进 #7） */
 	public installFilter: InstallFilter = "all";
-	/** 仅看收藏：只展示 favoritesSet 内的插件（独立于 sortFavoritesFirst 的「优先置顶」） */
-	public favoriteFilter = false;
+	/** 收藏筛选："favorited" 仅看收藏 / "unfavorited" 仅看未收藏 / "all" 全部 */
+	public favoriteFilter: FavoriteFilter = "all";
 	/** AI/关键字模式：当前选中的分类 facet（空数组表示不筛选，零回归） */
 	public selectedCategories: string[] = [];
 	/** 作者维度：当前按作者精确筛选（null 表示不过滤）。卡片作者钻取与作者 facet 共用此状态 */
