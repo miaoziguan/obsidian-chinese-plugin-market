@@ -186,6 +186,12 @@ export interface ViewContext {
 	authorRowEl: HTMLElement | null;
 	guidanceEl: HTMLElement | null;
 	authorFacetEl: HTMLElement | null;
+	/** 语言 facet 行容器（"按语言"筛选） */
+	languageRowEl: HTMLElement | null;
+	/** 语言 facet 胶囊容器 */
+	languageFacetEl: HTMLElement | null;
+	/** 全部插件列表（来自 view.plugins），供语言 facet 统计各桶数量 */
+	allPlugins: PluginInfo[];
 	featuredSectionEl: HTMLElement | null;
 	featuredGridEl: HTMLElement | null;
 
@@ -197,6 +203,10 @@ export interface ViewContext {
 	authorFacetList: AuthorGroup[];
 	authorExpanded: boolean;
 	activeAuthorLetter: string | null;
+	/** 语言维度筛选（"按语言" facet）：标准化主码 zh/en/ja/ko/other，null 表示不过滤 */
+	languageFilter: string | null;
+	/** 插件 id → 标准化语言码数组（仅已安装插件有） */
+	pluginLanguages: Map<string, string[]>;
 	recommendedOnly: boolean;
 
 	// ── 统计 ──
@@ -265,6 +275,10 @@ export interface ViewContext {
 	buildAuthorFacet: () => void;
 	renderAuthorFacet: () => void;
 	toggleAuthorFilter: (author: string) => void;
+	/** 按语言 facet：渲染语言胶囊（中文/英文/日文/韩文/其他） */
+	renderLanguageFacet: () => void;
+	/** 按语言 facet：点击切换语言筛选 */
+	toggleLanguageFilter: (lang: string) => void;
 	applySearchInput: (raw?: string) => void;
 	showAIPendingHint: () => void;
 	showAIConfigGuide: (reason?: "disabled" | "noKey") => void;
@@ -504,6 +518,11 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set guidanceEl(v) { view.guidanceEl = v; },
 		get authorFacetEl() { return view.authorFacetEl; },
 		set authorFacetEl(v) { view.authorFacetEl = v; },
+		get languageRowEl() { return view.languageRowEl; },
+		set languageRowEl(v) { view.languageRowEl = v; },
+		get languageFacetEl() { return view.languageFacetEl; },
+		set languageFacetEl(v) { view.languageFacetEl = v; },
+		get allPlugins() { return view.plugins; },
 		get featuredSectionEl() { return view.featuredSectionEl; },
 		set featuredSectionEl(v) { view.featuredSectionEl = v; },
 		get featuredGridEl() { return view.featuredGridEl; },
@@ -522,6 +541,10 @@ get authorFacetList() { return view.authorFacetList; },
 	set authorExpanded(v) { view.authorExpanded = v; },
 		get activeAuthorLetter() { return view.activeAuthorLetter; },
 		set activeAuthorLetter(v) { view.activeAuthorLetter = v; },
+		get languageFilter() { return view.languageFilter; },
+		set languageFilter(v) { view.languageFilter = v; },
+		get pluginLanguages() { return view.pluginLanguages; },
+		set pluginLanguages(v) { view.pluginLanguages = v; },
 		get recommendedOnly() { return view.recommendedOnly; },
 		set recommendedOnly(v) { view.recommendedOnly = v; },
 
@@ -590,6 +613,8 @@ get authorFacetList() { return view.authorFacetList; },
 		buildAuthorFacet: view.buildAuthorFacet.bind(view),
 		renderAuthorFacet: view.renderAuthorFacet.bind(view),
 		toggleAuthorFilter: view.toggleAuthorFilter.bind(view),
+		renderLanguageFacet: view.renderLanguageFacet.bind(view),
+		toggleLanguageFilter: view.toggleLanguageFilter.bind(view),
 		applySearchInput: view.applySearchInput.bind(view),
 		showAIPendingHint: view.showAIPendingHint.bind(view),
 		showAIConfigGuide: view.showAIConfigGuide.bind(view),

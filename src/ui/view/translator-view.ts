@@ -129,7 +129,7 @@ export function getDefaultSettings(): ChinesePluginMarketSettings {
 
 
 import { loadAndRender, updateGuidance, updateFacetVisibility, showSearchGuide, showAIPendingHint, showAIConfigGuide, showLoadingState, updateStats, applyAIConfig, announceStatus, updateScrollButtons, updateScrollPosBadge } from "@ui/view/view-chrome";
-import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, refreshOutdated, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
+import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, refreshOutdated, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, renderLanguageFacet, toggleLanguageFilter, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
 import { runAISearch } from "@ui/view/view-ai-search";
 import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, updateWindow, disposeRenderTimers } from "@ui/view/view-render";
 import { startInstalledWatch } from "@ui/view/installed-watch";
@@ -484,6 +484,10 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public selectedCategories: string[] = [];
 	/** 作者维度：当前按作者精确筛选（null 表示不过滤）。卡片作者钻取与作者 facet 共用此状态 */
 	public authorFilter: string | null = null;
+	/** 语言维度：当前按插件支持语言筛选（标准化主码 zh/en/ja/ko/other，null 表示不过滤） */
+	public languageFilter: string | null = null;
+	/** 插件 id → 标准化语言码数组（仅已安装插件有，来自本地 manifest.languages） */
+	public pluginLanguages: Map<string, string[]> = new Map();
 	/** 作者维度：作品数≥2 的多插件作者列表（facet 快捷筛选；长尾单插件作者走卡片钻取/搜索） */
 	public authorFacetList: AuthorGroup[] = [];
 	/** 作者字母筛选：选中的首字母（null = 不展开任何组，只显示字母条） */
@@ -494,6 +498,9 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public facetContainerEl: HTMLElement | null = null;
 	public catRowEl: HTMLElement | null = null;
 	public authorRowEl: HTMLElement | null = null;
+	/** 语言 facet 相关 DOM 引用 */
+	public languageRowEl: HTMLElement | null = null;
+	public languageFacetEl: HTMLElement | null = null;
 	/** 搜索模式引导行（无查询时显示当前模式的一句话提示） */
 	public guidanceEl: HTMLElement | null = null;
 	/** 离线智能信号缓存（插件 id → 信号列表），由 renderPluginList 在数据就绪时计算并传给卡片渲染 */
@@ -719,7 +726,13 @@ public buildAuthorFacet = () => buildAuthorFacet(this._ctx);
 public renderAuthorFacet = () => renderAuthorFacet(this._ctx);
 
 	/** 切换作者筛选：再次点同一作者则取消，并刷新 facet 选中态与列表 */
-public toggleAuthorFilter = (author: string) => toggleAuthorFilter(this._ctx, author);
+	public toggleAuthorFilter = (author: string) => toggleAuthorFilter(this._ctx, author);
+
+	/** 渲染语言 facet 行：中文/英文/日文/韩文/其他 胶囊 */
+	public renderLanguageFacet = () => renderLanguageFacet(this._ctx);
+
+	/** 切换语言筛选：再次点同一语言则取消，并刷新 facet 选中态与列表 */
+	public toggleLanguageFilter = (lang: string) => toggleLanguageFilter(this._ctx, lang);
 
 
 	

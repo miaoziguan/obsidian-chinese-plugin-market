@@ -47,6 +47,8 @@ export interface PluginInfo {
 	name: string;
 	description: string;
 	author: string;
+	/** 已安装插件本地 manifest 声明的本地化语言（如 ["zh-CN","en"]）；仅已安装插件有，远程清单无此字段 */
+	languages?: string[];
 	repo?: string;
 	/** 下载量（来自 community-plugin-stats.json） */
 	downloads?: number;

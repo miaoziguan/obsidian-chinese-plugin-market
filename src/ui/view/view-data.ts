@@ -18,6 +18,19 @@ import { renderFacetChips } from "@ui/components/facet-chips";
 import { groupAuthorsByName } from "@translation/lexicon/pinyin-init";
 import { setListState } from "@ui/dom/list-state";
 import { isAIMode } from "@domain/search/search-mode";
+
+/**
+ * 语言码标准化（供「按语言」facet 分类）。
+ * 提取主语言码并归并地区后缀：zh-CN/zh-TW/zh-Hans → zh；en-US → en；ja-JP → ja；ko-KR → ko。
+ * 其余（fr、de 等）保留原主码；无法识别返回 null（不计入筛选桶）。
+ */
+export function normalizeLangCode(code: string): string | null {
+	const base = code.trim().split(/[-_]/)[0].toLowerCase();
+	if (!base) return null;
+	if (["zh", "en", "ja", "ko"].includes(base)) return base;
+	return base; // 其他语言保留主码，由 facet 的「其他」桶覆盖
+}
+
 import type { ViewContext } from "@ui/view/view-context";
 import { LAYOUT, PLUGINS_URL } from "@shared/constants";
 import { fetchManifest } from "@domain/compare/plugin-insight";
@@ -510,10 +523,20 @@ export function snapshotInstalled(ctx: ViewContext) {
 				const next = new Set(Object.keys(plugins.manifests));
 				// 同时收集已装插件本地版本号（供「可更新」检测对比官方最新版）
 				const versions = new Map<string, string>();
+				// 已装插件 manifest 声明的本地化语言（标准化为主语言码），供「按语言」facet 筛选
+				const langMap = new Map<string, string[]>();
 				for (const [id, m] of Object.entries(plugins.manifests)) {
 					if (m?.version) versions.set(id, m.version);
+					const rawLangs = (m as { languages?: unknown }).languages;
+					if (Array.isArray(rawLangs)) {
+						const norm = rawLangs
+							.map((l) => normalizeLangCode(String(l)))
+							.filter((l): l is string => l !== null);
+						if (norm.length) langMap.set(id, norm);
+					}
 				}
 				ctx.installedVersions = versions;
+				ctx.pluginLanguages = langMap;
 				const nextEnabled =
 					plugins.enabledPlugins && typeof plugins.enabledPlugins.forEach === "function"
 						? new Set(plugins.enabledPlugins as Set<string>)
@@ -677,6 +700,7 @@ export function renderAuthorFacet(ctx: ViewContext) {
 			ctx.renderAuthorFacet();
 		});
 	}
+
 
 	// 展开选中字母组的作者 chips（与字母索引同一左缘，不加缩进）
 	if (ctx.activeAuthorLetter) {
@@ -897,5 +921,54 @@ export function refreshCardTranslation(ctx: ViewContext, id: string, result: Tra
 			}
 		}
 	
+}
+
+/** 按语言 facet：渲染语言胶囊（中文/英文/日文/韩文/其他） */
+export function renderLanguageFacet(ctx: ViewContext) {
+	const el = ctx.languageFacetEl;
+	if (!el) return;
+	el.empty();
+
+	// 固定语言桶（标准化主码），覆盖中文/英文/日文/韩文 + 其他（无语言信息/非主流语言）
+	const buckets: Array<{ key: string; label: string }> = [
+		{ key: "zh", label: ctx.t("facet.language.zh") },
+		{ key: "en", label: ctx.t("facet.language.en") },
+		{ key: "ja", label: ctx.t("facet.language.ja") },
+		{ key: "ko", label: ctx.t("facet.language.ko") },
+		{ key: "other", label: ctx.t("facet.language.other") },
+	];
+	const langMap = ctx.pluginLanguages;
+	const countLang = (key: string): number => {
+		let n = 0;
+		for (const p of ctx.allPlugins) {
+			const langs = langMap.get(p.id);
+			const matched =
+				key === "other"
+					? !langs || langs.length === 0 || !langs.some((l) => ["zh", "en", "ja", "ko"].includes(l))
+					: !!langs && langs.includes(key);
+			if (matched) n++;
+		}
+		return n;
+	};
+
+	for (const b of buckets) {
+		const count = countLang(b.key);
+		if (count <= 0) continue; // 空桶不显示，避免一堆 0 计数噪音
+		const chip = el.createEl("button", {
+			cls: "pt-facet-chip" + (ctx.languageFilter === b.key ? " pt-facet-chip--active" : ""),
+			attr: { type: "button", "aria-pressed": String(ctx.languageFilter === b.key) },
+		});
+		chip.append(b.label);
+		const badge = chip.createSpan({ cls: "pt-facet-chip-count", text: String(count) });
+		badge.setAttribute("aria-hidden", "true");
+		chip.addEventListener("click", () => toggleLanguageFilter(ctx, b.key));
+	}
+}
+
+/** 按语言 facet：点击切换语言筛选（再次点击取消） */
+export function toggleLanguageFilter(ctx: ViewContext, lang: string) {
+	ctx.languageFilter = ctx.languageFilter === lang ? null : lang;
+	renderLanguageFacet(ctx);
+	ctx.invalidateAndRender(true);
 }
 

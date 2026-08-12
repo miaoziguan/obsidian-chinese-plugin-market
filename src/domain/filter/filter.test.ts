@@ -61,6 +61,7 @@ function baseMatchOpts(over: Partial<MatchOptions> = {}): MatchOptions {
 		translatedResults: RESULTS,
 		searchIndex: mkIndex(),
 		authorFilter: null,
+		languageFilter: null,
 		...over,
 	};
 }
@@ -84,6 +85,8 @@ function baseFilterParams(over: Partial<FilterParams> = {}): FilterParams {
 		lastFilterQuery: "",
 		lastFilterSource: "all",
 		lastFilterAuthor: null,
+		languageFilter: null,
+		lastFilterLanguage: null,
 		...over,
 	};
 }
@@ -656,6 +659,7 @@ describe("FilterCache", () => {
 			nextFilterQuery: "x",
 			nextFilterSource: "translated",
 			nextFilterAuthor: "A",
+			nextFilterLanguage: null,
 			nextFilterInstall: "installed",
 			nextFilterRecommendedOnly: true,
 			nextFilterCategories: ["b"],
@@ -693,11 +697,44 @@ describe("FilterCache", () => {
 			nextFilterQuery: "b",
 			nextFilterSource: "translated",
 			nextFilterAuthor: "B",
+			nextFilterLanguage: null,
 			nextFilterInstall: "installed",
 			nextFilterMode: "keyword",
 			clearAiResult: true,
 		} as FilterResult);
 		expect(cache.snapshot().lastFilterQuery).toBe("b");
 		expect(cache.snapshot().lastFilterAuthor).toBe("B");
+	});
+});
+
+// ── 语言维度筛选（按插件 manifest.languages 主码 zh/en/ja/ko/other）──
+describe("语言维度筛选", () => {
+	const P_ZH = mkPlugin({ id: "zh-plugin", author: "张三", languages: ["zh-CN", "en"] });
+	const P_NONE = mkPlugin({ id: "no-lang", author: "Someone" }); // 无 languages（远程插件常态）
+	const P_FR = mkPlugin({ id: "fr-plugin", author: "Pierre", languages: ["fr"] }); // 非主流语言
+	const ALL = [P_ZH, P_NONE, P_FR];
+	const langMap = new Map<string, string[]>([
+		[P_ZH.id, ["zh", "en"]],
+		[P_FR.id, ["fr"]],
+	]);
+
+	it("zh 只命中含中文的插件", () => {
+		const matched = ALL.filter((p) => matchesPlugin(p, "", { ...baseMatchOpts(), languageFilter: "zh", pluginLanguages: langMap }, undefined));
+		expect(matched.map((p) => p.id)).toEqual(["zh-plugin"]);
+	});
+
+	it("en 只命中含英文的插件（多语言插件算命中）", () => {
+		const matched = ALL.filter((p) => matchesPlugin(p, "", { ...baseMatchOpts(), languageFilter: "en", pluginLanguages: langMap }, undefined));
+		expect(matched.map((p) => p.id)).toEqual(["zh-plugin"]);
+	});
+
+	it("other 命中无 languages 或非主流语言的插件", () => {
+		const matched = ALL.filter((p) => matchesPlugin(p, "", { ...baseMatchOpts(), languageFilter: "other", pluginLanguages: langMap }, undefined));
+		expect(matched.map((p) => p.id).sort()).toEqual(["fr-plugin", "no-lang"]);
+	});
+
+	it("null 不过滤（全命中）", () => {
+		const matched = ALL.filter((p) => matchesPlugin(p, "", { ...baseMatchOpts(), languageFilter: null, pluginLanguages: langMap }, undefined));
+		expect(matched.map((p) => p.id).sort()).toEqual(["fr-plugin", "no-lang", "zh-plugin"]);
 	});
 });

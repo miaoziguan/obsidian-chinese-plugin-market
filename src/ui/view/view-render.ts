@@ -138,6 +138,8 @@ export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[
 			sourceFilter: ctx.sourceFilter,
 			installFilter: ctx.installFilter,
 			authorFilter: ctx.authorFilter,
+			languageFilter: ctx.languageFilter,
+			pluginLanguages: ctx.pluginLanguages,
 			recommendedOnly: ctx.recommendedOnly,
 			recommendedSet: ctx.getRecommendedIds(),
 			sortFavoritesFirst: ctx.sortFavoritesFirst,
