@@ -27,6 +27,7 @@ import { debounce, mapWithConcurrency, contentHash } from "@shared/utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
 import { setWorkerSourceLoader } from "@semantic/workers/worker-backend";
 import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings } from "@ui/view/translator-view";
+import { refreshOutdated } from "@ui/view/view-data";
 import { VIEW_TYPE } from "@shared/constants";
 import { writeTMNote, removeTMNote, TM_FOLDER, parseTMNote, type TMEntry } from "@translation/memory/translation-memory";
 import { SqliteVectorStore, initSqlJsStatic, type PersistAdapter } from "@semantic/vec-store";
@@ -286,6 +287,28 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			id: "tm-clear-approved",
 			name: t("tm.clear.command"),
 			callback: () => void this.clearApprovedTM(),
+		});
+
+		// 命令：一键检查已安装插件更新（桌面/移动端均可在命令面板触发）
+		this.addCommand({
+			id: "check-updates",
+			name: t("action.checkUpdate"),
+			callback: async () => {
+				const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+				const view = leaves[0]?.view as ChinesePluginMarketView | undefined;
+				if (!(view instanceof ChinesePluginMarketView)) {
+					new Notice("请先打开插件搜索视图");
+					return;
+				}
+				try {
+					await refreshOutdated(view.ctx);
+					const n = view.ctx.outdatedIds?.size ?? 0;
+					if (n <= 0) new Notice(t("action.checkUpdate.upToDate"));
+					else new Notice(t("action.checkUpdate.available", { n: String(n) }));
+				} catch {
+					new Notice(t("action.checkUpdate.failed"));
+				}
+			},
 		});
 
 		// 注册 TM 文件夹的 vault 事件：用 create/delete 事件增量发现笔记，

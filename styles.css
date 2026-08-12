@@ -462,6 +462,44 @@
 }
 .pt-refresh:active { transform: scale(0.94); }
 .pt-refresh:disabled { cursor: default; opacity: 0.6; }
+/* 检查更新按钮：与刷新按钮同形（独立动作，图标区分） */
+.pt-check-update {
+	appearance: none;
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	color: var(--pt-text-muted);
+	background: var(--pt-surface-2);
+	border: 1px solid var(--pt-border);
+	border-radius: var(--pt-radius-btn);
+	cursor: pointer;
+	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
+		border-color var(--pt-duration-fast) var(--pt-ease), transform var(--pt-duration-fast) var(--pt-ease-spring);
+}
+.pt-check-update svg.svg-icon {
+	width: 16px;
+	height: 16px;
+	stroke-width: 2px;
+}
+.pt-check-update:focus-visible {
+	border-color: var(--pt-accent);
+	box-shadow: var(--pt-focus-ring);
+	outline: none;
+}
+.pt-check-update:hover {
+	background: var(--pt-surface-3);
+	border-color: var(--pt-border-strong);
+	color: var(--pt-text);
+}
+.pt-check-update:active { transform: scale(0.94); }
+/* 检测进行中：图标旋转提示 */
+.pt-check-update.pt-spin svg {
+	animation: pt-spin 0.9s linear infinite;
+}
 /* 刷新进行中：旋转动画提示进行状态 */
 .pt-refresh.pt-refreshing {
 	animation: pt-refresh-spin 0.9s linear infinite;

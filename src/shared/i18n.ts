@@ -45,6 +45,12 @@ export const STRINGS = {
 	// 手动刷新（产品改进 #15）
 	"action.refresh": { zh: "刷新列表" },
 	"action.refresh.done": { zh: "已更新到最新插件列表" },
+	// 一键检测已安装插件更新（产品改进）
+	"action.checkUpdate": { zh: "检查更新" },
+	"action.checkUpdate.upToDate": { zh: "已安装插件均已是最新" },
+	"action.checkUpdate.available": { zh: "发现 {n} 个插件有更新" },
+	"action.checkUpdate.failed": { zh: "检查更新失败，请稍后重试" },
+	"action.checkUpdate.empty": { zh: "暂无可检测的已安装插件" },
 	// 智能混合翻译（AI 优先，失败自动降级 Google/MyMemory/腾讯免费引擎）
 	"action.aiTranslate": { zh: "智能混合翻译" },
 	"action.aiTranslate.disabled": { zh: "智能混合翻译（未配置）" },
