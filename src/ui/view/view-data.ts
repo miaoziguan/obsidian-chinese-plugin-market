@@ -923,18 +923,16 @@ export function refreshCardTranslation(ctx: ViewContext, id: string, result: Tra
 	
 }
 
-/** 按语言 facet：渲染语言胶囊（中文/英文/日文/韩文/其他） */
+/** 按语言 facet：渲染语言胶囊（中文优先 / 其他） */
 export function renderLanguageFacet(ctx: ViewContext) {
 	const el = ctx.languageFacetEl;
 	if (!el) return;
 	el.empty();
 
-	// 固定语言桶（标准化主码），覆盖中文/英文/日文/韩文 + 其他（无语言信息/非主流语言）
+	// 语言维度只分两类：中文优先(zh) / 其他(无语言信息或非中文优先)；
+	// 仅已安装插件有 languages 信息，故计数只针对已装集合。
 	const buckets: Array<{ key: string; label: string }> = [
 		{ key: "zh", label: ctx.t("facet.language.zh") },
-		{ key: "en", label: ctx.t("facet.language.en") },
-		{ key: "ja", label: ctx.t("facet.language.ja") },
-		{ key: "ko", label: ctx.t("facet.language.ko") },
 		{ key: "other", label: ctx.t("facet.language.other") },
 	];
 	const langMap = ctx.pluginLanguages;
@@ -947,8 +945,8 @@ export function renderLanguageFacet(ctx: ViewContext) {
 			const langs = langMap.get(p.id);
 			const matched =
 				key === "other"
-					? !langs || langs.length === 0 || !langs.some((l) => ["zh", "en", "ja", "ko"].includes(l))
-					: !!langs && langs.includes(key);
+					? !langs || langs.length === 0 || !langs.includes("zh")
+					: !!langs && langs.includes("zh");
 			if (matched) n++;
 		}
 		return n;

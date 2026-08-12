@@ -484,7 +484,7 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public selectedCategories: string[] = [];
 	/** 作者维度：当前按作者精确筛选（null 表示不过滤）。卡片作者钻取与作者 facet 共用此状态 */
 	public authorFilter: string | null = null;
-	/** 语言维度：当前按插件支持语言筛选（标准化主码 zh/en/ja/ko/other，null 表示不过滤） */
+	/** 语言维度：当前按插件支持语言筛选（"zh" 中文优先 / "other" 非中文优先或无人声明，null 表示不过滤） */
 	public languageFilter: string | null = null;
 	/** 插件 id → 标准化语言码数组（仅已安装插件有，来自本地 manifest.languages） */
 	public pluginLanguages: Map<string, string[]> = new Map();

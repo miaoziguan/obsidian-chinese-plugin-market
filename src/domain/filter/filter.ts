@@ -130,7 +130,7 @@ export interface MatchOptions {
 	/** 作者维度：按作者精确筛选（作者钻取 / 作者 facet），null 表示不过滤 */
 	authorFilter: string | null;
 	/** 语言维度：按插件支持语言筛选（"按语言" facet），null 表示不过滤；
-	 *  取值为标准化主码（zh/en/ja/ko）或 "other"（无语言信息/非主流语言） */
+	 *  取值为 "zh"（中文优先）或 "other"（无语言信息/非中文优先） */
 	languageFilter: string | null;
 	/** 插件 id → 标准化语言码数组（仅已安装插件有，来自本地 manifest.languages） */
 	pluginLanguages?: Map<string, string[]>;
@@ -190,13 +190,14 @@ export function matchesPlugin(
 	}
 	// 作者维度：按作者精确筛选（所有模式生效；null 表示不过滤）
 	if (opts.authorFilter && p.author !== opts.authorFilter) return false;
-	// 语言维度：按插件支持语言筛选（所有模式生效；仅对已安装且 manifest 含 languages 的插件有效）
+	// 语言维度：按插件支持语言筛选（所有模式生效；仅对已安装且 manifest 含 languages 的插件有效）。
+	// 取值简化为"zh"(中文优先) / "other"(非中文优先或无人声明 languages)。
 	if (opts.languageFilter) {
 		const langs = opts.pluginLanguages?.get(p.id);
 		const matched =
 			opts.languageFilter === "other"
-				? !langs || langs.length === 0 || !langs.some((l) => ["zh", "en", "ja", "ko"].includes(l))
-				: !!langs && langs.includes(opts.languageFilter);
+				? !langs || langs.length === 0 || !langs.includes("zh")
+				: !!langs && langs.includes("zh");
 		if (!matched) return false;
 	}
 	// 官方推荐：仅保留推荐清单内的插件（所有模式生效）
@@ -416,8 +417,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 				filtered = filtered.filter((p) => {
 					const langs = pluginLanguages?.get(p.id);
 					return languageFilter === "other"
-						? !langs || langs.length === 0 || !langs.some((l) => ["zh", "en", "ja", "ko"].includes(l))
-						: !!langs && langs.includes(languageFilter);
+						? !langs || langs.length === 0 || !langs.includes("zh")
+						: !!langs && langs.includes("zh");
 				});
 			}
 		} else {
