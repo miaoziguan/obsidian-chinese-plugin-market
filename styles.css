@@ -462,8 +462,10 @@
 }
 .pt-refresh:active { transform: scale(0.94); }
 .pt-refresh:disabled { cursor: default; opacity: 0.6; }
-/* 检查更新按钮：与刷新按钮同形（独立动作，图标区分） */
-.pt-check-update {
+/* 检查更新按钮：纯图标，无底框/背景（仅图标+hover 着色）。
+   必须用 button. 前缀：主题的 .theme-xx button 默认背景/边框/box-shadow 特异性 (0,1,1)
+   会压过 .pt-check-update(0,1,0)，必须用 button.pt-check-update(0,1,1) 同级才能覆盖。 */
+button.pt-check-update {
 	appearance: none;
 	flex: none;
 	display: inline-flex;
@@ -473,31 +475,30 @@
 	height: 32px;
 	padding: 0;
 	color: var(--pt-text-muted);
-	background: var(--pt-surface-2);
-	border: 1px solid var(--pt-border);
+	background: transparent;
+	border: none;
+	box-shadow: none;
 	border-radius: var(--pt-radius-btn);
 	cursor: pointer;
-	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease), transform var(--pt-duration-fast) var(--pt-ease-spring);
+	font-family: inherit;
+	transition: color var(--pt-duration-fast) var(--pt-ease),
+		transform var(--pt-duration-fast) var(--pt-ease-spring);
 }
-.pt-check-update svg.svg-icon {
+button.pt-check-update svg.svg-icon {
 	width: 16px;
 	height: 16px;
 	stroke-width: 2px;
 }
-.pt-check-update:focus-visible {
-	border-color: var(--pt-accent);
+button.pt-check-update:focus-visible {
 	box-shadow: var(--pt-focus-ring);
 	outline: none;
 }
-.pt-check-update:hover {
-	background: var(--pt-surface-3);
-	border-color: var(--pt-border-strong);
+button.pt-check-update:hover {
 	color: var(--pt-text);
 }
-.pt-check-update:active { transform: scale(0.94); }
+button.pt-check-update:active { transform: scale(0.94); }
 /* 检测进行中：图标旋转提示 */
-.pt-check-update.pt-spin svg {
+button.pt-check-update.pt-spin svg {
 	animation: pt-spin 0.9s linear infinite;
 }
 /* 刷新进行中：旋转动画提示进行状态 */

@@ -621,6 +621,15 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		const authorChips = authorRow.createDiv({ cls: "pt-facet-chips" });
 		ctx.authorFacetEl = authorChips;
 		ctx.renderAuthorFacet();
+
+		// 语言行：按插件支持语言筛选（中文/英文/日文/韩文/其他）；仅已安装插件有 languages 信息
+		const languageRow = facetContainer.createDiv({ cls: "pt-facet-row" });
+		ctx.languageRowEl = languageRow;
+		languageRow.createSpan({ cls: "pt-facet-label", text: ctx.t("facet.language") });
+		const languageChips = languageRow.createDiv({ cls: "pt-facet-chips" });
+		ctx.languageFacetEl = languageChips;
+		ctx.renderLanguageFacet();
+
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 

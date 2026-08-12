@@ -211,11 +211,13 @@ export function updateFacetVisibility(ctx: ViewContext) {
 
 		const showCat = isAIMode(ctx) || isKeywordMode(ctx);
 		const showAuthor = (isAIMode(ctx) || isKeywordMode(ctx)) && ctx.authorFacetList.reduce((n, g) => n + g.authors.length, 0) > 0;
+		const showLanguage = isAIMode(ctx) || isKeywordMode(ctx);
 		if (ctx.facetContainerEl) {
-			ctx.facetContainerEl.setCssStyles({ display: showCat || showAuthor ? "" : "none" });
+			ctx.facetContainerEl.setCssStyles({ display: showCat || showAuthor || showLanguage ? "" : "none" });
 		}
 		if (ctx.catRowEl) ctx.catRowEl.setCssStyles({ display: showCat ? "" : "none" });
 	if (ctx.authorRowEl) ctx.authorRowEl.setCssStyles({ display: showAuthor ? "" : "none" });
+	if (ctx.languageRowEl) ctx.languageRowEl.setCssStyles({ display: showLanguage ? "" : "none" });
 
 	// 重置按钮状态反馈：有任何筛选激活时高亮，让用户一眼知道「可以清空」
 	const resetBtn = q(ctx.contentEl, ".pt-toolbar-reset--inline");
