@@ -727,16 +727,16 @@ button.pt-check-update.pt-spin svg {
 	flex: 1 1 auto;
 	min-width: 0;
 }
-/* 「安装」的下级维度（如语言）：内嵌于安装行下方、缩进显示，强化从属关系。
-   用 margin 缩进 + 去上边框（避免与安装行双分隔线），标签列收窄为 4em 对齐。 */
+/* 「安装」的下级维度（如语言）：作为独立子行内嵌于安装行下方、缩进显示，
+   强化从属关系。关键：flex-basis: 100% + flex-shrink: 0 强制换行独占一行
+   （否则会被 installRow 的 flex 容器和 chips 并排挤压）。 */
 .pt-facet-subrow {
 	display: flex;
 	align-items: center;
-	flex: 1 1 100%;
+	flex: 1 0 100%; /* grow=1 shrink=0 basis=100% → 强制另起一行 */
 	flex-wrap: nowrap;
 	padding-block: var(--pt-space-xs);
-	margin-left: 4em; /* 与安装行标签列同宽，形成视觉缩进 */
-	padding-left: var(--pt-space-md);
+	padding-left: 4em; /* 与安装行标签列对齐形成缩进 */
 	border-top: none;
 }
 .pt-facet-sublabel {
