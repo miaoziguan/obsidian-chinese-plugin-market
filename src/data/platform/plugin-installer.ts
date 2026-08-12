@@ -147,6 +147,13 @@ function getNodeHttps(): { get: (url: string, opts: unknown, cb: (res: unknown) 
 /**
  * 用 Node https 下载（桌面端主路径）。手动跟随 302 → release-assets CDN，
  * 取响应原始文本（utf8，Accept-Encoding: identity 避免 gzip）。最多 5 跳防环。
+ *
+ * 关键修复：Node https 在 socket 级错误（ECONNRESET / socket hang up）或连接半开时，
+ * 错误事件可能未可靠转发到 ClientRequest 的 "error"，导致 Promise 永久 pending
+ * （既不 resolve 也不 reject）→ 上层 installing 状态卡死。这里加：
+ *   1) 全链路 error 兜底（req.error + socket.error）；
+ *   2) 15s 连接/读取超时，超时主动 destroy 并判定失败；
+ * 确保任何失败都在有限时间内明确 resolve({ok:false})，不挂起。
  */
 function nodeDownload(url: string, depth = 0): Promise<{ ok: boolean; text: string; finalUrl: string }> {
 	return new Promise((resolve) => {
@@ -155,7 +162,21 @@ function nodeDownload(url: string, depth = 0): Promise<{ ok: boolean; text: stri
 			resolve({ ok: false, text: "", finalUrl: url });
 			return;
 		}
-		let req: { on: (e: string, cb: (err: Error) => void) => void } | null = null;
+		// 标记已结束，避免超时/错误/正常完成竞态下重复 resolve
+		let settled = false;
+		const fail = (msg: string) => {
+			if (settled) return;
+			settled = true;
+			logger.warn(`[Chinese Plugin Market] Node 下载失败：${msg} @ ${url}`);
+			resolve({ ok: false, text: "", finalUrl: url });
+		};
+
+		type NodeReq = {
+			on: (e: string, cb: (arg?: unknown) => void) => void;
+			setTimeout: (ms: number, cb?: () => void) => void;
+			destroy: () => void;
+		};
+		let req: NodeReq | null = null;
 		try {
 			req = https.get(
 				url,
@@ -178,31 +199,44 @@ function nodeDownload(url: string, depth = 0): Promise<{ ok: boolean; text: stri
 						res.resume();
 						const next = new URL(res.headers.location, url).toString();
 						logger.debug(`[Chinese Plugin Market] Node 下载跟随重定向 ${code}: ${url} → ${next}`);
+						if (settled) return;
+						settled = true;
 						resolve(nodeDownload(next, depth + 1));
 						return;
 					}
 					if (code !== 200) {
 						res.resume();
-						resolve({ ok: false, text: "", finalUrl: url });
+						fail(`HTTP ${code}`);
 						return;
 					}
 					let data = "";
 					res.setEncoding("utf8");
 					res.on("data", (chunk: string) => { data += chunk; });
-					res.on("end", () => resolve({ ok: true, text: data, finalUrl: url }));
+					res.on("end", () => {
+						if (settled) return;
+						settled = true;
+						resolve({ ok: true, text: data, finalUrl: url });
+					});
+					// 响应体读取阶段也可能出错（连接中途断开）
+					res.on("error", (e: Error) => fail(e.message));
 				}
-			);
+			) as NodeReq;
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
-			logger.warn(`[Chinese Plugin Market] Node 下载异常：${msg} @ ${url}`);
-			resolve({ ok: false, text: "", finalUrl: url });
+			fail(msg);
 			return;
 		}
+
 		if (req) {
-			req.on("error", (e: Error) => {
-				logger.warn(`[Chinese Plugin Market] Node 下载错误：${e.message} @ ${url}`);
-				resolve({ ok: false, text: "", finalUrl: url });
+			// req 级错误（含 socket hang up 转发的 ECONNRESET）
+			req.on("error", (e: Error) => fail(e.message));
+			// 超时兜底：连接或读取超过 15s 视为失败，主动销毁避免半开挂起
+			req.setTimeout(15_000, () => {
+				fail("timeout 15s");
+				try { req!.destroy(); } catch { /* 已结束 */ }
 			});
+		} else {
+			fail("https.get 返回空（运行时不支持）");
 		}
 	});
 }

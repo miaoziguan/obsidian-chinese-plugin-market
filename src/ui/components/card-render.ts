@@ -432,18 +432,41 @@ function updateInstallButton(
 	// 用 onclick 覆盖式赋值（不会累积监听器），启用/禁用由左下角电源图标负责。
 	const stopBubble = (e: MouseEvent) => e.stopPropagation();
 
-	// 安装中：统一显示为 span（不可点击，防重点）
+	// 安装中：统一显示为 span（不可点击，防重点）。
+	// 用 JS 驱动的三点省略号循环（安装中 → 安装中· → 安装中·· → 安装中···）提示"进行中"，
+	// 不依赖任何 CSS animation（规避系统/主题 reduce-motion 禁用动画导致完全不可见）。
 	if (isInstalling) {
+		const ensureInstalling = (el: HTMLElement) => {
+			el.className = "pt-card-install-btn pt-card-install-btn--installing";
+			el.setAttribute("aria-label", `${t("card.installing")} ${plugin.name}`);
+			el.onclick = stopBubble;
+			let label = el.querySelector<HTMLElement>(".pt-install-label");
+			if (!label) {
+				el.textContent = "";
+				label = createSpan({ cls: "pt-install-label", text: t("card.installing") });
+				el.appendChild(label);
+			}
+			// 启动/复用三点循环定时器（元素脱离文档则自动停，避免泄漏）
+			if (!(el as unknown as { _ptDots?: number })._ptDots) {
+				let n = 0;
+				const tick = () => {
+					if (!el.isConnected) {
+						window.clearInterval((el as unknown as { _ptDots?: number })._ptDots!);
+						(el as unknown as { _ptDots?: number })._ptDots = undefined;
+						return;
+					}
+					n = (n + 1) % 4;
+					label!.textContent = t("card.installing") + "·".repeat(n);
+				};
+				(el as unknown as { _ptDots?: number })._ptDots = window.setInterval(tick, 500);
+			}
+		};
 		if (existing.tagName === "SPAN" && existing.classList.contains("pt-card-install-btn--installing")) {
-			existing.textContent = t("card.installing");
-			existing.onclick = stopBubble;
+			ensureInstalling(existing);
 			return existing;
 		}
 		const el = createSpan();
-		el.className = "pt-card-install-btn pt-card-install-btn--installing";
-		el.textContent = t("card.installing");
-		el.setAttribute("aria-label", `${t("card.installing")} ${plugin.name}`);
-		el.onclick = stopBubble;
+		ensureInstalling(el);
 		existing.replaceWith(el);
 		return el;
 	}

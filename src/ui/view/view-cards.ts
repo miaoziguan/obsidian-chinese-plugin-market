@@ -13,6 +13,7 @@ import { q, toHTMLElement } from "@ui/dom/dom";
 import { fetchManifest, fetchReadmeText, fetchMainSignals, generateInsight } from "@domain/compare/plugin-insight";
 import type { I18nKey } from "@shared/i18n";
 import { LAYOUT } from "@shared/constants";
+import { logger } from "@shared/logger";
 import type { MirrorConfig } from "@domain/catalog/mirror";
 import { installCommunityPlugin, togglePluginEnabled, uninstallCommunityPlugin } from "@data/platform/plugin-installer";
 
@@ -96,6 +97,7 @@ export function computeSimilarFor(ctx: ViewContext, info: PluginInfo) : SimilarC
 export async function handleToggleEnabled(ctx: ViewContext, plugin: PluginInfo): Promise<void> {
 	if (ctx.installingIds.has(plugin.id)) return;
 	ctx.installingIds.add(plugin.id);
+	ctx.refreshCardState(plugin.id);
 	ctx.scheduleRender(true);
 	try {
 		await togglePluginEnabled(ctx, plugin);
@@ -239,10 +241,24 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			// 一键安装：后台下载 release 资产并加载启用（失败回退到跳转市场）
 			if (ctx.installedIds.has(plugin.id) || ctx.installingIds.has(plugin.id)) return;
 			ctx.installingIds.add(plugin.id);
+			// 立即原地刷新当前卡片（而非 scheduleRender）：列表签名因 installing 未变，
+			// renderPluginList 的 S2 增量优化会直接 return 不重绘，导致 installing 胶囊永不出现。
+			ctx.refreshCardState(plugin.id);
 			ctx.scheduleRender(true);
 			void (async () => {
+				const startedAt = Date.now();
 				try {
-					await installCommunityPlugin(ctx, plugin);
+					// 超时兜底：installCommunityPlugin 内部某步 await（网络下载 / Obsidian API）
+					// 在异常环境下可能永久 pending，导致 Promise 不 settle、finally 永不执行、
+					// installing 状态永久卡住。加 60s 超时强制让流程结束，保证 installing 一定清除。
+					const installTask = installCommunityPlugin(ctx, plugin);
+					const timeout = new Promise<void>((resolve) => window.setTimeout(resolve, 60_000));
+					await Promise.race([installTask, timeout]);
+					if (Date.now() - startedAt >= 60_000) {
+						logger.warn("[Chinese Plugin Market] 安装超时（60s）兜底清除 installing 状态：", plugin.id);
+					} else {
+						logger.debug(`[Chinese Plugin Market] 安装完成（耗时 ${Date.now() - startedAt}ms）：`, plugin.id);
+					}
 				} finally {
 					// 安装流程结束：先删除 installing 标记，再同步刷新当前卡片，最后兜底重建窗口。
 					// 注意：不要只依赖 scheduleRender，renderPluginList 的签名优化会跳过列表重绘；
