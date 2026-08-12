@@ -189,6 +189,16 @@ describe("matchesPlugin", () => {
 		expect(matchesPlugin(P_MIND, "", opts)).toBe(false);
 	});
 
+	it("安装筛选：仅已安装未启动时排除未安装或已启用插件", () => {
+		const opts = baseMatchOpts({
+			installFilter: "installedNotEnabled",
+			installedIds: new Set([P_CAL.id, P_MIND.id]),
+			enabledIds: new Set([P_CAL.id]),
+		});
+		expect(matchesPlugin(P_CAL, "", opts)).toBe(false); // 已启用
+		expect(matchesPlugin(P_MIND, "", opts)).toBe(true); // 已安装未启用
+	});
+
 	it("收藏优先排序不影响 matchesPlugin 成员资格（仅排序阶段置顶）", () => {
 		const opts = baseMatchOpts({ sortFavoritesFirst: true, favoritesSet: new Set([P_MIND.id, P_GIT.id]) });
 		expect(matchesPlugin(P_MIND, "", opts)).toBe(true);

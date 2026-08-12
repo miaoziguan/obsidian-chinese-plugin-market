@@ -8,7 +8,7 @@
 import { setIcon, Menu } from "obsidian";
 import { isMobileEnvironment } from "@shared/platform";
 import { type I18nKey } from "@shared/i18n";
-import { type SearchMode } from "@domain/filter/filter";
+import { type SearchMode, type InstallFilter } from "@domain/filter/filter";
 import { renderFacetChips } from "@ui/components/facet-chips";
 import { setListState } from "@ui/dom/list-state";
 import { isAIMode, isKeywordMode, isLocalMode } from "@domain/search/search-mode";
@@ -152,18 +152,13 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.favoriteFilter = false;
 			ctx.settings.favoriteFilter = false;
 			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
-			// 「仅显示已安装」按钮：aria-pressed 与文案复位
-			const uninstalledToggleEl = q(ctx.contentEl, ".pt-toggle-uninstalled");
-			if (uninstalledToggleEl) {
-				uninstalledToggleEl.setAttribute("aria-pressed", "false");
-				uninstalledToggleEl.textContent = "仅显示已安装";
-			}
-			// 「仅显示已启动」按钮：aria-pressed 与文案复位
-			const enabledToggleEl = q(ctx.contentEl, ".pt-toggle-enabled");
-			if (enabledToggleEl) {
-				enabledToggleEl.setAttribute("aria-pressed", "false");
-				enabledToggleEl.textContent = "仅显示已启动";
-			}
+			// 「仅显示已安装/已启动/已安装未启动」按钮：aria-pressed 与文案复位
+			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setAttribute("aria-pressed", "false");
+			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setText("仅显示已安装");
+			q(ctx.contentEl, ".pt-toggle-enabled")?.setAttribute("aria-pressed", "false");
+			q(ctx.contentEl, ".pt-toggle-enabled")?.setText("仅显示已启动");
+			q(ctx.contentEl, ".pt-toggle-installed-off")?.setAttribute("aria-pressed", "false");
+			q(ctx.contentEl, ".pt-toggle-installed-off")?.setText("仅显示已安装未启动");
 			// 「仅看收藏」按钮：aria-pressed 与文案复位
 			const favToggleEl = q(ctx.contentEl, ".pt-toggle-favorites");
 			if (favToggleEl) {
@@ -603,39 +598,38 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 
-		// ── 安装筛选（仅显示已安装 / 仅显示已启动），收进面板统一筛选入口 ──
+		// ── 安装筛选（仅显示已安装 / 仅显示已启动 / 仅显示已安装未启动），收进面板统一筛选入口 ──
 		const installRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		installRow.createSpan({ cls: "pt-facet-label", text: "安装" });
 		const installChips = installRow.createDiv({ cls: "pt-facet-chips" });
 
-		const uninstalledToggle = installChips.createEl("button", {
-			cls: "pt-filter pt-toggle-uninstalled",
-			text: "仅显示已安装",
-		});
-		const enabledToggle = installChips.createEl("button", {
-			cls: "pt-filter pt-toggle-enabled",
-			text: "仅显示已启动",
-		});
+		const installToggleDefs: { cls: string; on: InstallFilter; label: string; track: string }[] = [
+			{ cls: "pt-toggle-uninstalled", on: "installed", label: "仅显示已安装", track: "filter:installed" },
+			{ cls: "pt-toggle-enabled", on: "enabled", label: "仅显示已启动", track: "filter:enabled" },
+			{ cls: "pt-toggle-installed-off", on: "installedNotEnabled", label: "仅显示已安装未启动", track: "filter:installedNotEnabled" },
+		];
+		const installToggles = installToggleDefs.map((def) =>
+			installChips.createEl("button", { cls: `pt-filter ${def.cls}`, text: def.label })
+		);
 
 		const updateInstallToggles = () => {
-			uninstalledToggle.setAttribute("aria-pressed", ctx.installFilter === "installed" ? "true" : "false");
-			uninstalledToggle.textContent = ctx.installFilter === "installed" ? "显示全部" : "仅显示已安装";
-			enabledToggle.setAttribute("aria-pressed", ctx.installFilter === "enabled" ? "true" : "false");
-			enabledToggle.textContent = ctx.installFilter === "enabled" ? "显示全部" : "仅显示已启动";
+			installToggles.forEach((el, i) => {
+				const def = installToggleDefs[i];
+				const active = ctx.installFilter === def.on;
+				el.setAttribute("aria-pressed", active ? "true" : "false");
+				el.textContent = active ? "显示全部" : def.label;
+			});
 		};
 		updateInstallToggles();
 
-		uninstalledToggle.addEventListener("click", () => {
-			ctx.installFilter = ctx.installFilter === "installed" ? "all" : "installed";
-			updateInstallToggles();
-			ctx.track(ctx.installFilter === "installed" ? "filter:installed" : "filter:installed_off");
-			ctx.scheduleRender(true);
-		});
-		enabledToggle.addEventListener("click", () => {
-			ctx.installFilter = ctx.installFilter === "enabled" ? "all" : "enabled";
-			updateInstallToggles();
-			ctx.track(ctx.installFilter === "enabled" ? "filter:enabled" : "filter:enabled_off");
-			ctx.scheduleRender(true);
+		installToggles.forEach((el, i) => {
+			const def = installToggleDefs[i];
+			el.addEventListener("click", () => {
+				ctx.installFilter = ctx.installFilter === def.on ? "all" : def.on;
+				updateInstallToggles();
+				ctx.track(ctx.installFilter === def.on ? def.track : `${def.track}_off`);
+				ctx.scheduleRender(true);
+			});
 		});
 
 		// ── 收藏筛选（仅看收藏），与安装筛选同组 ──
@@ -677,10 +671,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			renderChips();
 			ctx.authorFilter = null;
 			ctx.installFilter = "all";
-			uninstalledToggle.setAttribute("aria-pressed", "false");
-			uninstalledToggle.textContent = "仅显示已安装";
-			enabledToggle.setAttribute("aria-pressed", "false");
-			enabledToggle.textContent = "仅显示已启动";
+			updateInstallToggles();
 			ctx.favoriteFilter = false;
 			ctx.settings.favoriteFilter = false;
 			favToggle.setAttribute("aria-pressed", "false");

@@ -518,7 +518,7 @@ export function snapshotInstalled(ctx: ViewContext) {
 					plugins.enabledPlugins && typeof plugins.enabledPlugins.forEach === "function"
 						? new Set(plugins.enabledPlugins as Set<string>)
 						: ctx.enabledIds;
-				// H2：安装/启用集合内容变化会改变「仅已安装」/「仅已启动」筛选的匹配集，
+				// H2：安装/启用集合内容变化会改变「仅已安装」/「仅已启动」/「仅已安装未启动」筛选的匹配集，
 				// 前缀缓存只减不增，必须失效，否则新装/新启插件在带搜索词时不出现。
 				// 精化：installedIds/enabledIds 仅参与对应 installFilter 的成员判定
 				// （搜索 blob 不含安装态，排序不走缓存），当前筛选为 "all" 时
@@ -530,11 +530,13 @@ export function snapshotInstalled(ctx: ViewContext) {
 				) {
 					ctx.filterCache.reset();
 				}
-				if (
-					ctx.installFilter === "enabled" &&
-					(nextEnabled.size !== ctx.enabledIds.size ||
-						[...nextEnabled].some((id) => !ctx.enabledIds.has(id)))
-				) {
+				const enabledChanged =
+					nextEnabled.size !== ctx.enabledIds.size ||
+					[...nextEnabled].some((id) => !ctx.enabledIds.has(id));
+				if (ctx.installFilter === "enabled" && enabledChanged) {
+					ctx.filterCache.reset();
+				}
+				if (ctx.installFilter === "installedNotEnabled" && (enabledChanged || next.size !== ctx.installedIds.size)) {
 					ctx.filterCache.reset();
 				}
 				ctx.installedIds = next;
