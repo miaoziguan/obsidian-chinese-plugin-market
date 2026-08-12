@@ -307,6 +307,10 @@ export class ChinesePluginMarketView extends ItemView {
 		if (!this.__ctx) this.__ctx = createViewContext(this);
 		return this.__ctx;
 	}
+	/** 对外暴露 ViewContext（供命令面板等场景访问 outdatedIds 等状态） */
+	public get ctx(): ViewContext {
+		return this._ctx;
+	}
 
 	getDisplayText(): string {
 		return "插件搜索";

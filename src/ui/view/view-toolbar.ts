@@ -5,7 +5,7 @@
  * 的 DOM 构建与事件绑定。返回 { searchInput } 供 loadAndRender 后续（自动聚焦、"/" 快捷键）使用。
  */
 
-import { setIcon, Menu } from "obsidian";
+import { setIcon, Menu, Notice } from "obsidian";
 import { isMobileEnvironment } from "@shared/platform";
 import { type I18nKey } from "@shared/i18n";
 import { type SearchMode, type InstallFilter, type FavoriteFilter } from "@domain/filter/filter";
@@ -17,6 +17,7 @@ import { LAYOUT, SEARCH_MODES } from "@shared/constants";
 import { type SortBy } from "@domain/filter/sort";
 import type { ViewContext } from "@ui/view/view-context";
 import { asAppInternals } from "@data/platform/obsidian-internals";
+import { refreshOutdated } from "@ui/view/view-data";
 
 /**
  * 跨工具栏构建块与 loadAndRender 尾部共享的可变状态。
@@ -283,6 +284,26 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		const onRefresh = () => { ctx.track("action:refresh"); void ctx.refreshData(); };
 		refreshBtn.addEventListener("click", onRefresh);
 
+		// 一键检查已安装插件更新（独立于「刷新列表」：只检测已装插件是否有新版，不拉市场数据）
+		const checkUpdateBtn = headerRow.createEl("button", {
+			cls: "pt-check-update",
+			attr: { "aria-label": ctx.t("action.checkUpdate"), title: ctx.t("action.checkUpdate"), type: "button" },
+		});
+		setIcon(checkUpdateBtn, "download-cloud");
+		const onCheckUpdate = () => {
+			ctx.track("action:checkUpdate");
+			checkUpdateBtn.addClass("pt-spin");
+			void refreshOutdated(ctx)
+				.then(() => {
+					const n = ctx.outdatedIds?.size ?? 0;
+					if (n <= 0) new Notice(ctx.t("action.checkUpdate.upToDate"));
+					else new Notice(ctx.t("action.checkUpdate.available", { n: String(n) }));
+				})
+				.catch(() => new Notice(ctx.t("action.checkUpdate.failed")))
+				.finally(() => checkUpdateBtn.removeClass("pt-spin"));
+		};
+		checkUpdateBtn.addEventListener("click", onCheckUpdate);
+
 		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 置于搜索行最右
 		const toggleBtn = headerRow.createEl("button", {
 			cls: "pt-toggle-filters pt-toggle-filters--text",
@@ -297,6 +318,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 避免与搜索框/排序/筛选挤在同一行导致换行或溢出。保留排序↕与筛选▾（核心、图标紧凑）。
 		if (isMobileEnvironment()) {
 			refreshBtn.setCssStyles({ display: "none" });
+			checkUpdateBtn.setCssStyles({ display: "none" });
 			ctx.aiTranslateBtnEl.setCssStyles({ display: "none" });
 			const overflowBtn = headerRow.createEl("button", {
 				cls: "pt-overflow-btn",
@@ -310,6 +332,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 						.setTitle(ctx.t("action.refresh"))
 						.setIcon("refresh-cw")
 						.onClick(() => onRefresh())
+				);
+				menu.addItem((item) =>
+					item
+						.setTitle(ctx.t("action.checkUpdate"))
+						.setIcon("download-cloud")
+						.onClick(() => onCheckUpdate())
 				);
 				menu.addItem((item) =>
 					item
