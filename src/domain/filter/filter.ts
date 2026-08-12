@@ -25,7 +25,6 @@ export class FilterCache {
 	private _query = "";
 	private _source: string = "all";
 	private _author: string | null = null;
-	private _language: string | null = null;
 	private _install: InstallFilter = "all";
 	private _recommendedOnly = false;
 	private _categories?: string[];
@@ -39,7 +38,6 @@ export class FilterCache {
 		this._query = result.nextFilterQuery;
 		this._source = result.nextFilterSource;
 		this._author = result.nextFilterAuthor;
-		this._language = result.nextFilterLanguage;
 		this._install = result.nextFilterInstall;
 		this._recommendedOnly = result.nextFilterRecommendedOnly ?? false;
 		this._categories = result.nextFilterCategories;
@@ -50,7 +48,7 @@ export class FilterCache {
 	/** 生成传给 filterAndSortPlugins 的快照字段 */
 	snapshot(): Pick<FilterParams,
 		| "lastFiltered" | "lastFilterQuery" | "lastFilterSource"
-		| "lastFilterAuthor" | "lastFilterLanguage" | "lastFilterInstall"
+		| "lastFilterAuthor" | "lastFilterInstall"
 		| "lastFilterRecommendedOnly" | "lastFilterCategories"
 		| "lastFilterFavorites" | "lastFilterMode"> {
 		return {
@@ -58,7 +56,6 @@ export class FilterCache {
 			lastFilterQuery: this._query,
 			lastFilterSource: this._source,
 			lastFilterAuthor: this._author,
-			lastFilterLanguage: this._language,
 			lastFilterInstall: this._install,
 			lastFilterRecommendedOnly: this._recommendedOnly,
 			lastFilterCategories: this._categories,
@@ -79,7 +76,6 @@ export class FilterCache {
 		this._query = "";
 		this._source = "all";
 		this._author = null;
-		this._language = null;
 		this._install = "all";
 		this._recommendedOnly = false;
 		this._categories = undefined;
@@ -129,11 +125,6 @@ export interface MatchOptions {
 	searchIndex: Map<string, string>;
 	/** 作者维度：按作者精确筛选（作者钻取 / 作者 facet），null 表示不过滤 */
 	authorFilter: string | null;
-	/** 语言维度：按插件支持语言筛选（"按语言" facet），null 表示不过滤；
-	 *  取值为 "zh"（中文优先）或 "other"（无语言信息/非中文优先） */
-	languageFilter: string | null;
-	/** 插件 id → 标准化语言码数组（仅已安装插件有，来自本地 manifest.languages） */
-	pluginLanguages?: Map<string, string[]>;
 	/** 官方推荐：仅展示推荐清单内的插件（false/undefined 表示不过滤） */
 	recommendedOnly?: boolean;
 	/** 官方推荐插件 id 集合（由 plugin-recommend.json 加载） */
@@ -190,16 +181,6 @@ export function matchesPlugin(
 	}
 	// 作者维度：按作者精确筛选（所有模式生效；null 表示不过滤）
 	if (opts.authorFilter && p.author !== opts.authorFilter) return false;
-	// 语言维度：按插件支持语言筛选（所有模式生效；仅对已安装且 manifest 含 languages 的插件有效）。
-	// 取值简化为"zh"(中文优先) / "other"(非中文优先或无人声明 languages)。
-	if (opts.languageFilter) {
-		const langs = opts.pluginLanguages?.get(p.id);
-		const matched =
-			opts.languageFilter === "other"
-				? !langs || langs.length === 0 || !langs.includes("zh")
-				: !!langs && langs.includes("zh");
-		if (!matched) return false;
-	}
 	// 官方推荐：仅保留推荐清单内的插件（所有模式生效）
 	if (opts.recommendedOnly && opts.recommendedSet && !opts.recommendedSet.has(p.id)) return false;
 	// 收藏筛选：仅已收藏 / 仅未收藏
@@ -249,10 +230,6 @@ export interface FilterParams {
 	installFilter: InstallFilter;
 	/** 作者维度：按作者精确筛选（null 表示不过滤） */
 	authorFilter: string | null;
-	/** 语言维度：按插件支持语言筛选（null 表示不过滤） */
-	languageFilter: string | null;
-	/** 插件 id → 标准化语言码数组（仅已安装插件有，来自本地 manifest.languages）；供语言筛选判定 */
-	pluginLanguages?: Map<string, string[]>;
 	/** 官方推荐：仅展示推荐清单内插件 */
 	recommendedOnly?: boolean;
 	/** 官方推荐插件 id 集合 */
@@ -290,7 +267,6 @@ export interface FilterParams {
 	lastFilterQuery: string;
 	lastFilterSource: string;
 	lastFilterAuthor: string | null;
-	lastFilterLanguage?: string | null;
 	/** 上一次的 installFilter（缓存失效判断，避免切回「全部」时复用已安装子集） */
 	lastFilterInstall?: InstallFilter;
 	/** 上一次的 recommendedOnly */
@@ -312,7 +288,6 @@ export interface FilterResult {
 	nextFilterQuery: string;
 	nextFilterSource: string;
 	nextFilterAuthor: string | null;
-	nextFilterLanguage: string | null;
 	/** 回写的 installFilter（供下次缓存失效判断） */
 	nextFilterInstall: InstallFilter;
 	nextFilterRecommendedOnly?: boolean;
@@ -336,9 +311,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		plugins, searchMode, query, sourceFilter, installFilter, installedIds, enabledIds,
 		translatedResults, searchIndex, sortBy,
 		aiSearchResult, aiSearchQueryCache,
-  lastFiltered, lastFilterQuery, lastFilterSource, lastFilterAuthor, authorFilter, languageFilter, pluginLanguages,
+  lastFiltered, lastFilterQuery, lastFilterSource, lastFilterAuthor, authorFilter,
   lastFilterInstall = "all", lastFilterRecommendedOnly = false, lastFilterFavorites = "all",
-  lastFilterLanguage = null,
   lastFilterCategories, lastFilterMode = "keyword",
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
@@ -348,7 +322,6 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 
 	const matchOpts: MatchOptions = {
 		sourceFilter, installFilter, searchMode, installedIds, enabledIds, translatedResults, searchIndex, authorFilter,
-		languageFilter, pluginLanguages,
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		selectedCategories, pluginTagMap,
@@ -360,7 +333,6 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	let nextFilterQuery: string;
 	let nextFilterSource: string;
 	let nextFilterAuthor: string | null;
-	let nextFilterLanguage: string | null;
 	let nextFilterInstall: InstallFilter;
 	let nextFilterRecommendedOnly: boolean | undefined;
 	let nextFilterFavorites: FavoriteFilter | undefined;
@@ -412,15 +384,6 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 			if (authorFilter) {
 				filtered = filtered.filter((p) => p.author === authorFilter);
 			}
-			// 语言筛选（AI 模式也要收窄，与本地模式行为一致）
-			if (languageFilter) {
-				filtered = filtered.filter((p) => {
-					const langs = pluginLanguages?.get(p.id);
-					return languageFilter === "other"
-						? !langs || langs.length === 0 || !langs.includes("zh")
-						: !!langs && langs.includes("zh");
-				});
-			}
 		} else {
 			filtered = [];
 		}
@@ -429,7 +392,6 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		nextFilterQuery = query;
 		nextFilterSource = sourceFilter;
 		nextFilterAuthor = authorFilter;
-		nextFilterLanguage = languageFilter;
 	} else {
 		// 非 AI 模式：本地过滤 + 前缀增量缓存优化
 		// 高级语法仅在 keyword 模式解析；其余模式沿用原有子串逻辑。
@@ -450,7 +412,6 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 			lastFiltered.length > 0 &&
 			lastFilterSource === sourceFilter &&
 			lastFilterAuthor === authorFilter &&
-			lastFilterLanguage === languageFilter &&
 			lastFilterInstall === installFilter &&
 			lastFilterRecommendedOnly === recommendedOnly &&
 			lastFilterFavorites === favoriteFilter &&
@@ -466,7 +427,6 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		nextFilterQuery = query;
 		nextFilterSource = sourceFilter;
 		nextFilterAuthor = authorFilter;
-		nextFilterLanguage = languageFilter;
 		nextFiltered = filtered;
 
 		// 非 AI 路径：标记应清空残留 AI 结果（视图据此置 null）
@@ -508,7 +468,6 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		nextFilterQuery,
 		nextFilterSource,
 		nextFilterAuthor,
-		nextFilterLanguage,
 		nextFilterInstall,
 		nextFilterRecommendedOnly,
 		nextFilterFavorites,

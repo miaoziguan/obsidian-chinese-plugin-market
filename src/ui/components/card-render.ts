@@ -527,11 +527,19 @@ async function handleCardSysTranslate(card: HTMLElement, ctx: CardRenderContext)
 
 	btn.classList.add("pt-icon-btn--loading");
 	btn.setAttribute("aria-busy", "true");
+	// CSS 进度线驱动：从 0→0.5（name 完成）→1（desc 完成）两段递进。
+	// 仅设"完成时"刻度，未完成时保持 ready（=0），避免误以为已经开始了。
+	btn.style.setProperty("--pt-progress", "0");
+	const pName = macosSystemTranslate(nameSrc).then((r) => {
+		btn.style.setProperty("--pt-progress", "0.5");
+		return r;
+	});
+	const pDesc = macosSystemTranslate(descSrc).then((r) => {
+		btn.style.setProperty("--pt-progress", "1");
+		return r;
+	});
 	try {
-		const [nameR, descR] = await Promise.all([
-			macosSystemTranslate(nameSrc),
-			macosSystemTranslate(descSrc),
-		]);
+		const [nameR, descR] = await Promise.all([pName, pDesc]);
 		// 落库沉淀：写入 cache + tmApproved，下次打开直接命中复用（用户主动翻译 = 认可）
 		// 用 reqPluginId 而非重新读 dataset，避免把 A 的译文写到 B 的 id 下
 		if (reqPluginId && nameR && ctx.onSysTranslatePersist) {

@@ -727,27 +727,6 @@ button.pt-check-update.pt-spin svg {
 	flex: 1 1 auto;
 	min-width: 0;
 }
-/* 「安装」的下级维度（如语言）：与安装行平级，但视觉上紧邻其下方、缩进显示
-   强化从属关系。DOM 决策：放在 advancedInner 而非 installRow 内部（避免被
-   installRow 的 flex 流和 toggle chips 并排挤压）。margin-left 模拟缩进。 */
-.pt-facet-subrow {
-	display: flex;
-	align-items: center;
-	flex-wrap: nowrap;
-	padding-block: var(--pt-space-xs);
-	margin-left: 4em; /* 与安装行标签列对齐形成视觉缩进 */
-	padding-left: var(--pt-space-md);
-	border-top: none;
-}
-.pt-facet-sublabel {
-	font-size: var(--pt-text-sm);
-	font-weight: var(--pt-weight-medium);
-	color: var(--pt-text-muted);
-	flex: 0 0 4em;
-	text-align: left;
-	box-sizing: border-box;
-	padding-right: var(--pt-space-md);
-}
 /* 分类过多时的「更多 ▾ / 收起 ▴」折叠按钮：轻量虚线胶囊，区别于实体分类 chip */
 .pt-facet-more {
 	font-size: var(--pt-text-sm);
@@ -2009,13 +1988,173 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-accent);
 	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
 }
-/* 系统翻译按需按钮：加载中（旋转指示，复用 accent 色） */
-.pt-icon-btn--loading svg,
-.pt-detail-btn--loading {
-	animation: pt-spin 0.9s linear infinite;
+/* ── 系统翻译（macOS 通道）加载态 ──────────────────────────────────────────
+   设计目标：摆脱"裸旋转"和"整个按钮歪歪扭扭转"的廉价感；改用「苹果标自身
+   的呼吸 + 弧扫光指示 + 底部细进度线」这套克制的视觉语义，让等待显得踏实。
+
+   - 卡片按钮（.pt-icon-btn--loading）：按钮本体轻微收紧，SVG 颜色渐变到 accent，
+     苹果叶/果身做长呼吸，叶柄柔抖；按钮下方冒出一道 hair-thin 进度线，从 0%→
+     100% 跟随 JS 写入的 --pt-progress（0~1）。整按钮本身不旋转。
+   - 详情页按钮（.pt-detail-btn--loading）：整按钮本体不再旋转（避免矩形乱甩）；
+     前置一个弧扫光 SVG 圆环指示器（光点顺环跑），底部同样接进度线，文案走
+     "翻译中 N%"。
+   共用：long-easing cubic-bezier(0.4,0,0.2,1) 让节奏不像定时器；尊重
+   prefers-reduced-motion（降到极淡的纯渐变）。                                         */
+
+:root {
+    --pt-progress: 0;        /* 0~1，由 JS 写入；CSS 进度线/弧扫光都从这里读 */
+    --pt-sys-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
-@keyframes pt-spin {
-	to { transform: rotate(360deg); }
+
+/* ── 卡片：🍎 系统翻译按钮加载态 ──────────────────────────────────────── */
+.pt-icon-btn--loading {
+    /* 整按钮微缩 + accent 光环呼吸；按钮本身不再旋转，把"动"让给图标内部 */
+    position: relative;          /* 让 ::after 进度线能相对按钮定位 */
+    transform: scale(0.94);
+    color: var(--pt-accent);
+    box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--pt-accent) 18%, transparent),
+        0 0 14px color-mix(in srgb, var(--pt-accent) 40%, transparent);
+    animation: pt-sys-card-pulse 1.6s var(--pt-sys-ease) infinite;
+}
+/* 进度线容器：用 ::after 在按钮下方做一道 hair-thin 增长线，opacity 0→1 入场 */
+.pt-icon-btn--loading::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: 2px;
+    height: 1.5px;
+    border-radius: 2px;
+    background: linear-gradient(
+        90deg,
+        var(--pt-accent) 0%,
+        color-mix(in srgb, var(--pt-accent) 70%, white 30%) 100%
+    );
+    transform-origin: left center;
+    transform: scaleX(var(--pt-progress, 0));
+    transition: transform 320ms var(--pt-sys-ease);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--pt-accent) 60%, transparent);
+    pointer-events: none;
+}
+/* 苹果标 SVG：颜色已由父级 color 接管，这里让 SVG 描边略细化+跟随父色 */
+.pt-icon-btn--loading svg {
+    overflow: visible;
+    animation: pt-sys-logo-breath 2.2s var(--pt-sys-ease) infinite;
+    transform-origin: 12px 12px;
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--pt-accent) 35%, transparent));
+}
+/* 苹果标内部「叶柄」斜线（ICON_SYS_TRANSLATE 第 3、4 笔）做柔抖——挑出对应 <path> */
+.pt-icon-btn--loading svg path:nth-of-type(3),
+.pt-icon-btn--loading svg path:nth-of-type(4) {
+    transform-origin: 12px 12px;
+    animation: pt-sys-logo-tilt 2.6s var(--pt-sys-ease) infinite;
+}
+.pt-icon-btn--loading svg path:nth-of-type(4) {
+    animation-delay: -1.3s; /* 让两条叶柄线交替 */
+}
+
+/* ── 详情页：🍎 系统翻译 README 按钮加载态 ────────────────────────────── */
+.pt-detail-btn--loading {
+    color: var(--pt-accent);
+    border-color: color-mix(in srgb, var(--pt-accent) 35%, var(--background-modifier-border));
+    background: color-mix(in srgb, var(--pt-accent) 8%, var(--background-primary));
+    /* 关键：整按钮不旋转；只在前面贴一颗弧扫指示器 */
+    animation: pt-sys-detail-glow 1.8s var(--pt-sys-ease) infinite;
+    overflow: hidden;        /* 让 progress 线和光晕裁在按钮里 */
+    position: relative;
+}
+/* 弧扫指示器：SVG 圈在按钮文字前面，做"光点顺环跑"的精致感。
+   用 background-image data-uri，避免引入新 DOM。                           */
+.pt-detail-btn--loading::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    vertical-align: -2px;
+    border-radius: 50%;
+    background:
+        conic-gradient(
+            from 0deg,
+            var(--pt-accent) 0deg,
+            color-mix(in srgb, var(--pt-accent) 25%, transparent) 110deg,
+            transparent 200deg,
+            transparent 360deg
+        );
+    -webkit-mask:
+        radial-gradient(circle, transparent 4.5px, #000 5px, #000 6.5px, transparent 7px);
+            mask:
+        radial-gradient(circle, transparent 4.5px, #000 5px, #000 6.5px, transparent 7px);
+    animation: pt-sys-arc-spin 1.3s linear infinite;
+}
+/* 底部进度线（占满 button 内 padding，跟卡片版本对齐） */
+.pt-detail-btn--loading::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    width: calc(100% * var(--pt-progress, 0));
+    background: linear-gradient(
+        90deg,
+        var(--pt-accent),
+        color-mix(in srgb, var(--pt-accent) 60%, white 40%)
+    );
+    transition: width 320ms var(--pt-sys-ease);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--pt-accent) 50%, transparent);
+    pointer-events: none;
+}
+
+/* ── keyframes（pt-sys-*） ───────────────────────────────────────────── */
+@keyframes pt-sys-card-pulse {
+    0%, 100% {
+        box-shadow:
+            0 0 0 4px color-mix(in srgb, var(--pt-accent) 18%, transparent),
+            0 0 14px color-mix(in srgb, var(--pt-accent) 30%, transparent);
+    }
+    50% {
+        box-shadow:
+            0 0 0 6px color-mix(in srgb, var(--pt-accent) 10%, transparent),
+            0 0 22px color-mix(in srgb, var(--pt-accent) 55%, transparent);
+    }
+}
+@keyframes pt-sys-logo-breath {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.08); }
+}
+@keyframes pt-sys-logo-tilt {
+    0%, 100% { transform: rotate(-1.5deg); }
+    50%      { transform: rotate( 1.5deg); }
+}
+@keyframes pt-sys-detail-glow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 transparent;
+        background: color-mix(in srgb, var(--pt-accent) 8%, var(--background-primary));
+    }
+    50% {
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--pt-accent) 14%, transparent);
+        background: color-mix(in srgb, var(--pt-accent) 14%, var(--background-primary));
+    }
+}
+@keyframes pt-sys-arc-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── 减弱动效：保留语义、删去所有连续循环 ─────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .pt-icon-btn--loading,
+    .pt-icon-btn--loading svg,
+    .pt-icon-btn--loading svg path:nth-of-type(3),
+    .pt-icon-btn--loading svg path:nth-of-type(4),
+    .pt-detail-btn--loading,
+    .pt-detail-btn--loading::before {
+        animation: none !important;
+    }
+    .pt-icon-btn--loading::after,
+    .pt-detail-btn--loading::after {
+        transition: none !important;
+    }
 }
 
 /* 列表整体入场淡入（一次性，绑定在 layer 上，
