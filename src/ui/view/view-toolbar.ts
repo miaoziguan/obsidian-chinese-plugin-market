@@ -666,9 +666,14 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			});
 		});
 
-		// 语言子行：作为「安装」的下级维度，缩进内嵌于安装行下方，仅在 installFilter≠all 时可见。
-		// 形态上紧贴父级，强化"语言 ⊂ 安装"的从属关系。
-		const languageRow = installRow.createDiv({ cls: "pt-facet-subrow pt-facet-language-subrow" });
+		// 语言子行：作为「安装」的下级维度，缩进紧贴安装行下方显示。
+		// 关键 DOM 决策：放在 advancedInner（installRow 平级）而非 installRow 内部。
+		// 这样语言行是独立块级元素，自动独占一行；margin-left 模拟"安装行子级"缩进。
+		// （若放进 installRow，会被 installRow 的 flex 流和 toggle chips 并排挤压，
+		//   flex: 1 0 100% 也救不回来——兄弟元素的 flex: 1 1 auto 会继续在同一行排。）
+		const languageRow = advancedInner.createDiv({
+			cls: "pt-facet-subrow pt-facet-language-subrow",
+		});
 		ctx.languageRowEl = languageRow;
 		languageRow.createSpan({ cls: "pt-facet-sublabel", text: ctx.t("facet.language") });
 		const languageChips = languageRow.createDiv({ cls: "pt-facet-chips" });
