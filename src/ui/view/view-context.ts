@@ -203,7 +203,7 @@ export interface ViewContext {
 	authorFacetList: AuthorGroup[];
 	authorExpanded: boolean;
 	activeAuthorLetter: string | null;
-	/** 语言维度筛选（"按语言" facet）：标准化主码 zh/en/ja/ko/other，null 表示不过滤 */
+	/** 语言维度筛选（"按语言" facet）："zh" 中文优先 / "other" 非中文优先或无人声明，null 表示不过滤 */
 	languageFilter: string | null;
 	/** 插件 id → 标准化语言码数组（仅已安装插件有） */
 	pluginLanguages: Map<string, string[]>;
