@@ -621,17 +621,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		const authorChips = authorRow.createDiv({ cls: "pt-facet-chips" });
 		ctx.authorFacetEl = authorChips;
 		ctx.renderAuthorFacet();
-
-		// 语言行：与分类/作者平级的独立 facet 栏（形态同「作者」），按插件支持语言
-		// 筛选（中文/英文/日文/韩文/其他）。仅已安装插件有 languages 信息，故仅当
-		// 用户切到任一已装相关视图（已安装/已启动/已安装未启动）时才显示。
-		const languageRow = facetContainer.createDiv({ cls: "pt-facet-row" });
-		ctx.languageRowEl = languageRow;
-		languageRow.createSpan({ cls: "pt-facet-label", text: ctx.t("facet.language") });
-		const languageChips = languageRow.createDiv({ cls: "pt-facet-chips" });
-		ctx.languageFacetEl = languageChips;
-		ctx.renderLanguageFacet();
-
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 
@@ -669,13 +658,22 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 					ctx.languageFilter = null;
 				}
 				updateInstallToggles();
-				// 切视图后重算 facet 可见性与语言桶（切到已安装才显示语言行，且桶按已装集合计数）
+				// 切视图后重算 facet 可见性与语言桶（切到已安装才显示语言子行，且桶按已装集合计数）
 				ctx.updateFacetVisibility();
 				ctx.renderLanguageFacet();
 				ctx.track(ctx.installFilter === def.on ? def.track : `${def.track}_off`);
 				ctx.scheduleRender(true);
 			});
 		});
+
+		// 语言子行：作为「安装」的下级维度，缩进内嵌于安装行下方，仅在 installFilter≠all 时可见。
+		// 形态上紧贴父级，强化"语言 ⊂ 安装"的从属关系。
+		const languageRow = installRow.createDiv({ cls: "pt-facet-subrow pt-facet-language-subrow" });
+		ctx.languageRowEl = languageRow;
+		languageRow.createSpan({ cls: "pt-facet-sublabel", text: ctx.t("facet.language") });
+		const languageChips = languageRow.createDiv({ cls: "pt-facet-chips" });
+		ctx.languageFacetEl = languageChips;
+		ctx.renderLanguageFacet();
 
 		// ── 收藏筛选（已收藏 / 未收藏），与安装筛选同组 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });

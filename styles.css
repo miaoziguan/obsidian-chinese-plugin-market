@@ -727,6 +727,27 @@ button.pt-check-update.pt-spin svg {
 	flex: 1 1 auto;
 	min-width: 0;
 }
+/* 「安装」的下级维度（如语言）：内嵌于安装行下方、缩进显示，强化从属关系。
+   用 margin 缩进 + 去上边框（避免与安装行双分隔线），标签列收窄为 4em 对齐。 */
+.pt-facet-subrow {
+	display: flex;
+	align-items: center;
+	flex: 1 1 100%;
+	flex-wrap: nowrap;
+	padding-block: var(--pt-space-xs);
+	margin-left: 4em; /* 与安装行标签列同宽，形成视觉缩进 */
+	padding-left: var(--pt-space-md);
+	border-top: none;
+}
+.pt-facet-sublabel {
+	font-size: var(--pt-text-sm);
+	font-weight: var(--pt-weight-medium);
+	color: var(--pt-text-muted);
+	flex: 0 0 4em;
+	text-align: left;
+	box-sizing: border-box;
+	padding-right: var(--pt-space-md);
+}
 /* 分类过多时的「更多 ▾ / 收起 ▴」折叠按钮：轻量虚线胶囊，区别于实体分类 chip */
 .pt-facet-more {
 	font-size: var(--pt-text-sm);
