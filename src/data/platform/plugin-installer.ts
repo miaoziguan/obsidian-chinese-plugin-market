@@ -656,6 +656,17 @@ export async function uninstallCommunityPlugin(
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 卸载前 disablePlugin 失败：", e);
 		}
+		// 1.5 双轨兜底：Obsidian 1.13 下 disablePlugin 在非交互上下文可能返回 true
+		// 却不真正把 id 从内存 enabledPlugins 移除（与 enablePlugin 早退对称），
+		// 导致卸载后 enabledIds 仍含该 id、卡片仍显示「已启用」、状态不切回。
+		// 显式从运行时 enabledPlugins 移除（与 tryEnablePlugin 显式 add 对称）。
+		const ep = plugins?.enabledPlugins as unknown as Set<string> | string[] | undefined;
+		if (ep && typeof (ep as Set<string>).delete === "function") {
+			(ep as Set<string>).delete(plugin.id);
+		} else if (Array.isArray(ep)) {
+			const idx = ep.indexOf(plugin.id);
+			if (idx >= 0) ep.splice(idx, 1);
+		}
 	}
 
 	// 2. 删除磁盘目录
@@ -675,6 +686,16 @@ export async function uninstallCommunityPlugin(
 
 	// 3. 从 community-plugins.json 移除（关键：否则重启后仍会被视为已安装）
 	await syncCommunityPluginsJson(ctx, plugin.id, false);
+
+	// 3.5 强制 Obsidian 重新扫描磁盘 manifest：删除目录后 plugins.manifests（内存 Map）
+	// 不会自动移除已删插件，若直接 snapshotInstalled 读到的仍是旧 manifests，
+	// installedIds 仍含该 id → 卡片卸载后仍显示「已安装/已启用」，状态不切回。
+	// 官方社区市场卸载后同样依赖 loadManifests 刷新；加错误兜底避免内部 API 挂死。
+	try {
+		await plugins?.loadManifests?.call(plugins);
+	} catch (e: unknown) {
+		logger.warn("[Chinese Plugin Market] 卸载后 loadManifests 失败（降级继续）：", e);
+	}
 
 	logger.debug(`[Chinese Plugin Market] 已卸载插件 ${plugin.id}`);
 	ctx.snapshotInstalled();

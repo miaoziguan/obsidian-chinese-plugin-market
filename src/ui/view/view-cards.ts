@@ -121,19 +121,23 @@ class UninstallConfirmModal extends Modal {
 		super(ctx.app);
 		this.plugin = plugin;
 		this.resolve = resolve;
+		this.contentEl.addClass("pt-uninstall-modal");
 	}
 
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
 		this.setTitle(this.plugin.name ? `卸载 ${this.plugin.name}` : "卸载插件");
-		contentEl.createEl("p", { text: "确定卸载该插件？插件文件将从磁盘删除，此操作不可撤销。" });
-		const actions = contentEl.createDiv({ cls: "modal-button-row" });
-		actions.createEl("button", { text: "取消", cls: "mod-cta" }).addEventListener("click", () => {
+		const warn = contentEl.createEl("p", { cls: "pt-uninstall-warn" });
+		warn.append("确定卸载该插件？插件文件将从磁盘删除，此操作");
+		warn.createEl("strong", { text: "不可撤销" });
+		warn.append("。");
+		const actions = contentEl.createDiv({ cls: "modal-button-row pt-uninstall-actions" });
+		actions.createEl("button", { text: "取消", cls: "pt-detail-btn" }).addEventListener("click", () => {
 			this.close();
 			this.resolve(false);
 		});
-		actions.createEl("button", { text: "卸载", cls: "mod-warning" }).addEventListener("click", () => {
+		actions.createEl("button", { text: "卸载", cls: "pt-detail-btn mod-warning" }).addEventListener("click", () => {
 			this.close();
 			this.resolve(true);
 		});
@@ -147,6 +151,7 @@ class UninstallConfirmModal extends Modal {
 export async function handleUninstall(ctx: ViewContext, plugin: PluginInfo): Promise<void> {
 	if (ctx.installingIds.has(plugin.id)) return;
 	ctx.installingIds.add(plugin.id);
+	ctx.refreshCardState(plugin.id);
 	ctx.scheduleRender(true);
 	try {
 		const confirmed = await new Promise<boolean>((resolve) => {
