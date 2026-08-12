@@ -398,6 +398,7 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set compareMode(v) { view.compareMode = v; },
 		get compareSet() { return view.compareSet; },
 		get favoritesSet() { return view.favoritesSet; },
+		set favoritesSet(v) { view.favoritesSet = v; },
 		get sortFavoritesFirst() { return view.sortFavoritesFirst; },
 		set sortFavoritesFirst(v) { view.sortFavoritesFirst = v; },
 
