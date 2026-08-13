@@ -21,7 +21,7 @@
 
 import type { PluginInfo, TranslateResult, AISearchResult, Translator } from "@domain/catalog/translator";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
-import type { SearchMode, SourceFilter, InstallFilter, FavoriteFilter, FilterCache, EmptyState } from "@domain/filter/filter";
+import type { SearchMode, SourceFilter, InstallFilter, FavoriteFilter, ChineseEcoFilter, FilterCache, EmptyState } from "@domain/filter/filter";
 import type { SortBy } from "@domain/filter/sort";
 import type { PluginStat } from "@domain/catalog/stats";
 import type { SimilarCandidate } from "@domain/recommend/similar";
@@ -96,6 +96,8 @@ export interface ViewContext {
 	applyProfile: (p: PluginProfile) => Promise<void>;
 	/** 当前已保存的启用组合 Profile 列表（读 settings.profiles 的便捷委托） */
 	profiles: PluginProfile[];
+	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json 人工清单） */
+	chineseEcoSet: Set<string>;
 
 	// ── Obsidian ItemView DOM ──
 	containerEl: HTMLElement;
@@ -112,6 +114,8 @@ export interface ViewContext {
 	sourceFilter: SourceFilter;
 	installFilter: InstallFilter;
 	favoriteFilter: FavoriteFilter;
+	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
+	chineseEcoFilter: ChineseEcoFilter;
 	/** 新上线窗口天数：null 表示不过滤；合法值 7/30/90 */
 	newWithinDays: number | null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
@@ -383,6 +387,7 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		applyProfile: (p) =>
 			(view.plugin as unknown as { applyProfile(p: PluginProfile): Promise<void> }).applyProfile(p),
 		profiles: view.plugin.settings.profiles,
+		chineseEcoSet: view.chineseEcoSet,
 
 		// ── Obsidian ItemView DOM ──
 		containerEl: view.containerEl,
@@ -406,6 +411,8 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set installFilter(v) { view.installFilter = v; },
 		get favoriteFilter() { return view.favoriteFilter; },
 		set favoriteFilter(v) { view.favoriteFilter = v; },
+		get chineseEcoFilter() { return view.chineseEcoFilter; },
+		set chineseEcoFilter(v) { view.chineseEcoFilter = v; },
 		get newWithinDays() { return view.newWithinDays; },
 		set newWithinDays(v) { view.newWithinDays = v; },
 		get updatedWithinDays() { return view.updatedWithinDays; },

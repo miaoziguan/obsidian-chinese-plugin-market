@@ -695,6 +695,23 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 	});
 
+	// ── 中文生态筛选（中文作者/中文描述/常见拼音/人工清单；toggle 全部↔中文生态） ──
+	const ecoRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	ecoRow.createSpan({ cls: "pt-facet-label", text: "中文生态" });
+	const ecoChips = ecoRow.createDiv({ cls: "pt-facet-chips" });
+	const ecoToggle = ecoChips.createEl("button", { cls: "pt-filter pt-toggle-eco", text: "中文生态" });
+	const updateEcoToggle = () => {
+		ecoToggle.setAttribute("aria-pressed", ctx.chineseEcoFilter === "eco" ? "true" : "false");
+		ecoToggle.textContent = ctx.chineseEcoFilter === "eco" ? "全部" : "中文生态";
+	};
+	updateEcoToggle();
+	ecoToggle.addEventListener("click", () => {
+		ctx.chineseEcoFilter = ctx.chineseEcoFilter === "eco" ? "all" : "eco";
+		updateEcoToggle();
+		ctx.track(ctx.chineseEcoFilter === "eco" ? "filter:eco" : "filter:eco_off");
+		ctx.scheduleRender(true);
+	});
+
 	// ── 新上线筛选（近 N 天首次见；null = 不过滤） ──
 	const newRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 	newRow.createSpan({ cls: "pt-facet-label", text: "上线" });
@@ -800,6 +817,9 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.favoriteFilter = "all";
 			ctx.settings.favoriteFilter = "all";
 			updateFavToggles();
+			// 重置中文生态筛选
+			ctx.chineseEcoFilter = "all";
+			updateEcoToggle();
 			// 重置新上线 + 近期更新筛选
 			ctx.newWithinDays = null;
 			ctx.settings.newWithinDays = null;
