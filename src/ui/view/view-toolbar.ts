@@ -695,14 +695,16 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 	});
 
-	// ── 中文生态筛选（中文作者/中文描述/常见拼音/人工清单；toggle 全部↔中文生态） ──
+	// ── 中文生态筛选（中文作者/中文描述/常见拼音/人工清单；toggle 全部↔生态） ──
+	// 文案用「生态」而非「中文生态」：维度可扩展（未来可加国产生态/效率生态等），
+	// 判定仍由 chineseEcoFilter + chinese-ecosystem.ts 驱动（当前实现聚焦中文生态）。
 	const ecoRow = advancedInner.createDiv({ cls: "pt-facet-row" });
-	ecoRow.createSpan({ cls: "pt-facet-label", text: "中文生态" });
+	ecoRow.createSpan({ cls: "pt-facet-label", text: "生态" });
 	const ecoChips = ecoRow.createDiv({ cls: "pt-facet-chips" });
-	const ecoToggle = ecoChips.createEl("button", { cls: "pt-filter pt-toggle-eco", text: "中文生态" });
+	const ecoToggle = ecoChips.createEl("button", { cls: "pt-filter pt-toggle-eco", text: "生态" });
 	const updateEcoToggle = () => {
 		ecoToggle.setAttribute("aria-pressed", ctx.chineseEcoFilter === "eco" ? "true" : "false");
-		ecoToggle.textContent = ctx.chineseEcoFilter === "eco" ? "全部" : "中文生态";
+		ecoToggle.textContent = ctx.chineseEcoFilter === "eco" ? "全部" : "生态";
 	};
 	updateEcoToggle();
 	ecoToggle.addEventListener("click", () => {
