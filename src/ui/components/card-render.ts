@@ -632,13 +632,13 @@ async function handleCardSysTranslate(card: HTMLElement, ctx: CardRenderContext)
 	btn.setAttribute("aria-busy", "true");
 	// CSS 进度线驱动：从 0→0.5（name 完成）→1（desc 完成）两段递进。
 	// 仅设"完成时"刻度，未完成时保持 ready（=0），避免误以为已经开始了。
-	btn.style.setProperty("--pt-progress", "0");
+	btn.setCssProps({ "--pt-progress": "0" });
 	const pName = macosSystemTranslate(nameSrc).then((r) => {
-		btn.style.setProperty("--pt-progress", "0.5");
+		btn.setCssProps({ "--pt-progress": "0.5" });
 		return r;
 	});
 	const pDesc = macosSystemTranslate(descSrc).then((r) => {
-		btn.style.setProperty("--pt-progress", "1");
+		btn.setCssProps({ "--pt-progress": "1" });
 		return r;
 	});
 	try {

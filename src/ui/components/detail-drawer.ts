@@ -356,10 +356,10 @@ export class PluginDetailDrawer {
 		btn.setAttribute("disabled", "true"); // 翻译中禁用，防止重复点击导致更慢/更易失败
 		// CSS 进度线 + 弧扫指示器驱动：把分段进度 done/total 写入 --pt-progress；
 		// 文案从「翻译中 N/M」改成「翻译中 N%」，与底部细线进度条语义对齐。
-		btn.style.setProperty("--pt-progress", "0");
+		btn.setCssProps({ "--pt-progress": "0" });
 		const setProgress = (done: number, total: number) => {
 			labelEl.textContent = `翻译中 ${Math.round((done / total) * 100)}%`;
-			btn.style.setProperty("--pt-progress", String(done / total));
+			btn.setCssProps({ "--pt-progress": String(done / total) });
 		};
 		let failed = 0;
 		try {
