@@ -8,7 +8,7 @@
  * 失败时回退到原行为：打开 obsidian://show-plugin?id= 跳转。
  */
 
-import { Notice } from "obsidian";
+import { Notice, type App } from "obsidian";
 import { asAppInternals, type AppPlugins } from "@data/platform/obsidian-internals";
 
 import type { PluginInfo } from "@domain/catalog/translator";
@@ -521,6 +521,104 @@ async function tryEnablePlugin(
 	}
 	logger.warn(`[Chinese Plugin Market] enabledPlugins 类型不可写入：${Object.prototype.toString.call(ep)}`);
 	return false;
+}
+
+/**
+ * 禁用单个插件（与 tryEnablePlugin 对称）。
+ * 1.13 非交互上下文下官方 disablePlugin 可能返回 true 却不真正把 id 从运行时
+ * enabledPlugins 移除（与 enable 早退对称），故显式从内存移除并双写两个真相源。
+ * @returns 是否成功（内存或持久化任一生效即算成功）
+ */
+async function tryDisablePlugin(
+	ctx: ViewContext,
+	plugins: AppPlugins,
+	id: string
+): Promise<boolean> {
+	try {
+		await plugins.disablePlugin?.call(plugins, id);
+	} catch (e: unknown) {
+		logger.warn("[Chinese Plugin Market] disablePlugin 调用异常（继续手动维护）：", e instanceof Error ? e.message : String(e));
+	}
+	// 让事件循环推进
+	await new Promise((r) => window.setTimeout(r, 30));
+	const ep = plugins.enabledPlugins as unknown as Set<string> | string[] | undefined;
+	let removed = false;
+	if (ep && typeof (ep as Set<string>).delete === "function") {
+		(ep as Set<string>).delete(id);
+		removed = true;
+	} else if (Array.isArray(ep)) {
+		const idx = ep.indexOf(id);
+		if (idx >= 0) { ep.splice(idx, 1); removed = true; }
+	}
+	if (removed) {
+		// 双写：community-plugins.json（已安装集）+ app.json.enabledPlugins（启用集）
+		await syncCommunityPluginsJson(ctx, id, false);
+		await removeEnabledPlugin(ctx, id);
+		logger.debug(`[Chinese Plugin Market] 已显式禁用 ${id} 并持久化`);
+		return true;
+	}
+	logger.warn(`[Chinese Plugin Market] enabledPlugins 类型不可写入（disable ${id}）`);
+	return false;
+}
+
+/**
+ * 应用一个「启用组合 Profile」的核心逻辑（不依赖视图上下文）。
+ * 把当前启用集切换为 target（命名快照），自动 diff 出 toEnable / toDisable 并逐个应用，
+ * 且**永远排除 selfId**（Chinese Market 自身不能被任何 profile 误关，否则市场打不开需手动救）。
+ *
+ * @param app        Obsidian App（读 app.plugins、写盘）
+ * @param current   当前启用的插件 id 集合（由调用方从 app.plugins.enabledPlugins 或 ctx.enabledIds 提供）
+ * @param target     目标启用插件 id 集合（profile 内容）
+ * @param selfId     本插件 id（chinese-plugin-market），从 toDisable 中排除
+ * @returns 实际启用/禁用计数，供 UI 通知
+ */
+export async function applyProfileByIds(
+	app: App,
+	current: Set<string>,
+	target: Set<string>,
+	selfId: string
+): Promise<{ enabled: number; disabled: number }> {
+	const plugins = asAppInternals(app).plugins;
+	if (!plugins) return { enabled: 0, disabled: 0 };
+	// 刷新 manifests，确保待启用的插件已被 Obsidian 识别（否则 enablePlugin 无 manifest 可加载）
+	try {
+		await plugins.loadManifests?.call(plugins);
+	} catch {
+		/* manifest 扫描失败不阻断，下方按 manifests 存在性兜底 */
+	}
+	const toEnable = [...target].filter(
+		(id) => !current.has(id) && id !== selfId && Boolean(plugins.manifests?.[id])
+	);
+	const toDisable = [...current].filter((id) => !target.has(id) && id !== selfId);
+
+	// try* 函数只用到 ctx.app（写盘），构造最小伪 ctx 透传 app
+	const fakeCtx = { app } as unknown as ViewContext;
+	let enabled = 0;
+	let disabled = 0;
+	// 逐个 await 应用：Obsidian 1.13 非交互上下文启用/禁用含异步加载，
+	// 并发易触发内部 loadingPluginId 竞态，逐个更稳。
+	for (const id of toEnable) {
+		if (await tryEnablePlugin(fakeCtx, plugins, id)) enabled++;
+	}
+	for (const id of toDisable) {
+		if (await tryDisablePlugin(fakeCtx, plugins, id)) disabled++;
+	}
+	return { enabled, disabled };
+}
+
+/**
+ * 视图上下文便捷封装：应用 Profile 后刷新卡片启用态。
+ * @see applyProfileByIds
+ */
+export async function applyEnabledProfile(
+	ctx: ViewContext,
+	target: Set<string>,
+	selfId: string
+): Promise<{ enabled: number; disabled: number }> {
+	const r = await applyProfileByIds(ctx.app, ctx.enabledIds, target, selfId);
+	ctx.snapshotInstalled();
+	ctx.invalidateAndRender(true);
+	return r;
 }
 
 /**

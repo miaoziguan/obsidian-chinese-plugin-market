@@ -100,8 +100,18 @@ export interface ChinesePluginMarketSettings {
 	trendKeepDays: number;
 	/** 已安装插件有可用更新时，在列表卡片标红点提醒（轻量版，无后台轮询） */
 	notifyInstalledUpdates: boolean;
+	/** 插件启用组合预设（Profile）：命名快照，一键应用切换启用集。不碰自身。 */
+	profiles: PluginProfile[];
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
+}
+
+/** 单个启用组合 Profile：命名 + 启用插件 id 列表 */
+export interface PluginProfile {
+	/** 预设名（如「写作」「阅读」「项目管理」） */
+	name: string;
+	/** 该预设下应启用的插件 id 集合 */
+	enabled: string[];
 }
 
 export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
@@ -140,6 +150,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	trendIntervalMs: 6 * 60 * 60 * 1000,
 	trendKeepDays: 90,
 	notifyInstalledUpdates: true,
+	profiles: [],
 };
 
 /**

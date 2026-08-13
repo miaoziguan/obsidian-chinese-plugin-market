@@ -11,6 +11,10 @@ import type ChinesePluginMarket from "@app/main";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { normalizeBaseUrl } from "@shared/utils";
 import { isWebGPUAvailable } from "@semantic/embedding";
+import { VIEW_TYPE } from "@shared/constants";
+import { asAppInternals } from "@data/platform/obsidian-internals";
+import { applyProfileByIds, applyEnabledProfile } from "@data/platform/plugin-installer";
+import type { PluginProfile, ChinesePluginMarketView } from "@ui/view/translator-view";
 
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
@@ -492,7 +496,86 @@ export class TranslatorSettingTab extends PluginSettingTab {
 					},
 				],
 			},
+			{
+				type: "group",
+				heading: this.t("settings.profiles"),
+				desc: this.t("settings.profiles.desc"),
+				items: [
+					{
+						name: this.t("settings.profiles.list"),
+						// 现有预设列表 + 保存新预设（动态渲染，增删后重画本设置页）
+						render: (setting) => {
+							const list = this.plugin.settings.profiles;
+							// 预设列表：每行「名称 · N个」+ 应用 + 删除
+							for (const p of list) {
+								const row = setting.controlEl.createDiv({ cls: "pt-profile-row" });
+								row.createSpan({ text: `${p.name}（${p.enabled.length}）`, cls: "pt-profile-name" });
+								row.createEl("button", { text: this.t("settings.profiles.apply") }).addEventListener("click", () => {
+									void this.applyProfile(p);
+								});
+								row.createEl("button", { text: this.t("settings.profiles.delete"), cls: "pt-profile-del" }).addEventListener("click", () => {
+									this.plugin.settings.profiles = list.filter((x) => x !== p);
+									void this.plugin.flushSaveSettings();
+									new Notice(this.t("settings.profiles.deleted", { name: p.name }));
+									this.display();
+								});
+							}
+							// 保存当前为预设
+							const nameInput = setting.controlEl.createEl("input", {
+								cls: "pt-profile-input",
+								placeholder: this.t("settings.profiles.name.ph"),
+							});
+							setting.controlEl.createEl("button", {
+								text: this.t("settings.profiles.save"),
+								cls: "pt-profile-save",
+							}).addEventListener("click", () => {
+								const name = nameInput.value.trim();
+								if (!name) {
+									new Notice(this.t("settings.profiles.nameRequired"));
+									return;
+								}
+								const enabled = this.getCurrentEnabledIds();
+								const profiles = this.plugin.settings.profiles.slice();
+								const idx = profiles.findIndex((x) => x.name === name);
+								const profile: PluginProfile = { name, enabled: [...enabled] };
+								if (idx >= 0) {
+									profiles[idx] = profile;
+									new Notice(this.t("settings.profiles.exists", { name }));
+								} else {
+									profiles.push(profile);
+									new Notice(this.t("settings.profiles.saved", { name, n: String(enabled.size) }));
+								}
+								this.plugin.settings.profiles = profiles;
+								void this.plugin.flushSaveSettings();
+								this.display();
+							});
+						},
+					},
+				],
+			},
 		];
+	}
+
+	/** 读取当前真正启用的插件 id 集合（来自 app.plugins.enabledPlugins，不依赖视图是否打开） */
+	private getCurrentEnabledIds(): Set<string> {
+		const plugins = asAppInternals(this.app).plugins;
+		const ep = plugins?.enabledPlugins as unknown as Set<string> | string[] | undefined;
+		if (!ep) return new Set();
+		return new Set(ep);
+	}
+
+	/** 应用一个启用组合 Profile（排除本插件自身，避免误关市场） */
+	private async applyProfile(p: PluginProfile): Promise<void> {
+		const selfId = this.plugin.manifest.id;
+		const target = new Set(p.enabled);
+		// 视图开着则用 ctx 包装版（应用后即时刷新卡片），否则用底层版（仅落盘+内存）
+		const view = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view as
+			| ChinesePluginMarketView
+			| undefined;
+		const r = view?.ctx
+			? await applyEnabledProfile(view.ctx, target, selfId)
+			: await applyProfileByIds(this.app, this.getCurrentEnabledIds(), target, selfId);
+		new Notice(this.t("settings.profiles.applied", { name: p.name, n: String(r.enabled), m: String(r.disabled) }));
 	}
 
 	/** 声明式控件读值：透传到 plugin.settings[key] */
