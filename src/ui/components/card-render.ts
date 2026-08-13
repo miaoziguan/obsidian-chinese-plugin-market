@@ -119,7 +119,6 @@ const ICON_DOWNLOAD = `<svg viewBox="0 0 24 24" width="10" height="10" fill="non
 const ICON_CLOCK = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 // 作者：线性人头图标（卡片作者标识）
 const ICON_PERSON = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>`;
-const ICON_TRASH = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
 /**
  * 创建单个插件卡片（无逐卡事件绑定，由列表层事件委托处理交互）。
@@ -154,8 +153,6 @@ interface CardRefs {
 	insightBtn: HTMLElement;
 	favBtn: HTMLElement;
 	macosBtn: HTMLElement | null;
-	toggleSwitch: HTMLElement;
-	uninstallBtn: HTMLElement;
 	descEl: HTMLElement;
 	statline: HTMLElement;
 	dlChip: HTMLElement;
@@ -167,7 +164,7 @@ interface CardRefs {
 	aiReasonText: HTMLElement;
 	authorSpan: HTMLElement;
 	authorName: HTMLElement;
-
+	installedMeta: HTMLElement;
 	recommendBadge: HTMLElement;
 	/** 排序可解释性：召回信号徽标行（向量/关键词/标题/AI 精排） */
 	matchSignals: HTMLElement;
@@ -231,6 +228,8 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	});
 	appendSVG(authorSpan.createSpan({ cls: "pt-author-icon" }), ICON_PERSON);
 	const authorName = authorSpan.createSpan({ cls: "pt-author-name" });
+	const installedMeta = metaInfo.createSpan({ cls: "pt-card-installed" });
+	installedMeta.setCssStyles({ display: "none" });
 
 	// 「可更新」徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口；初始隐藏
 	const updateBadge = metaInfo.createSpan({ cls: "pt-card-update-badge" });
@@ -365,11 +364,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	appendSVG(compareBtn, ICON_COMPARE);
 	const favBtn = makeIconBtn("pt-icon-btn pt-card-favorite", "favorite", ctx.t("card.favorite"), ctx);
 	appendSVG(favBtn, ICON_FAVORITE);
-	// 卸载按钮（仅已安装插件显示，默认隐藏，由 applyCardState 按安装态显隐）
-	const uninstallBtn = makeIconBtn("pt-icon-btn pt-card-uninstall", "uninstall", ctx.t("card.uninstall"), ctx);
-	appendSVG(uninstallBtn, ICON_TRASH);
-	uninstallBtn.setCssStyles({ display: "none" });
-	actionsRow.append(insightBtn, compareBtn, favBtn, uninstallBtn);
+	actionsRow.append(insightBtn, compareBtn, favBtn);
 
 	// macOS 系统翻译（按需按钮，仅 macOS 桌面端渲染）
 	let macosBtn: HTMLElement | null = null;
@@ -383,41 +378,18 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		actionsRow.append(macosBtn);
 	}
 
-	// 启用/禁用切换（子弹开关，放在卡片右下角，仅已安装插件显示）。
-	// 直接绑 click + stopPropagation：开关是自定义 DOM（非 SVG），closest 在最外层
-	// 容器上稳定命中；stopPropagation 阻止冒泡到卡片层（避免误开详情页）。
-	const toggleSwitch = actionsRow.createDiv({ cls: "pt-card-toggle-switch", attr: { "data-action": "toggle-enabled", role: "switch", tabindex: "0", "aria-label": ctx.t("card.enable") } });
-	toggleSwitch.setCssStyles({ display: "none" });
-	const toggleTrack = toggleSwitch.createDiv({ cls: "pt-card-toggle-track" });
-	toggleTrack.createDiv({ cls: "pt-card-toggle-knob" });
-	toggleSwitch.addEventListener("click", (e: MouseEvent) => {
-		e.stopPropagation();
-		e.preventDefault();
-		const pid = card.dataset.pluginId;
-		const liveCtx = cardCtxMap.get(card) ?? ctx;
-		if (pid && liveCtx.onToggleEnabled) liveCtx.onToggleEnabled(pid);
-	});
-	toggleSwitch.addEventListener("keydown", (e: KeyboardEvent) => {
-		if (e.key === "Enter" || e.key === " ") {
-			e.preventDefault();
-			e.stopPropagation();
-			const pid = card.dataset.pluginId;
-			const liveCtx = cardCtxMap.get(card) ?? ctx;
-			if (pid && liveCtx.onToggleEnabled) liveCtx.onToggleEnabled(pid);
-		}
-	});
-
 	cardRefsMap.set(card, {
-		nameSpan, originalName, installBtn, insightBtn, compareBtn, favBtn, macosBtn, toggleSwitch, uninstallBtn,
+		nameSpan, originalName, installBtn, insightBtn, compareBtn, favBtn, macosBtn,
 		descEl, statline, dlChip, dlText, clkChip, clkText,
-		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, recommendBadge, matchSignals,
+		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, installedMeta, recommendBadge, matchSignals,
 		updateBadge,
 	});
 	cardCtxMap.set(card, ctx);
 	return card;
 }
 
-/** 构建按安装状态变化的安装状态胶囊（右上角，纯展示/入口，不复用启用切换逻辑）。 */
+/** 构建按安装状态变化的安装按钮（无 SVG，纯文本/属性，复用成本低） */
+/** 原地更新安装按钮；若结构变化（enabled 的 span ↔ 其它状态的 button）则 replaceWith 重建。 */
 function updateInstallButton(
 	existing: HTMLElement,
 	plugin: PluginInfo,
@@ -428,85 +400,44 @@ function updateInstallButton(
 	const isEnabled = ctx.enabledIds.has(plugin.id);
 	const isInstalling = !!ctx.installingIds?.has(plugin.id);
 
-	// 纯展示状态（安装中 / 已启用 / 已安装）点击不冒泡到卡片层 → 不打开详情页。
-	// 用 onclick 覆盖式赋值（不会累积监听器），启用/禁用由左下角电源图标负责。
-	const stopBubble = (e: MouseEvent) => e.stopPropagation();
-
-	// 安装中：统一显示为 span（不可点击，防重点）。
-	// 用 JS 驱动的三点省略号循环（安装中 → 安装中· → 安装中·· → 安装中···）提示"进行中"，
-	// 不依赖任何 CSS animation（规避系统/主题 reduce-motion 禁用动画导致完全不可见）。
+	// 安装中：统一显示为 span（不可点击，防重点）
 	if (isInstalling) {
-		const ensureInstalling = (el: HTMLElement) => {
-			el.className = "pt-card-install-btn pt-card-install-btn--installing";
-			el.setAttribute("aria-label", `${t("card.installing")} ${plugin.name}`);
-			el.onclick = stopBubble;
-			let label = el.querySelector<HTMLElement>(".pt-install-label");
-			if (!label) {
-				el.textContent = "";
-				label = createSpan({ cls: "pt-install-label", text: t("card.installing") });
-				el.appendChild(label);
-			}
-			// 启动/复用三点循环定时器（元素脱离文档则自动停，避免泄漏）
-			if (!(el as unknown as { _ptDots?: number })._ptDots) {
-				let n = 0;
-				const tick = () => {
-					if (!el.isConnected) {
-						window.clearInterval((el as unknown as { _ptDots?: number })._ptDots);
-						(el as unknown as { _ptDots?: number })._ptDots = undefined;
-						return;
-					}
-					n = (n + 1) % 4;
-					label.textContent = t("card.installing") + "·".repeat(n);
-				};
-				(el as unknown as { _ptDots?: number })._ptDots = window.setInterval(tick, 500);
-			}
-		};
 		if (existing.tagName === "SPAN" && existing.classList.contains("pt-card-install-btn--installing")) {
-			ensureInstalling(existing);
+			existing.textContent = t("card.installing");
 			return existing;
 		}
 		const el = createSpan();
-		ensureInstalling(el);
+		el.className = "pt-card-install-btn pt-card-install-btn--installing";
+		el.textContent = t("card.installing");
+		el.setAttribute("aria-label", `${t("card.installing")} ${plugin.name}`);
 		existing.replaceWith(el);
 		return el;
 	}
 
-	// 已启用：实心成功色胶囊（纯展示，启用/禁用由左下角电源图标负责）
+	// enabled 是 span，其余是 button——结构不同需重建
 	if (isEnabled) {
-		const el = existing.tagName === "SPAN" && existing.classList.contains("pt-card-install-btn--enabled")
-			? existing
-			: createSpan();
-		if (el !== existing) existing.replaceWith(el);
+		if (existing.tagName === "SPAN" && existing.classList.contains("pt-card-install-btn--enabled")) {
+			existing.textContent = t("card.installed.on");
+			return existing;
+		}
+		const el = createSpan();
 		el.className = "pt-card-install-btn pt-card-install-btn--enabled";
-		el.setAttribute("aria-label", `${t("card.installed.on")} ${plugin.name}`);
 		el.textContent = t("card.installed.on");
-		el.onclick = stopBubble;
+		existing.replaceWith(el);
 		return el;
 	}
-	// 已安装但未启用：次要胶囊（纯展示）
-	if (isInstalled) {
-		const el = existing.tagName === "SPAN" && existing.classList.contains("pt-card-install-btn--installed")
-			? existing
-			: createSpan();
-		if (el !== existing) existing.replaceWith(el);
-		el.className = "pt-card-install-btn pt-card-install-btn--installed";
-		el.setAttribute("aria-label", `${t("card.installed.off")} ${plugin.name}`);
-		el.textContent = t("card.installed.off");
-		el.onclick = stopBubble;
-		return el;
-	}
-	// 未安装：主 CTA 安装按钮，data-action=market（走卡片层事件委托，不拦冒泡）
+	// install / installed 都是 button[data-action=market]，可原地更新 class/text/attrs
 	const btn = existing.tagName === "BUTTON" && existing.dataset.action === "market"
 		? existing
 		: createEl("button");
 	if (btn !== existing) existing.replaceWith(btn);
-	btn.className = "pt-card-install-btn";
+	btn.className = isInstalled ? "pt-card-install-btn pt-card-install-btn--installed" : "pt-card-install-btn";
 	btn.setAttribute("data-action", "market");
 	btn.setAttribute("data-url", `obsidian://show-plugin?id=${plugin.id}`);
-	btn.setAttribute("aria-label", `${t("card.install")} ${plugin.name}`);
-	btn.setAttribute("title", t("card.install"));
-	btn.textContent = t("card.install");
-	btn.onclick = null;
+	const label = isInstalled ? t("card.installed.off") : t("card.install");
+	btn.setAttribute("aria-label", `${label} ${plugin.name}`);
+	btn.setAttribute("title", isInstalled ? `${t("card.installed.off")} — ${t("card.enable")}` : t("card.install"));
+	btn.textContent = label;
 	return btn;
 }
 
@@ -527,19 +458,12 @@ async function handleCardSysTranslate(card: HTMLElement, ctx: CardRenderContext)
 
 	btn.classList.add("pt-icon-btn--loading");
 	btn.setAttribute("aria-busy", "true");
-	// CSS 进度线驱动：从 0→0.5（name 完成）→1（desc 完成）两段递进。
-	// 仅设"完成时"刻度，未完成时保持 ready（=0），避免误以为已经开始了。
-	btn.style.setProperty("--pt-progress", "0");
-	const pName = macosSystemTranslate(nameSrc).then((r) => {
-		btn.style.setProperty("--pt-progress", "0.5");
-		return r;
-	});
-	const pDesc = macosSystemTranslate(descSrc).then((r) => {
-		btn.style.setProperty("--pt-progress", "1");
-		return r;
-	});
 	try {
-		const [nameR, descR] = await Promise.all([pName, pDesc]);
+		let failed = 0;
+		const [nameR, descR] = await Promise.all([
+			macosSystemTranslate(nameSrc, undefined, (f) => (failed += f)),
+			macosSystemTranslate(descSrc, undefined, (f) => (failed += f)),
+		]);
 		// 落库沉淀：写入 cache + tmApproved，下次打开直接命中复用（用户主动翻译 = 认可）
 		// 用 reqPluginId 而非重新读 dataset，避免把 A 的译文写到 B 的 id 下
 		if (reqPluginId && nameR && ctx.onSysTranslatePersist) {
@@ -556,7 +480,11 @@ async function handleCardSysTranslate(card: HTMLElement, ctx: CardRenderContext)
 			refs.descEl.textContent = descR;
 			refs.descEl.classList.remove("pt-desc-pending");
 		}
-		new Notice(ctx.t("card.sysTranslate.done"));
+		if (failed > 0) {
+			new Notice(ctx.t("card.sysTranslate.partial").replace("{n}", String(failed)));
+		} else {
+			new Notice(ctx.t("card.sysTranslate.done"));
+		}
 	} catch {
 		new Notice(ctx.t("card.sysTranslate.fail"));
 	} finally {
@@ -625,43 +553,8 @@ export function applyCardState(
 		refs.nameSpan.setAttribute("aria-pressed", String(showOrig));
 	}
 
-	// 安装按钮：install/installed 状态原地更新（右上角纯状态胶囊）
+	// 安装按钮：install/installed 状态原地更新，enabled 结构变化才重建（保持 head Row 顺序）
 	refs.installBtn = updateInstallButton(refs.installBtn, plugin, ctx);
-
-	// 启用/禁用切换（右下角子弹开关，仅已安装插件显示）
-	const isInstalled = ctx.installedIds.has(plugin.id);
-	const isEnabled = ctx.enabledIds.has(plugin.id);
-	const isInstalling = !!ctx.installingIds?.has(plugin.id);
-	// 仅在「安装中」或「确实未安装」时隐藏开关。
-	// 注意：启用插件后 Obsidian 内部 manifests 重载存在竞态，installedIds 快照可能瞬时
-	// 漏掉该 id；enabledIds 通常更可靠，故用「既非 installed 也非 enabled」才隐藏，
-	// 避免开关在开启成功后误消失。
-	if (isInstalling || (!isInstalled && !isEnabled)) {
-		refs.toggleSwitch.setCssStyles({ display: "none" });
-		refs.toggleSwitch.classList.remove("is-on");
-		refs.toggleSwitch.setAttribute("aria-checked", "false");
-	} else if (isEnabled) {
-		refs.toggleSwitch.setCssStyles({ display: "" });
-		refs.toggleSwitch.classList.add("is-on");
-		refs.toggleSwitch.setAttribute("aria-checked", "true");
-		refs.toggleSwitch.setAttribute("aria-label", `${plugin.name} ${t("card.installed.on")} — ${t("card.disable")}`);
-		refs.toggleSwitch.setAttribute("title", t("card.disable"));
-	} else {
-		refs.toggleSwitch.setCssStyles({ display: "" });
-		refs.toggleSwitch.classList.remove("is-on");
-		refs.toggleSwitch.setAttribute("aria-checked", "false");
-		refs.toggleSwitch.setAttribute("aria-label", `${plugin.name} ${t("card.installed.off")} — ${t("card.enable")}`);
-		refs.toggleSwitch.setAttribute("title", t("card.enable"));
-	}
-
-	// 卸载按钮：仅已安装（含已启用）插件显示
-	if (isInstalled || isEnabled) {
-		refs.uninstallBtn.setCssStyles({ display: "" });
-		refs.uninstallBtn.setAttribute("aria-label", t("card.uninstall"));
-		refs.uninstallBtn.setAttribute("title", t("card.uninstall"));
-	} else {
-		refs.uninstallBtn.setCssStyles({ display: "none" });
-	}
 
 	// 对比 / 收藏图标态
 	refs.compareBtn.classList.toggle("is-compare-on", isCompared);
@@ -723,9 +616,19 @@ export function applyCardState(
 		refs.matchSignals.replaceChildren();
 	}
 
-	// 元信息：作者
+	// 元信息：作者 + ID + 安装状态
 	refs.authorName.textContent = (plugin.author);
 	refs.authorSpan.setAttribute("title", t("card.author.tip").replace("{author}", plugin.author));
+	if (ctx.installedIds.has(plugin.id)) {
+		const enabled = ctx.enabledIds.has(plugin.id);
+		refs.installedMeta.setCssStyles({ display: "" });
+		const txt = t(enabled ? "card.installed.on" : "card.installed.off");
+		refs.installedMeta.textContent = (txt);
+		refs.installedMeta.className = enabled ? "pt-card-installed pt-installed-on" : "pt-card-installed pt-installed-off";
+		refs.installedMeta.setAttribute("title", txt);
+	} else {
+		refs.installedMeta.setCssStyles({ display: "none" });
+	}
 
 	// 可更新徽标：官方版本领先本地（仅已装插件），点击跳 Obsidian 社区插件更新入口
 	const ub = refs.updateBadge;
