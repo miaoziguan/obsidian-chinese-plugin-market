@@ -185,6 +185,11 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				desc: this.t("settings.engineAndAi.desc"),
 				items: [
 					{
+						name: this.t("settings.engine.transmart"),
+						desc: this.t("settings.engine.transmart.desc"),
+						control: { type: "toggle", key: "useTransmart", defaultValue: true },
+					},
+					{
 						name: this.t("settings.engine.myMemory"),
 						desc: this.t("settings.engine.myMemory.desc"),
 						control: { type: "toggle", key: "useMyMemory", defaultValue: true },
@@ -440,6 +445,9 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		}
 		if (key === "useMyMemory") {
 			this.plugin.translator.setUseMyMemory(Boolean(value));
+		}
+		if (key === "useTransmart") {
+			this.plugin.translator.setUseTransmart(Boolean(value));
 		}
 		return this.plugin.flushSaveSettings();
 	}

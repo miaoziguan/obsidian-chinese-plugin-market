@@ -681,6 +681,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			});
 		}
 		this.translator.setUseMyMemory(this.settings.useMyMemory);
+		this.translator.setUseTransmart(this.settings.useTransmart);
 		// 同步自托管翻译源（DeepLX / LibreTranslate）；空列表清空，行为完全不变
 		this.translator.setSelfHostedTranslators(this.settings.selfHostedTranslators);
 		// 从 settings 同步 AI 配置（与腾讯配置同款处理）。
