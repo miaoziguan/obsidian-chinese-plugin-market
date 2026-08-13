@@ -22,6 +22,7 @@ import {
 	type SourceFilter,
 	type InstallFilter,
 	type FavoriteFilter,
+	type ChineseEcoFilter,
 } from "@domain/filter/filter";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { type CardRenderContext } from "@ui/components/card-render";
@@ -567,6 +568,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public installFilter: InstallFilter = "all";
 	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部 */
 	public favoriteFilter: FavoriteFilter = "all";
+	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
+	public chineseEcoFilter: ChineseEcoFilter = "all";
 	/** 新上线窗口天数：null 不过滤，可选 7/30/90 */
 	public newWithinDays: number | null = null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
@@ -577,6 +580,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public authorFilter: string | null = null;
 	/** 作者维度：作品数≥2 的多插件作者列表（facet 快捷筛选；长尾单插件作者走卡片钻取/搜索） */
 	public authorFacetList: AuthorGroup[] = [];
+	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json 人工清单；算法判定在 chinese-ecosystem.ts） */
+	public chineseEcoSet: Set<string> = new Set();
 	/** 作者字母筛选：选中的首字母（null = 不展开任何组，只显示字母条） */
 	public activeAuthorLetter: string | null = null;
 	/** 作者 facet 展开态（字母组作者 > maxVisible 时「更多 ▾/收起 ▴」状态） */

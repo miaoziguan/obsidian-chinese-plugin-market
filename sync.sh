@@ -27,6 +27,7 @@ FILES=(
 	"embedding-worker.bundle.js"
 	"seeded-translator-cache.json"
 	"plugin-release-dates.json"
+	"plugin-chinese-ecosystem.json"
 )
 
 # ── 解析参数 ──

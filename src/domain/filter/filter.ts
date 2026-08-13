@@ -11,6 +11,7 @@ import type { PluginInfo, TranslateResult, AISearchResult } from "@domain/catalo
 import type { QueryAST, QueryFields } from "@domain/search/query";
 import { isAdvancedQuery, parseQuery, matchQueryAST } from "@domain/search/query";
 import { sortPlugins, type SortBy } from "@domain/filter/sort";
+import { isChineseEcosystem } from "@domain/recommend/chinese-ecosystem";
 import type { I18nKey } from "@shared/i18n";
 import { isAIWorthyQuery, isKeywordWorthyQuery } from "@domain/search/ai-explorer";
 
@@ -104,6 +105,9 @@ export type InstallFilter = "all" | "installed" | "enabled" | "installedNotEnabl
 /** 收藏筛选（"all" 表示全部；"favorited" 仅已收藏；"unfavorited" 仅未收藏） */
 export type FavoriteFilter = "all" | "favorited" | "unfavorited";
 
+/** 中文生态筛选（"all" 表示全部；"eco" 仅中文生态插件） */
+export type ChineseEcoFilter = "all" | "eco";
+
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。
  * 供搜索索引预计算与即时匹配共用，保证两路口径一致。
@@ -143,6 +147,10 @@ export interface MatchOptions {
 	favoriteFilter?: FavoriteFilter;
 	/** 用户收藏插件 id 集合（由 settings.favorites 加载为 Set） */
 	favoritesSet?: Set<string>;
+	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
+	chineseEcoFilter?: ChineseEcoFilter;
+	/** 中文生态人工清单 id 集合（plugin-chinese-ecosystem.json） */
+	chineseEcoSet?: Set<string>;
 	/** 新上线窗口天数（number | null；null = 不过滤，7/30/90 生效） */
 	newWithinDays?: number | null;
 	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json（git history 解析） */
@@ -200,6 +208,11 @@ export function matchesPlugin(
 	// 收藏筛选：仅已收藏 / 仅未收藏
 	if (opts.favoriteFilter === "favorited" && opts.favoritesSet && !opts.favoritesSet.has(p.id)) return false;
 	if (opts.favoriteFilter === "unfavorited" && opts.favoritesSet && opts.favoritesSet.has(p.id)) return false;
+	// 中文生态筛选：仅中文生态插件（算法信号 ∪ 人工清单）
+	if (opts.chineseEcoFilter === "eco") {
+		const isEco = opts.chineseEcoSet?.has(p.id) === true || isChineseEcosystem(p);
+		if (!isEco) return false;
+	}
 	// 仅看新上线：近 newWithinDays 天「首次进入官方市场」的插件才保留（null = 不过滤）。
 	// 时间源 = releaseDatesMap（插件真实上线日期，来自 obsidian-releases git history），
 	// 与用户是否见过无关，是稳定的插件维度。缺失/无记录则不命中。
@@ -266,6 +279,10 @@ export interface FilterParams {
 	favoriteFilter?: FavoriteFilter;
 	/** 用户收藏插件 id 集合 */
 	favoritesSet?: Set<string>;
+	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
+	chineseEcoFilter?: ChineseEcoFilter;
+	/** 中文生态人工清单 id 集合 */
+	chineseEcoSet?: Set<string>;
 	/** 新上线窗口天数（number | null；null = 不过滤） */
 	newWithinDays?: number | null;
 	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json */
@@ -354,6 +371,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
   lastFilterNewWithinDays, lastFilterCategories, lastFilterMode = "keyword",
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
+		chineseEcoFilter, chineseEcoSet,
 		selectedCategories, pluginTagMap,
 		hasHistoryTranslation,
 		releaseDatesMap,
@@ -365,6 +383,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		sourceFilter, installFilter, searchMode, installedIds, enabledIds, translatedResults, searchIndex, authorFilter,
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
+		chineseEcoFilter, chineseEcoSet,
 		selectedCategories, pluginTagMap,
 		releaseDatesMap, newWithinDays, updatedWithinDays,
 		hasHistoryTranslation,

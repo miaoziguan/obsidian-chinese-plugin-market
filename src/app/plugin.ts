@@ -47,6 +47,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	cachedTrendingHistory: Record<string, TrendSnapshot[]> | null = null;
 	/** 左侧栏 ribbon 图标元素（用于更新提醒红点标记） */
 	ribbonEl: HTMLElement | null = null;
+	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json，人工精修清单；算法判定在 chinese-ecosystem.ts） */
+	chineseEcoSet: Set<string> = new Set();
 	/** SQLite 向量库（P3+：真 SQLite，sql.js/WASM）。null 表示未初始化（sql-wasm 缺失或加载失败）。 */
 	private vectorStore: SqliteVectorStore | null = null;
 	/** SQLite 初始化失败记忆：true 后本会话不再重试（Obsidian 沙箱可能无法加载 sql.js，避免反复报错刷屏）。 */
@@ -438,6 +440,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 后台异步加载插件上线日期索引（「上线」维度用，不阻塞视图启动）
 		this.loadReleaseDates().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载上线日期失败：", e),
+		);
+		// 后台异步加载中文生态人工清单（「中文生态」维度用，不阻塞视图启动）
+		this.loadChineseEcosystem().catch((e) =>
+			logger.warn("[Chinese Plugin Market] 后台加载中文生态清单失败：", e),
 		);
 
 		// TM/索引就绪：通知已打开的视图用最终数据重渲染一次。
@@ -936,6 +942,37 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			}
 		} catch (e: unknown) {
 			logger.warn(`[Chinese Plugin Market] 加载插件上线日期失败，已跳过：`, e);
+		}
+	}
+
+	/**
+	 * 加载随插件分发的「中文生态」人工精修清单 plugin-chinese-ecosystem.json。
+	 * 内容 = 算法漏掉/误判后人工校正的插件 id（{ id: true }）。运行时判定 =
+	 * chinese-ecosystem.ts 的算法信号 ∪ 本清单。缺失/解析失败静默降级（仅算法兜底）。
+	 */
+	private async loadChineseEcosystem() {
+		const fileName = "plugin-chinese-ecosystem.json";
+		try {
+			const adapter = this.app.vault.adapter;
+			const fullPath = `.obsidian/plugins/${this.manifest.id}/${fileName}`;
+			if (!(await adapter.exists(fullPath))) return;
+			const text = await adapter.read(fullPath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (parsed && typeof parsed === "object") {
+				const set = new Set<string>(Object.keys(parsed));
+				this.chineseEcoSet = set;
+				// 注入已打开的视图并触发重渲染（视图未创建时 onOpen 自然读到 Set）
+				for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+					const view = leaf.view;
+					if (view instanceof ChinesePluginMarketView) {
+						view.chineseEcoSet = set;
+						view.invalidateAndRender(false);
+					}
+				}
+				logger.debug(`[Chinese Plugin Market] 已加载 ${set.size} 个中文生态插件`);
+			}
+		} catch (e: unknown) {
+			logger.warn(`[Chinese Plugin Market] 加载中文生态清单失败，已跳过：`, e);
 		}
 	}
 

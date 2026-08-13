@@ -151,6 +151,8 @@ export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[
 			sortFavoritesFirst: ctx.sortFavoritesFirst,
 			favoriteFilter: ctx.favoriteFilter,
 			favoritesSet: ctx.favoritesSet,
+			chineseEcoFilter: ctx.chineseEcoFilter,
+			chineseEcoSet: ctx.chineseEcoSet,
 			newWithinDays: ctx.newWithinDays,
 			updatedWithinDays: ctx.updatedWithinDays,
 			releaseDatesMap: ctx.releaseDatesMap,

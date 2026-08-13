@@ -1,12 +1,13 @@
 {
   "name": "chinese-plugin-market",
-  "version": "2.36.2",
+  "version": "2.37.0",
   "description": "中文区 Obsidian 社区插件搜索：输入关键词即可检索并展示翻译后的插件卡片，支持 AI 语义 / 名称 / 作者搜索。默认不加载列表，搜索时才出结果。",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "gen-release-dates": "node scripts/gen-release-dates.mjs",
+    "gen-chinese-ecosystem": "node scripts/gen-chinese-ecosystem.mjs",
     "test": "vitest run",
     "build:e2e": "node scripts/build-e2e.mjs",
     "test:e2e": "node scripts/build-e2e.mjs && npx playwright test",
