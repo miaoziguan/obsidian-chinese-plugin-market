@@ -1,6 +1,7 @@
 import {
 	PluginSettingTab,
 	Setting,
+	SecretComponent,
 	Notice,
 	requestUrl,
 	Platform,
@@ -12,7 +13,9 @@ import { makeT, type I18nKey } from "@shared/i18n";
 import { normalizeBaseUrl } from "@shared/utils";
 import { isWebGPUAvailable } from "@semantic/embedding";
 import { asAppInternals } from "@data/platform/obsidian-internals";
-import type { PluginProfile } from "@ui/view/translator-view";
+import { VIEW_TYPE } from "@shared/constants";
+import { logger } from "@shared/logger";
+import type { PluginProfile, ChinesePluginMarketView } from "@ui/view/translator-view";
 
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
@@ -300,7 +303,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							{
 								name: this.t("settings.tencent.secretKey"),
 								desc: this.t("settings.tencent.secretKey.desc"),
-								control: { type: "text", key: "secretKey", placeholder: "..." },
+								// 密钥用 SecretComponent：不显示明文，防肩窥（方案 1）
+								render: (setting) => this.renderSecretField(setting, "secretKey"),
 							},
 							{
 								name: this.t("settings.tencent.region"),
@@ -326,7 +330,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							{
 								name: this.t("settings.ai.key"),
 								desc: this.t("settings.ai.key.desc"),
-								control: { type: "text", key: "aiSearchApiKey", placeholder: "sk-..." },
+								// 密钥用 SecretComponent：不显示明文，防肩窥（方案 1）
+								render: (setting) => this.renderSecretField(setting, "aiSearchApiKey"),
 							},
 							{
 								name: this.t("settings.ai.model"),
@@ -392,7 +397,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								name: this.t("settings.embedding.key"),
 								desc: this.t("settings.embedding.key.desc"),
 								visible: () => s.embeddingSource === "api",
-								control: { type: "text", key: "embeddingApiKey", placeholder: "sk-..." },
+								// 密钥用 SecretComponent：不显示明文，防肩窥（方案 1）
+								render: (setting) => this.renderSecretField(setting, "embeddingApiKey"),
 							},
 							{
 								name: this.t("settings.embedding.model"),
@@ -564,6 +570,33 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		return new Set(ep);
 	}
 
+	/**
+	 * 联动重试（对齐 better-store onTokenLinked）：凭据变更后，若市场视图开着，
+	 * 重新翻译当前可见的未译项（original 兜底自动重试）。只处理可见项，不烧多余 token。
+	 */
+	private retryFailedTranslations(): void {
+		const view = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view as
+			| ChinesePluginMarketView
+			| undefined;
+		if (!view?.ctx) return;
+		void view.ctx.aiTranslateAllPending().catch((e: unknown) => {
+			logger.warn("[Chinese Plugin Market] 凭据变更后重试翻译失败：", e);
+		});
+	}
+
+	/**
+	 * 用 Obsidian SecretComponent 渲染敏感字段输入（方案 1：设置面板不显示明文、防肩窥）。
+	 * 值仍走 setControlValue → settings + credentials.json 持久化，行为与 text 一致。
+	 */
+	private renderSecretField(setting: Setting, key: string): void {
+		const secret = new SecretComponent(this.app, setting.controlEl);
+		const current = (this.plugin.settings as unknown as Record<string, unknown>)[key];
+		secret.setValue(typeof current === "string" ? current : "");
+		secret.onChange((value) => {
+			void this.setControlValue(key, value);
+		});
+	}
+
 	/** 声明式控件读值：透传到 plugin.settings[key] */
 	getControlValue(key: string): unknown {
 		return (this.plugin.settings as unknown as Record<string, unknown>)[key];
@@ -614,6 +647,11 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		}
 		if (key === "aiSearchEnabled" || key === "aiSearchBaseURL" || key === "aiSearchApiKey" || key === "aiSearchModel") {
 			this.syncTranslatorAIConfig();
+		}
+		// 方案 3（对齐 better-store onTokenLinked）：凭据/开关变更后联动重试——
+		// 之前因无 key 翻译失败的可见项（original 兜底）自动重新翻译，无需用户手动再触发。
+		if (key === "aiSearchApiKey" || key === "aiSearchBaseURL" || key === "aiSearchModel" || key === "secretKey" || key === "embeddingApiKey") {
+			this.retryFailedTranslations();
 		}
 		if (key === "useMyMemory") {
 			this.plugin.translator.setUseMyMemory(Boolean(value));
