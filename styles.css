@@ -1777,12 +1777,11 @@ button.pt-card-install-btn--installed {
 	cursor: pointer;
 }
 .pt-card-desc--touch:hover {
-	/* 可点态轻提示：hover 时轻微变色（仅视觉，不弹浮层） */
+	/* 可点态轻提示：hover 时轻微变色（仅视觉，不弹浮层）。
+	   仅用 text-decoration: underline 短属性——长属性（text-decoration-color 等）
+	   在 Obsidian 1.11.4 部分支持，且此处纯装饰、无需精细化。 */
 	color: var(--pt-text);
 	text-decoration: underline;
-	text-decoration-color: color-mix(in srgb, var(--pt-text-muted) 40%, transparent);
-	text-underline-offset: 3px;
-	text-decoration-thickness: 1px;
 }
 .pt-card-desc--expanded {
 	-webkit-line-clamp: unset;
@@ -2193,7 +2192,9 @@ button.pt-card-install-btn--installed {
    .pt-icon-btn--loading svg path:nth-of-type(3) 等更高特异性选择器上，
    (0,1,0) 的本体选择器压不住；去掉会破坏「系统减弱动效」用户的体验。 */
 @media (prefers-reduced-motion: reduce) {
-    /* stylelint-disable-next-line declaration-no-important -- reduce-motion 强制关闭动画 */
+    /* 必须 !important：动画声明散落在 .pt-icon-btn--loading svg path:nth-of-type(3)
+       等更高特异性选择器上；(0,1,0) 的本体选择器即使后声明也压不住。
+       CSS lint 的 declaration-no-important 属通用规则，此处是正当例外（无条件禁用动效）。 */
     .pt-icon-btn--loading,
     .pt-icon-btn--loading svg,
     .pt-icon-btn--loading svg path:nth-of-type(3),
@@ -2202,7 +2203,6 @@ button.pt-card-install-btn--installed {
     .pt-detail-btn--loading::before {
         animation: none !important;
     }
-    /* stylelint-disable-next-line declaration-no-important -- reduce-motion 强制关闭过渡 */
     .pt-icon-btn--loading::after,
     .pt-detail-btn--loading::after {
         transition: none !important;
