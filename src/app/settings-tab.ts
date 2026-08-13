@@ -522,7 +522,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 									void this.plugin.flushSaveSettings();
 									this.plugin.refreshProfileCommands();
 									new Notice(this.t("settings.profiles.deleted", { name: p.name }));
-									this.display();
+									// 1.13+ 声明式设置刷新用 update()，display() 已弃用
+									this.update();
 								});
 							}
 							// 保存当前为预设
@@ -553,7 +554,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								this.plugin.settings.profiles = profiles;
 								void this.plugin.flushSaveSettings();
 								this.plugin.refreshProfileCommands();
-								this.display();
+								// 1.13+ 声明式设置刷新用 update()，display() 已弃用
+								this.update();
 							});
 						},
 					},
