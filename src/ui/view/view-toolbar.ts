@@ -702,8 +702,11 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	const ecoChips = ecoRow.createDiv({ cls: "pt-facet-chips" });
 	const ecoToggle = ecoChips.createEl("button", { cls: "pt-filter pt-toggle-eco", text: "中文生态" });
 	const updateEcoToggle = () => {
-		ecoToggle.setAttribute("aria-pressed", ctx.chineseEcoFilter === "eco" ? "true" : "false");
-		ecoToggle.textContent = ctx.chineseEcoFilter === "eco" ? "全部" : "中文生态";
+		const active = ctx.chineseEcoFilter === "eco";
+		ecoToggle.setAttribute("aria-pressed", active ? "true" : "false");
+		// 文案始终「中文生态」：激活态靠 aria-pressed 样式区分（点此按钮在「激活/取消」间切换，
+		// 无意义变「全部」）。真正的「全部」由工具栏「重置」按钮一键处理，避免按钮身份切换带来的认知负担。
+		ecoToggle.textContent = "中文生态";
 	};
 	updateEcoToggle();
 	ecoToggle.addEventListener("click", () => {
