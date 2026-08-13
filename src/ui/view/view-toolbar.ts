@@ -683,17 +683,71 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		updateFavToggles();
 
 		favToggles.forEach((el, i) => {
-			const def = favToggleDefs[i];
-			el.addEventListener("click", () => {
-				ctx.favoriteFilter = ctx.favoriteFilter === def.on ? "all" : def.on;
-				updateFavToggles();
-				// 持久化跨会话：与 sourceFilter 同款处理，回写 settings 并落盘
-				ctx.settings.favoriteFilter = ctx.favoriteFilter;
-				ctx.track(ctx.favoriteFilter === def.on ? def.track : `${def.track}_off`);
-				ctx.saveSettings();
-				ctx.scheduleRender(true);
-			});
+		const def = favToggleDefs[i];
+		el.addEventListener("click", () => {
+			ctx.favoriteFilter = ctx.favoriteFilter === def.on ? "all" : def.on;
+			updateFavToggles();
+			// 持久化跨会话：与 sourceFilter 同款处理，回写 settings 并落盘
+			ctx.settings.favoriteFilter = ctx.favoriteFilter;
+			ctx.track(ctx.favoriteFilter === def.on ? def.track : `${def.track}_off`);
+			ctx.saveSettings();
+			ctx.scheduleRender(true);
 		});
+	});
+
+	// ── 新上线筛选（近 N 天首次见；null = 不过滤） ──
+	const newRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	newRow.createSpan({ cls: "pt-facet-label", text: "上线" });
+	const newChip = newRow.createDiv({ cls: "pt-facet-chips" });
+	// 「上线」过滤：无 "全部" 选项，默认不过滤；点窗口胶囊激活，再点同一胶囊取消
+	const NEW_WINDOWS = [7, 30, 90];
+	const NEW_LABELS = ["7天", "30天", "90天"];
+	const newToggles = NEW_WINDOWS.map((_, i) =>
+		newChip.createEl("button", { cls: "pt-filter", text: NEW_LABELS[i] })
+	);
+	const updateNewToggle = () => {
+		newToggles.forEach((el, i) => {
+			el.setAttribute("aria-pressed", ctx.newWithinDays === NEW_WINDOWS[i] ? "true" : "false");
+		});
+	};
+	updateNewToggle();
+	newToggles.forEach((el, i) => {
+		el.addEventListener("click", () => {
+			const val = NEW_WINDOWS[i];
+			ctx.newWithinDays = ctx.newWithinDays === val ? null : val;
+			ctx.settings.newWithinDays = ctx.newWithinDays;
+			ctx.saveSettings();
+			updateNewToggle();
+			ctx.scheduleRender(true);
+		});
+	});
+
+	// ── 近期更新筛选（近 N 天有版本更新；null = 不过滤） ──
+	const updRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	updRow.createSpan({ cls: "pt-facet-label", text: "更新" });
+	const updChip = updRow.createDiv({ cls: "pt-facet-chips" });
+	// 「更新」过滤：无 "全部" 选项，默认不过滤；点窗口胶囊激活，再点同一胶囊取消
+	const UPD_WINDOWS = [7, 30, 90];
+	const UPD_LABELS = ["7天", "30天", "90天"];
+	const updToggles = UPD_WINDOWS.map((_, i) =>
+		updChip.createEl("button", { cls: "pt-filter", text: UPD_LABELS[i] })
+	);
+	const updateUpdToggle = () => {
+		updToggles.forEach((el, i) => {
+			el.setAttribute("aria-pressed", ctx.updatedWithinDays === UPD_WINDOWS[i] ? "true" : "false");
+		});
+	};
+	updateUpdToggle();
+	updToggles.forEach((el, i) => {
+		el.addEventListener("click", () => {
+			const val = UPD_WINDOWS[i];
+			ctx.updatedWithinDays = ctx.updatedWithinDays === val ? null : val;
+			ctx.settings.updatedWithinDays = ctx.updatedWithinDays;
+			ctx.saveSettings();
+			updateUpdToggle();
+			ctx.scheduleRender(true);
+		});
+	});
 
 		// 重置筛选：移至标题行右侧（与「筛选与统计」同行右端对齐）
 		const resetBtn = advancedHeading.createEl("button", {
@@ -718,6 +772,13 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.favoriteFilter = "all";
 			ctx.settings.favoriteFilter = "all";
 			updateFavToggles();
+			// 重置新上线 + 近期更新筛选
+			ctx.newWithinDays = null;
+			ctx.settings.newWithinDays = null;
+			ctx.updatedWithinDays = null;
+			ctx.settings.updatedWithinDays = null;
+			updateNewToggle();
+			updateUpdToggle();
 			ctx.renderAuthorFacet();
 			// 同步顶部「筛选中」chips 与重置按钮高亮态（仅 scheduleRender 不会触发）
 			ctx.updateFacetVisibility();

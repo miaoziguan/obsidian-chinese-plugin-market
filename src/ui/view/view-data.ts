@@ -188,7 +188,20 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			ctx.translator.recordCoverage(covStat, ctx.manifest.version);
 			ctx.saveTranslatorData();
 
-			// 同步合并已缓存的 stats（首屏不空白）并快照已安装状态
+			// 同步合并已缓存的 stats（首屏不空白）并快照已安装状态。
+			// 等 cachedStats 就绪（onload 异步加载可能慢于视图打开），避免竞态下
+			// statsMap 为空导致 downloads/updated 未写入、进而「更新」维度筛空。
+			// 最多等 8s；超时仍空则主动重新从磁盘读一次 stats 缓存做最后兜底（不阻断首屏）。
+			const deadline = Date.now() + 8000;
+			while (!ctx.cachedStats && Date.now() < deadline) {
+				await new Promise((r) => window.setTimeout(r, 50));
+			}
+			if (!ctx.cachedStats) {
+				try {
+					const reloaded = await ctx.loadStatsCache();
+					if (reloaded) ctx.cachedStats = reloaded;
+				} catch { /* 忽略，交给后续 fetchStatsAndMerge 兜底 */ }
+			}
 			ctx.mergeStatsFromCache();
 			ctx.snapshotInstalled();
 
@@ -443,6 +456,12 @@ export function reportNewPluginDelta(ctx: ViewContext, current: PluginInfo[], re
 		);
 		// 更新 seen 集合为本轮全集（差量已提取，下次以本轮为基线）
 		ctx.seenPluginIds = currentIds;
+		// 记录新插件首次见时间戳（供卡片「新」标记窗口判断）；已有 id 保持原值不变
+		const now = Date.now();
+		const fsMap = ctx.firstSeenMap;
+		for (const id of currentIds) {
+			if (!fsMap.has(id)) fsMap.set(id, delta.newIds.includes(id) ? now : 0);
+		}
 
 		// 首次加载或无新增：不弹增量提示
 		if (delta.isFirstLoad || delta.newIds.length === 0) return;
@@ -467,6 +486,9 @@ export function mirrorConfig(ctx: ViewContext) : MirrorConfig {
 
 export async function fetchStatsAndMerge(ctx: ViewContext) : Promise<void> {
 
+		// 先同步合并磁盘缓存（不依赖网络）：保证 downloads/updated 立即可用，
+		// 即便后续网络拉取失败也不会让「更新」等维度因 updated 缺失而筛空。
+		ctx.mergeStatsFromCache();
 		try {
 			const url = resolveUrl(PLUGIN_STATS_URL, ctx.mirrorConfig());
 			const map = await fetchPluginStats(url);
@@ -476,7 +498,7 @@ export async function fetchStatsAndMerge(ctx: ViewContext) : Promise<void> {
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 拉取 stats 失败，复用缓存/旧值：", e);
 		}
-	
+
 }
 
 export function mergeStatsIntoPlugins(ctx: ViewContext) {

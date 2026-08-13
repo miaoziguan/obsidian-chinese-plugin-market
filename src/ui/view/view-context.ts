@@ -80,10 +80,14 @@ export interface ViewContext {
 
 	// ── plugin 内部状态/动作的 ctx 委托（P2-2 去耦合收尾批）──
 	get cachedStats(): Map<string, PluginStat> | null;
+	set cachedStats(v: Map<string, PluginStat> | null);
+	loadStatsCache(): Promise<Map<string, PluginStat> | null>;
 	get cachedTrendingHistory(): Record<string, TrendSnapshot[]> | null;
 	get recommendedTitle(): string;
 	get seenPluginIds(): Set<string>;
 	set seenPluginIds(v: Set<string>);
+	/** 插件 id → 首次见时间戳（ms）；0 = 基线旧插件。卡片「新」标记用（只读） */
+	get firstSeenMap(): Map<string, number>;
 	saveTrendingHistory: (history: Record<string, TrendSnapshot[]>) => Promise<void>;
 	savePluginListCache: (list: unknown[]) => Promise<void>;
 	saveStatsCache: (map: Map<string, PluginStat>) => Promise<void>;
@@ -104,6 +108,10 @@ export interface ViewContext {
 	sourceFilter: SourceFilter;
 	installFilter: InstallFilter;
 	favoriteFilter: FavoriteFilter;
+	/** 新上线窗口天数：null 表示不过滤；合法值 7/30/90 */
+	newWithinDays: number | null;
+	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
+	updatedWithinDays: number | null;
 	sortBy: SortBy;
 	dataLoaded: boolean;
 	dataLoading: boolean;
@@ -203,6 +211,8 @@ export interface ViewContext {
 
 	// ── 统计 ──
 	statsMap: Map<string, PluginStat>;
+	/** 插件 id → 首次进入官方市场的真实时间（ms），来自 plugin-release-dates.json */
+	releaseDatesMap: Map<string, number>;
 	installedIds: Set<string>;
 	enabledIds: Set<string>;
 	/** 已装插件本地版本号（id → manifest.version） */
@@ -354,10 +364,13 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 
 		// ── plugin 内部状态/动作的 ctx 委托（P2-2 收尾批）──
 		get cachedStats() { return view.plugin.cachedStats; },
+		set cachedStats(v) { view.plugin.cachedStats = v; },
+		loadStatsCache: () => view.plugin.storage.loadStatsCache(),
 		get cachedTrendingHistory() { return view.plugin.cachedTrendingHistory; },
 		get recommendedTitle() { return view.plugin.recommendedTitle; },
 		get seenPluginIds() { return view.plugin.seenPluginIds; },
 		set seenPluginIds(v) { view.plugin.seenPluginIds = v; },
+		get firstSeenMap() { return view.plugin.firstSeenMap; },
 		saveTrendingHistory: (history) => view.plugin.storage.saveTrendingHistory(history),
 		savePluginListCache: (list) => view.plugin.storage.savePluginListCache(list),
 		saveStatsCache: (map) => view.plugin.storage.saveStatsCache(map),
@@ -385,6 +398,10 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set installFilter(v) { view.installFilter = v; },
 		get favoriteFilter() { return view.favoriteFilter; },
 		set favoriteFilter(v) { view.favoriteFilter = v; },
+		get newWithinDays() { return view.newWithinDays; },
+		set newWithinDays(v) { view.newWithinDays = v; },
+		get updatedWithinDays() { return view.updatedWithinDays; },
+		set updatedWithinDays(v) { view.updatedWithinDays = v; },
 		get sortBy() { return view.sortBy; },
 		set sortBy(v) { view.sortBy = v; },
 		get dataLoaded() { return view.dataLoaded; },
@@ -530,6 +547,8 @@ get authorFacetList() { return view.authorFacetList; },
 
 		// ── 统计 ─
 		get statsMap() { return view.statsMap; },
+		set statsMap(v) { view.statsMap = v; },
+		get releaseDatesMap() { return view.releaseDatesMap; },
 		get installedIds() { return view.installedIds; },
 		set installedIds(v) { view.installedIds = v; },
 		get enabledIds() { return view.enabledIds; },

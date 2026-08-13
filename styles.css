@@ -1589,6 +1589,45 @@ button.pt-card-install-btn--installed {
 	border: 1px solid color-mix(in srgb, var(--pt-accent-green, #2ecc71) 40%, transparent);
 }
 
+/* ── 维护健康度（基于 updated 三档，纯文字表达，融入作者行） ── */
+.pt-card-health-badge {
+	display: inline;
+	padding: 0;
+	border-radius: 0;
+	font-size: var(--pt-text-xs);
+	font-weight: normal;
+	letter-spacing: 0;
+	color: var(--text-muted);
+	background: transparent;
+	box-shadow: none;
+	border: none;
+	cursor: default;
+}
+/* 在作者名与健康度文案之间加间隔点 */
+.pt-card-health-badge::before {
+	content: "·";
+	margin: 0 0.3em;
+}
+
+/* ── 「新」标记（近 30 天首次见，纯文字，融入作者行） ── */
+.pt-card-new-badge {
+	display: inline;
+	padding: 0;
+	border-radius: 0;
+	font-size: var(--pt-text-xs);
+	font-weight: normal;
+	letter-spacing: 0;
+	color: var(--text-muted);
+	background: transparent;
+	box-shadow: none;
+	border: none;
+	cursor: default;
+}
+.pt-card-new-badge::before {
+	content: "·";
+	margin: 0 0.3em;
+}
+
 /* ── 顶部「官方推荐」置顶区（默认无搜索词时强曝光） ──
    设计：融入页面的分区标题，去掉厚边框/背景盒子，从根本上消除「框内居中」对齐难题。
    头部为一行 flex（标题左 + 展开/收起右），标题含金色强调竖条；
@@ -1803,6 +1842,30 @@ button.pt-card-install-btn--installed {
 .pt-stat-chip .pt-stat-icon {
 	margin-right: 2px;
 	font-size: var(--pt-text-xs);
+}
+
+/* 趋势 sparkline（卡片下载行内，近 30 天增速折线） */
+.pt-card-spark {
+	display: inline-flex;
+	align-items: center;
+	margin-left: var(--pt-space-2xs);
+}
+.pt-card-spark svg {
+	width: 60px;
+	height: 16px;
+	display: block;
+}
+.pt-card-spark path {
+	fill: none;
+	stroke: var(--pt-accent);
+	stroke-width: 1.5;
+	stroke-linejoin: round;
+	stroke-linecap: round;
+	vector-effect: non-scaling-stroke;
+}
+/* 平/负增速：中性灰，弱化强调 */
+.pt-card-spark--flat path {
+	stroke: var(--pt-text-muted);
 }
 
 /* AI 理由行（紧凑，1 行） */

@@ -143,6 +143,9 @@ export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[
 			sortFavoritesFirst: ctx.sortFavoritesFirst,
 			favoriteFilter: ctx.favoriteFilter,
 			favoritesSet: ctx.favoritesSet,
+			newWithinDays: ctx.newWithinDays,
+			updatedWithinDays: ctx.updatedWithinDays,
+			releaseDatesMap: ctx.releaseDatesMap,
 			selectedCategories: ctx.selectedCategories.length ? ctx.selectedCategories : undefined,
 			pluginTagMap: ctx.pluginTagMap,
 			installedIds: ctx.installedIds,
@@ -603,6 +606,10 @@ function makeCardRenderCtx(ctx: ViewContext): CardRenderContext {
 			const plugin = ctx.plugins.find((p) => p.id === pid);
 			if (plugin) void handleToggleEnabled(ctx, plugin);
 		},
+		// 趋势 sparkline + 增量 chip：卡片下载行展示近 30 天增速曲线
+		trendingEngine: ctx.trendingEngine,
+		// 「新」标记：近 30 天首次见插件，纯文字融入作者行
+		firstSeenMap: ctx.firstSeenMap,
 	};
 }
 
