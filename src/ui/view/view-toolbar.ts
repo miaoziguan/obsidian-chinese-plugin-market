@@ -762,6 +762,24 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.scheduleRender(true);
 	});
 
+	// ── 系列筛选（开发者自维护系列，如「竹林中国系列」；toggle 全部↔系列） ──
+	const seriesRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	seriesRow.createSpan({ cls: "pt-facet-label", text: "系列" });
+	const seriesChips = seriesRow.createDiv({ cls: "pt-facet-chips" });
+	const seriesToggle = seriesChips.createEl("button", { cls: "pt-filter pt-toggle-series", text: "竹林中国系列" });
+	const updateSeriesToggle = () => {
+		const active = ctx.seriesFilter === "bamboo";
+		seriesToggle.setAttribute("aria-pressed", active ? "true" : "false");
+		seriesToggle.textContent = "竹林中国系列";
+	};
+	updateSeriesToggle();
+	seriesToggle.addEventListener("click", () => {
+		ctx.seriesFilter = ctx.seriesFilter === "bamboo" ? "all" : "bamboo";
+		updateSeriesToggle();
+		ctx.track(ctx.seriesFilter === "bamboo" ? "filter:series_bamboo" : "filter:series_bamboo_off");
+		ctx.scheduleRender(true);
+	});
+
 	// ── 新上线筛选（近 N 天首次见；null = 不过滤） ──
 	const newRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 	newRow.createSpan({ cls: "pt-facet-label", text: "上线" });
@@ -844,6 +862,9 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			// 重置中文生态筛选
 			ctx.chineseEcoFilter = "all";
 			updateEcoToggle();
+			// 重置系列筛选
+			ctx.seriesFilter = "all";
+			updateSeriesToggle();
 			// 重置新上线 + 近期更新筛选
 			ctx.newWithinDays = null;
 			ctx.settings.newWithinDays = null;

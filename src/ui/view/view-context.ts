@@ -21,7 +21,7 @@
 
 import type { PluginInfo, TranslateResult, AISearchResult, Translator } from "@domain/catalog/translator";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
-import type { SearchMode, SourceFilter, InstallFilter, FavoriteFilter, ChineseEcoFilter, FilterCache, EmptyState } from "@domain/filter/filter";
+import type { SearchMode, SourceFilter, InstallFilter, FavoriteFilter, ChineseEcoFilter, SeriesFilter, FilterCache, EmptyState } from "@domain/filter/filter";
 import type { SortBy } from "@domain/filter/sort";
 import type { PluginStat } from "@domain/catalog/stats";
 import type { SimilarCandidate } from "@domain/recommend/similar";
@@ -98,6 +98,8 @@ export interface ViewContext {
 	profiles: PluginProfile[];
 	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json 人工清单） */
 	chineseEcoSet: Set<string>;
+	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json 开发者清单） */
+	bambooSeriesSet: Set<string>;
 
 	// ── Obsidian ItemView DOM ──
 	containerEl: HTMLElement;
@@ -116,6 +118,8 @@ export interface ViewContext {
 	favoriteFilter: FavoriteFilter;
 	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
 	chineseEcoFilter: ChineseEcoFilter;
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	seriesFilter: SeriesFilter;
 	/** 新上线窗口天数：null 表示不过滤；合法值 7/30/90 */
 	newWithinDays: number | null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
@@ -388,6 +392,7 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 			(view.plugin as unknown as { applyProfile(p: PluginProfile): Promise<void> }).applyProfile(p),
 		profiles: view.plugin.settings.profiles,
 		chineseEcoSet: view.chineseEcoSet,
+		bambooSeriesSet: view.bambooSeriesSet,
 
 		// ── Obsidian ItemView DOM ──
 		containerEl: view.containerEl,
@@ -413,6 +418,8 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set favoriteFilter(v) { view.favoriteFilter = v; },
 		get chineseEcoFilter() { return view.chineseEcoFilter; },
 		set chineseEcoFilter(v) { view.chineseEcoFilter = v; },
+		get seriesFilter() { return view.seriesFilter; },
+		set seriesFilter(v) { view.seriesFilter = v; },
 		get newWithinDays() { return view.newWithinDays; },
 		set newWithinDays(v) { view.newWithinDays = v; },
 		get updatedWithinDays() { return view.updatedWithinDays; },
