@@ -92,7 +92,7 @@ describe("Translator.translateSubset", () => {
 		t.setUseMyMemory(true);
 		// mock 私有 callApi，避免真实网络
 		vi.spyOn(MyMemoryClient.prototype as any, "callApi").mockImplementation(
-			async (s: string) => `译:${s}`
+			async (s: string) => ({ text: `译:${s}`, unchanged: false })
 		);
 		const seen: Record<string, TranslateResult> = {};
 		await t.translateSubset(plugins, (id, r) => {
@@ -106,7 +106,7 @@ describe("Translator.translateSubset", () => {
 	it("机翻（online）译文自动直接落库为 approved", async () => {
 		t.setUseMyMemory(true);
 		vi.spyOn(MyMemoryClient.prototype as any, "callApi").mockImplementation(
-			async (s: string) => `译:${s}`
+			async (s: string) => ({ text: `译:${s}`, unchanged: false })
 		);
 		const seen: Record<string, TranslateResult> = {};
 		await t.translateSubset(plugins, (id, r) => {
@@ -153,7 +153,7 @@ describe("Translator.translateSubset", () => {
 		vi.spyOn(MyMemoryClient.prototype as any, "callApi").mockImplementation(
 			async (s: string) => {
 				calls++;
-				return `译:${s}`;
+				return { text: `译:${s}`, unchanged: false };
 			}
 		);
 		const seen: string[] = [];
@@ -181,7 +181,7 @@ describe("Translator.translateSubset", () => {
 		vi.spyOn(MyMemoryClient.prototype as any, "callApi").mockImplementation(
 			async (s: string) => {
 				onlineCalls++;
-				return `译:${s}`;
+				return { text: `译:${s}`, unchanged: false };
 			}
 		);
 

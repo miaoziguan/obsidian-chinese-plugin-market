@@ -85,21 +85,27 @@ export class MyMemoryClient {
 			const namePromise = this.callApi(plugin.name);
 			const descPromise = this.callApi(plugin.description);
 			const [nameR, descR] = await Promise.allSettled([namePromise, descPromise]);
-			// 必须两段都成功才算成功：半成功（如 name 成功 + desc 429）曾把
-			// 「半原文半机翻」标成 online 固化进缓存，且吞掉 desc 的 429 使配额
-			// 检测永远不触发、recordSuccess 还会稀释熔断计数。
-			if (nameR.status === "fulfilled" && descR.status === "fulfilled") {
-				this.netBreaker.recordSuccess();
-				return {
-					translatedName: nameR.value,
-					translatedDesc: descR.value,
-					source: "online",
-					provider: "mymemory",
-				};
+			// 任一段真实失败（网络/超时/配额提示）→ 整条走降级，避免「半失败」被固化为 online
+			// （unchanged 已不再是失败：无需翻译的词由 callApi 标记 unchanged，不是 rejected）
+			if (nameR.status === "rejected" || descR.status === "rejected") {
+				const reason: unknown =
+					nameR.status === "rejected" ? nameR.reason : (descR as PromiseRejectedResult).reason;
+				throw reason instanceof Error ? reason : new Error("name and description both failed");
 			}
-			const reason: unknown =
-				nameR.status === "rejected" ? nameR.reason : (descR as PromiseRejectedResult).reason;
-			throw reason instanceof Error ? reason : new Error("name and description both failed");
+			const nameRes = nameR.value;
+			const descRes = descR.value;
+			// 两段都未变（专有名词整条无需翻译）→ 判无效走降级（不记熔断，见 catch 特殊处理，
+			// 语义对齐 Google「结果未变化」兜底路径）
+			if (nameRes.unchanged && descRes.unchanged) {
+				throw new Error("MyMemory 翻译结果未变化");
+			}
+			this.netBreaker.recordSuccess();
+			return {
+				translatedName: nameRes.unchanged ? plugin.name : nameRes.text,
+				translatedDesc: descRes.unchanged ? plugin.description : descRes.text,
+				source: "online",
+				provider: "mymemory",
+			};
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			if (/429|quota|mymemory warning|配额|额度|rate.?limit/i.test(msg)) {
@@ -110,6 +116,8 @@ export class MyMemoryClient {
 						"[Chinese Plugin Market] MyMemory 额度已耗尽（429/配额），今日内不再调用 MyMemory，未译插件将走其他来源或原文兜底（跨天自动恢复）。"
 					);
 				}
+			} else if (msg === "MyMemory 翻译结果未变化") {
+				// 无需翻译：正常兜底路径，不算失败、不记熔断
 			} else {
 				// 非配额类（含弱网/超时）→ 计入瞬时熔断
 				this.netBreaker.recordFailure(isFatalError(e));
@@ -123,9 +131,9 @@ export class MyMemoryClient {
 	async translateText(text: string): Promise<MyMemoryResult | null> {
 		if (!this.enabled || this.blocked || this.netBreaker.isOpen()) return null;
 		try {
-			const translated = await this.callApi(text);
+			const res = await this.callApi(text);
 			this.netBreaker.recordSuccess();
-			return { translatedName: translated, translatedDesc: "", match: 0 };
+			return { translatedName: res.text, translatedDesc: "", match: 0 };
 		} catch (e: unknown) {
 			this.netBreaker.recordFailure(isFatalError(e));
 			return null;
@@ -140,8 +148,8 @@ export class MyMemoryClient {
 
 	// ── 内部 ──
 
-	private async callApi(text: string): Promise<string> {
-		if (!text || text.trim().length === 0) return text;
+	private async callApi(text: string): Promise<BlockResult> {
+		if (!text || text.trim().length === 0) return { text, unchanged: true };
 		const truncated = text.length > 500 ? text.substring(0, 500) : text;
 		const encoded = encodeURIComponent(truncated);
 		const url = `https://api.mymemory.translated.net/get?q=${encoded}&langpair=en|zh-CN`;
@@ -161,13 +169,24 @@ export class MyMemoryClient {
 			const isQuotaHint = QUOTA_HINTS.some((h) => translated.toUpperCase().includes(h));
 			const isUnchanged = translated.trim().toLowerCase() === text.trim().toLowerCase();
 			const isAllCaps = translated.toUpperCase() === translated && text.toUpperCase() !== text;
-			if (isQuotaHint || isUnchanged || isAllCaps) {
-				throw new Error("MyMemory 未返回有效译文（原文/配额提示/全大写）");
+			if (isQuotaHint) {
+				throw new Error("MyMemory 未返回有效译文（配额提示）");
 			}
-			return translated;
+			// 原文/全大写回显（专有名词无需翻译）：同 Google「结果未变化」语义，标记 unchanged 保留原文，
+			// 不算失败、不记熔断（否则热门大牌连锁回显会使 MyMemory 层提前熔断，后续批量翻译失效）
+			if (isUnchanged || isAllCaps) {
+				return { text: truncated, unchanged: true };
+			}
+			return { text: translated, unchanged: false };
 		}
 		throw new Error(`MyMemory API 错误: ${parsed.responseStatus} ${parsed.responseDetails || ""}`);
 	}
+}
+
+/** 单段翻译结果：text 为译文（unchanged 时为原文）；unchanged 表示服务原样返回（无需翻译） */
+interface BlockResult {
+	text: string;
+	unchanged: boolean;
 }
 
 // ───────── GoogleClient ─────────
