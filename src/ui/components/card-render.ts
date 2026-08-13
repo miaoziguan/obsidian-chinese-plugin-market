@@ -322,9 +322,25 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const descEl = card.createDiv({ cls: "pt-card-desc pt-card-desc--clamped" });
 	let descTooltip: HTMLElement | null = null;
 	let descTooltipTimer: number | null = null;
+	// 描述 hover 时临时抑制 actions row 内按钮的 HTML 原生 title（防止坐标重叠时
+	// "安装/卸载/更新" 等原生 tooltip 抢触发，盖住我们的描述浮层）；mouseleave 恢复。
+	let savedTitles: { el: HTMLElement; title: string }[] = [];
+	const suppressActionRowTitles = () => {
+		savedTitles = [];
+		const actionEls = card.querySelectorAll<HTMLElement>(".pt-card-actions-row [title]");
+		actionEls.forEach((el) => {
+			savedTitles.push({ el, title: el.getAttribute("title") ?? "" });
+			el.removeAttribute("title");
+		});
+	};
+	const restoreActionRowTitles = () => {
+		for (const { el, title } of savedTitles) el.setAttribute("title", title);
+		savedTitles = [];
+	};
 	descEl.addEventListener("mouseenter", () => {
 		const fullText = descEl.textContent || "";
 		if (!fullText || descEl.scrollHeight <= descEl.clientHeight + 2) return; // 无截断则不弹
+		suppressActionRowTitles();
 		// 延迟 150ms 显示，避免快速划过时闪烁
 		descTooltipTimer = window.setTimeout(() => {
 			descTooltipTimer = null;
@@ -368,6 +384,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		if (descTooltipTimer) { window.clearTimeout(descTooltipTimer); descTooltipTimer = null; }
 		descTooltip?.remove();
 		descTooltip = null;
+		restoreActionRowTitles();
 	});
 	// #5: 移动端触摸适配。桌面靠 hover 浮层看完整描述；触摸端无 hover，改为点一下描述区
 	// 原地展开/收起（toggle --expanded 移除行数截断），与桌面 hover 互斥：仅移动端绑定。
