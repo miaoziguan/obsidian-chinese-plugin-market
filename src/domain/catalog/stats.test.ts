@@ -3,6 +3,7 @@ import {
 	parseStatsJson,
 	formatDownloads,
 	formatUpdated,
+	formatRelativeTime,
 	PLUGIN_STATS_URL,
 	type PluginStat,
 } from "@domain/catalog/stats";
@@ -75,6 +76,33 @@ describe("formatUpdated", () => {
 	it("缺失或非有限返回空串", () => {
 		expect(formatUpdated(undefined)).toBe("");
 		expect(formatUpdated(NaN)).toBe("");
+	});
+});
+
+describe("formatRelativeTime", () => {
+	const NOW = 1_000_000_000_000;
+	it("1 分钟内 → 刚刚", () => {
+		expect(formatRelativeTime(NOW - 30_000, NOW)).toBe("刚刚");
+	});
+	it("1 小时内 → N 分钟前", () => {
+		expect(formatRelativeTime(NOW - 5 * 60_000, NOW)).toBe("5 分钟前");
+	});
+	it("24 小时内 → N 小时前", () => {
+		expect(formatRelativeTime(NOW - 3 * 3_600_000, NOW)).toBe("3 小时前");
+	});
+	it("30 天内 → N 天前", () => {
+		expect(formatRelativeTime(NOW - 7 * 86_400_000, NOW)).toBe("7 天前");
+	});
+	it("365 天内 → N 个月前", () => {
+		expect(formatRelativeTime(NOW - 2 * 30 * 86_400_000, NOW)).toBe("2 个月前");
+	});
+	it("365 天以上 → N 年前", () => {
+		expect(formatRelativeTime(NOW - 2 * 365 * 86_400_000, NOW)).toBe("2 年前");
+	});
+	it("缺失 / 非法 / 未来时间戳返回空串", () => {
+		expect(formatRelativeTime(undefined, NOW)).toBe("");
+		expect(formatRelativeTime(NaN, NOW)).toBe("");
+		expect(formatRelativeTime(NOW + 1000, NOW)).toBe("");
 	});
 });
 
