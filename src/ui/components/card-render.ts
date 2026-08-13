@@ -8,7 +8,6 @@
  */
 
 import { Notice } from "obsidian";
-import { isMobileEnvironment } from "@shared/platform";
 import type { PluginInfo, TranslateResult, AISearchResult } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import type { I18nKey } from "@shared/i18n";
@@ -318,88 +317,20 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	newBadge.setAttribute("aria-hidden", "true");
 	newBadge.setCssStyles({ display: "none" });
 
-	// ── 描述（固定行数截断，hover 浮层展示完整描述） ──
+	// ── 描述（固定行数截断，点击展开/收起全文；桌面与移动统一交互） ──
+	// 方案 C：弃用 hover 浮层（闪烁/遮罩/易失），改点按描述区 toggle --expanded。
 	const descEl = card.createDiv({ cls: "pt-card-desc pt-card-desc--clamped" });
-	let descTooltip: HTMLElement | null = null;
-	let descTooltipTimer: number | null = null;
-	// 描述 hover 时临时抑制 actions row 内按钮的 HTML 原生 title（防止坐标重叠时
-	// "安装/卸载/更新" 等原生 tooltip 抢触发，盖住我们的描述浮层）；mouseleave 恢复。
-	let savedTitles: { el: HTMLElement; title: string }[] = [];
-	const suppressActionRowTitles = () => {
-		savedTitles = [];
-		const actionEls = card.querySelectorAll<HTMLElement>(".pt-card-actions-row [title]");
-		actionEls.forEach((el) => {
-			savedTitles.push({ el, title: el.getAttribute("title") ?? "" });
-			el.removeAttribute("title");
-		});
-	};
-	const restoreActionRowTitles = () => {
-		for (const { el, title } of savedTitles) el.setAttribute("title", title);
-		savedTitles = [];
-	};
-	descEl.addEventListener("mouseenter", () => {
+	descEl.classList.add("pt-card-desc--touch");
+	descEl.addEventListener("click", (e: MouseEvent) => {
+		e.stopPropagation(); // 避免冒泡到整卡误触发打开详情
 		const fullText = descEl.textContent || "";
-		if (!fullText || descEl.scrollHeight <= descEl.clientHeight + 2) return; // 无截断则不弹
-		suppressActionRowTitles();
-		// 延迟 150ms 显示，避免快速划过时闪烁
-		descTooltipTimer = window.setTimeout(() => {
-			descTooltipTimer = null;
-			descTooltip = createDiv();
-			descTooltip.className = "pt-desc-tooltip";
-			descTooltip.textContent = fullText;
-			const cardRect = card.getBoundingClientRect();
-			const descRect = descEl.getBoundingClientRect();
-			const vw = window.innerWidth;
-			const vh = window.innerHeight;
-			const gap = 6;
-			// 浮层宽度与卡片对齐，保底 200px
-			const minW = 200;
-			const ttW = Math.max(minW, Math.min(cardRect.width, 440));
-			descTooltip.setCssStyles({ minWidth: `${minW}px`, maxWidth: `${ttW}px` });
-			// 先挂载以测量实际高度
-			descTooltip.setCssStyles({ visibility: "hidden" });
-			document.body.appendChild(descTooltip);
-			const actualW = Math.min(ttW, descTooltip.scrollWidth);
-			const actualH = descTooltip.offsetHeight;
-			// 左对齐卡片，溢出视口时内缩
-			let left = cardRect.left;
-			if (left + actualW > vw - 8) left = vw - 8 - actualW;
-			if (left < 8) left = 8;
-			descTooltip.setCssStyles({ left: `${left}px` });
-			// 智能纵向定位
-			const belowTop = descRect.bottom + gap;
-			if (belowTop + actualH > vh - 8) {
-				descTooltip.setCssStyles({ top: `${descRect.top - gap - actualH}px` });
-				descTooltip.classList.add("pt-desc-tooltip--above");
-			} else {
-				descTooltip.setCssStyles({ top: `${belowTop}px` });
-			}
-			// 三角箭头水平对齐描述区
-			const arrowLeft = Math.max(12, Math.min(descRect.left - left + 12, actualW - 24));
-			descTooltip.setCssProps({ "--pt-tooltip-arrow-x": `${arrowLeft}px` });
-			descTooltip.setCssStyles({ visibility: "" });
-		}, 150);
+		if (!fullText || descEl.scrollHeight <= descEl.clientHeight + 2) return; // 无截断则不处理
+		const expanded = descEl.classList.toggle("pt-card-desc--expanded");
+		descEl.setAttribute("aria-expanded", String(expanded));
 	});
-	descEl.addEventListener("mouseleave", () => {
-		if (descTooltipTimer) { window.clearTimeout(descTooltipTimer); descTooltipTimer = null; }
-		descTooltip?.remove();
-		descTooltip = null;
-		restoreActionRowTitles();
-	});
-	// #5: 移动端触摸适配。桌面靠 hover 浮层看完整描述；触摸端无 hover，改为点一下描述区
-	// 原地展开/收起（toggle --expanded 移除行数截断），与桌面 hover 互斥：仅移动端绑定。
-	if (isMobileEnvironment()) {
-		descEl.classList.add("pt-card-desc--touch");
-		descEl.addEventListener("click", (e: MouseEvent) => {
-			e.stopPropagation(); // 避免冒泡到整卡误触发打开详情
-			const fullText = descEl.textContent || "";
-			if (!fullText || descEl.scrollHeight <= descEl.clientHeight + 2) return; // 无截断则不处理
-			const expanded = descEl.classList.toggle("pt-card-desc--expanded");
-			descEl.setAttribute("aria-expanded", String(expanded));
-		});
-		descEl.setAttribute("role", "button");
-		descEl.setAttribute("tabindex", "-1");
-	}
+	descEl.setAttribute("role", "button");
+	descEl.setAttribute("aria-expanded", "false");
+	descEl.setAttribute("tabindex", "-1");
 
 	// ── 标题点击切换中文/英文原名（方案 D） ──
 	nameSpan.addEventListener("click", (e: MouseEvent) => {

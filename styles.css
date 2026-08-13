@@ -1739,71 +1739,22 @@ button.pt-card-install-btn--installed {
 .pt-card-desc--clamped {
 	overflow: hidden;
 }
-/* #5: 移动端点按描述原地展开（移除行数截断），再点收起 */
+/* 描述点击展开/收起（方案 C：桌面与移动统一，弃用 hover 浮层） */
 .pt-card-desc--touch {
 	cursor: pointer;
+}
+.pt-card-desc--touch:hover {
+	/* 可点态轻提示：hover 时轻微变色（仅视觉，不弹浮层） */
+	color: var(--pt-text);
+	text-decoration: underline;
+	text-decoration-color: color-mix(in srgb, var(--pt-text-muted) 40%, transparent);
+	text-underline-offset: 3px;
+	text-decoration-thickness: 1px;
 }
 .pt-card-desc--expanded {
 	-webkit-line-clamp: unset;
 	max-height: none;
 	overflow: visible;
-}
-/* 描述 hover 浮层（fixed 定位，不破坏卡片布局） */
-.pt-desc-tooltip {
-	position: fixed;
-	z-index: var(--layer-popover, var(--obsidian-z-popover));
-	padding: 12px 16px;
-	background: var(--pt-surface);
-	color: var(--pt-text-strong);
-	border: 1px solid var(--pt-border);
-	border-radius: 8px;
-	box-shadow:
-		0 4px 12px rgba(0, 0, 0, 0.08),
-		0 1px 3px rgba(0, 0, 0, 0.06);
-	font-size: var(--pt-text-md);
-	line-height: 1.75;
-	max-height: 260px;
-	overflow-y: auto;
-	pointer-events: none;
-	word-break: break-word;
-	overflow-wrap: anywhere;
-	white-space: normal;
-	-webkit-box-orient: initial;
-	-webkit-line-clamp: initial;
-	display: block;
-	/* 入场动画 */
-	opacity: 0;
-	transform: translateY(4px);
-	animation: pt-tooltip-in 0.15s ease-out forwards;
-}
-@keyframes pt-tooltip-in {
-	to { opacity: 1; transform: translateY(0); }
-}
-/* 三角箭头（默认朝上，指向描述区底部）。用 border 三角画纯色箭头，避免 clip-path。 */
-.pt-desc-tooltip::before {
-	content: "";
-	position: absolute;
-	top: -8px;
-	left: var(--pt-tooltip-arrow-x, 16px);
-	width: 0;
-	height: 0;
-	border: 8px solid transparent;
-	border-bottom-color: var(--pt-surface);
-}
-/* 翻转态：浮层在描述区上方，箭头朝下 */
-.pt-desc-tooltip--above::before {
-	top: auto;
-	bottom: -8px;
-	border-bottom-color: transparent;
-	border-top-color: var(--pt-surface);
-}
-/* 尊重用户减弱动画偏好 */
-@media (prefers-reduced-motion: reduce) {
-	.pt-desc-tooltip {
-		animation: none;
-		opacity: 1;
-		transform: none;
-	}
 }
 /* 描述展开/收起按钮（底部居右） */
 .pt-card-desc-toggle {

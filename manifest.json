@@ -1,7 +1,7 @@
 {
   "id": "chinese-plugin-market",
   "name": "Chinese Market",
-  "version": "2.37.4",
+  "version": "2.38.0",
   "minAppVersion": "1.13.0",
   "description": "面向中文用户的社区插件搜索工具：输入关键词即可检索并展示翻译后的插件卡片，支持 AI 语义 / 名称 / 作者搜索。默认不加载列表，搜索时才出结果。 / A Chinese-region community plugin search tool with AI semantic, name and author search. List loads on demand.",
   "author": "羽鳞君",
