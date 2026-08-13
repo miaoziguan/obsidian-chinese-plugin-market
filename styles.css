@@ -2155,8 +2155,12 @@ button.pt-card-install-btn--installed {
     to { transform: rotate(360deg); }
 }
 
-/* ── 减弱动效：保留语义、删去所有连续循环 ─────────────────────────────── */
+/* ── 减弱动效：保留语义、删去所有连续循环 ───────────────────────────────
+   这里必须用 !important（reduce-motion 的「无条件禁用」语义）：动画定义在
+   .pt-icon-btn--loading svg path:nth-of-type(3) 等更高特异性选择器上，
+   (0,1,0) 的本体选择器压不住；去掉会破坏「系统减弱动效」用户的体验。 */
 @media (prefers-reduced-motion: reduce) {
+    /* stylelint-disable-next-line declaration-no-important -- reduce-motion 强制关闭动画 */
     .pt-icon-btn--loading,
     .pt-icon-btn--loading svg,
     .pt-icon-btn--loading svg path:nth-of-type(3),
@@ -2165,6 +2169,7 @@ button.pt-card-install-btn--installed {
     .pt-detail-btn--loading::before {
         animation: none !important;
     }
+    /* stylelint-disable-next-line declaration-no-important -- reduce-motion 强制关闭过渡 */
     .pt-icon-btn--loading::after,
     .pt-detail-btn--loading::after {
         transition: none !important;
