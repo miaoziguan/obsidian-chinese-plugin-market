@@ -2192,20 +2192,19 @@ button.pt-card-install-btn--installed {
    .pt-icon-btn--loading svg path:nth-of-type(3) 等更高特异性选择器上，
    (0,1,0) 的本体选择器压不住；去掉会破坏「系统减弱动效」用户的体验。 */
 @media (prefers-reduced-motion: reduce) {
-    /* 必须 !important：动画声明散落在 .pt-icon-btn--loading svg path:nth-of-type(3)
-       等更高特异性选择器上；(0,1,0) 的本体选择器即使后声明也压不住。
-       CSS lint 的 declaration-no-important 属通用规则，此处是正当例外（无条件禁用动效）。 */
+    /* 所有带动画/过渡的选择器都列在此处（含 .pt-icon-btn--loading svg path:nth-of-type(3)
+       等高特异性选择器），且本块在文件后部——同特异性后声明覆盖，无需 !important。 */
     .pt-icon-btn--loading,
     .pt-icon-btn--loading svg,
     .pt-icon-btn--loading svg path:nth-of-type(3),
     .pt-icon-btn--loading svg path:nth-of-type(4),
     .pt-detail-btn--loading,
     .pt-detail-btn--loading::before {
-        animation: none !important;
+        animation: none;
     }
     .pt-icon-btn--loading::after,
     .pt-detail-btn--loading::after {
-        transition: none !important;
+        transition: none;
     }
 }
 
