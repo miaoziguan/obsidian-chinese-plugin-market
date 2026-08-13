@@ -700,8 +700,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	newRow.createSpan({ cls: "pt-facet-label", text: "上线" });
 	const newChip = newRow.createDiv({ cls: "pt-facet-chips" });
 	// 「上线」过滤：无 "全部" 选项，默认不过滤；点窗口胶囊激活，再点同一胶囊取消
-	const NEW_WINDOWS = [7, 30, 90];
-	const NEW_LABELS = ["7天", "30天", "90天"];
+	const NEW_WINDOWS = [1, 3, 7, 30, 90, 365];
+	const NEW_LABELS = ["24h", "3天", "7天", "30天", "90天", "1年"];
 	const newToggles = NEW_WINDOWS.map((_, i) =>
 		newChip.createEl("button", { cls: "pt-filter", text: NEW_LABELS[i] })
 	);
@@ -727,8 +727,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	updRow.createSpan({ cls: "pt-facet-label", text: "更新" });
 	const updChip = updRow.createDiv({ cls: "pt-facet-chips" });
 	// 「更新」过滤：无 "全部" 选项，默认不过滤；点窗口胶囊激活，再点同一胶囊取消
-	const UPD_WINDOWS = [7, 30, 90];
-	const UPD_LABELS = ["7天", "30天", "90天"];
+	const UPD_WINDOWS = [1, 3, 7, 30, 90, 365];
+	const UPD_LABELS = ["24h", "3天", "7天", "30天", "90天", "1年"];
 	const updToggles = UPD_WINDOWS.map((_, i) =>
 		updChip.createEl("button", { cls: "pt-filter", text: UPD_LABELS[i] })
 	);
