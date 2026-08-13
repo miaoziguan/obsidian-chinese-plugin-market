@@ -340,6 +340,10 @@ export const STRINGS = {
 	"settings.embedding.mobileWarn": { zh: "移动端提示：本地模型需下载约 26MB WASM 运行时并加载模型权重，可能占用大量内存、拖慢 Obsidian，弱网下首次加载也较慢。推荐使用「关键词」或「API 向量」模式。" },
 	"settings.embedding.mobileLocalNotice": { zh: "移动端本地模型可能占用大量内存，如遇卡顿请切回关键词或 API。" },
 	// 翻译引擎
+	"settings.engine.transmart": { zh: "启用腾讯翻译（免费）" },
+	"settings.engine.transmart.desc": {
+		zh: "零配置免费、无需密钥（transmart.qq.com 接口），默认开启；检测到中文源自动跳过。",
+	},
 	"settings.engine.myMemory": { zh: "启用 MyMemory 免费翻译" },
 	"settings.engine.myMemory.desc": {
 		zh: "无需密钥，每天 5000 字符免费，翻译后缓存到本地。",
