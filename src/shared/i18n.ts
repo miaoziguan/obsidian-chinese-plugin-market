@@ -429,6 +429,24 @@ export const STRINGS = {
 	"settings.updateManage.interval.43200000": { zh: "12 小时" },
 	"settings.updateManage.interval.86400000": { zh: "24 小时" },
 
+	// 插件 Profile（启用组合预设）
+	"settings.profiles": { zh: "插件启用组合" },
+	"settings.profiles.list": { zh: "预设列表" },
+	"settings.profiles.desc": {
+		zh: "把当前启用的插件集合存为命名预设，一键切换场景（写作 / 阅读 / 项目管理）。应用时会自动 diff 启用集，且不会关闭本插件。",
+	},
+	"settings.profiles.empty": { zh: "暂无预设。在下方输入名称保存当前启用集。" },
+	"settings.profiles.name": { zh: "预设名称" },
+	"settings.profiles.name.ph": { zh: "如：写作 / 阅读 / 项目管理" },
+	"settings.profiles.save": { zh: "保存当前为预设" },
+	"settings.profiles.apply": { zh: "应用" },
+	"settings.profiles.delete": { zh: "删除" },
+	"settings.profiles.applied": { zh: "已应用「{name}」：启用 {n} 个 / 停用 {m} 个" },
+	"settings.profiles.saved": { zh: "已保存预设「{name}」（{n} 个启用插件）" },
+	"settings.profiles.deleted": { zh: "已删除预设「{name}」" },
+	"settings.profiles.nameRequired": { zh: "请先输入预设名称" },
+	"settings.profiles.exists": { zh: "已存在同名预设「{name}」，已覆盖" },
+
 	// 个人 AI 固化资产
 	"settings.aidict": { zh: "个人 AI 固化资产" },
 	"settings.aidict.desc": { zh: "已固化的 AI 译文（共 " },

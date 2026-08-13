@@ -5272,3 +5272,25 @@ button.pt-card-install-btn--installed {
 	box-shadow: 0 0 0 2px var(--background-primary);
 	pointer-events: none;
 }
+
+/* 设置页：插件启用组合 Profile 行 */
+.pt-profile-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 4px 0;
+}
+.pt-profile-name {
+	flex: 1;
+	font-weight: 500;
+}
+.pt-profile-row button {
+	margin: 0;
+}
+.pt-profile-del {
+	color: var(--text-error, #e5693f);
+}
+.pt-profile-input {
+	margin-top: 8px;
+	width: 100%;
+}
