@@ -1,6 +1,6 @@
 {
   "name": "chinese-plugin-market",
-  "version": "2.40.1",
+  "version": "2.40.2",
   "description": "中文区 Obsidian 社区插件搜索：输入关键词即可检索并展示翻译后的插件卡片，支持 AI 语义 / 名称 / 作者搜索。默认不加载列表，搜索时才出结果。",
   "main": "main.js",
   "scripts": {
