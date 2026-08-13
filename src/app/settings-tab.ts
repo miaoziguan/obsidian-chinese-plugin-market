@@ -549,6 +549,10 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		if (key === "useMyMemory") {
 			this.plugin.translator.setUseMyMemory(Boolean(value));
 		}
+		if (key === "notifyInstalledUpdates") {
+			// 关闭更新提醒时立即清除 ribbon 红点；开启时由下次检测（或打开视图）重算
+			if (!value) this.plugin.setRibbonUpdateBadge(0);
+		}
 		return this.plugin.flushSaveSettings();
 	}
 
