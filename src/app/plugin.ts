@@ -6,7 +6,7 @@
  * 视图本身由 translator-view.ts 的 ChinesePluginMarketView 承载。
  */
 
-import { Plugin, Notice, TFile, TFolder, Platform, normalizePath } from "obsidian";
+import { Plugin, Notice, Menu, TFile, TFolder, Platform, normalizePath } from "obsidian";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
@@ -26,11 +26,12 @@ import { TranslatorSettingTab } from "@app/settings-tab";
 import { debounce, mapWithConcurrency, contentHash } from "@shared/utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
 import { setWorkerSourceLoader } from "@semantic/workers/worker-backend";
-import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings } from "@ui/view/translator-view";
+import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings, type PluginProfile } from "@ui/view/translator-view";
 import { refreshOutdated } from "@ui/view/view-data";
 import { VIEW_TYPE } from "@shared/constants";
 import { writeTMNote, removeTMNote, TM_FOLDER, parseTMNote, type TMEntry } from "@translation/memory/translation-memory";
 import { SqliteVectorStore, initSqlJsStatic, type PersistAdapter } from "@semantic/vec-store";
+import { applyProfileByIds, applyEnabledProfile } from "@data/platform/plugin-installer";
 import type { TrendSnapshot } from "@domain/recommend/trending";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
 /** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
@@ -223,10 +224,16 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			},
 		});
 
-		// 左侧栏图标
-		this.ribbonEl = this.addRibbonIcon("languages", "插件搜索", () => {
-			void this.openTranslatorView();
+		// 左侧栏图标：无 profile 时直接打开市场；有 profile 时弹菜单（打开 + 一键切换场景）
+		this.ribbonEl = this.addRibbonIcon("languages", "插件搜索", (ev: MouseEvent) => {
+			if (this.settings.profiles.length === 0) {
+				void this.openTranslatorView();
+				return;
+			}
+			this.showRibbonMenu(ev);
 		});
+		// 命令：插件启用组合（P0：命令面板每条 profile 一条命令）
+		this.refreshProfileCommands();
 
 		this.addCommand({
 			id: "scroll-layout-debug",
@@ -507,6 +514,97 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			el.setAttribute("aria-label", "插件搜索");
 		}
 	}
+
+	/**
+	 * 应用一个启用组合 Profile（命令面板 / ribbon 菜单 / 设置页共用）。
+	 * 视图开着则用 ctx 包装版（应用后即时刷新卡片），否则走底层落盘+内存。
+	 */
+	async applyProfile(p: PluginProfile): Promise<void> {
+		const selfId = this.manifest.id;
+		const target = new Set(p.enabled);
+		const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view as
+			| ChinesePluginMarketView
+			| undefined;
+		const r = view?.ctx
+			? await applyEnabledProfile(view.ctx, target, selfId)
+			: await applyProfileByIds(this.app, this.getCurrentEnabledIds(), target, selfId);
+		const t = makeT();
+		new Notice(t("settings.profiles.applied", { name: p.name, n: String(r.enabled), m: String(r.disabled) }));
+	}
+
+	/** 读取当前真正启用的插件 id 集合（来自 app.plugins.enabledPlugins） */
+	private getCurrentEnabledIds(): Set<string> {
+		const plugins = (this.app as unknown as {
+			plugins?: { enabledPlugins?: Set<string> | string[] };
+		}).plugins;
+		const ep = plugins?.enabledPlugins;
+		if (!ep) return new Set();
+		return new Set(ep);
+	}
+
+	/**
+	 * 同步注册「应用组合」命令（P0）：每条 profile 生成一条 `apply-profile-{index}` 命令。
+	 * profile 增删后由设置页调用刷新；重复注册前先 removeCommand 旧 id。
+	 */
+	refreshProfileCommands(): void {
+		const t = makeT();
+		// 先移除已注册的 profile 命令（Obsidian removeCommand since 1.7.2）
+		for (const id of this.profileCommandIds) {
+			try {
+				this.removeCommand(id);
+			} catch {
+				/* 命令可能未注册，忽略 */
+			}
+		}
+		this.profileCommandIds = [];
+		this.settings.profiles.forEach((p, i) => {
+			const id = `apply-profile-${i}`;
+			this.addCommand({
+				id,
+				name: `${t("command.applyProfile.prefix")}：${p.name}`,
+				callback: () => {
+					void this.applyProfile(p);
+				},
+			});
+			this.profileCommandIds.push(id);
+		});
+	}
+
+	/** 点击 ribbon 时的聚合菜单：打开市场 + 各 profile 一键切换 + 管理组合 */
+	private showRibbonMenu(ev: MouseEvent): void {
+		const menu = new Menu();
+		const t = makeT();
+		menu.addItem((item) =>
+			item
+				.setTitle(t("app.search"))
+				.setIcon("languages")
+				.onClick(() => void this.openTranslatorView())
+		);
+		if (this.settings.profiles.length > 0) {
+			menu.addSeparator();
+			for (const p of this.settings.profiles) {
+				menu.addItem((item) =>
+					item
+						.setTitle(`${t("command.applyProfile.prefix")}：${p.name}`)
+						.setIcon("switch")
+						.onClick(() => void this.applyProfile(p))
+				);
+			}
+		}
+		menu.addSeparator();
+		menu.addItem((item) =>
+			item
+				.setTitle(t("settings.profiles"))
+				.setIcon("gear")
+				.onClick(() => {
+					// 打开 Obsidian 设置并定位到本插件设置页（半官方内部 API，失败则静默）
+					(this.app as unknown as { setting?: { open(): unknown } }).setting?.open?.();
+				})
+		);
+		menu.showAtMouseEvent(ev);
+	}
+	/** 已注册的 profile 命令 id（refreshProfileCommands 刷新时移除） */
+	private profileCommandIds: string[] = [];
 
 
 

@@ -11,10 +11,8 @@ import type ChinesePluginMarket from "@app/main";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { normalizeBaseUrl } from "@shared/utils";
 import { isWebGPUAvailable } from "@semantic/embedding";
-import { VIEW_TYPE } from "@shared/constants";
 import { asAppInternals } from "@data/platform/obsidian-internals";
-import { applyProfileByIds, applyEnabledProfile } from "@data/platform/plugin-installer";
-import type { PluginProfile, ChinesePluginMarketView } from "@ui/view/translator-view";
+import type { PluginProfile } from "@ui/view/translator-view";
 
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
@@ -511,11 +509,12 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								const row = setting.controlEl.createDiv({ cls: "pt-profile-row" });
 								row.createSpan({ text: `${p.name}（${p.enabled.length}）`, cls: "pt-profile-name" });
 								row.createEl("button", { text: this.t("settings.profiles.apply") }).addEventListener("click", () => {
-									void this.applyProfile(p);
+									void this.plugin.applyProfile(p);
 								});
 								row.createEl("button", { text: this.t("settings.profiles.delete"), cls: "pt-profile-del" }).addEventListener("click", () => {
 									this.plugin.settings.profiles = list.filter((x) => x !== p);
 									void this.plugin.flushSaveSettings();
+									this.plugin.refreshProfileCommands();
 									new Notice(this.t("settings.profiles.deleted", { name: p.name }));
 									this.display();
 								});
@@ -547,6 +546,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								}
 								this.plugin.settings.profiles = profiles;
 								void this.plugin.flushSaveSettings();
+								this.plugin.refreshProfileCommands();
 								this.display();
 							});
 						},
@@ -562,20 +562,6 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		const ep = plugins?.enabledPlugins as unknown as Set<string> | string[] | undefined;
 		if (!ep) return new Set();
 		return new Set(ep);
-	}
-
-	/** 应用一个启用组合 Profile（排除本插件自身，避免误关市场） */
-	private async applyProfile(p: PluginProfile): Promise<void> {
-		const selfId = this.plugin.manifest.id;
-		const target = new Set(p.enabled);
-		// 视图开着则用 ctx 包装版（应用后即时刷新卡片），否则用底层版（仅落盘+内存）
-		const view = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view as
-			| ChinesePluginMarketView
-			| undefined;
-		const r = view?.ctx
-			? await applyEnabledProfile(view.ctx, target, selfId)
-			: await applyProfileByIds(this.app, this.getCurrentEnabledIds(), target, selfId);
-		new Notice(this.t("settings.profiles.applied", { name: p.name, n: String(r.enabled), m: String(r.disabled) }));
 	}
 
 	/** 声明式控件读值：透传到 plugin.settings[key] */

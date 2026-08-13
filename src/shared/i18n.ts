@@ -446,6 +446,7 @@ export const STRINGS = {
 	"settings.profiles.deleted": { zh: "已删除预设「{name}」" },
 	"settings.profiles.nameRequired": { zh: "请先输入预设名称" },
 	"settings.profiles.exists": { zh: "已存在同名预设「{name}」，已覆盖" },
+	"command.applyProfile.prefix": { zh: "应用组合" },
 
 	// 个人 AI 固化资产
 	"settings.aidict": { zh: "个人 AI 固化资产" },
