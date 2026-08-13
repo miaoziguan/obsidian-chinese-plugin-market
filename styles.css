@@ -3010,6 +3010,27 @@ button.pt-card-install-btn--installed {
 .pt-detail-btn--sys-translate:hover {
 	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
 }
+.pt-detail-btn--sys-translate:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+/* README 翻译入口：「当前通道名 ▼」（主按钮 + 下拉 caret 合成一个视觉单元） */
+.pt-detail-readme-translate {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+.pt-detail-readme-translate .pt-detail-btn {
+	padding-left: 10px;
+	padding-right: 10px;
+}
+.pt-detail-btn--caret {
+	padding-left: 6px;
+	padding-right: 6px;
+}
+.pt-detail-btn--caret:hover {
+	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
+}
 /* README 系统翻译后的「返回原文」标识 */
 .pt-detail-readme-back {
 	display: flex;

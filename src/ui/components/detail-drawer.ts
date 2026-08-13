@@ -18,11 +18,13 @@ import {
 	MarkdownRenderer,
 	requestUrl,
 	Notice,
+	Menu,
+	setIcon,
 } from "obsidian";
 import { isMobileEnvironment, requestIdle } from "@shared/platform";
 import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
-import { makeT, type I18nKey } from "@shared/i18n";
+import { makeT, type TFunc, type I18nKey } from "@shared/i18n";
 import { cleanChineseSpaces } from "@shared/utils";
 import { formatDownloads, formatUpdated } from "@domain/catalog/stats";
 import { buildReadmeUrl, classifyNetworkError } from "@domain/catalog/mirror";
@@ -41,6 +43,29 @@ function cacheReadme(url: string, md: string): void {
 		if (oldest !== undefined) README_CACHE.delete(oldest);
 	}
 	README_CACHE.set(url, md);
+}
+
+/** 详情页 README 可用的翻译通道（显式选择，失败不降级） */
+export type ReadmeChannel = "tencent-transmart" | "tencent" | "macos";
+
+/** 腾讯翻译（免费）/腾讯云单次请求的安全上限（与 transmart.qq.com 实测一致） */
+const README_SEGMENT_LIMIT = 500;
+
+/** 长文本软分段：优先在换行处切断，避免把 markdown 段落/结构拦腰截断 */
+function splitSegments(text: string, limit: number): string[] {
+	if (text.length <= limit) return [text];
+	const out: string[] = [];
+	let start = 0;
+	while (start < text.length) {
+		let end = Math.min(start + limit, text.length);
+		if (end < text.length) {
+			const nl = text.lastIndexOf("\n", end);
+			if (nl > start) end = nl + 1;
+		}
+		out.push(text.substring(start, end));
+		start = end;
+	}
+	return out;
 }
 
 /**
@@ -133,6 +158,8 @@ export class PluginDetailDrawer {
 	private readmeBodyEl: HTMLElement | null = null;
 	/** README 标题行内的系统翻译切换按钮（仅 macOS 渲染，常驻以便随时切回原文） */
 	private readmeSysBtnEl: HTMLButtonElement | null = null;
+	/** README 翻译通道的会话级显式选择（详情实例内生效，未选时回落默认通道） */
+	private readmeChannel: ReadmeChannel | null = null;
 
 	/** 内部组件（清理用） */
 	private renderComp: Component | null = null;
@@ -145,7 +172,7 @@ export class PluginDetailDrawer {
 	private _boundBackdropClick: (e: MouseEvent) => void;
 	private _cleanupFns: (() => void)[] = [];
 
-	private readonly t: (key: I18nKey) => string = makeT();
+	private readonly t: TFunc = makeT();
 
 	constructor(opts: DrawerOptions) {
 		this.app = opts.app;
@@ -325,9 +352,9 @@ export class PluginDetailDrawer {
 	}
 
 	/**
-	 * 详情页「🍎 系统翻译」按钮：按需调用 macOS 快捷指令把当前插件的 README 原文
-	 * Markdown 整篇翻译成中文，就地替换 README 区渲染，并在区尾追加「返回原文」标识
-	 * （不与自动翻译链耦合；再次点击可在译文/原文间切换）。
+	 * 详情页 README 翻译按钮：按当前通道把 README 原文 Markdown 整篇翻译成中文，
+	 * 就地替换 README 区渲染（不与自动翻译链耦合；再次点击可在译文/原文间切换）。
+	 * 通道分发：macOS → 系统快捷指令；腾讯免费/腾讯云 → 按 ~500 字符分段串行翻译。
 	 */
 	private async sysTranslate(btn: HTMLElement): Promise<void> {
 		if (!this.drawerEl || btn.classList.contains("pt-detail-btn--loading")) return;
@@ -339,13 +366,19 @@ export class PluginDetailDrawer {
 		if (this.readmeTranslated && this.readmeRaw) {
 			this.readmeTranslated = false;
 			this.renderReadme(this.readmeBodyEl, this.readmeRaw, this.info.repo ?? "");
-			this.updateSysTranslateBtn();
+			this.updateChannelBtn();
 			return;
 		}
 		if (!this.readmeRaw) {
 			new Notice(this.t("detail.readme.loading"));
 			return;
 		}
+		const channel = this.getCurrentReadmeChannel();
+		if (!channel) {
+			new Notice(this.t("detail.readme.noChannel"));
+			return;
+		}
+		this.readmeChannel = channel; // 会话记住本次所用通道
 		const repo = this.info.repo ?? "";
 		// 只改 label span 的文本，避免 textContent 赋值抹掉按钮内的图标等子元素
 		const labelEl = btn.querySelector<HTMLElement>(".pt-detail-btn-label") ?? btn;
@@ -355,27 +388,35 @@ export class PluginDetailDrawer {
 		btn.setAttribute("aria-busy", "true");
 		btn.setAttribute("disabled", "true"); // 翻译中禁用，防止重复点击导致更慢/更易失败
 		// CSS 进度线 + 弧扫指示器驱动：把分段进度 done/total 写入 --pt-progress；
-		// 文案从「翻译中 N/M」改成「翻译中 N%」，与底部细线进度条语义对齐。
+		// 文案显示「翻译中 N/M…」，与分段计数一致（macOS 通道整篇为 1 段）。
 		btn.style.setProperty("--pt-progress", "0");
 		const setProgress = (done: number, total: number) => {
-			labelEl.textContent = `翻译中 ${Math.round((done / total) * 100)}%`;
-			btn.style.setProperty("--pt-progress", String(done / total));
+			labelEl.textContent = this.t("detail.readme.translatingN", {
+				n: String(done),
+				m: String(total),
+			});
+			btn.style.setProperty("--pt-progress", String(total > 0 ? done / total : 0));
 		};
 		let failed = 0;
 		try {
-			// 方案 A：先把代码块/URL/表格行等结构占位保护，翻译后还原，避免系统翻译破坏格式
+			// 先把代码块/URL/表格行等结构占位保护，翻译后还原，避免翻译破坏格式
 			const { text: protectedMd, blocks } = protectMarkdown(this.readmeRaw);
-			const translated = await macosSystemTranslate(protectedMd, setProgress, (f) => (failed = f));
+			let translated: string | null;
+			if (channel === "macos") {
+				translated = await macosSystemTranslate(protectedMd, setProgress, (f) => (failed = f));
+			} else {
+				translated = await this.translateReadmeSegments(protectedMd, channel, setProgress, (f) => (failed = f));
+			}
 			// 抽屉已关闭或已切到别的插件：丢弃这次结果，否则会把 A 的译文写进 B 的 README
 			if (!this.drawerEl || this.info.id !== reqPluginId || !this.readmeBodyEl) return;
 			if (!translated) {
-				new Notice(this.t("card.sysTranslate.fail"));
+				new Notice(this.t("detail.readme.translateFailed"));
 				return;
 			}
 			const restored = restoreMarkdown(translated, blocks);
 			this.readmeTranslated = true;
 			this.renderReadme(this.readmeBodyEl, restored, repo);
-			this.updateSysTranslateBtn();
+			this.updateChannelBtn();
 			// 部分失败：明确告知用户已翻译/失败段数，而非笼统「失败」
 			if (failed > 0) {
 				new Notice(this.t("card.sysTranslate.partial").replace("{n}", String(failed)));
@@ -383,23 +424,83 @@ export class PluginDetailDrawer {
 				new Notice(this.t("card.sysTranslate.done"));
 			}
 		} catch {
-			new Notice(this.t("card.sysTranslate.fail"));
+			new Notice(this.t("detail.readme.translateFailed"));
 		} finally {
 			btn.classList.remove("pt-detail-btn--loading");
 			btn.removeAttribute("aria-busy");
 			btn.removeAttribute("disabled");
-			// 恢复按钮文案为当前状态对应文案（已译→「返回原文」，未译→「系统翻译」）
-			this.updateSysTranslateBtn();
+			// 恢复按钮文案为当前状态对应文案（已译→「返回原文」，未译→「当前通道名」）
+			this.updateChannelBtn();
 		}
 	}
 
-	/** 根据 readmeTranslated 状态刷新 README 标题行的系统翻译按钮文案，状态自明 */
-	private updateSysTranslateBtn() {
+	/** 详情页 README 可用的翻译通道（按可用性：腾讯免费开关 / 腾讯云密钥 / macOS 桌面端） */
+	private availableReadmeChannels(): ReadmeChannel[] {
+		const list: ReadmeChannel[] = [];
+		if (this.plugin.settings.useTransmart) list.push("tencent-transmart");
+		if (this.plugin.settings.secretId && this.plugin.settings.secretKey) list.push("tencent");
+		if (isMacOS()) list.push("macos");
+		return list;
+	}
+
+	/** 当前 README 翻译通道：会话内显式选择优先，否则默认（腾讯免费 > 腾讯云 > macOS） */
+	private getCurrentReadmeChannel(): ReadmeChannel | null {
+		if (this.readmeChannel) return this.readmeChannel;
+		return this.availableReadmeChannels()[0] ?? null;
+	}
+
+	/** 通道显示名 */
+	private readmeChannelLabel(ch: ReadmeChannel): string {
+		if (ch === "macos") return this.t("channel.macos");
+		if (ch === "tencent") return this.t("channel.tencent");
+		return this.t("channel.tencentTransmart");
+	}
+
+	/**
+	 * 腾讯免费 / 腾讯云 README 分段翻译：按 ~500 字符软分段（保护后的 markdown，
+	 * 已在换行处断开，避开代码块/表格结构），串行调用所选通道（限流 1 并发），
+	 * 失败段保留原文继续，最后拼接返回。
+	 */
+	private async translateReadmeSegments(
+		protectedMd: string,
+		channel: "tencent-transmart" | "tencent",
+		onProgress: (done: number, total: number) => void,
+		onFailed: (n: number) => void
+	): Promise<string | null> {
+		if (!protectedMd) return "";
+		const segments = splitSegments(protectedMd, README_SEGMENT_LIMIT);
+		if (segments.length === 0) return "";
+		const out: string[] = [];
+		let failed = 0;
+		onProgress(0, segments.length);
+		for (let i = 0; i < segments.length; i++) {
+			const seg = segments[i];
+			const r = await this.plugin.translator.translateTextSegment(seg, channel);
+			if (r == null || r.length === 0 || (seg.trim() !== "" && r.trim() === seg.trim())) {
+				// 失败 / 原文回显：保留原文段（best-effort，让用户大部分译文可用）
+				out.push(seg);
+				failed++;
+			} else {
+				out.push(r);
+			}
+			onProgress(i + 1, segments.length);
+		}
+		onFailed(failed);
+		return out.join("");
+	}
+
+	/** 根据 readmeTranslated / 当前通道刷新 README 标题行的按钮文案，状态自明 */
+	private updateChannelBtn() {
 		const btn = this.readmeSysBtnEl;
 		if (!btn) return;
-		btn.textContent = this.readmeTranslated
-			? this.t("detail.readme.backOriginal")
-			: this.t("card.sysTranslate.readme");
+		const labelEl = btn.querySelector<HTMLElement>(".pt-detail-btn-label") ?? btn;
+		if (this.readmeTranslated) {
+			labelEl.textContent = this.t("detail.readme.backOriginal");
+		} else {
+			const ch = this.getCurrentReadmeChannel();
+			labelEl.textContent = ch ? this.readmeChannelLabel(ch) : this.t("detail.readme.noChannel");
+			btn.disabled = !ch;
+		}
 	}
 
 	private render() {
@@ -674,17 +775,49 @@ export class PluginDetailDrawer {
 			);
 		});
 
-		// 「系统翻译 README」切换按钮（仅 macOS 桌面端，且与「了解功能」并排常驻于 README 标题行，
-		// 控制的是下方 README 区，空间邻近；状态自明：未译显示「🍎 翻译」、已译显示「↩ 返回原文」）
-		if (isMacOS()) {
-			const sysBtn = readmeHeader.createEl("button", {
-				cls: "pt-detail-btn pt-detail-btn--sys-translate",
-			});
-			this.readmeSysBtnEl = sysBtn;
-			sysBtn.textContent = this.t("card.sysTranslate.readme");
-			this.updateSysTranslateBtn();
+		// README 翻译入口：「当前通道名 ▼」——主按钮点击按当前通道翻译 README（再点返回原文），
+		// ▼ 展开通道下拉切换（跨平台：默认腾讯翻译（免费）；macOS 桌面额外提供「系统翻译」）。
+		// 常量于 README 标题行、与「了解功能」并排，控制的是下方 README 区，空间邻近。
+		const channels = this.availableReadmeChannels();
+		const translateWrap = readmeHeader.createDiv({ cls: "pt-detail-readme-translate" });
+		const sysBtn = translateWrap.createEl("button", {
+			cls: "pt-detail-btn pt-detail-btn--sys-translate",
+		});
+		sysBtn.createSpan({ cls: "pt-detail-btn-label" });
+		this.readmeSysBtnEl = sysBtn;
+		this.updateChannelBtn();
+		if (channels.length === 0) {
+			// 无任何可用通道（腾讯免费关 + 无腾讯云密钥 + 非 macOS）：按钮禁用，仅作提示
+			sysBtn.disabled = true;
+		} else {
 			sysBtn.addEventListener("click", () => {
 				void this.sysTranslate(sysBtn);
+			});
+			// ▼：展开 README 翻译通道下拉（会话级，仅当前详情实例内生效）
+			const caretBtn = translateWrap.createEl("button", {
+				cls: "pt-detail-btn pt-detail-btn--sys-translate pt-detail-btn--caret",
+				attr: {
+					"aria-label": this.t("detail.readme.changeChannel"),
+					"aria-haspopup": "menu",
+					type: "button",
+				},
+			});
+			setIcon(caretBtn, "chevron-down");
+			caretBtn.addEventListener("click", (e: MouseEvent) => {
+				const menu = new Menu();
+				const current = this.getCurrentReadmeChannel();
+				for (const ch of channels) {
+					menu.addItem((item) =>
+						item
+							.setTitle(this.readmeChannelLabel(ch))
+							.setChecked(ch === current)
+							.onClick(() => {
+								this.readmeChannel = ch;
+								this.updateChannelBtn();
+							})
+					);
+				}
+				menu.showAtMouseEvent(e);
 			});
 		}
 
