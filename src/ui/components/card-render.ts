@@ -16,6 +16,8 @@ import { appendSVG } from "@ui/dom/dom";
 import { isMacOS, macosSystemTranslate } from "@translation/platform/macos-shortcuts";
 import { formatDownloads, formatUpdated } from "@domain/catalog/stats";
 import type { SignalId } from "@domain/filter/smart-signal";
+import type { TrendingEngine, TrendSnapshot } from "@domain/recommend/trending";
+import { assessHealth } from "@domain/recommend/health";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 
 /** 离线信号 → 中文标签（无需 AI Key 即可展示） */
@@ -35,6 +37,44 @@ const MATCH_SIGNAL_LABELS: Record<string, string> = {
 	title: "标题",
 	llm: "AI 精排",
 };
+
+const TREND_WINDOW_MS = 30 * 86400000;
+
+/**
+ * 取某插件近 30 天窗口内的绝对下载增量（latest - 最早窗口点）。
+ * 无历史 / 窗口内样本不足 2 点时返回 null（诚实化：不编造增量、不画空线）。
+ */
+function trendDelta(engine: TrendingEngine | undefined, id: string): number | null {
+	if (!engine) return null;
+	const snaps = engine.getSnapshots(id);
+	if (!snaps || snaps.length < 2) return null;
+	const latest = snaps[snaps.length - 1];
+	const cutoff = latest.timestamp - TREND_WINDOW_MS;
+	const win = snaps.filter((s) => s.timestamp >= cutoff);
+	if (win.length < 2) return null;
+	return latest.downloads - win[0].downloads;
+}
+
+/**
+ * 由快照序列生成 ~60×16 的折线 SVG path d（归一化到 viewBox）。
+ * 样本不足 2 点时返回空串（调用方据此隐藏 sparkline）。
+ * 纯字符串拼接，无 DOM 重建，虚拟滚动热路径可放心调用。
+ */
+function sparkPathD(snaps: TrendSnapshot[], w = 60, h = 16): string {
+	if (snaps.length < 2) return "";
+	const ds = snaps.map((s) => s.downloads);
+	const min = Math.min(...ds);
+	const max = Math.max(...ds);
+	const span = max - min || 1;
+	const stepX = w / (snaps.length - 1);
+	return snaps
+		.map((s, i) => {
+			const x = (i * stepX).toFixed(1);
+			const y = (h - ((s.downloads - min) / span) * h).toFixed(1);
+			return `${i === 0 ? "M" : "L"}${x} ${y}`;
+		})
+		.join(" ");
+}
 
 /**
  * 在文本中高亮命中词（highlightTerms，小写），以 DOM 节点方式就地渲染，
@@ -102,6 +142,10 @@ export interface CardRenderContext {
 	onSysTranslatePersist?: (pluginId: string, translatedName: string, translatedDesc: string) => void;
 	/** 卡片左下角电源按钮：切换已安装插件启用/禁用（由视图注入，避免 card-render 依赖 installer） */
 	onToggleEnabled?: (pluginId: string) => void;
+	/** 趋势评分引擎（可选）：用于卡片下载行绘制近 30 天增量 chip + 增速 sparkline。未注入则静默隐藏 */
+	trendingEngine?: TrendingEngine;
+	/** 首次见时间戳映射（可选）：id → 首次见 ms；>0 且近 30 天内标「新」。未注入则静默隐藏 */
+	firstSeenMap?: Map<string, number>;
 }
 
 // ── 操作图标（统一 lucide 描边风） ──
@@ -158,6 +202,10 @@ interface CardRefs {
 	uninstallBtn: HTMLElement;
 	descEl: HTMLElement;
 	statline: HTMLElement;
+	/** 趋势 sparkline 容器（常驻隐藏，applyCardState 在有窗口历史时显示） */
+	spark: HTMLElement;
+	/** sparkline 内 <path> 元素引用（避免每次重绘 querySelector） */
+	sparkPath: SVGPathElement;
 	dlChip: HTMLElement;
 	dlText: HTMLElement;
 	clkChip: HTMLElement;
@@ -173,6 +221,10 @@ interface CardRefs {
 	matchSignals: HTMLElement;
 	/** 可更新徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口 */
 	updateBadge?: HTMLElement;
+	/** 维护健康度徽标（基于 updated 三档：活跃/放缓/风险），常驻隐藏，applyCardState 填充 */
+	healthBadge: HTMLElement;
+	/** 「新」标记（近 30 天首次见），纯文字融入作者行，常驻隐藏，applyCardState 填充 */
+	newBadge: HTMLElement;
 }
 
 const cardRefsMap = new WeakMap<HTMLElement, CardRefs>();
@@ -239,6 +291,14 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		e.stopPropagation();
 		asAppInternals(ctx.app).setting?.openTabById?.("community-plugins");
 	});
+
+	// 维护健康度徽标（基于 updated 三档），常驻隐藏，applyCardState 填充
+	const healthBadge = metaInfo.createSpan({ cls: "pt-card-health-badge" });
+	healthBadge.setCssStyles({ display: "none" });
+
+	// 「新」标记（近 30 天首次见），纯文字融入作者行，常驻隐藏，applyCardState 填充
+	const newBadge = metaInfo.createSpan({ cls: "pt-card-new-badge" });
+	newBadge.setCssStyles({ display: "none" });
 
 	// ── 描述（固定行数截断，hover 浮层展示完整描述） ──
 	const descEl = card.createDiv({ cls: "pt-card-desc pt-card-desc--clamped" });
@@ -343,6 +403,12 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const clkText = clkChip.createSpan();
 	clkChip.setCssStyles({ display: "none" });
 
+	// ── 趋势 sparkline（常驻隐藏，applyCardState 在有窗口历史时显示） ──
+	const spark = statline.createSpan({ cls: "pt-card-spark" });
+	appendSVG(spark, `<path d=""></path>`);
+	const sparkPath = spark.querySelector("path") as SVGPathElement;
+	spark.setCssStyles({ display: "none" });
+
 	// ── 离线智能信号（pill 文本，无 SVG，按需填充） ──
 	const signalsRow = card.createDiv({ cls: "pt-card-signals" });
 	signalsRow.setCssStyles({ display: "none" });
@@ -409,9 +475,9 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 
 	cardRefsMap.set(card, {
 		nameSpan, originalName, installBtn, insightBtn, compareBtn, favBtn, macosBtn, toggleSwitch, uninstallBtn,
-		descEl, statline, dlChip, dlText, clkChip, clkText,
+		descEl, statline, spark, sparkPath, dlChip, dlText, clkChip, clkText,
 		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, recommendBadge, matchSignals,
-		updateBadge,
+		updateBadge, healthBadge, newBadge,
 	});
 	cardCtxMap.set(card, ctx);
 	return card;
@@ -683,6 +749,21 @@ export function applyCardState(
 	const showClk = !!u;
 	refs.clkChip.setCssStyles({ display: showClk ? "" : "none" });
 	if (showClk) refs.clkText.textContent = (`更新于 ${u}`);
+
+	// 趋势 sparkline + 增量 chip：有窗口历史才显示，否则诚实隐藏（不画空线、不编造增量）
+	const snaps = ctx.trendingEngine?.getSnapshots(plugin.id);
+	const delta = trendDelta(ctx.trendingEngine, plugin.id);
+	if (snaps && snaps.length >= 2 && delta != null) {
+		refs.sparkPath.setAttribute("d", sparkPathD(snaps));
+		refs.spark.setCssStyles({ display: "" });
+		// 增速方向：正向上翘用强调色，平/负用中性灰
+		refs.spark.classList.toggle("pt-card-spark--flat", delta <= 0);
+		if (showDl) refs.dlText.textContent = `${formatDownloads(dl)} · +${formatDownloads(delta)}/30d`;
+	} else {
+		refs.spark.setCssStyles({ display: "none" });
+		refs.spark.classList.remove("pt-card-spark--flat");
+		// 已有 1 个采样点但不足 2 点时不显示趋势标签，仅保留下载量数字
+	}
 	refs.statline.setCssStyles({ display: showDl || showClk ? "" : "none" });
 
 	// 离线智能信号
@@ -738,5 +819,25 @@ export function applyCardState(
 		ub.setCssStyles({ display: "" });
 	} else if (ub) {
 		ub.setCssStyles({ display: "none" });
+	}
+
+	// 维护健康度：纯文字表达，融入作者行（与竞品 health.ts 同数据，去掉彩色胶囊样式）
+	const hb = refs.healthBadge;
+	const health = assessHealth(plugin.updated);
+	const healthLabel = health.level === "healthy" ? "活跃" : health.level === "aging" ? "维护放缓" : "停更风险";
+	hb.textContent = healthLabel;
+	hb.setAttribute("title", `维护状态：${health.reason}`);
+	hb.className = "pt-card-health-badge";
+	hb.setCssStyles({ display: "" });
+
+	// 「新」标记：近 30 天首次见的插件，纯文字融入作者行（对齐竞品 newness.ts 窗口判定）
+	const nb = refs.newBadge;
+	const seenAt = ctx.firstSeenMap?.get(plugin.id);
+	const isNew = seenAt != null && seenAt > 0 && Date.now() - seenAt <= 30 * 86_400_000;
+	if (isNew) {
+		nb.textContent = "新";
+		nb.setCssStyles({ display: "" });
+	} else {
+		nb.setCssStyles({ display: "none" });
 	}
 }

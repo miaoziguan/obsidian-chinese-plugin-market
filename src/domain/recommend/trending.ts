@@ -25,8 +25,9 @@ export interface TrendSnapshot {
 }
 
 const MS_PER_DAY = 86400000;
-/** 两次采样的最小间隔：更密集的刷新只更新最新值，不新增采样点 */
-const MIN_SAMPLE_INTERVAL_MS = 60 * 60 * 1000;
+/** 两次采样的最小间隔：对齐竞品 better-store（6h），更密集的刷新只更新最新值、不新增点。
+ *  下载量属慢变信号，短间隔采到的多为噪声，纯时间驱动积累趋势。 */
+const MIN_SAMPLE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /** 最早/最新采样点的最小时距：低于此时距增速噪声过大，返回中性分 */
 const MIN_SPAN_MS = 60 * 60 * 1000;
 
@@ -164,6 +165,11 @@ export class TrendingEngine {
 	/** 历史是否为空（用于判断是否需要从持久化恢复） */
 	isEmpty(): boolean {
 		return this.history.size === 0;
+	}
+
+	/** 取某插件的采样快照序列（只读，供 UI 绘制趋势 sparkline 等展示用途） */
+	getSnapshots(pluginId: string): TrendSnapshot[] | undefined {
+		return this.history.get(pluginId);
 	}
 
 	/**
