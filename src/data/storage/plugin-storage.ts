@@ -14,6 +14,8 @@ export interface TranslatorPersistedData {
 	myMemoryBlockedDate: string;
 	seenPluginIds: string[];
 	lastListFetchAt: number;
+	/** 插件 id → 首次见时间戳（ms）；0 表示基线旧插件（不报新）。用于卡片「新」标记窗口判断 */
+	firstSeenIds?: Record<string, number>;
 }
 
 /** 账号/密钥等敏感配置（独立成 credentials.json，避免随主 data.json 备份/分享时泄露）。 */
@@ -200,7 +202,7 @@ export class PluginStorage {
 			const {
 				cache, aiDict, pluginInsights, compareInsights,
 				coverageSnapshots, myMemoryBlockedDate,
-				seenPluginIds, lastListFetchAt,
+				seenPluginIds, lastListFetchAt, firstSeenIds,
 			} = data;
 			await adapter.write(
 				this.translatorCacheFilePath,
@@ -208,7 +210,7 @@ export class PluginStorage {
 					savedAt: Date.now(),
 					cache, aiDict, pluginInsights, compareInsights,
 					coverageSnapshots, myMemoryBlockedDate,
-					seenPluginIds, lastListFetchAt,
+					seenPluginIds, lastListFetchAt, firstSeenIds,
 				})
 			);
 		} catch (e: unknown) {
@@ -221,28 +223,29 @@ export class PluginStorage {
 	 * 优先插件目录文件；旧版（v2.15.x）曾误写 vault 根相对路径，缺失时回退该旧位置。
 	 */
 	async loadTranslatorCache(): Promise<TranslatorPersistedData | null> {
-		try {
-			const adapter = this.storage;
-			let text: string | null = null;
-			if (await adapter.exists(this.translatorCacheFilePath)) {
-				text = await adapter.read(this.translatorCacheFilePath);
-			} else if (await adapter.exists(this.legacyTranslatorCachePath)) {
-				// 迁移：旧版写到了 vault 根，读出来后由下次 saveTranslatorCache 落回插件目录
-				text = await adapter.read(this.legacyTranslatorCachePath);
-			}
-			if (!text) return null;
-			const parsed = JSON.parse(text) as Record<string, unknown>;
-			if (!parsed || typeof parsed !== "object") return null;
-			return {
-				cache: (parsed.cache as Record<string, TranslateResult>) ?? {},
-				aiDict: (parsed.aiDict as Record<string, DictEntry>) ?? {},
-				pluginInsights: (parsed.pluginInsights as Record<string, unknown>) ?? {},
-				compareInsights: (parsed.compareInsights as Record<string, unknown>) ?? {},
-				coverageSnapshots: (parsed.coverageSnapshots as CoverageSnapshot[]) ?? [],
-				myMemoryBlockedDate: (parsed.myMemoryBlockedDate as string) ?? "",
-				seenPluginIds: (parsed.seenPluginIds as string[]) ?? [],
-				lastListFetchAt: (parsed.lastListFetchAt as number) ?? 0,
-			};
+	try {
+		const adapter = this.storage;
+		let text: string | null = null;
+		if (await adapter.exists(this.translatorCacheFilePath)) {
+			text = await adapter.read(this.translatorCacheFilePath);
+		} else if (await adapter.exists(this.legacyTranslatorCachePath)) {
+			// 迁移：旧版写到了 vault 根，读出来后由下次 saveTranslatorCache 落回插件目录
+			text = await adapter.read(this.legacyTranslatorCachePath);
+		}
+		if (!text) return null;
+		const parsed = JSON.parse(text) as Record<string, unknown>;
+		if (!parsed || typeof parsed !== "object") return null;
+		return {
+			cache: (parsed.cache as Record<string, TranslateResult>) ?? {},
+			aiDict: (parsed.aiDict as Record<string, DictEntry>) ?? {},
+			pluginInsights: (parsed.pluginInsights as Record<string, unknown>) ?? {},
+			compareInsights: (parsed.compareInsights as Record<string, unknown>) ?? {},
+			coverageSnapshots: (parsed.coverageSnapshots as CoverageSnapshot[]) ?? [],
+			myMemoryBlockedDate: (parsed.myMemoryBlockedDate as string) ?? "",
+			seenPluginIds: (parsed.seenPluginIds as string[]) ?? [],
+			lastListFetchAt: (parsed.lastListFetchAt as number) ?? 0,
+			firstSeenIds: (parsed.firstSeenIds as Record<string, number>) ?? {},
+		};
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 读取翻译缓存失败：", e);
 			return null;
