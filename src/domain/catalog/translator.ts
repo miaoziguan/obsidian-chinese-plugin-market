@@ -794,6 +794,33 @@ export class Translator {
 	}
 
 	/**
+	 * 详情页 README 分段翻译入口：按用户显式选择的通道译单段文本（失败不降级，返回 null 由调用方保留原文段）。
+	 * 输入是长文本片段而非插件对象，用于 README 等富文本。
+	 * 支持："tencent-transmart"（腾讯翻译·免费）/ "tencent"（腾讯云翻译，需密钥）。
+	 */
+	async translateTextSegment(
+		text: string,
+		provider: "tencent-transmart" | "tencent"
+	): Promise<string | null> {
+		if (provider === "tencent-transmart") {
+			if (!this.transmartClient.isAvailable()) return null;
+			try {
+				return await this.transmartClient.translateSegment(text);
+			} catch (e: unknown) {
+				logger.warn("[Chinese Plugin Market] 腾讯翻译（免费）README 分段失败:", e);
+				return null;
+			}
+		}
+		if (!(this.apiConfig?.secretId && this.apiConfig?.secretKey)) return null;
+		try {
+			return await this.tencentClient.translate(text);
+		} catch (e: unknown) {
+			this.logTencentError("readme", e);
+			return null;
+		}
+	}
+
+	/**
 	 * 批量翻译插件列表（内部在线阶段使用并发=3，缓存/词典命中的仍顺序产出以保持进度准确）。
 	 */
 	async translateBatch(
