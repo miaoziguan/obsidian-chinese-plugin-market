@@ -146,9 +146,14 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 		if (!actionEl && actionsRow && hasToggle) {
 			return;
 		}
-		// 整卡点击打开详情（非按钮区域点击）
+		// 整卡点击打开详情（非按钮区域点击）。
+		// e.target===currentTarget 防护（对齐 better-store）：仅当点击落在卡片空白区
+		// （target 是 card 本体或非交互元素）时才打开详情；点击可交互子元素（按钮/链接/
+		// 开关等，closest 未命中 data-action 的遗漏情形）不触发，防内部控件冒泡误开详情。
 		if (!actionEl) {
-			if (pid) {
+			const t = ev.target as HTMLElement;
+			const isInteractive = t.closest?.("button, a, [role='button'], input, select, textarea") != null;
+			if (pid && !isInteractive) {
 				ev.stopPropagation();
 				const plugin = ctx.plugins.find((p) => p.id === pid);
 				if (plugin) {
@@ -310,10 +315,15 @@ export function onCardKeydown(ctx: ViewContext, ev: KeyboardEvent) {
 		const total = ctx.visibleList.length;
 		if (total === 0) return;
 
-		// 仅在方向键 / 翻页键 / Enter / Tab 需要拦截时处理，其余放行
+		// 焦点在输入类控件（搜索框/输入框/下拉/文本域）内时不拦截按键，
+		// 避免方向键/Enter/Space 被误当成卡片导航（如设置搜索词时按方向键）
+		const tag = (ev.target as HTMLElement)?.tagName;
+		if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+		// 仅在方向键 / 翻页键 / Enter / Space / Tab 需要拦截时处理，其余放行
 		const key = ev.key;
 		if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "ArrowRight" &&
-			key !== "ArrowLeft" && key !== "Enter" && key !== "Tab" &&
+			key !== "ArrowLeft" && key !== "Enter" && key !== " " && key !== "Tab" &&
 			key !== "PageDown" && key !== "PageUp" && key !== "Home" && key !== "End") return;
 
 		// Tab：允许在卡片内部 focusable 元素间切换
@@ -322,8 +332,8 @@ export function onCardKeydown(ctx: ViewContext, ev: KeyboardEvent) {
 		ev.preventDefault();
 		ev.stopPropagation();
 
-		// Enter：打开当前聚焦卡片的详情
-		if (key === "Enter") {
+		// Enter / Space：打开当前聚焦卡片的详情（对齐 better-store 的 Enter+Space 双激活）
+		if (key === "Enter" || key === " ") {
 			if (ctx.focusedCardIdx >= 0 && ctx.focusedCardIdx < total) {
 				const plugin = ctx.visibleList[ctx.focusedCardIdx];
 				const layer = ctx.scrollCardLayer;
