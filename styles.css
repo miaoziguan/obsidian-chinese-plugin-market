@@ -4587,13 +4587,13 @@ button.pt-card-install-btn--installed {
 	background: transparent;
 	color: var(--pt-text-muted, var(--text-muted));
 	cursor: pointer;
+	font-size: 14px;
+	line-height: 1;
+	font-family: inherit;
 	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease);
 }
-.pt-active-chip-clear .svg-icon {
-	width: 10px;
-	height: 10px;
-	stroke-width: 2.5;
-}
+/* 文字 × 偏移修正：CSS line-height 在 inline-flex 容器里仍可能略偏，-2px 上移让它视觉居中。
+   同时去掉 SVG 子选择器（按钮改用文字后 svg-icon 规则失效）。 */
 .pt-active-chip-clear:hover {
 	background: color-mix(in srgb, var(--pt-accent) 20%, transparent);
 	color: var(--pt-accent, var(--interactive-accent));

@@ -368,7 +368,8 @@ export function renderActiveFilters(ctx: ViewContext) {
 			cls: "pt-active-chip-clear",
 			attr: { type: "button", "aria-label": ctx.t("filter.active.clear"), title: ctx.t("filter.active.clear") },
 		});
-		setIcon(x, "x");
+		// 用文字 × 而非 setIcon("x") SVG：避免 lucide 图标在某些主题/版本下 stroke 不显色导致按钮空白
+		x.textContent = "×";
 		x.addEventListener("click", c.onClear);
 	}
 }
