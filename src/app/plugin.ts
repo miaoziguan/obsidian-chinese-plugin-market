@@ -44,6 +44,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	cachedStats: Map<string, PluginStat> | null = null;
 	/** 趋势采样历史（onload 时恢复，视图的 TrendingEngine 从此水合；跨会话才有真实增速） */
 	cachedTrendingHistory: Record<string, TrendSnapshot[]> | null = null;
+	/** 左侧栏 ribbon 图标元素（用于更新提醒红点标记） */
+	ribbonEl: HTMLElement | null = null;
 	/** SQLite 向量库（P3+：真 SQLite，sql.js/WASM）。null 表示未初始化（sql-wasm 缺失或加载失败）。 */
 	private vectorStore: SqliteVectorStore | null = null;
 	/** SQLite 初始化失败记忆：true 后本会话不再重试（Obsidian 沙箱可能无法加载 sql.js，避免反复报错刷屏）。 */
@@ -222,7 +224,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		});
 
 		// 左侧栏图标
-		this.addRibbonIcon("languages", "插件搜索", () => {
+		this.ribbonEl = this.addRibbonIcon("languages", "插件搜索", () => {
 			void this.openTranslatorView();
 		});
 
@@ -485,6 +487,25 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			active: true,
 		});
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });
+	}
+
+	/**
+	 * 更新 ribbon 图标的红点徽标（对齐竞品 better-store 的后台更新提醒）。
+	 * @param n 有可用更新的已装插件数量；<=0 时清除红点。
+	 * 受设置 notifyInstalledUpdates 控制（由调用方判断后传 0 清除）。
+	 */
+	setRibbonUpdateBadge(n: number): void {
+		const el = this.ribbonEl;
+		if (!el) return;
+		if (n > 0) {
+			el.addClass("pt-ribbon-has-update");
+			el.setAttribute("title", `插件搜索 · ${n} 个已装插件有更新`);
+			el.setAttribute("aria-label", `插件搜索 · ${n} 个已装插件有更新`);
+		} else {
+			el.removeClass("pt-ribbon-has-update");
+			el.setAttribute("title", "插件搜索");
+			el.setAttribute("aria-label", "插件搜索");
+		}
 	}
 
 

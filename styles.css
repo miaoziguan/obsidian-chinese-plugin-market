@@ -5255,3 +5255,20 @@ button.pt-card-install-btn--installed {
 		flex-wrap: nowrap;
 	}
 }
+
+/* 左侧栏 ribbon：已装插件有可用更新时的红点徽标（对齐竞品 better-store 后台更新提醒） */
+.side-dock-ribbon-action.pt-ribbon-has-update {
+	position: relative;
+}
+.side-dock-ribbon-action.pt-ribbon-has-update::after {
+	content: "";
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--text-error, #e5693f);
+	box-shadow: 0 0 0 2px var(--background-primary);
+	pointer-events: none;
+}

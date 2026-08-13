@@ -42,6 +42,9 @@ import type ChinesePluginMarketPlugin from "@app/plugin";
 import { VIEW_TYPE, LAYOUT } from "@shared/constants";
 import { cancelIdle } from "@shared/platform";
 
+/** 后台更新检测轮询间隔：对齐 stats 缓存 TTL（6h），避免过频网络请求 */
+const UPDATE_POLL_MS = 6 * 60 * 60 * 1000;
+
 export interface ChinesePluginMarketSettings {
 	useMyMemory: boolean;
 	secretId: string;
@@ -204,6 +207,8 @@ export class ChinesePluginMarketView extends ItemView {
 	public disposed = false;
 	/** 已安装状态监听的清理函数（#14：fs.watch 桌面 / 轮询移动），onClose 时调用 */
 	public installedWatchDispose: (() => void) | null = null;
+	/** 后台更新检测轮询定时器句柄（onClose 时清理，避免泄漏） */
+	public updatePollTimer: number | null = null;
 	/** 结果计数元素引用（常驻工具栏内，搜索后显示「找到 N 个插件」） */
 	public resultCountEl: HTMLElement | null = null;
 	/** 「AI 一键翻译」按钮与进度元素（仅筛选「未翻译」时显示，聚焦 AI 战略） */
@@ -366,6 +371,19 @@ export class ChinesePluginMarketView extends ItemView {
 		return "languages";
 	}
 
+	/**
+	 * 检测已装插件可用更新并同步 ribbon 红点（封装 refreshOutdated + 徽标联动）。
+	 * 受设置 notifyInstalledUpdates 控制：关闭时清除红点。
+	 */
+	public checkUpdates = async (): Promise<void> => {
+		if (!this.plugin.settings.notifyInstalledUpdates) {
+			this.plugin.setRibbonUpdateBadge(0);
+			return;
+		}
+		await refreshOutdated(this._ctx);
+		this.plugin.setRibbonUpdateBadge(this._ctx.outdatedIds?.size ?? 0);
+	};
+
 	async onOpen() {
 		// 标记所属 leaf（替代 :has 选择器），供 CSS 隐藏该 leaf 的 view-header
 		this.containerEl.closest?.(".workspace-leaf-content")?.addClass("pt-pt-view-leaf");
@@ -400,8 +418,14 @@ export class ChinesePluginMarketView extends ItemView {
 		await this.loadAndRender();
 		// #14：启动已安装状态实时同步（桌面 fs.watch / 移动轮询），视图关闭时释放
 		this.installedWatchDispose = startInstalledWatch(this._ctx);
-		// A 方案：后台检测「可更新」插件（拉官方 manifest 对比本地版本），完成后自动重渲徽标
-		if (!this.disposed) this.refreshOutdated();
+		// A 方案：后台检测「可更新」插件（拉官方 manifest 对比本地版本），完成后自动重渲徽标 + ribbon 红点
+		if (!this.disposed) void this.checkUpdates();
+		// 后台轮询：对齐 stats 缓存 TTL（6h），视图常开时持续感知已装插件更新（对齐竞品后台检查）
+		if (this.plugin.settings.notifyInstalledUpdates) {
+			this.updatePollTimer = window.setInterval(() => {
+				if (!this.disposed) void this.checkUpdates();
+			}, UPDATE_POLL_MS);
+		}
 		// T4(#7): 注册分类标签加载完成回调，刷新 facet（标签可能晚于首屏就绪）；
 		// 若打开视图时标签已就绪（竞态：加载早于视图打开），立即补刷一次。
 		this.plugin.onPluginTagsLoaded = () => {
@@ -424,6 +448,11 @@ export class ChinesePluginMarketView extends ItemView {
 	async onClose() {
 		// 标记视图已卸载：所有后续异步路径（翻译、落盘定时器）据此尽早退出，避免幽灵写盘
 		this.disposed = true;
+		// 清理后台更新检测轮询定时器（防止关闭视图后向已销毁 ctx 写盘/轮询）
+		if (this.updatePollTimer != null) {
+			window.clearInterval(this.updatePollTimer);
+			this.updatePollTimer = null;
+		}
 		this.compareMode = false;
 		// 解绑标签加载回调：plugin 是单例，留着会一直持有本视图闭包（内存泄漏 + 幽灵刷新）
 		if (this.plugin.onPluginTagsLoaded) this.plugin.onPluginTagsLoaded = null;
