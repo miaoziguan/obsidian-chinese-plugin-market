@@ -248,7 +248,9 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			cls: "pt-profile-dropdown",
 			attr: { "aria-label": "切换启用组合", type: "button" },
 		});
-		setIcon(profileBtn, "switch");
+		// 图标用「图层 layers」而非「切换 switch」：组合表达的是「一组启用方案/场景预设」，
+		// 叠层意象比箭头交换更精准（箭头更像切换排序方向等）。
+		setIcon(profileBtn, "layers");
 		const buildProfileMenu = (): Menu | null => {
 			if (ctx.profiles.length === 0) {
 				new Notice("暂无组合预设，可在设置 → 插件启用组合中保存当前启用集");
