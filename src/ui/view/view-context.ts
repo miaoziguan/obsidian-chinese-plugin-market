@@ -35,7 +35,7 @@ import type { TrendingEngine } from "@domain/recommend/trending";
 import type { AuthorGroup } from "@translation/lexicon/pinyin-init";
 
 import type { I18nKey, I18nVars } from "@shared/i18n";
-import type { ChinesePluginMarketSettings, ChinesePluginMarketView } from "@ui/view/translator-view";
+import type { ChinesePluginMarketSettings, ChinesePluginMarketView, PluginProfile } from "@ui/view/translator-view";
 import type { TrendSnapshot } from "@domain/recommend/trending";
 import type { App, PluginManifest } from "obsidian";
 import { makeT } from "@shared/i18n";
@@ -92,6 +92,10 @@ export interface ViewContext {
 	savePluginListCache: (list: unknown[]) => Promise<void>;
 	saveStatsCache: (map: Map<string, PluginStat>) => Promise<void>;
 	saveVectorIndex: () => Promise<void>;
+	/** 应用启用组合 Profile（委托 plugin.applyProfile：命令/菜单/设置/工具栏共用入口） */
+	applyProfile: (p: PluginProfile) => Promise<void>;
+	/** 当前已保存的启用组合 Profile 列表（读 settings.profiles 的便捷委托） */
+	profiles: PluginProfile[];
 
 	// ── Obsidian ItemView DOM ──
 	containerEl: HTMLElement;
@@ -375,6 +379,10 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		savePluginListCache: (list) => view.plugin.storage.savePluginListCache(list),
 		saveStatsCache: (map) => view.plugin.storage.saveStatsCache(map),
 		saveVectorIndex: () => view.plugin.saveVectorIndex(),
+		// 委托 plugin.applyProfile（DrawerHostPlugin 最小端口不含此方法，运行时 view.plugin 为完整插件）
+		applyProfile: (p) =>
+			(view.plugin as unknown as { applyProfile(p: PluginProfile): Promise<void> }).applyProfile(p),
+		profiles: view.plugin.settings.profiles,
 
 		// ── Obsidian ItemView DOM ──
 		containerEl: view.containerEl,
