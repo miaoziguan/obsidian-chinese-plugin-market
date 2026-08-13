@@ -501,6 +501,39 @@ button.pt-check-update:active { transform: scale(0.94); }
 button.pt-check-update.pt-spin svg {
 	animation: pt-spin 0.9s linear infinite;
 }
+/* 组合下拉按钮（场景切换）：与检查更新同款纯图标样式 */
+button.pt-profile-dropdown {
+	appearance: none;
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	color: var(--pt-text-muted);
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	border-radius: var(--pt-radius-btn);
+	cursor: pointer;
+	font-family: inherit;
+	transition: color var(--pt-duration-fast) var(--pt-ease),
+		transform var(--pt-duration-fast) var(--pt-ease-spring);
+}
+button.pt-profile-dropdown svg.svg-icon {
+	width: 16px;
+	height: 16px;
+	stroke-width: 2px;
+}
+button.pt-profile-dropdown:focus-visible {
+	box-shadow: var(--pt-focus-ring);
+	outline: none;
+}
+button.pt-profile-dropdown:hover {
+	color: var(--pt-text);
+}
+button.pt-profile-dropdown:active { transform: scale(0.94); }
 /* 刷新进行中：旋转动画提示进行状态 */
 .pt-refresh.pt-refreshing {
 	animation: pt-refresh-spin 0.9s linear infinite;

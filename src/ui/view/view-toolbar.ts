@@ -243,6 +243,50 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// ── 排序按钮（仅图标，点击展开排序菜单） ──
 		const sortWrap = headerRow.createDiv({ cls: "pt-sort-wrap" });
 
+		// ── 组合下拉（场景切换，非筛选：点击弹 Menu 列出 profile 一键应用） ──
+		const profileBtn = headerRow.createEl("button", {
+			cls: "pt-profile-dropdown",
+			attr: { "aria-label": "切换启用组合", type: "button" },
+		});
+		setIcon(profileBtn, "switch");
+		const buildProfileMenu = (): Menu | null => {
+			if (ctx.profiles.length === 0) {
+				new Notice("暂无组合预设，可在设置 → 插件启用组合中保存当前启用集");
+				return null;
+			}
+			const menu = new Menu();
+			for (const p of ctx.profiles) {
+				menu.addItem((item) =>
+					item
+						.setTitle(`${p.name}（${p.enabled.length}）`)
+						.onClick(() => {
+							// 应用组合 + 切到「已安装」视角，立即看到启用集变化
+							ctx.installFilter = "installed";
+							updateInstallToggles();
+							ctx.updateFacetVisibility();
+							ctx.track("profile:apply");
+							void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
+						})
+				);
+			}
+			return menu;
+		};
+		profileBtn.addEventListener("click", (ev: MouseEvent) => {
+			const menu = buildProfileMenu();
+			if (menu) menu.showAtMouseEvent(ev);
+		});
+		profileBtn.addEventListener("keydown", (ev: KeyboardEvent) => {
+			if (ev.key === "Enter" || ev.key === " ") {
+				ev.preventDefault();
+				// 键盘触发 Menu：用按钮位置定位（无鼠标事件可用）
+				const menu = buildProfileMenu();
+				if (menu) {
+					const rect = profileBtn.getBoundingClientRect();
+					menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+				}
+			}
+		});
+
 		// AI 一键翻译（纯图标按钮，置于排序↕与刷新↻之间；无待翻译项时自动隐藏）
 		ctx.aiTranslateBtnEl = headerRow.createEl("button", {
 			cls: "pt-ai-icon-btn",
@@ -770,33 +814,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 	});
 
-	// ── 启用组合 Profile 快速切换（最末尾一行；平铺 chip 与「上线/更新」视觉一致，点选即应用）──
-	const profileRow = advancedInner.createDiv({ cls: "pt-facet-row" });
-	profileRow.createSpan({ cls: "pt-facet-label", text: "组合" });
-	const profileChips = profileRow.createDiv({ cls: "pt-facet-chips" });
-	for (const p of ctx.profiles) {
-		const chip = profileChips.createEl("button", {
-			cls: "pt-filter pt-toggle-profile",
-			text: `${p.name}（${p.enabled.length}）`,
-		});
-		chip.setAttribute("aria-pressed", "false");
-		chip.addEventListener("click", () => {
-			// 应用组合 + 切到「已安装」视角，立即看到启用集变化
-			ctx.installFilter = "installed";
-			updateInstallToggles();
-			ctx.updateFacetVisibility();
-			ctx.track("profile:apply");
-			void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
-		});
-	}
-	if (ctx.profiles.length === 0) {
-		// 无预设时显示占位灰 chip（不可点击），提示用户去设置页保存
-		const empty = profileChips.createEl("button", {
-			cls: "pt-filter pt-toggle-profile is-empty",
-			text: "无组合（设置页保存）",
-		});
-		empty.disabled = true;
-	}
+
 
 		// 重置筛选：移至标题行右侧（与「筛选与统计」同行右端对齐）
 		const resetBtn = advancedHeading.createEl("button", {
