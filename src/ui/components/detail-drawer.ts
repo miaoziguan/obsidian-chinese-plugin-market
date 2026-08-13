@@ -25,7 +25,7 @@ import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { cleanChineseSpaces } from "@shared/utils";
 import { formatDownloads, formatUpdated } from "@domain/catalog/stats";
-import { buildReadmeUrl, classifyNetworkError } from "@domain/catalog/mirror";
+import { buildReadmeUrl, rewriteReadmeUrls, classifyNetworkError } from "@domain/catalog/mirror";
 import type { SimilarCandidate } from "@domain/recommend/similar";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { openInsightModal } from "@ui/view/view-cards";
@@ -811,12 +811,32 @@ export class PluginDetailDrawer {
 			text: this.t("detail.readme.loading"),
 		});
 		try {
-			const resp = await requestUrl({ url, method: "GET" });
+			// 大小写 fallback（对齐 better-store）：README.md 404 时依次尝试 readme.md / Readme.md
+			const fileNameCandidates = ["README.md", "readme.md", "Readme.md"];
+			let md = "";
+			let usedUrl = url;
+			for (const fileName of fileNameCandidates) {
+				const candidateUrl = buildReadmeUrl(p.repo, {
+					source: this.plugin.settings.mirrorSource,
+					customBase: this.plugin.settings.mirrorCustomBase,
+				}, fileName);
+				const resp = await requestUrl({ url: candidateUrl, method: "GET", throw: false });
+				if (resp.status === 200) {
+					md = resp.text || "";
+					usedUrl = candidateUrl;
+					break;
+				}
+				// 401/403/404 等继续尝试下一候选；其它网络错误直接跳出走降级
+				if (resp.status >= 400 && resp.status < 500 && resp.status !== 401 && resp.status !== 403) {
+					// 4xx 属资源类错误（404 最常见），继续下一候选
+					continue;
+				}
+				break;
+			}
 			// 抽屉已关闭或已切到别的插件：丢弃这次响应，否则会污染当前插件的 README 与后续「系统翻译」源文本
 			if (!this.drawerEl || this.info.id !== p.id) return;
-			const md = resp.text || "";
 			loading.remove();
-			if (md.trim()) cacheReadme(url, md);
+			if (md.trim()) cacheReadme(usedUrl, md);
 			if (!md.trim()) {
 				container.createDiv({
 					cls: "pt-detail-readme-empty",
@@ -875,15 +895,19 @@ export class PluginDetailDrawer {
 
 	/**
 	 * 把 README 的 Markdown 渲染进容器（复用统一的 MarkdownRenderer + 链接前缀）。
+	 * 渲染前先 rewriteReadmeUrls：把相对路径图片/链接重写为 raw/blob 绝对地址，
+	 * 否则 MarkdownRenderer 的 sourcePath 只给出 github blob 网页地址，图片显示成页面而非图片。
 	 * 翻译态下在区尾追加「返回原文」标识，点击切回英文原文。
 	 */
 	private renderReadme(container: HTMLElement, md: string, repo: string) {
 		container.empty();
 		this.renderComp?.unload();
 		this.renderComp = new Component();
+		// 相对路径 → 绝对地址（图片走 raw、链接走 blob）；绝对地址/锚点原样保留
+		const rewritten = repo ? rewriteReadmeUrls(md, repo) : md;
 		void MarkdownRenderer.render(
 			this.app,
-			md,
+			rewritten,
 			container,
 			`https://github.com/${repo}/blob/HEAD/`,
 			this.renderComp
