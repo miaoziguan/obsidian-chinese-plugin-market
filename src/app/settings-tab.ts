@@ -1,6 +1,7 @@
 import {
 	PluginSettingTab,
 	Setting,
+	SecretComponent,
 	Notice,
 	requestUrl,
 	Platform,
@@ -11,6 +12,10 @@ import type ChinesePluginMarket from "@app/main";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { normalizeBaseUrl } from "@shared/utils";
 import { isWebGPUAvailable } from "@semantic/embedding";
+import { asAppInternals } from "@data/platform/obsidian-internals";
+import { VIEW_TYPE } from "@shared/constants";
+import { logger } from "@shared/logger";
+import type { PluginProfile, ChinesePluginMarketView } from "@ui/view/translator-view";
 
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
@@ -150,6 +155,103 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			},
 			{
 				type: "group",
+				heading: this.t("settings.updateManage"),
+				desc: this.t("settings.updateManage.desc"),
+				items: [
+					{
+						name: this.t("settings.updateManage.defaultNew"),
+						desc: this.t("settings.updateManage.defaultNew.desc"),
+						control: {
+							type: "dropdown",
+							key: "defaultNewWithinDays",
+							defaultValue: "off",
+							options: {
+								off: this.t("settings.updateManage.window.off"),
+								"1": this.t("settings.updateManage.window.1"),
+								"3": this.t("settings.updateManage.window.3"),
+								"7": this.t("settings.updateManage.window.7"),
+								"30": this.t("settings.updateManage.window.30"),
+								"90": this.t("settings.updateManage.window.90"),
+								"365": this.t("settings.updateManage.window.365"),
+							},
+						},
+					},
+					{
+						name: this.t("settings.updateManage.defaultUpdated"),
+						desc: this.t("settings.updateManage.defaultUpdated.desc"),
+						control: {
+							type: "dropdown",
+							key: "defaultUpdatedWithinDays",
+							defaultValue: "off",
+							options: {
+								off: this.t("settings.updateManage.window.off"),
+								"1": this.t("settings.updateManage.window.1"),
+								"3": this.t("settings.updateManage.window.3"),
+								"7": this.t("settings.updateManage.window.7"),
+								"30": this.t("settings.updateManage.window.30"),
+								"90": this.t("settings.updateManage.window.90"),
+								"365": this.t("settings.updateManage.window.365"),
+							},
+						},
+					},
+					{
+						name: this.t("settings.updateManage.healthBadge"),
+						desc: this.t("settings.updateManage.healthBadge.desc"),
+						control: { type: "toggle", key: "showHealthBadge", defaultValue: true },
+					},
+					{
+						name: this.t("settings.updateManage.demoteAtRisk"),
+						desc: this.t("settings.updateManage.demoteAtRisk.desc"),
+						visible: () => this.plugin.settings.showHealthBadge,
+						control: { type: "toggle", key: "demoteAtRisk", defaultValue: false },
+					},
+					{
+						name: this.t("settings.updateManage.healthHealthy"),
+						desc: this.t("settings.updateManage.healthHealthy.desc"),
+						visible: () => this.plugin.settings.showHealthBadge,
+						control: { type: "text", key: "healthHealthyDays", placeholder: "120" },
+					},
+					{
+						name: this.t("settings.updateManage.healthAging"),
+						desc: this.t("settings.updateManage.healthAging.desc"),
+						visible: () => this.plugin.settings.showHealthBadge,
+						control: { type: "text", key: "healthAgingDays", placeholder: "365" },
+					},
+					{
+						name: this.t("settings.updateManage.trendSampling"),
+						desc: this.t("settings.updateManage.trendSampling.desc"),
+						control: { type: "toggle", key: "trendSampling", defaultValue: true },
+					},
+					{
+						name: this.t("settings.updateManage.trendInterval"),
+						visible: () => this.plugin.settings.trendSampling,
+						control: {
+							type: "dropdown",
+							key: "trendIntervalMs",
+							defaultValue: String(6 * 60 * 60 * 1000),
+							options: {
+								"3600000": this.t("settings.updateManage.interval.3600000"),
+								"21600000": this.t("settings.updateManage.interval.21600000"),
+								"43200000": this.t("settings.updateManage.interval.43200000"),
+								"86400000": this.t("settings.updateManage.interval.86400000"),
+							},
+						},
+					},
+					{
+						name: this.t("settings.updateManage.trendKeep"),
+						desc: this.t("settings.updateManage.trendKeep"),
+						visible: () => this.plugin.settings.trendSampling,
+						control: { type: "text", key: "trendKeepDays", placeholder: "90" },
+					},
+					{
+						name: this.t("settings.updateManage.notifyInstalled"),
+						desc: this.t("settings.updateManage.notifyInstalled.desc"),
+						control: { type: "toggle", key: "notifyInstalledUpdates", defaultValue: true },
+					},
+				],
+			},
+			{
+				type: "group",
 				heading: this.t("settings.dataSource"),
 				desc: this.t("settings.dataSource.desc"),
 				items: [
@@ -206,7 +308,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							{
 								name: this.t("settings.tencent.secretKey"),
 								desc: this.t("settings.tencent.secretKey.desc"),
-								control: { type: "text", key: "secretKey", placeholder: "..." },
+								// 密钥用 SecretComponent：不显示明文，防肩窥（方案 1）
+								render: (setting) => this.renderSecretField(setting, "secretKey"),
 							},
 							{
 								name: this.t("settings.tencent.region"),
@@ -232,7 +335,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							{
 								name: this.t("settings.ai.key"),
 								desc: this.t("settings.ai.key.desc"),
-								control: { type: "text", key: "aiSearchApiKey", placeholder: "sk-..." },
+								// 密钥用 SecretComponent：不显示明文，防肩窥（方案 1）
+								render: (setting) => this.renderSecretField(setting, "aiSearchApiKey"),
 							},
 							{
 								name: this.t("settings.ai.model"),
@@ -298,7 +402,8 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								name: this.t("settings.embedding.key"),
 								desc: this.t("settings.embedding.key.desc"),
 								visible: () => s.embeddingSource === "api",
-								control: { type: "text", key: "embeddingApiKey", placeholder: "sk-..." },
+								// 密钥用 SecretComponent：不显示明文，防肩窥（方案 1）
+								render: (setting) => this.renderSecretField(setting, "embeddingApiKey"),
 							},
 							{
 								name: this.t("settings.embedding.model"),
@@ -400,7 +505,101 @@ export class TranslatorSettingTab extends PluginSettingTab {
 					},
 				],
 			},
+			{
+				type: "group",
+				heading: this.t("settings.profiles"),
+				desc: this.t("settings.profiles.desc"),
+				items: [
+					{
+						name: this.t("settings.profiles.list"),
+						// 现有预设列表 + 保存新预设（动态渲染，增删后重画本设置页）
+						render: (setting) => {
+							const list = this.plugin.settings.profiles;
+							// 预设列表：每行「名称 · N个」+ 应用 + 删除
+							for (const p of list) {
+								const row = setting.controlEl.createDiv({ cls: "pt-profile-row" });
+								row.createSpan({ text: `${p.name}（${p.enabled.length}）`, cls: "pt-profile-name" });
+								row.createEl("button", { text: this.t("settings.profiles.apply") }).addEventListener("click", () => {
+									void this.plugin.applyProfile(p);
+								});
+								row.createEl("button", { text: this.t("settings.profiles.delete"), cls: "pt-profile-del" }).addEventListener("click", () => {
+									this.plugin.settings.profiles = list.filter((x) => x !== p);
+									void this.plugin.flushSaveSettings();
+									this.plugin.refreshProfileCommands();
+									new Notice(this.t("settings.profiles.deleted", { name: p.name }));
+									this.display();
+								});
+							}
+							// 保存当前为预设
+							const nameInput = setting.controlEl.createEl("input", {
+								cls: "pt-profile-input",
+								placeholder: this.t("settings.profiles.name.ph"),
+							});
+							setting.controlEl.createEl("button", {
+								text: this.t("settings.profiles.save"),
+								cls: "pt-profile-save",
+							}).addEventListener("click", () => {
+								const name = nameInput.value.trim();
+								if (!name) {
+									new Notice(this.t("settings.profiles.nameRequired"));
+									return;
+								}
+								const enabled = this.getCurrentEnabledIds();
+								const profiles = this.plugin.settings.profiles.slice();
+								const idx = profiles.findIndex((x) => x.name === name);
+								const profile: PluginProfile = { name, enabled: [...enabled] };
+								if (idx >= 0) {
+									profiles[idx] = profile;
+									new Notice(this.t("settings.profiles.exists", { name }));
+								} else {
+									profiles.push(profile);
+									new Notice(this.t("settings.profiles.saved", { name, n: String(enabled.size) }));
+								}
+								this.plugin.settings.profiles = profiles;
+								void this.plugin.flushSaveSettings();
+								this.plugin.refreshProfileCommands();
+								this.display();
+							});
+						},
+					},
+				],
+			},
 		];
+	}
+
+	/** 读取当前真正启用的插件 id 集合（来自 app.plugins.enabledPlugins，不依赖视图是否打开） */
+	private getCurrentEnabledIds(): Set<string> {
+		const plugins = asAppInternals(this.app).plugins;
+		const ep = plugins?.enabledPlugins as unknown as Set<string> | string[] | undefined;
+		if (!ep) return new Set();
+		return new Set(ep);
+	}
+
+	/**
+	 * 联动重试（对齐 better-store onTokenLinked）：凭据变更后，若市场视图开着，
+	 * 重新翻译当前可见的未译项（original 兜底自动重试）。只处理可见项，不烧多余 token。
+	 */
+	private retryFailedTranslations(): void {
+		const view = this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view as
+			| ChinesePluginMarketView
+			| undefined;
+		if (!view?.ctx) return;
+		void view.ctx.aiTranslateAllPending().catch((e: unknown) => {
+			logger.warn("[Chinese Plugin Market] 凭据变更后重试翻译失败：", e);
+		});
+	}
+
+	/**
+	 * 用 Obsidian SecretComponent 渲染敏感字段输入（方案 1：设置面板不显示明文、防肩窥）。
+	 * 值仍走 setControlValue → settings + credentials.json 持久化，行为与 text 一致。
+	 */
+	private renderSecretField(setting: Setting, key: string): void {
+		const secret = new SecretComponent(this.app, setting.controlEl);
+		const current = (this.plugin.settings as unknown as Record<string, unknown>)[key];
+		secret.setValue(typeof current === "string" ? current : "");
+		secret.onChange((value) => {
+			void this.setControlValue(key, value);
+		});
 	}
 
 	/** 声明式控件读值：透传到 plugin.settings[key] */
@@ -434,6 +633,17 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			case "embeddingLocalWasmPaths":
 				s[key] = typeof value === "string" ? value.trim() : value;
 				break;
+			// 数字字段：声明式 dropdown/text 回传字符串，收敛为 number（null 表示不过滤）
+			case "defaultNewWithinDays":
+			case "defaultUpdatedWithinDays":
+			case "trendIntervalMs":
+			case "healthHealthyDays":
+			case "healthAgingDays":
+			case "trendKeepDays":
+				s[key] = value == null || value === "" || value === "off"
+					? null
+					: Number(value);
+				break;
 			default:
 				s[key] = value;
 		}
@@ -443,11 +653,20 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		if (key === "aiSearchEnabled" || key === "aiSearchBaseURL" || key === "aiSearchApiKey" || key === "aiSearchModel") {
 			this.syncTranslatorAIConfig();
 		}
+		// 方案 3（对齐 better-store onTokenLinked）：凭据/开关变更后联动重试——
+		// 之前因无 key 翻译失败的可见项（original 兜底）自动重新翻译，无需用户手动再触发。
+		if (key === "aiSearchApiKey" || key === "aiSearchBaseURL" || key === "aiSearchModel" || key === "secretKey" || key === "embeddingApiKey") {
+			this.retryFailedTranslations();
+		}
 		if (key === "useMyMemory") {
 			this.plugin.translator.setUseMyMemory(Boolean(value));
 		}
 		if (key === "useTransmart") {
 			this.plugin.translator.setUseTransmart(Boolean(value));
+		}
+		if (key === "notifyInstalledUpdates") {
+			// 关闭更新提醒时立即清除 ribbon 红点；开启时由下次检测（或打开视图）重算
+			if (!value) this.plugin.setRibbonUpdateBadge(0);
 		}
 		return this.plugin.flushSaveSettings();
 	}

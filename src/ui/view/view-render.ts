@@ -11,6 +11,7 @@ import { computeColCount, computeWindowRange, computeSpacerHeights } from "@ui/d
 import { createCardElement, applyCardState, type CardRenderContext } from "@ui/components/card-render";
 import { computeSmartSignals } from "@domain/filter/smart-signal";
 import { scoreAllPlugins } from "@domain/recommend/engine";
+import { assessHealth } from "@domain/recommend/health";
 import { setListState } from "@ui/dom/list-state";
 import { q, toHTMLElement } from "@ui/dom/dom";
 import { handleToggleEnabled } from "@ui/view/view-cards";
@@ -102,9 +103,16 @@ export function recomputeSmartSignalsIfNeeded(ctx: ViewContext) {
 			ctx.smartSignalsRev = ctx.pluginsRev;
 
 			// 2) 趋势评分（供 "trending" 排序模式使用）；
-			// 仅在实际新增采样点时落盘历史（密集刷新去重，避免无谓 IO）
-			if (ctx.trendingEngine.updateWithStats(ctx.statsMap)) {
-				void ctx.saveTrendingHistory(ctx.trendingEngine.serialize());
+			// 仅在实际新增采样点时落盘历史（密集刷新去重，避免无谓 IO）。
+			// 受设置 trendSampling 开关控制；trendIntervalMs 自定义采样间隔。
+			if (ctx.settings.trendSampling) {
+				if (ctx.trendingEngine.updateWithStats(ctx.statsMap, ctx.settings.trendIntervalMs)) {
+					void ctx.saveTrendingHistory(ctx.trendingEngine.serialize());
+				}
+				// 清理超过 trendKeepDays 天的旧采样（控制本地存储体积）
+				if (ctx.trendingEngine.prune(ctx.settings.trendKeepDays)) {
+					void ctx.saveTrendingHistory(ctx.trendingEngine.serialize());
+				}
 			}
 			const allIds = ctx.plugins.map((p) => p.id);
 			ctx.trendingScores = ctx.trendingEngine.batchTrendingScores(allIds);
@@ -143,6 +151,13 @@ export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[
 			sortFavoritesFirst: ctx.sortFavoritesFirst,
 			favoriteFilter: ctx.favoriteFilter,
 			favoritesSet: ctx.favoritesSet,
+			chineseEcoFilter: ctx.chineseEcoFilter,
+			chineseEcoSet: ctx.chineseEcoSet,
+			seriesFilter: ctx.seriesFilter,
+			bambooSeriesSet: ctx.bambooSeriesSet,
+			newWithinDays: ctx.newWithinDays,
+			updatedWithinDays: ctx.updatedWithinDays,
+			releaseDatesMap: ctx.releaseDatesMap,
 			selectedCategories: ctx.selectedCategories.length ? ctx.selectedCategories : undefined,
 			pluginTagMap: ctx.pluginTagMap,
 			installedIds: ctx.installedIds,
@@ -164,9 +179,22 @@ export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[
 			ctx.aiSearchResult = null;
 			ctx.aiSearchQueryCache = "";
 		}
-		ctx.visibleList = filterResult.list;
+		let list = filterResult.list;
+		// 「停更风险插件沉底」：开启时把 at-risk 插件稳定排到列表末尾（保持其余顺序）
+		if (ctx.settings.demoteAtRisk) {
+			const atRisk = new Set<string>();
+			for (const p of list) {
+				if (assessHealth(p.updated, Date.now(), ctx.settings.healthHealthyDays, ctx.settings.healthAgingDays).level === "at-risk") {
+					atRisk.add(p.id);
+				}
+			}
+			if (atRisk.size > 0) {
+				list = [...list.filter((p) => !atRisk.has(p.id)), ...list.filter((p) => atRisk.has(p.id))];
+			}
+		}
+		ctx.visibleList = list;
 		ctx.focusedCardIdx = -1;
-		return filterResult.list;
+		return list;
 	
 }
 
@@ -580,6 +608,7 @@ function isInWindow(card: HTMLElement, start: number, end: number): boolean {
 function makeCardRenderCtx(ctx: ViewContext): CardRenderContext {
 	return {
 		t: ctx.t,
+		settings: ctx.settings,
 		installedIds: ctx.installedIds,
 		enabledIds: ctx.enabledIds,
 		aiSearchResult: ctx.aiSearchResult,
@@ -603,6 +632,10 @@ function makeCardRenderCtx(ctx: ViewContext): CardRenderContext {
 			const plugin = ctx.plugins.find((p) => p.id === pid);
 			if (plugin) void handleToggleEnabled(ctx, plugin);
 		},
+		// 趋势 sparkline + 增量 chip：卡片下载行展示近 30 天增速曲线
+		trendingEngine: ctx.trendingEngine,
+		// 「新」标记：近 30 天首次见插件，纯文字融入作者行
+		firstSeenMap: ctx.firstSeenMap,
 	};
 }
 

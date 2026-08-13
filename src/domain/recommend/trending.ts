@@ -25,8 +25,9 @@ export interface TrendSnapshot {
 }
 
 const MS_PER_DAY = 86400000;
-/** 两次采样的最小间隔：更密集的刷新只更新最新值，不新增采样点 */
-const MIN_SAMPLE_INTERVAL_MS = 60 * 60 * 1000;
+/** 两次采样的最小间隔：对齐竞品 better-store（6h），更密集的刷新只更新最新值、不新增点。
+ *  下载量属慢变信号，短间隔采到的多为噪声，纯时间驱动积累趋势。 */
+const MIN_SAMPLE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /** 最早/最新采样点的最小时距：低于此时距增速噪声过大，返回中性分 */
 const MIN_SPAN_MS = 60 * 60 * 1000;
 
@@ -62,9 +63,11 @@ export class TrendingEngine {
 	 * 距上一采样点不足最小间隔时仅更新最新下载量（不新增点），
 	 * 避免同会话内几秒间隔的两次刷新产生毫秒级时距的伪增速。
 	 *
+	 * @param intervalMs 采样最小间隔（ms）；默认 MIN_SAMPLE_INTERVAL_MS（6h）。
+	 *                   由设置 trendIntervalMs 注入，支持 1h/6h/12h/24h。
 	 * @returns 是否新增了采样点（供调用方决定是否落盘历史）
 	 */
-	updateWithStats(stats: Map<string, PluginStat>): boolean {
+	updateWithStats(stats: Map<string, PluginStat>, intervalMs: number = MIN_SAMPLE_INTERVAL_MS): boolean {
 		const now = Date.now();
 		let added = false;
 
@@ -72,7 +75,7 @@ export class TrendingEngine {
 			const snapshots = this.history.get(id) ?? [];
 			const last = snapshots[snapshots.length - 1];
 
-			if (last && now - last.timestamp < MIN_SAMPLE_INTERVAL_MS) {
+			if (last && now - last.timestamp < intervalMs) {
 				// 采样过密：只跟进最新下载量，时间轴不前移
 				if (stat.downloads > last.downloads) last.downloads = stat.downloads;
 				this.history.set(id, snapshots);
@@ -164,6 +167,30 @@ export class TrendingEngine {
 	/** 历史是否为空（用于判断是否需要从持久化恢复） */
 	isEmpty(): boolean {
 		return this.history.size === 0;
+	}
+
+	/** 取某插件的采样快照序列（只读，供 UI 绘制趋势 sparkline 等展示用途） */
+	getSnapshots(pluginId: string): TrendSnapshot[] | undefined {
+		return this.history.get(pluginId);
+	}
+
+	/**
+	 * 清理超过 keepDays 天的旧采样点（由设置 trendKeepDays 驱动，控制本地存储体积）。
+	 * 仅删除整条序列中最旧、且早于保留窗口的点；若序列最新点也过期则整条移除。
+	 * @returns 是否有任何序列被裁剪（供调用方决定是否落盘）
+	 */
+	prune(keepDays: number): boolean {
+		const cutoff = Date.now() - keepDays * MS_PER_DAY;
+		let changed = false;
+		for (const [id, snapshots] of this.history) {
+			const kept = snapshots.filter((s) => s.timestamp >= cutoff);
+			if (kept.length !== snapshots.length) {
+				if (kept.length === 0) this.history.delete(id);
+				else this.history.set(id, kept);
+				changed = true;
+			}
+		}
+		return changed;
 	}
 
 	/**

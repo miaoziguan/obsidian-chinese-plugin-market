@@ -55,6 +55,8 @@ export interface PluginInfo {
 	downloads?: number;
 	/** 最近更新时间戳（ms，来自 stats） */
 	updated?: number;
+	/** 首次进入 Obsidian 社区市场的真实时间（ms，来自 plugin-release-dates.json 的 git history 解析） */
+	firstListedAt?: number;
 	/** 社区插件清单中的原始下标（越大越新） */
 	listIndex?: number;
 }

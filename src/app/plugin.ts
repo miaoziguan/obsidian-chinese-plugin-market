@@ -6,7 +6,7 @@
  * 视图本身由 translator-view.ts 的 ChinesePluginMarketView 承载。
  */
 
-import { Plugin, Notice, TFile, TFolder, Platform, normalizePath } from "obsidian";
+import { Plugin, Notice, Menu, TFile, TFolder, Platform, normalizePath } from "obsidian";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
@@ -26,11 +26,12 @@ import { TranslatorSettingTab } from "@app/settings-tab";
 import { debounce, mapWithConcurrency, contentHash } from "@shared/utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
 import { setWorkerSourceLoader } from "@semantic/workers/worker-backend";
-import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings } from "@ui/view/translator-view";
+import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings, type PluginProfile } from "@ui/view/translator-view";
 import { refreshOutdated } from "@ui/view/view-data";
 import { VIEW_TYPE } from "@shared/constants";
 import { writeTMNote, removeTMNote, TM_FOLDER, parseTMNote, type TMEntry } from "@translation/memory/translation-memory";
 import { SqliteVectorStore, initSqlJsStatic, type PersistAdapter } from "@semantic/vec-store";
+import { applyProfileByIds, applyEnabledProfile } from "@data/platform/plugin-installer";
 import type { TrendSnapshot } from "@domain/recommend/trending";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
 /** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
@@ -44,6 +45,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	cachedStats: Map<string, PluginStat> | null = null;
 	/** 趋势采样历史（onload 时恢复，视图的 TrendingEngine 从此水合；跨会话才有真实增速） */
 	cachedTrendingHistory: Record<string, TrendSnapshot[]> | null = null;
+	/** 左侧栏 ribbon 图标元素（用于更新提醒红点标记） */
+	ribbonEl: HTMLElement | null = null;
+	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json，人工精修清单；算法判定在 chinese-ecosystem.ts） */
+	chineseEcoSet: Set<string> = new Set();
+	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json，开发者自维护清单） */
+	bambooSeriesSet: Set<string> = new Set();
 	/** SQLite 向量库（P3+：真 SQLite，sql.js/WASM）。null 表示未初始化（sql-wasm 缺失或加载失败）。 */
 	private vectorStore: SqliteVectorStore | null = null;
 	/** SQLite 初始化失败记忆：true 后本会话不再重试（Obsidian 沙箱可能无法加载 sql.js，避免反复报错刷屏）。 */
@@ -60,6 +67,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	private buildLocalIndexPromise: Promise<void> | null = null;
 	/** 已「见过」的插件 id 集合（产品改进 #16，跨会话落盘，增量提示在重启后仍准确） */
 	seenPluginIds: Set<string> = new Set();
+	/** 插件 id → 首次见时间戳（ms）；0 表示基线旧插件（不报新）。用于卡片「新」标记窗口判断（对齐竞品 newness.ts） */
+	firstSeenMap: Map<string, number> = new Map();
 	/** 上次落盘 translator-cache 的内容指纹（PERF-5：相同内容跳过全量序列化+写盘） */
 	private _lastTranslatorFingerprint = "";
 	/**
@@ -219,10 +228,16 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			},
 		});
 
-		// 左侧栏图标
-		this.addRibbonIcon("languages", "插件搜索", () => {
-			void this.openTranslatorView();
+		// 左侧栏图标：无 profile 时直接打开市场；有 profile 时弹菜单（打开 + 一键切换场景）
+		this.ribbonEl = this.addRibbonIcon("languages", "插件搜索", (ev: MouseEvent) => {
+			if (this.settings.profiles.length === 0) {
+				void this.openTranslatorView();
+				return;
+			}
+			this.showRibbonMenu(ev);
 		});
+		// 命令：插件启用组合（P0：命令面板每条 profile 一条命令）
+		this.refreshProfileCommands();
 
 		this.addCommand({
 			id: "scroll-layout-debug",
@@ -424,6 +439,18 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.loadPluginTags().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载分类索引失败：", e),
 		);
+		// 后台异步加载插件上线日期索引（「上线」维度用，不阻塞视图启动）
+		this.loadReleaseDates().catch((e) =>
+			logger.warn("[Chinese Plugin Market] 后台加载上线日期失败：", e),
+		);
+		// 后台异步加载中文生态人工清单（「中文生态」维度用，不阻塞视图启动）
+		this.loadChineseEcosystem().catch((e) =>
+			logger.warn("[Chinese Plugin Market] 后台加载中文生态清单失败：", e),
+		);
+		// 后台异步加载竹林中国系列清单（「系列」维度用，不阻塞视图启动）
+		this.loadBambooSeries().catch((e) =>
+			logger.warn("[Chinese Plugin Market] 后台加载竹林系列清单失败：", e),
+		);
 
 		// TM/索引就绪：通知已打开的视图用最终数据重渲染一次。
 		// 视图尚未创建时无需处理——其 onOpen 会自然读到已就绪的数据。
@@ -480,6 +507,116 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		});
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });
 	}
+
+	/**
+	 * 更新 ribbon 图标的红点徽标（对齐竞品 better-store 的后台更新提醒）。
+	 * @param n 有可用更新的已装插件数量；<=0 时清除红点。
+	 * 受设置 notifyInstalledUpdates 控制（由调用方判断后传 0 清除）。
+	 */
+	setRibbonUpdateBadge(n: number): void {
+		const el = this.ribbonEl;
+		if (!el) return;
+		if (n > 0) {
+			el.addClass("pt-ribbon-has-update");
+			el.setAttribute("title", `插件搜索 · ${n} 个已装插件有更新`);
+			el.setAttribute("aria-label", `插件搜索 · ${n} 个已装插件有更新`);
+		} else {
+			el.removeClass("pt-ribbon-has-update");
+			el.setAttribute("title", "插件搜索");
+			el.setAttribute("aria-label", "插件搜索");
+		}
+	}
+
+	/**
+	 * 应用一个启用组合 Profile（命令面板 / ribbon 菜单 / 设置页共用）。
+	 * 视图开着则用 ctx 包装版（应用后即时刷新卡片），否则走底层落盘+内存。
+	 */
+	async applyProfile(p: PluginProfile): Promise<void> {
+		const selfId = this.manifest.id;
+		const target = new Set(p.enabled);
+		const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view as
+			| ChinesePluginMarketView
+			| undefined;
+		const r = view?.ctx
+			? await applyEnabledProfile(view.ctx, target, selfId)
+			: await applyProfileByIds(this.app, this.getCurrentEnabledIds(), target, selfId);
+		const t = makeT();
+		new Notice(t("settings.profiles.applied", { name: p.name, n: String(r.enabled), m: String(r.disabled) }));
+	}
+
+	/** 读取当前真正启用的插件 id 集合（来自 app.plugins.enabledPlugins） */
+	private getCurrentEnabledIds(): Set<string> {
+		const plugins = (this.app as unknown as {
+			plugins?: { enabledPlugins?: Set<string> | string[] };
+		}).plugins;
+		const ep = plugins?.enabledPlugins;
+		if (!ep) return new Set();
+		return new Set(ep);
+	}
+
+	/**
+	 * 同步注册「应用组合」命令（P0）：每条 profile 生成一条 `apply-profile-{index}` 命令。
+	 * profile 增删后由设置页调用刷新；重复注册前先 removeCommand 旧 id。
+	 */
+	refreshProfileCommands(): void {
+		const t = makeT();
+		// 先移除已注册的 profile 命令（Obsidian removeCommand since 1.7.2）
+		for (const id of this.profileCommandIds) {
+			try {
+				this.removeCommand(id);
+			} catch {
+				/* 命令可能未注册，忽略 */
+			}
+		}
+		this.profileCommandIds = [];
+		this.settings.profiles.forEach((p, i) => {
+			const id = `apply-profile-${i}`;
+			this.addCommand({
+				id,
+				name: `${t("command.applyProfile.prefix")}：${p.name}`,
+				callback: () => {
+					void this.applyProfile(p);
+				},
+			});
+			this.profileCommandIds.push(id);
+		});
+	}
+
+	/** 点击 ribbon 时的聚合菜单：打开市场 + 各 profile 一键切换 + 管理组合 */
+	private showRibbonMenu(ev: MouseEvent): void {
+		const menu = new Menu();
+		const t = makeT();
+		menu.addItem((item) =>
+			item
+				.setTitle(t("app.search"))
+				.setIcon("languages")
+				.onClick(() => void this.openTranslatorView())
+		);
+		if (this.settings.profiles.length > 0) {
+			menu.addSeparator();
+			for (const p of this.settings.profiles) {
+				menu.addItem((item) =>
+					item
+						.setTitle(`${t("command.applyProfile.prefix")}：${p.name}`)
+						.setIcon("switch")
+						.onClick(() => void this.applyProfile(p))
+				);
+			}
+		}
+		menu.addSeparator();
+		menu.addItem((item) =>
+			item
+				.setTitle(t("settings.profiles"))
+				.setIcon("gear")
+				.onClick(() => {
+					// 打开 Obsidian 设置并定位到本插件设置页（半官方内部 API，失败则静默）
+					(this.app as unknown as { setting?: { open(): unknown } }).setting?.open?.();
+				})
+		);
+		menu.showAtMouseEvent(ev);
+	}
+	/** 已注册的 profile 命令 id（refreshProfileCommands 刷新时移除） */
+	private profileCommandIds: string[] = [];
 
 
 
@@ -673,6 +810,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.lastListFetchAt = fileData?.lastListFetchAt ?? 0;
 		// 已「见过」的插件 id 集合（产品改进 #16 跨会话落盘，避免重启后误报全量新插件）
 		this.seenPluginIds = new Set(fileData?.seenPluginIds ?? []);
+		// 首次见时间戳映射（卡片「新」标记 + 「上线」维度筛选用）。
+		// 字段语义：>0 = 该插件首次进入清单的真实时刻（ms）；0 = 基线旧插件（历史兼容值，不报新）。
+		// 新插件（运行时 diff 出 newIds）会被标为 now（>0）；存量老插件保持 0 = 不视为"新上线"。
+		const restoredFirstSeen = fileData?.firstSeenIds ?? {};
+		this.firstSeenMap = new Map(Object.entries(restoredFirstSeen).map(([k, v]) => [k, Number(v)]));
+		if (this.firstSeenMap.size === 0 && this.seenPluginIds.size > 0) {
+			for (const id of this.seenPluginIds) this.firstSeenMap.set(id, 0);
+		}
 		if (this.settings.secretId && this.settings.secretKey) {
 			this.translator.setApiConfig({
 				secretId: this.settings.secretId,
@@ -772,6 +917,102 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * 加载随插件分发的插件上线日期索引 plugin-release-dates.json（「上线」维度用）。
+	 * 内容 = 每个插件首次进入官方社区市场的真实时间（ms），由构建期脚本从
+	 * obsidian-releases 的 git history 解析生成。缺失/解析失败时静默降级（「上线」维度无数据）。
+	 */
+	private async loadReleaseDates() {
+		const fileName = "plugin-release-dates.json";
+		try {
+			const adapter = this.app.vault.adapter;
+			const fullPath = `.obsidian/plugins/${this.manifest.id}/${fileName}`;
+			if (!(await adapter.exists(fullPath))) return;
+			const text = await adapter.read(fullPath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (parsed && typeof parsed === "object") {
+				const map = new Map<string, number>();
+				for (const [id, ts] of Object.entries(parsed)) {
+					const n = Number(ts);
+					if (typeof id === "string" && id && Number.isFinite(n)) map.set(id, n * 1000); // 秒→ms
+				}
+				// 注入到已打开的视图并触发重渲染（视图未创建时其 onOpen 会自然读到空 Map，
+				// 上线维度此时为空数据，下次重载插件即生效——属一次性降级，影响极小）
+				for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+					const view = leaf.view;
+					if (view instanceof ChinesePluginMarketView) {
+						view.releaseDatesMap = map;
+						view.invalidateAndRender(false);
+					}
+				}
+				logger.debug(`[Chinese Plugin Market] 已加载 ${map.size} 个插件上线日期`);
+			}
+		} catch (e: unknown) {
+			logger.warn(`[Chinese Plugin Market] 加载插件上线日期失败，已跳过：`, e);
+		}
+	}
+
+	/**
+	 * 加载随插件分发的「中文生态」人工精修清单 plugin-chinese-ecosystem.json。
+	 * 内容 = 算法漏掉/误判后人工校正的插件 id（{ id: true }）。运行时判定 =
+	 * chinese-ecosystem.ts 的算法信号 ∪ 本清单。缺失/解析失败静默降级（仅算法兜底）。
+	 */
+	private async loadChineseEcosystem() {
+		const fileName = "plugin-chinese-ecosystem.json";
+		try {
+			const adapter = this.app.vault.adapter;
+			const fullPath = `.obsidian/plugins/${this.manifest.id}/${fileName}`;
+			if (!(await adapter.exists(fullPath))) return;
+			const text = await adapter.read(fullPath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (parsed && typeof parsed === "object") {
+				const set = new Set<string>(Object.keys(parsed));
+				this.chineseEcoSet = set;
+				// 注入已打开的视图并触发重渲染（视图未创建时 onOpen 自然读到 Set）
+				for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+					const view = leaf.view;
+					if (view instanceof ChinesePluginMarketView) {
+						view.chineseEcoSet = set;
+						view.invalidateAndRender(false);
+					}
+				}
+				logger.debug(`[Chinese Plugin Market] 已加载 ${set.size} 个中文生态插件`);
+			}
+		} catch (e: unknown) {
+			logger.warn(`[Chinese Plugin Market] 加载中文生态清单失败，已跳过：`, e);
+		}
+	}
+
+	/**
+	 * 加载随插件分发的「竹林中国系列」清单 plugin-bamboo-series.json。
+	 * 内容 = 开发者自维护的系列插件 id（{ id: true }）。缺失/解析失败静默降级（系列维度无数据）。
+	 */
+	private async loadBambooSeries() {
+		const fileName = "plugin-bamboo-series.json";
+		try {
+			const adapter = this.app.vault.adapter;
+			const fullPath = `.obsidian/plugins/${this.manifest.id}/${fileName}`;
+			if (!(await adapter.exists(fullPath))) return;
+			const text = await adapter.read(fullPath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (parsed && typeof parsed === "object") {
+				const set = new Set<string>(Object.keys(parsed));
+				this.bambooSeriesSet = set;
+				// 注入已打开的视图并触发重渲染
+				for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+					const view = leaf.view;
+					if (view instanceof ChinesePluginMarketView) {
+						view.bambooSeriesSet = set;
+						view.invalidateAndRender(false);
+					}
+				}
+				logger.debug(`[Chinese Plugin Market] 已加载 ${set.size} 个竹林系列插件`);
+			}
+		} catch (e: unknown) {
+			logger.warn(`[Chinese Plugin Market] 加载竹林系列清单失败，已跳过：`, e);
+		}
+	}
+
 	/** 加载官方推荐清单（plugin-recommend.json），种子为羽鳞君的全部插件 */
 	private async loadPluginRecommend() {
 		const fileName = "plugin-recommend.json";
@@ -843,6 +1084,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			myMemoryBlockedDate: translatorData.myMemoryBlockedDate ?? "",
 			seenPluginIds: Array.from(this.seenPluginIds),
 			lastListFetchAt: this.lastListFetchAt,
+			firstSeenIds: Object.fromEntries(this.firstSeenMap),
 		});
 		// 仅写盘成功后更新指纹（失败则下次仍会重试写盘）
 		this._lastTranslatorFingerprint = fingerprint;

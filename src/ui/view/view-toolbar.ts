@@ -243,6 +243,52 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// ── 排序按钮（仅图标，点击展开排序菜单） ──
 		const sortWrap = headerRow.createDiv({ cls: "pt-sort-wrap" });
 
+		// ── 组合下拉（场景切换，非筛选：点击弹 Menu 列出 profile 一键应用） ──
+		const profileBtn = headerRow.createEl("button", {
+			cls: "pt-profile-dropdown",
+			attr: { "aria-label": "切换启用组合", type: "button" },
+		});
+		// 图标用「图层 layers」而非「切换 switch」：组合表达的是「一组启用方案/场景预设」，
+		// 叠层意象比箭头交换更精准（箭头更像切换排序方向等）。
+		setIcon(profileBtn, "layers");
+		const buildProfileMenu = (): Menu | null => {
+			if (ctx.profiles.length === 0) {
+				new Notice("暂无组合预设，可在设置 → 插件启用组合中保存当前启用集");
+				return null;
+			}
+			const menu = new Menu();
+			for (const p of ctx.profiles) {
+				menu.addItem((item) =>
+					item
+						.setTitle(`${p.name}（${p.enabled.length}）`)
+						.onClick(() => {
+							// 应用组合 + 切到「已安装」视角，立即看到启用集变化
+							ctx.installFilter = "installed";
+							updateInstallToggles();
+							ctx.updateFacetVisibility();
+							ctx.track("profile:apply");
+							void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
+						})
+				);
+			}
+			return menu;
+		};
+		profileBtn.addEventListener("click", (ev: MouseEvent) => {
+			const menu = buildProfileMenu();
+			if (menu) menu.showAtMouseEvent(ev);
+		});
+		profileBtn.addEventListener("keydown", (ev: KeyboardEvent) => {
+			if (ev.key === "Enter" || ev.key === " ") {
+				ev.preventDefault();
+				// 键盘触发 Menu：用按钮位置定位（无鼠标事件可用）
+				const menu = buildProfileMenu();
+				if (menu) {
+					const rect = profileBtn.getBoundingClientRect();
+					menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+				}
+			}
+		});
+
 		// AI 一键翻译（纯图标按钮，置于排序↕与刷新↻之间；无待翻译项时自动隐藏）
 		ctx.aiTranslateBtnEl = headerRow.createEl("button", {
 			cls: "pt-ai-icon-btn",
@@ -683,17 +729,112 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		updateFavToggles();
 
 		favToggles.forEach((el, i) => {
-			const def = favToggleDefs[i];
-			el.addEventListener("click", () => {
-				ctx.favoriteFilter = ctx.favoriteFilter === def.on ? "all" : def.on;
-				updateFavToggles();
-				// 持久化跨会话：与 sourceFilter 同款处理，回写 settings 并落盘
-				ctx.settings.favoriteFilter = ctx.favoriteFilter;
-				ctx.track(ctx.favoriteFilter === def.on ? def.track : `${def.track}_off`);
-				ctx.saveSettings();
-				ctx.scheduleRender(true);
-			});
+		const def = favToggleDefs[i];
+		el.addEventListener("click", () => {
+			ctx.favoriteFilter = ctx.favoriteFilter === def.on ? "all" : def.on;
+			updateFavToggles();
+			// 持久化跨会话：与 sourceFilter 同款处理，回写 settings 并落盘
+			ctx.settings.favoriteFilter = ctx.favoriteFilter;
+			ctx.track(ctx.favoriteFilter === def.on ? def.track : `${def.track}_off`);
+			ctx.saveSettings();
+			ctx.scheduleRender(true);
 		});
+	});
+
+	// ── 生态筛选（当前实现 = 中文生态；维度可扩展为其它生态） ──
+	// 标题用通用词「生态」（维度标签），激活按钮用具体语义「中文生态」（用户看到的是「我在筛什么」）。
+	const ecoRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	ecoRow.createSpan({ cls: "pt-facet-label", text: "生态" });
+	const ecoChips = ecoRow.createDiv({ cls: "pt-facet-chips" });
+	const ecoToggle = ecoChips.createEl("button", { cls: "pt-filter pt-toggle-eco", text: "中文生态" });
+	const updateEcoToggle = () => {
+		const active = ctx.chineseEcoFilter === "eco";
+		ecoToggle.setAttribute("aria-pressed", active ? "true" : "false");
+		// 文案始终「中文生态」：激活态靠 aria-pressed 样式区分（点此按钮在「激活/取消」间切换，
+		// 无意义变「全部」）。真正的「全部」由工具栏「重置」按钮一键处理，避免按钮身份切换带来的认知负担。
+		ecoToggle.textContent = "中文生态";
+	};
+	updateEcoToggle();
+	ecoToggle.addEventListener("click", () => {
+		ctx.chineseEcoFilter = ctx.chineseEcoFilter === "eco" ? "all" : "eco";
+		updateEcoToggle();
+		ctx.track(ctx.chineseEcoFilter === "eco" ? "filter:eco" : "filter:eco_off");
+		ctx.scheduleRender(true);
+	});
+
+	// ── 系列筛选（开发者自维护系列，如「竹林中国系列」；toggle 全部↔系列） ──
+	const seriesRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	seriesRow.createSpan({ cls: "pt-facet-label", text: "系列" });
+	const seriesChips = seriesRow.createDiv({ cls: "pt-facet-chips" });
+	const seriesToggle = seriesChips.createEl("button", { cls: "pt-filter pt-toggle-series", text: "竹林中国系列" });
+	const updateSeriesToggle = () => {
+		const active = ctx.seriesFilter === "bamboo";
+		seriesToggle.setAttribute("aria-pressed", active ? "true" : "false");
+		seriesToggle.textContent = "竹林中国系列";
+	};
+	updateSeriesToggle();
+	seriesToggle.addEventListener("click", () => {
+		ctx.seriesFilter = ctx.seriesFilter === "bamboo" ? "all" : "bamboo";
+		updateSeriesToggle();
+		ctx.track(ctx.seriesFilter === "bamboo" ? "filter:series_bamboo" : "filter:series_bamboo_off");
+		ctx.scheduleRender(true);
+	});
+
+	// ── 新上线筛选（近 N 天首次见；null = 不过滤） ──
+	const newRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	newRow.createSpan({ cls: "pt-facet-label", text: "上线" });
+	const newChip = newRow.createDiv({ cls: "pt-facet-chips" });
+	// 「上线」过滤：无 "全部" 选项，默认不过滤；点窗口胶囊激活，再点同一胶囊取消
+	const NEW_WINDOWS = [1, 3, 7, 30, 90, 365];
+	const NEW_LABELS = ["24h", "3天", "7天", "30天", "90天", "1年"];
+	const newToggles = NEW_WINDOWS.map((_, i) =>
+		newChip.createEl("button", { cls: "pt-filter", text: NEW_LABELS[i] })
+	);
+	const updateNewToggle = () => {
+		newToggles.forEach((el, i) => {
+			el.setAttribute("aria-pressed", ctx.newWithinDays === NEW_WINDOWS[i] ? "true" : "false");
+		});
+	};
+	updateNewToggle();
+	newToggles.forEach((el, i) => {
+		el.addEventListener("click", () => {
+			const val = NEW_WINDOWS[i];
+			ctx.newWithinDays = ctx.newWithinDays === val ? null : val;
+			ctx.settings.newWithinDays = ctx.newWithinDays;
+			ctx.saveSettings();
+			updateNewToggle();
+			ctx.scheduleRender(true);
+		});
+	});
+
+	// ── 近期更新筛选（近 N 天有版本更新；null = 不过滤） ──
+	const updRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	updRow.createSpan({ cls: "pt-facet-label", text: "更新" });
+	const updChip = updRow.createDiv({ cls: "pt-facet-chips" });
+	// 「更新」过滤：无 "全部" 选项，默认不过滤；点窗口胶囊激活，再点同一胶囊取消
+	const UPD_WINDOWS = [1, 3, 7, 30, 90, 365];
+	const UPD_LABELS = ["24h", "3天", "7天", "30天", "90天", "1年"];
+	const updToggles = UPD_WINDOWS.map((_, i) =>
+		updChip.createEl("button", { cls: "pt-filter", text: UPD_LABELS[i] })
+	);
+	const updateUpdToggle = () => {
+		updToggles.forEach((el, i) => {
+			el.setAttribute("aria-pressed", ctx.updatedWithinDays === UPD_WINDOWS[i] ? "true" : "false");
+		});
+	};
+	updateUpdToggle();
+	updToggles.forEach((el, i) => {
+		el.addEventListener("click", () => {
+			const val = UPD_WINDOWS[i];
+			ctx.updatedWithinDays = ctx.updatedWithinDays === val ? null : val;
+			ctx.settings.updatedWithinDays = ctx.updatedWithinDays;
+			ctx.saveSettings();
+			updateUpdToggle();
+			ctx.scheduleRender(true);
+		});
+	});
+
+
 
 		// 重置筛选：移至标题行右侧（与「筛选与统计」同行右端对齐）
 		const resetBtn = advancedHeading.createEl("button", {
@@ -718,6 +859,19 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.favoriteFilter = "all";
 			ctx.settings.favoriteFilter = "all";
 			updateFavToggles();
+			// 重置中文生态筛选
+			ctx.chineseEcoFilter = "all";
+			updateEcoToggle();
+			// 重置系列筛选
+			ctx.seriesFilter = "all";
+			updateSeriesToggle();
+			// 重置新上线 + 近期更新筛选
+			ctx.newWithinDays = null;
+			ctx.settings.newWithinDays = null;
+			ctx.updatedWithinDays = null;
+			ctx.settings.updatedWithinDays = null;
+			updateNewToggle();
+			updateUpdToggle();
 			ctx.renderAuthorFacet();
 			// 同步顶部「筛选中」chips 与重置按钮高亮态（仅 scheduleRender 不会触发）
 			ctx.updateFacetVisibility();

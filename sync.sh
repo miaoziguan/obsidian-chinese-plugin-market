@@ -26,6 +26,9 @@ FILES=(
 	"ort-wasm-simd-threaded.jsep.wasm"
 	"embedding-worker.bundle.js"
 	"seeded-translator-cache.json"
+	"plugin-release-dates.json"
+	"plugin-chinese-ecosystem.json"
+	"plugin-bamboo-series.json"
 )
 
 # ── 解析参数 ──

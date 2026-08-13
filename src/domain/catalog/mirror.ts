@@ -47,19 +47,50 @@ export function resolveUrl(rawUrl: string, mirror: MirrorConfig): string {
 
 /**
  * 由插件 repo（形如 `owner/name`）构造 README 的 raw 拉取 URL，并按镜像映射（产品改进 #8）。
- * 默认取 `HEAD` 分支的 `README.md`。repo 非法（空 / 无斜杠）时返回空串。
+ * 默认取 `HEAD` 分支的 `README.md`；repo 非法（空 / 无斜杠）时返回空串。
+ * @param fileName 可选：README 文件名（大小写 fallback 时传 "readme.md" / "Readme.md"）
  */
 export function buildReadmeUrl(
 	repo: string | undefined,
-	mirror: MirrorConfig
+	mirror: MirrorConfig,
+	fileName: string = "README.md"
 ): string {
 	if (!repo) return "";
 	const cleaned = repo.replace(/^\/+|\/+$/g, "");
 	const parts = cleaned.split("/");
 	if (parts.length !== 2 || !parts[0] || !parts[1]) return "";
 	const [owner, name] = parts;
-	const rawUrl = `https://raw.githubusercontent.com/${owner}/${name}/HEAD/README.md`;
+	const rawUrl = `https://raw.githubusercontent.com/${owner}/${name}/HEAD/${fileName}`;
 	return resolveUrl(rawUrl, mirror);
+}
+
+/**
+ * 把 GitHub README 中的相对路径 URL 重写为绝对地址（对齐 better-store readme.ts）：
+ * - Markdown 图片 → raw.githubusercontent.com（否则 MarkdownRenderer 的 sourcePath 只给出
+ *   github blob 网页地址，图片显示成页面而非图片）
+ * - Markdown 链接 → github blob 视图
+ * - HTML `<img src>` → raw.githubusercontent.com
+ * 绝对地址（http(s)://、//、#、mailto:、data:、obsidian:）与锚点原样保留。
+ * 纯函数，零依赖，可单测。
+ */
+export function rewriteReadmeUrls(markdown: string, repo: string): string {
+	const rawBase = `https://raw.githubusercontent.com/${repo}/HEAD/`;
+	const blobBase = `https://github.com/${repo}/blob/HEAD/`;
+	const ABSOLUTE = /^(?:https?:)?\/\/|^#|^mailto:|^data:|^obsidian:/i;
+	const stripLeadingDot = (url: string): string => url.replace(/^\.?\//, "");
+	return markdown
+		// Markdown 图片: ![alt](url)
+		.replace(/(!\[[^\]]*\]\()([^)\s]+)(\))/g, (m, pre: string, url: string, post: string) =>
+			ABSOLUTE.test(url) ? m : pre + rawBase + stripLeadingDot(url) + post
+		)
+		// Markdown 链接: [text](url)，负向后视排除图片
+		.replace(/((?<!!)\[[^\]]*\]\()([^)\s]+)(\))/g, (m, pre: string, url: string, post: string) =>
+			ABSOLUTE.test(url) ? m : pre + blobBase + stripLeadingDot(url) + post
+		)
+		// 内联 HTML 图片: <img src="url">
+		.replace(/(<img[^>]*\ssrc=")([^"]+)(")/gi, (m, pre: string, url: string, post: string) =>
+			ABSOLUTE.test(url) ? m : pre + rawBase + stripLeadingDot(url) + post
+		);
 }
 
 /** 网络错误分类结果 */

@@ -22,6 +22,8 @@ import {
 	type SourceFilter,
 	type InstallFilter,
 	type FavoriteFilter,
+	type ChineseEcoFilter,
+	type SeriesFilter,
 } from "@domain/filter/filter";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { type CardRenderContext } from "@ui/components/card-render";
@@ -41,6 +43,9 @@ import type ChinesePluginMarketPlugin from "@app/plugin";
 // 作为唯一来源，避免 view 模块跨文件引用本中枢模块的常量（审计 P2-4）。
 import { VIEW_TYPE, LAYOUT } from "@shared/constants";
 import { cancelIdle } from "@shared/platform";
+
+/** 后台更新检测轮询间隔：对齐 stats 缓存 TTL（6h），避免过频网络请求 */
+const UPDATE_POLL_MS = 6 * 60 * 60 * 1000;
 
 export interface ChinesePluginMarketSettings {
 	useMyMemory: boolean;
@@ -75,8 +80,42 @@ export interface ChinesePluginMarketSettings {
 	favorites: string[];
 	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部（跨会话持久化） */
 	favoriteFilter: FavoriteFilter;
+	/** 新上线窗口天数：null 表示不过滤（默认），可选 1/3/7/30/90/365 */
+	newWithinDays: number | null;
+	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件（默认 null = 不过滤） */
+	updatedWithinDays: number | null;
+	/** 默认上线窗口（设置预设，打开市场时套用；null = 不过滤） */
+	defaultNewWithinDays: number | null;
+	/** 默认更新窗口（设置预设，打开市场时套用；null = 不过滤） */
+	defaultUpdatedWithinDays: number | null;
+	/** 卡片显示维护健康度徽标（healthy/aging/at-risk 彩色点） */
+	showHealthBadge: boolean;
+	/** 把 at-risk（停更风险）插件在列表沉底折叠 */
+	demoteAtRisk: boolean;
+	/** 健康度「活跃」阈值天数（≤ 该值判 healthy） */
+	healthHealthyDays: number;
+	/** 健康度「风险」阈值天数（> 该值判 at-risk） */
+	healthAgingDays: number;
+	/** 启用下载趋势采样（trending.ts） */
+	trendSampling: boolean;
+	/** 趋势采样间隔（ms）：1h/6h/12h/24h 之一 */
+	trendIntervalMs: number;
+	/** 趋势采样保留天数（> 该值的旧采样清理） */
+	trendKeepDays: number;
+	/** 已安装插件有可用更新时，在列表卡片标红点提醒（轻量版，无后台轮询） */
+	notifyInstalledUpdates: boolean;
+	/** 插件启用组合预设（Profile）：命名快照，一键应用切换启用集。不碰自身。 */
+	profiles: PluginProfile[];
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
+}
+
+/** 单个启用组合 Profile：命名 + 启用插件 id 列表 */
+export interface PluginProfile {
+	/** 预设名（如「写作」「阅读」「项目管理」） */
+	name: string;
+	/** 该预设下应启用的插件 id 集合 */
+	enabled: string[];
 }
 
 export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
@@ -104,6 +143,19 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	favorites: [],
 	compare: [],
 	favoriteFilter: "all",
+	newWithinDays: null,
+	updatedWithinDays: null,
+	defaultNewWithinDays: null,
+	defaultUpdatedWithinDays: null,
+	showHealthBadge: true,
+	demoteAtRisk: false,
+	healthHealthyDays: 120,
+	healthAgingDays: 365,
+	trendSampling: true,
+	trendIntervalMs: 6 * 60 * 60 * 1000,
+	trendKeepDays: 90,
+	notifyInstalledUpdates: true,
+	profiles: [],
 };
 
 /**
@@ -171,6 +223,8 @@ export class ChinesePluginMarketView extends ItemView {
 	public disposed = false;
 	/** 已安装状态监听的清理函数（#14：fs.watch 桌面 / 轮询移动），onClose 时调用 */
 	public installedWatchDispose: (() => void) | null = null;
+	/** 后台更新检测轮询定时器句柄（onClose 时清理，避免泄漏） */
+	public updatePollTimer: number | null = null;
 	/** 结果计数元素引用（常驻工具栏内，搜索后显示「找到 N 个插件」） */
 	public resultCountEl: HTMLElement | null = null;
 	/** 「AI 一键翻译」按钮与进度元素（仅筛选「未翻译」时显示，聚焦 AI 战略） */
@@ -268,6 +322,8 @@ export class ChinesePluginMarketView extends ItemView {
 
 	// ── 插件统计（下载量/更新时间，产品改进 #1 #6）──
 	public statsMap: Map<string, PluginStat> = new Map();
+	// 插件上线日期（首次进入官方市场，ms），来自 plugin-release-dates.json（构建期 git history 解析）
+	public releaseDatesMap: Map<string, number> = new Map();
 
 	// ── 已安装/已启用状态（产品改进 #7）──
 	public installedIds: Set<string> = new Set();
@@ -295,6 +351,14 @@ export class ChinesePluginMarketView extends ItemView {
 		this.favoritesSet = new Set(plugin.settings.favorites);
 		// 水合对比集（从持久化 settings.compare 恢复为 Set，跨会话保留）
 		this.compareSet = new Set(plugin.settings.compare);
+		// 水合新上线窗口天数：打开市场时套用设置里「默认上线窗口」预设（defaultNewWithinDays）。
+		// default 字段与工具栏临时点选的 newWithinDays 分离，重开回到预设而非残留临时态。
+		const VALID_WINDOWS = new Set([1, 3, 7, 30, 90, 365]);
+		const dnwd = plugin.settings.defaultNewWithinDays;
+		this.newWithinDays = typeof dnwd === "number" && VALID_WINDOWS.has(dnwd) ? dnwd : null;
+		// 水合近期更新窗口：套用设置里「默认更新窗口」预设（defaultUpdatedWithinDays）
+		const duwd = plugin.settings.defaultUpdatedWithinDays;
+		this.updatedWithinDays = typeof duwd === "number" && VALID_WINDOWS.has(duwd) ? duwd : null;
 		// 跨会话恢复列表拉取时间：避免 lastListFetchAt 重启归零导致 isListStale(0,now,6h)
 		// 恒真 → 每次启动都强制重拉列表 + 重译可见项（修复「每次重启都要重新加载翻译」）
 		this.lastListFetchAt = plugin.lastListFetchAt;
@@ -323,6 +387,19 @@ export class ChinesePluginMarketView extends ItemView {
 		return "languages";
 	}
 
+	/**
+	 * 检测已装插件可用更新并同步 ribbon 红点（封装 refreshOutdated + 徽标联动）。
+	 * 受设置 notifyInstalledUpdates 控制：关闭时清除红点。
+	 */
+	public checkUpdates = async (): Promise<void> => {
+		if (!this.plugin.settings.notifyInstalledUpdates) {
+			this.plugin.setRibbonUpdateBadge(0);
+			return;
+		}
+		await refreshOutdated(this._ctx);
+		this.plugin.setRibbonUpdateBadge(this._ctx.outdatedIds?.size ?? 0);
+	};
+
 	async onOpen() {
 		// 标记所属 leaf（替代 :has 选择器），供 CSS 隐藏该 leaf 的 view-header
 		this.containerEl.closest?.(".workspace-leaf-content")?.addClass("pt-pt-view-leaf");
@@ -333,6 +410,7 @@ export class ChinesePluginMarketView extends ItemView {
 		const self = this;
 		this.cardPoolCtx = {
 			t: this.t,
+			get settings() { return self.plugin.settings; },
 			get installedIds() { return self.installedIds; },
 			get enabledIds() { return self.enabledIds; },
 			get aiSearchResult() { return self.aiSearchResult; },
@@ -356,8 +434,14 @@ export class ChinesePluginMarketView extends ItemView {
 		await this.loadAndRender();
 		// #14：启动已安装状态实时同步（桌面 fs.watch / 移动轮询），视图关闭时释放
 		this.installedWatchDispose = startInstalledWatch(this._ctx);
-		// A 方案：后台检测「可更新」插件（拉官方 manifest 对比本地版本），完成后自动重渲徽标
-		if (!this.disposed) this.refreshOutdated();
+		// A 方案：后台检测「可更新」插件（拉官方 manifest 对比本地版本），完成后自动重渲徽标 + ribbon 红点
+		if (!this.disposed) void this.checkUpdates();
+		// 后台轮询：对齐 stats 缓存 TTL（6h），视图常开时持续感知已装插件更新（对齐竞品后台检查）
+		if (this.plugin.settings.notifyInstalledUpdates) {
+			this.updatePollTimer = window.setInterval(() => {
+				if (!this.disposed) void this.checkUpdates();
+			}, UPDATE_POLL_MS);
+		}
 		// T4(#7): 注册分类标签加载完成回调，刷新 facet（标签可能晚于首屏就绪）；
 		// 若打开视图时标签已就绪（竞态：加载早于视图打开），立即补刷一次。
 		this.plugin.onPluginTagsLoaded = () => {
@@ -380,6 +464,11 @@ export class ChinesePluginMarketView extends ItemView {
 	async onClose() {
 		// 标记视图已卸载：所有后续异步路径（翻译、落盘定时器）据此尽早退出，避免幽灵写盘
 		this.disposed = true;
+		// 清理后台更新检测轮询定时器（防止关闭视图后向已销毁 ctx 写盘/轮询）
+		if (this.updatePollTimer != null) {
+			window.clearInterval(this.updatePollTimer);
+			this.updatePollTimer = null;
+		}
 		this.compareMode = false;
 		// 解绑标签加载回调：plugin 是单例，留着会一直持有本视图闭包（内存泄漏 + 幽灵刷新）
 		if (this.plugin.onPluginTagsLoaded) this.plugin.onPluginTagsLoaded = null;
@@ -483,12 +572,24 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public installFilter: InstallFilter = "all";
 	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部 */
 	public favoriteFilter: FavoriteFilter = "all";
+	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
+	public chineseEcoFilter: ChineseEcoFilter = "all";
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	public seriesFilter: SeriesFilter = "all";
+	/** 新上线窗口天数：null 不过滤，可选 7/30/90 */
+	public newWithinDays: number | null = null;
+	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
+	public updatedWithinDays: number | null = null;
 	/** AI/关键字模式：当前选中的分类 facet（空数组表示不筛选，零回归） */
 	public selectedCategories: string[] = [];
 	/** 作者维度：当前按作者精确筛选（null 表示不过滤）。卡片作者钻取与作者 facet 共用此状态 */
 	public authorFilter: string | null = null;
 	/** 作者维度：作品数≥2 的多插件作者列表（facet 快捷筛选；长尾单插件作者走卡片钻取/搜索） */
 	public authorFacetList: AuthorGroup[] = [];
+	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json 人工清单；算法判定在 chinese-ecosystem.ts） */
+	public chineseEcoSet: Set<string> = new Set();
+	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json 开发者清单） */
+	public bambooSeriesSet: Set<string> = new Set();
 	/** 作者字母筛选：选中的首字母（null = 不展开任何组，只显示字母条） */
 	public activeAuthorLetter: string | null = null;
 	/** 作者 facet 展开态（字母组作者 > maxVisible 时「更多 ▾/收起 ▴」状态） */

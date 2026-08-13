@@ -501,6 +501,39 @@ button.pt-check-update:active { transform: scale(0.94); }
 button.pt-check-update.pt-spin svg {
 	animation: pt-spin 0.9s linear infinite;
 }
+/* 组合下拉按钮（场景切换）：与检查更新同款纯图标样式 */
+button.pt-profile-dropdown {
+	appearance: none;
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	color: var(--pt-text-muted);
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	border-radius: var(--pt-radius-btn);
+	cursor: pointer;
+	font-family: inherit;
+	transition: color var(--pt-duration-fast) var(--pt-ease),
+		transform var(--pt-duration-fast) var(--pt-ease-spring);
+}
+button.pt-profile-dropdown svg.svg-icon {
+	width: 16px;
+	height: 16px;
+	stroke-width: 2px;
+}
+button.pt-profile-dropdown:focus-visible {
+	box-shadow: var(--pt-focus-ring);
+	outline: none;
+}
+button.pt-profile-dropdown:hover {
+	color: var(--pt-text);
+}
+button.pt-profile-dropdown:active { transform: scale(0.94); }
 /* 刷新进行中：旋转动画提示进行状态 */
 .pt-refresh.pt-refreshing {
 	animation: pt-refresh-spin 0.9s linear infinite;
@@ -1589,6 +1622,45 @@ button.pt-card-install-btn--installed {
 	border: 1px solid color-mix(in srgb, var(--pt-accent-green, #2ecc71) 40%, transparent);
 }
 
+/* ── 维护健康度（基于 updated 三档，纯文字表达，融入作者行） ── */
+.pt-card-health-badge {
+	display: inline;
+	padding: 0;
+	border-radius: 0;
+	font-size: var(--pt-text-xs);
+	font-weight: normal;
+	letter-spacing: 0;
+	color: var(--text-muted);
+	background: transparent;
+	box-shadow: none;
+	border: none;
+	cursor: default;
+}
+/* 在作者名与健康度文案之间加间隔点 */
+.pt-card-health-badge::before {
+	content: "·";
+	margin: 0 0.3em;
+}
+
+/* ── 「新」标记（近 30 天首次见，纯文字，融入作者行） ── */
+.pt-card-new-badge {
+	display: inline;
+	padding: 0;
+	border-radius: 0;
+	font-size: var(--pt-text-xs);
+	font-weight: normal;
+	letter-spacing: 0;
+	color: var(--text-muted);
+	background: transparent;
+	box-shadow: none;
+	border: none;
+	cursor: default;
+}
+.pt-card-new-badge::before {
+	content: "·";
+	margin: 0 0.3em;
+}
+
 /* ── 顶部「官方推荐」置顶区（默认无搜索词时强曝光） ──
    设计：融入页面的分区标题，去掉厚边框/背景盒子，从根本上消除「框内居中」对齐难题。
    头部为一行 flex（标题左 + 展开/收起右），标题含金色强调竖条；
@@ -1700,71 +1772,21 @@ button.pt-card-install-btn--installed {
 .pt-card-desc--clamped {
 	overflow: hidden;
 }
-/* #5: 移动端点按描述原地展开（移除行数截断），再点收起 */
+/* 描述点击展开/收起（方案 C：桌面与移动统一，弃用 hover 浮层） */
 .pt-card-desc--touch {
 	cursor: pointer;
+}
+.pt-card-desc--touch:hover {
+	/* 可点态轻提示：hover 时轻微变色（仅视觉，不弹浮层）。
+	   仅用 text-decoration: underline 短属性——长属性（text-decoration-color 等）
+	   在 Obsidian 1.11.4 部分支持，且此处纯装饰、无需精细化。 */
+	color: var(--pt-text);
+	text-decoration: underline;
 }
 .pt-card-desc--expanded {
 	-webkit-line-clamp: unset;
 	max-height: none;
 	overflow: visible;
-}
-/* 描述 hover 浮层（fixed 定位，不破坏卡片布局） */
-.pt-desc-tooltip {
-	position: fixed;
-	z-index: var(--layer-popover, var(--obsidian-z-popover));
-	padding: 12px 16px;
-	background: var(--pt-surface);
-	color: var(--pt-text-strong);
-	border: 1px solid var(--pt-border);
-	border-radius: 8px;
-	box-shadow:
-		0 4px 12px rgba(0, 0, 0, 0.08),
-		0 1px 3px rgba(0, 0, 0, 0.06);
-	font-size: var(--pt-text-md);
-	line-height: 1.75;
-	max-height: 260px;
-	overflow-y: auto;
-	pointer-events: none;
-	word-break: break-word;
-	overflow-wrap: anywhere;
-	white-space: normal;
-	-webkit-box-orient: initial;
-	-webkit-line-clamp: initial;
-	display: block;
-	/* 入场动画 */
-	opacity: 0;
-	transform: translateY(4px);
-	animation: pt-tooltip-in 0.15s ease-out forwards;
-}
-@keyframes pt-tooltip-in {
-	to { opacity: 1; transform: translateY(0); }
-}
-/* 三角箭头（默认朝上，指向描述区底部）。用 border 三角画纯色箭头，避免 clip-path。 */
-.pt-desc-tooltip::before {
-	content: "";
-	position: absolute;
-	top: -8px;
-	left: var(--pt-tooltip-arrow-x, 16px);
-	width: 0;
-	height: 0;
-	border: 8px solid transparent;
-	border-bottom-color: var(--pt-surface);
-}
-/* 翻转态：浮层在描述区上方，箭头朝下 */
-.pt-desc-tooltip--above::before {
-	top: auto;
-	bottom: -8px;
-	border-bottom-color: transparent;
-	border-top-color: var(--pt-surface);
-}
-/* 尊重用户减弱动画偏好 */
-@media (prefers-reduced-motion: reduce) {
-	.pt-desc-tooltip {
-		animation: none;
-		opacity: 1;
-		transform: none;
-	}
 }
 /* 描述展开/收起按钮（底部居右） */
 .pt-card-desc-toggle {
@@ -1803,6 +1825,30 @@ button.pt-card-install-btn--installed {
 .pt-stat-chip .pt-stat-icon {
 	margin-right: 2px;
 	font-size: var(--pt-text-xs);
+}
+
+/* 趋势 sparkline（卡片下载行内，近 30 天增速折线） */
+.pt-card-spark {
+	display: inline-flex;
+	align-items: center;
+	margin-left: var(--pt-space-2xs);
+}
+.pt-card-spark svg {
+	width: 60px;
+	height: 16px;
+	display: block;
+}
+.pt-card-spark path {
+	fill: none;
+	stroke: var(--pt-accent);
+	stroke-width: 1.5;
+	stroke-linejoin: round;
+	stroke-linecap: round;
+	vector-effect: non-scaling-stroke;
+}
+/* 平/负增速：中性灰，弱化强调 */
+.pt-card-spark--flat path {
+	stroke: var(--pt-text-muted);
 }
 
 /* AI 理由行（紧凑，1 行） */
@@ -2141,19 +2187,24 @@ button.pt-card-install-btn--installed {
     to { transform: rotate(360deg); }
 }
 
-/* ── 减弱动效：保留语义、删去所有连续循环 ─────────────────────────────── */
+/* ── 减弱动效：保留语义、删去所有连续循环 ───────────────────────────────
+   这里必须用 !important（reduce-motion 的「无条件禁用」语义）：动画定义在
+   .pt-icon-btn--loading svg path:nth-of-type(3) 等更高特异性选择器上，
+   (0,1,0) 的本体选择器压不住；去掉会破坏「系统减弱动效」用户的体验。 */
 @media (prefers-reduced-motion: reduce) {
+    /* 所有带动画/过渡的选择器都列在此处（含 .pt-icon-btn--loading svg path:nth-of-type(3)
+       等高特异性选择器），且本块在文件后部——同特异性后声明覆盖，无需 !important。 */
     .pt-icon-btn--loading,
     .pt-icon-btn--loading svg,
     .pt-icon-btn--loading svg path:nth-of-type(3),
     .pt-icon-btn--loading svg path:nth-of-type(4),
     .pt-detail-btn--loading,
     .pt-detail-btn--loading::before {
-        animation: none !important;
+        animation: none;
     }
     .pt-icon-btn--loading::after,
     .pt-detail-btn--loading::after {
-        transition: none !important;
+        transition: none;
     }
 }
 
@@ -4557,13 +4608,13 @@ button.pt-card-install-btn--installed {
 	background: transparent;
 	color: var(--pt-text-muted, var(--text-muted));
 	cursor: pointer;
+	font-size: 14px;
+	line-height: 1;
+	font-family: inherit;
 	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease);
 }
-.pt-active-chip-clear .svg-icon {
-	width: 10px;
-	height: 10px;
-	stroke-width: 2.5;
-}
+/* 文字 × 偏移修正：CSS line-height 在 inline-flex 容器里仍可能略偏，-2px 上移让它视觉居中。
+   同时去掉 SVG 子选择器（按钮改用文字后 svg-icon 规则失效）。 */
 .pt-active-chip-clear:hover {
 	background: color-mix(in srgb, var(--pt-accent) 20%, transparent);
 	color: var(--pt-accent, var(--interactive-accent));
@@ -5212,4 +5263,43 @@ button.pt-card-install-btn--installed {
 	.pt-view .pt-header-row {
 		flex-wrap: nowrap;
 	}
+}
+
+/* 左侧栏 ribbon：已装插件有可用更新时的红点徽标（对齐竞品 better-store 后台更新提醒） */
+.side-dock-ribbon-action.pt-ribbon-has-update {
+	position: relative;
+}
+.side-dock-ribbon-action.pt-ribbon-has-update::after {
+	content: "";
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--text-error, #e5693f);
+	box-shadow: 0 0 0 2px var(--background-primary);
+	pointer-events: none;
+}
+
+/* 设置页：插件启用组合 Profile 行 */
+.pt-profile-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 4px 0;
+}
+.pt-profile-name {
+	flex: 1;
+	font-weight: 500;
+}
+.pt-profile-row button {
+	margin: 0;
+}
+.pt-profile-del {
+	color: var(--text-error, #e5693f);
+}
+.pt-profile-input {
+	margin-top: 8px;
+	width: 100%;
 }

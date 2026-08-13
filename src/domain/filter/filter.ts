@@ -11,6 +11,7 @@ import type { PluginInfo, TranslateResult, AISearchResult } from "@domain/catalo
 import type { QueryAST, QueryFields } from "@domain/search/query";
 import { isAdvancedQuery, parseQuery, matchQueryAST } from "@domain/search/query";
 import { sortPlugins, type SortBy } from "@domain/filter/sort";
+import { isChineseEcosystem } from "@domain/recommend/chinese-ecosystem";
 import type { I18nKey } from "@shared/i18n";
 import { isAIWorthyQuery, isKeywordWorthyQuery } from "@domain/search/ai-explorer";
 
@@ -29,6 +30,8 @@ export class FilterCache {
 	private _recommendedOnly = false;
 	private _categories?: string[];
 	private _favorites: FavoriteFilter = "all";
+	private _newWithinDays: number | null = null;
+	private _updatedWithinDays: number | null = null;
 	/** 上一次过滤所处的搜索模式（H1：AI 召回子集不得被关键词模式当前缀基础集复用） */
 	private _mode: SearchMode = "keyword";
 
@@ -42,6 +45,8 @@ export class FilterCache {
 		this._recommendedOnly = result.nextFilterRecommendedOnly ?? false;
 		this._categories = result.nextFilterCategories;
 		this._favorites = result.nextFilterFavorites ?? "all";
+		this._newWithinDays = result.nextFilterNewWithinDays ?? null;
+		this._updatedWithinDays = result.nextFilterUpdatedWithinDays ?? null;
 		this._mode = result.nextFilterMode ?? "keyword";
 	}
 
@@ -50,7 +55,7 @@ export class FilterCache {
 		| "lastFiltered" | "lastFilterQuery" | "lastFilterSource"
 		| "lastFilterAuthor" | "lastFilterInstall"
 		| "lastFilterRecommendedOnly" | "lastFilterCategories"
-		| "lastFilterFavorites" | "lastFilterMode"> {
+		| "lastFilterFavorites" | "lastFilterNewWithinDays" | "lastFilterUpdatedWithinDays" | "lastFilterMode"> {
 		return {
 			lastFiltered: this._list,
 			lastFilterQuery: this._query,
@@ -60,6 +65,8 @@ export class FilterCache {
 			lastFilterRecommendedOnly: this._recommendedOnly,
 			lastFilterCategories: this._categories,
 			lastFilterFavorites: this._favorites,
+			lastFilterNewWithinDays: this._newWithinDays,
+			lastFilterUpdatedWithinDays: this._updatedWithinDays,
 			lastFilterMode: this._mode,
 		};
 	}
@@ -80,6 +87,8 @@ export class FilterCache {
 		this._recommendedOnly = false;
 		this._categories = undefined;
 		this._favorites = "all";
+		this._newWithinDays = null;
+		this._updatedWithinDays = null;
 		this._mode = "keyword";
 	}
 }
@@ -95,6 +104,12 @@ export type InstallFilter = "all" | "installed" | "enabled" | "installedNotEnabl
 
 /** 收藏筛选（"all" 表示全部；"favorited" 仅已收藏；"unfavorited" 仅未收藏） */
 export type FavoriteFilter = "all" | "favorited" | "unfavorited";
+
+/** 中文生态筛选（"all" 表示全部；"eco" 仅中文生态插件） */
+export type ChineseEcoFilter = "all" | "eco";
+
+/** 系列筛选（"all" 表示全部；"bamboo" 仅竹林中国系列插件） */
+export type SeriesFilter = "all" | "bamboo";
 
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。
@@ -135,6 +150,20 @@ export interface MatchOptions {
 	favoriteFilter?: FavoriteFilter;
 	/** 用户收藏插件 id 集合（由 settings.favorites 加载为 Set） */
 	favoritesSet?: Set<string>;
+	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
+	chineseEcoFilter?: ChineseEcoFilter;
+	/** 中文生态人工清单 id 集合（plugin-chinese-ecosystem.json） */
+	chineseEcoSet?: Set<string>;
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	seriesFilter?: SeriesFilter;
+	/** 系列插件 id 集合（plugin-bamboo-series.json） */
+	bambooSeriesSet?: Set<string>;
+	/** 新上线窗口天数（number | null；null = 不过滤，7/30/90 生效） */
+	newWithinDays?: number | null;
+	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json（git history 解析） */
+	releaseDatesMap?: Map<string, number>;
+	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件（null = 不过滤） */
+	updatedWithinDays?: number | null;
 	/** 分类筛选：选中分类列表（多选取并集；空/undefined 不过滤） */
 	selectedCategories?: string[];
 	/** 插件 id → 一级分类映射（由 translator.pluginTags 构建，用于本地分类过滤） */
@@ -186,6 +215,27 @@ export function matchesPlugin(
 	// 收藏筛选：仅已收藏 / 仅未收藏
 	if (opts.favoriteFilter === "favorited" && opts.favoritesSet && !opts.favoritesSet.has(p.id)) return false;
 	if (opts.favoriteFilter === "unfavorited" && opts.favoritesSet && opts.favoritesSet.has(p.id)) return false;
+	// 中文生态筛选：仅中文生态插件（算法信号 ∪ 人工清单）
+	if (opts.chineseEcoFilter === "eco") {
+		const isEco = opts.chineseEcoSet?.has(p.id) === true || isChineseEcosystem(p);
+		if (!isEco) return false;
+	}
+	// 系列筛选：仅「竹林中国系列」插件（plugin-bamboo-series.json 人工清单）
+	if (opts.seriesFilter === "bamboo") {
+		if (opts.bambooSeriesSet?.has(p.id) !== true) return false;
+	}
+	// 仅看新上线：近 newWithinDays 天「首次进入官方市场」的插件才保留（null = 不过滤）。
+	// 时间源 = releaseDatesMap（插件真实上线日期，来自 obsidian-releases git history），
+	// 与用户是否见过无关，是稳定的插件维度。缺失/无记录则不命中。
+	if (opts.newWithinDays && opts.newWithinDays > 0) {
+		const listedAt = opts.releaseDatesMap?.get(p.id);
+		if (listedAt == null || listedAt <= 0 || Date.now() - listedAt > opts.newWithinDays * 86_400_000) return false;
+	}
+	// 近期更新：仅保留近 updatedWithinDays 天有版本更新的插件（null/0 = 不过滤）
+	if (opts.updatedWithinDays && opts.updatedWithinDays > 0) {
+		const u = p.updated;
+		if (!u || Date.now() - u > opts.updatedWithinDays * 86_400_000) return false;
+	}
 	// 分类筛选：仅保留分类匹配的插件（多选取并集；所有模式生效，作为全局发现维度）
 	if (opts.selectedCategories?.length && opts.pluginTagMap) {
 		const cat = opts.pluginTagMap.get(p.id);
@@ -240,6 +290,20 @@ export interface FilterParams {
 	favoriteFilter?: FavoriteFilter;
 	/** 用户收藏插件 id 集合 */
 	favoritesSet?: Set<string>;
+	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
+	chineseEcoFilter?: ChineseEcoFilter;
+	/** 中文生态人工清单 id 集合 */
+	chineseEcoSet?: Set<string>;
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	seriesFilter?: SeriesFilter;
+	/** 系列插件 id 集合（plugin-bamboo-series.json） */
+	bambooSeriesSet?: Set<string>;
+	/** 新上线窗口天数（number | null；null = 不过滤） */
+	newWithinDays?: number | null;
+	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json */
+	releaseDatesMap?: Map<string, number>;
+	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
+	updatedWithinDays?: number | null;
 	/** 分类筛选：选中分类列表（多选取并集） */
 	selectedCategories?: string[];
 	/** 插件 id → 一级分类映射 */
@@ -273,6 +337,10 @@ export interface FilterParams {
 	lastFilterRecommendedOnly?: boolean;
 	/** 上一次的 favoriteFilter（缓存失效判断，避免切回「全部」时复用收藏子集） */
 	lastFilterFavorites?: FavoriteFilter;
+	/** 上一次的 newWithinDays（缓存失效判断，null = 不过滤） */
+	lastFilterNewWithinDays?: number | null;
+	/** 上一次的 updatedWithinDays（缓存失效判断） */
+	lastFilterUpdatedWithinDays?: number | null;
 	/** 上一次选中的分类（数组引用比对，变化时使缓存失效） */
 	lastFilterCategories?: string[];
 	/** 上一次过滤所处的搜索模式（缺省视为 keyword，向后兼容） */
@@ -292,6 +360,8 @@ export interface FilterResult {
 	nextFilterInstall: InstallFilter;
 	nextFilterRecommendedOnly?: boolean;
 	nextFilterFavorites?: FavoriteFilter;
+	nextFilterNewWithinDays?: number | null;
+	nextFilterUpdatedWithinDays?: number | null;
 	nextFilterCategories?: string[];
 	/** 回写的搜索模式（供下次缓存复用判定：AI 子集不得被关键词模式复用） */
 	nextFilterMode: SearchMode;
@@ -313,18 +383,26 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		aiSearchResult, aiSearchQueryCache,
   lastFiltered, lastFilterQuery, lastFilterSource, lastFilterAuthor, authorFilter,
   lastFilterInstall = "all", lastFilterRecommendedOnly = false, lastFilterFavorites = "all",
-  lastFilterCategories, lastFilterMode = "keyword",
+  lastFilterNewWithinDays, lastFilterCategories, lastFilterMode = "keyword",
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
+		chineseEcoFilter, chineseEcoSet,
+		seriesFilter, bambooSeriesSet,
 		selectedCategories, pluginTagMap,
 		hasHistoryTranslation,
+		releaseDatesMap,
+		newWithinDays, updatedWithinDays,
+		lastFilterUpdatedWithinDays = null,
 	} = params;
 
 	const matchOpts: MatchOptions = {
 		sourceFilter, installFilter, searchMode, installedIds, enabledIds, translatedResults, searchIndex, authorFilter,
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
+		chineseEcoFilter, chineseEcoSet,
+		seriesFilter, bambooSeriesSet,
 		selectedCategories, pluginTagMap,
+		releaseDatesMap, newWithinDays, updatedWithinDays,
 		hasHistoryTranslation,
 	};
 
@@ -336,6 +414,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	let nextFilterInstall: InstallFilter;
 	let nextFilterRecommendedOnly: boolean | undefined;
 	let nextFilterFavorites: FavoriteFilter | undefined;
+	let nextFilterNewWithinDays: number | null | undefined;
+	let nextFilterUpdatedWithinDays: number | null | undefined;
 	let nextFilterCategories: string[] | undefined;
 	let clearAiResult = false;
 
@@ -415,6 +495,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 			lastFilterInstall === installFilter &&
 			lastFilterRecommendedOnly === recommendedOnly &&
 			lastFilterFavorites === favoriteFilter &&
+			lastFilterNewWithinDays === (newWithinDays ?? null) &&
+			lastFilterUpdatedWithinDays === (updatedWithinDays ?? null) &&
 			sameCategories &&
 			(lastFilterQuery === "" || query.startsWith(lastFilterQuery));
 
@@ -437,6 +519,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	nextFilterInstall = installFilter;
 	nextFilterRecommendedOnly = recommendedOnly;
 	nextFilterFavorites = favoriteFilter;
+	nextFilterNewWithinDays = newWithinDays ?? null;
+	nextFilterUpdatedWithinDays = updatedWithinDays ?? null;
 	nextFilterCategories = selectedCategories;
 
 	// 应用排序。relevance 保持来源顺序（AI=rankedIds 序 / 本地=过滤序）；其余维度覆盖之。
@@ -471,6 +555,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		nextFilterInstall,
 		nextFilterRecommendedOnly,
 		nextFilterFavorites,
+		nextFilterNewWithinDays,
+		nextFilterUpdatedWithinDays,
 		nextFilterCategories,
 		nextFilterMode: searchMode,
 		clearAiResult,

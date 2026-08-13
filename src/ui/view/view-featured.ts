@@ -99,6 +99,7 @@ export function renderFeaturedSection(ctx: ViewContext) {
 			const result = ctx.translatedResults[plugin.id];
 			const card = createPluginCard(plugin, result, {
 				t: ctx.t,
+				settings: ctx.settings,
 				installedIds: ctx.installedIds,
 				enabledIds: ctx.enabledIds,
 				aiSearchResult: ctx.aiSearchResult,
