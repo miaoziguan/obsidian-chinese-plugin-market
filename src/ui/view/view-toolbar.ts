@@ -659,37 +659,33 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			});
 		});
 
-		// ── 启用组合 Profile 快速切换（对齐「已安装」维度：切组合后自动切到已安装视角看效果）──
+		// ── 启用组合 Profile 快速切换（平铺，与「上线/更新」chip 视觉一致；点选即应用）──
 		const profileRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		profileRow.createSpan({ cls: "pt-facet-label", text: "组合" });
 		const profileChips = profileRow.createDiv({ cls: "pt-facet-chips" });
-		const profileBtn = profileChips.createEl("button", {
-			cls: "pt-filter pt-toggle-profile",
-			text: ctx.profiles.length > 0 ? "切换组合" : "无组合",
-		});
-		if (ctx.profiles.length === 0) {
-			profileBtn.setAttribute("aria-pressed", "false");
-			profileBtn.disabled = true;
+		for (const p of ctx.profiles) {
+			const chip = profileChips.createEl("button", {
+				cls: "pt-filter pt-toggle-profile",
+				text: `${p.name}（${p.enabled.length}）`,
+			});
+			chip.setAttribute("aria-pressed", "false");
+			chip.addEventListener("click", () => {
+				// 应用组合 + 切到「已安装」视角，立即看到启用集变化
+				ctx.installFilter = "installed";
+				updateInstallToggles();
+				ctx.updateFacetVisibility();
+				ctx.track("profile:apply");
+				void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
+			});
 		}
-		profileBtn.addEventListener("click", (ev) => {
-			if (ctx.profiles.length === 0) return;
-			const menu = new Menu();
-			for (const p of ctx.profiles) {
-				menu.addItem((item) =>
-					item
-						.setTitle(`${p.name}（${p.enabled.length}）`)
-						.onClick(() => {
-							// 应用组合 + 切到「已安装」视角，立即看到启用集变化
-							ctx.installFilter = "installed";
-							updateInstallToggles();
-							ctx.updateFacetVisibility();
-							ctx.track("profile:apply");
-							void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
-						})
-				);
-			}
-			menu.showAtMouseEvent(ev);
-		});
+		if (ctx.profiles.length === 0) {
+			// 无预设时显示占位灰 chip（不可点击），提示用户去设置页保存
+			const empty = profileChips.createEl("button", {
+				cls: "pt-filter pt-toggle-profile is-empty",
+				text: "无组合（设置页保存）",
+			});
+			empty.disabled = true;
+		}
 
 		// ── 收藏筛选（已收藏 / 未收藏），与安装筛选同组 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
