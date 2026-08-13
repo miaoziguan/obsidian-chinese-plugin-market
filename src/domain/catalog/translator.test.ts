@@ -267,7 +267,7 @@ describe("Translator · AI 翻译管线", () => {
 	it("AI 调用失败时降级到 MyMemory（source=online）", async () => {
 		vi.spyOn(LLMClient.prototype, "call").mockRejectedValue(new Error("AI down"));
 		vi.spyOn(MyMemoryClient.prototype as any, "callApi").mockImplementation(
-			async (text: string) => `机翻:${text}`
+			async (text: string) => ({ text: `机翻:${text}`, unchanged: false })
 		);
 		const t = new Translator();
 		t.setUseMyMemory(true);
@@ -283,7 +283,7 @@ describe("Translator · AI 翻译管线", () => {
 	it("未配置 apiKey 时跳过 AI（callAITranslate 不被调用），走机翻", async () => {
 		const llmSpy = vi.spyOn(translateApi, "callAITranslate").mockResolvedValue({ translatedName: "x" } as TranslateResult);
 		vi.spyOn(MyMemoryClient.prototype as any, "callApi").mockImplementation(
-			async (text: string) => `机翻:${text}`
+			async (text: string) => ({ text: `机翻:${text}`, unchanged: false })
 		);
 		const t = new Translator();
 		t.setUseMyMemory(true);
@@ -299,7 +299,7 @@ describe("Translator · AI 翻译管线", () => {
 	it("AI 返回空 name 时视为失败并降级", async () => {
 		vi.spyOn(translateApi, "callAITranslate").mockResolvedValue(null);
 		vi.spyOn(MyMemoryClient.prototype as any, "callApi").mockImplementation(
-			async (text: string) => `机翻:${text}`
+			async (text: string) => ({ text: `机翻:${text}`, unchanged: false })
 		);
 		const t = new Translator();
 		t.setUseMyMemory(true);
