@@ -15,10 +15,11 @@ import type { I18nKey } from "@shared/i18n";
 import { cleanChineseSpaces } from "@shared/utils";
 import { appendSVG } from "@ui/dom/dom";
 import { isMacOS, macosSystemTranslate } from "@translation/platform/macos-shortcuts";
-import { formatDownloads, formatUpdated } from "@domain/catalog/stats";
+import { formatDownloads, formatRelativeTime } from "@domain/catalog/stats";
 import type { SignalId } from "@domain/filter/smart-signal";
 import type { TrendingEngine, TrendSnapshot } from "@domain/recommend/trending";
 import { assessHealth } from "@domain/recommend/health";
+import { isNewPlugin } from "@domain/recommend/newness";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 
 /** 离线信号 → 中文标签（无需 AI Key 即可展示） */
@@ -748,7 +749,7 @@ export function applyCardState(
 	const showDl = dl != null;
 	refs.dlChip.setCssStyles({ display: showDl ? "" : "none" });
 	if (showDl) refs.dlText.textContent = (formatDownloads(dl));
-	const u = plugin.updated != null ? formatUpdated(plugin.updated) : "";
+	const u = plugin.updated != null ? formatRelativeTime(plugin.updated) : "";
 	const showClk = !!u;
 	refs.clkChip.setCssStyles({ display: showClk ? "" : "none" });
 	if (showClk) refs.clkText.textContent = (`更新于 ${u}`);
@@ -844,11 +845,9 @@ export function applyCardState(
 		hb.setCssStyles({ display: "none" });
 	}
 
-	// 「新」标记：近 30 天首次见的插件，纯文字融入作者行（对齐竞品 newness.ts 窗口判定）
+	// 「新」标记：近 30 天首次见的插件，纯文字融入作者行（newness.ts 窗口判定，可配置）
 	const nb = refs.newBadge;
-	const seenAt = ctx.firstSeenMap?.get(plugin.id);
-	const isNew = seenAt != null && seenAt > 0 && Date.now() - seenAt <= 30 * 86_400_000;
-	if (isNew) {
+	if (isNewPlugin(ctx.firstSeenMap?.get(plugin.id))) {
 		nb.textContent = "新";
 		nb.setCssStyles({ display: "" });
 	} else {

@@ -65,6 +65,28 @@ export function formatUpdated(ts?: number): string {
 	return `${y}-${mm}`;
 }
 
+const MINUTE = 60_000;
+const HOUR = 3_600_000;
+const DAY = 86_400_000;
+
+/**
+ * 把 ms 时间戳格式化为相对时间（对齐竞品 "3d ago" 的可读性，中文文案）：
+ *   <1 分钟 → "刚刚"；<1 小时 → "N 分钟前"；<24 小时 → "N 小时前"；
+ *   <30 天 → "N 天前"；<365 天 → "N 个月前"；否则 → "N 年前"。
+ * 缺失 / 非法 / 未来时间戳返回 ""（未来时间视为未知，避免 "0 分钟前" 误导）。
+ */
+export function formatRelativeTime(ts?: number, now: number = Date.now()): string {
+	if (ts == null || !Number.isFinite(ts)) return "";
+	const diff = now - ts;
+	if (diff < 0) return "";
+	if (diff < MINUTE) return "刚刚";
+	if (diff < HOUR) return `${Math.floor(diff / MINUTE)} 分钟前`;
+	if (diff < DAY) return `${Math.floor(diff / HOUR)} 小时前`;
+	if (diff < 30 * DAY) return `${Math.floor(diff / DAY)} 天前`;
+	if (diff < 365 * DAY) return `${Math.floor(diff / (30 * DAY))} 个月前`;
+	return `${Math.floor(diff / (365 * DAY))} 年前`;
+}
+
 /** 从网络拉取并解析 stats（失败向上抛，由调用方静默降级） */
 export async function fetchPluginStats(url: string): Promise<Map<string, PluginStat>> {
 	const response = await netRequest({ url, method: "GET" });
