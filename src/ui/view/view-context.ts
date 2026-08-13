@@ -391,8 +391,10 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		applyProfile: (p) =>
 			(view.plugin as unknown as { applyProfile(p: PluginProfile): Promise<void> }).applyProfile(p),
 		profiles: view.plugin.settings.profiles,
-		chineseEcoSet: view.chineseEcoSet,
-		bambooSeriesSet: view.bambooSeriesSet,
+		// 中文生态/系列清单是异步加载的（可能晚于视图创建）：用 getter 动态读，
+		// 避免值拷贝持有空 Set 导致筛选恒空（修复：视图先开时系列筛选为空）
+		get chineseEcoSet() { return view.chineseEcoSet; },
+		get bambooSeriesSet() { return view.bambooSeriesSet; },
 
 		// ── Obsidian ItemView DOM ──
 		containerEl: view.containerEl,
