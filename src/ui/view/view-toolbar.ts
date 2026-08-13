@@ -659,6 +659,38 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			});
 		});
 
+		// ── 启用组合 Profile 快速切换（对齐「已安装」维度：切组合后自动切到已安装视角看效果）──
+		const profileRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+		profileRow.createSpan({ cls: "pt-facet-label", text: "组合" });
+		const profileChips = profileRow.createDiv({ cls: "pt-facet-chips" });
+		const profileBtn = profileChips.createEl("button", {
+			cls: "pt-filter pt-toggle-profile",
+			text: ctx.profiles.length > 0 ? "切换组合" : "无组合",
+		});
+		if (ctx.profiles.length === 0) {
+			profileBtn.setAttribute("aria-pressed", "false");
+			profileBtn.disabled = true;
+		}
+		profileBtn.addEventListener("click", (ev) => {
+			if (ctx.profiles.length === 0) return;
+			const menu = new Menu();
+			for (const p of ctx.profiles) {
+				menu.addItem((item) =>
+					item
+						.setTitle(`${p.name}（${p.enabled.length}）`)
+						.onClick(() => {
+							// 应用组合 + 切到「已安装」视角，立即看到启用集变化
+							ctx.installFilter = "installed";
+							updateInstallToggles();
+							ctx.updateFacetVisibility();
+							ctx.track("profile:apply");
+							void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
+						})
+				);
+			}
+			menu.showAtMouseEvent(ev);
+		});
+
 		// ── 收藏筛选（已收藏 / 未收藏），与安装筛选同组 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		favRow.createSpan({ cls: "pt-facet-label", text: "收藏" });
