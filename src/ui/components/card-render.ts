@@ -10,6 +10,7 @@
 import { Notice } from "obsidian";
 import { isMobileEnvironment } from "@shared/platform";
 import type { PluginInfo, TranslateResult, AISearchResult } from "@domain/catalog/translator";
+import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import type { I18nKey } from "@shared/i18n";
 import { cleanChineseSpaces } from "@shared/utils";
 import { appendSVG } from "@ui/dom/dom";
@@ -112,6 +113,8 @@ function highlightInto(el: HTMLElement, text: string, terms: string[] | undefine
 export interface CardRenderContext {
 	/** i18n 取词函数 */
 	t: (key: I18nKey) => string;
+	/** 插件设置（健康度徽标 / 更新提醒等偏好，供卡片就地读取） */
+	settings: ChinesePluginMarketSettings;
 	/** 已安装插件 id 集合 */
 	installedIds: Set<string>;
 	/** 已启用插件 id 集合 */
@@ -809,8 +812,9 @@ export function applyCardState(
 	refs.authorSpan.setAttribute("title", t("card.author.tip").replace("{author}", plugin.author));
 
 	// 可更新徽标：官方版本领先本地（仅已装插件），点击跳 Obsidian 社区插件更新入口
+	// 受设置 notifyInstalledUpdates 开关控制（轻量更新提醒，无后台推送）
 	const ub = refs.updateBadge;
-	const outdated = !!ctx.outdatedIds?.has(plugin.id);
+	const outdated = !!ctx.settings.notifyInstalledUpdates && !!ctx.outdatedIds?.has(plugin.id);
 	if (outdated && ub) {
 		const info = ctx.outdatedInfo?.get(plugin.id);
 		const label = info ? `可更新 ${info.local} → ${info.latest}` : "可更新";
@@ -822,13 +826,23 @@ export function applyCardState(
 	}
 
 	// 维护健康度：纯文字表达，融入作者行（与竞品 health.ts 同数据，去掉彩色胶囊样式）
+	// 受设置 showHealthBadge 开关控制；阈值由 healthHealthyDays / healthAgingDays 自定义
 	const hb = refs.healthBadge;
-	const health = assessHealth(plugin.updated);
-	const healthLabel = health.level === "healthy" ? "活跃" : health.level === "aging" ? "维护放缓" : "停更风险";
-	hb.textContent = healthLabel;
-	hb.setAttribute("title", `维护状态：${health.reason}`);
-	hb.className = "pt-card-health-badge";
-	hb.setCssStyles({ display: "" });
+	if (ctx.settings.showHealthBadge) {
+		const health = assessHealth(
+			plugin.updated,
+			Date.now(),
+			ctx.settings.healthHealthyDays,
+			ctx.settings.healthAgingDays,
+		);
+		const healthLabel = health.level === "healthy" ? "活跃" : health.level === "aging" ? "维护放缓" : "停更风险";
+		hb.textContent = healthLabel;
+		hb.setAttribute("title", `维护状态：${health.reason}`);
+		hb.className = "pt-card-health-badge";
+		hb.setCssStyles({ display: "" });
+	} else {
+		hb.setCssStyles({ display: "none" });
+	}
 
 	// 「新」标记：近 30 天首次见的插件，纯文字融入作者行（对齐竞品 newness.ts 窗口判定）
 	const nb = refs.newBadge;

@@ -150,6 +150,103 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			},
 			{
 				type: "group",
+				heading: this.t("settings.updateManage"),
+				desc: this.t("settings.updateManage.desc"),
+				items: [
+					{
+						name: this.t("settings.updateManage.defaultNew"),
+						desc: this.t("settings.updateManage.defaultNew.desc"),
+						control: {
+							type: "dropdown",
+							key: "defaultNewWithinDays",
+							defaultValue: "off",
+							options: {
+								off: this.t("settings.updateManage.window.off"),
+								"1": this.t("settings.updateManage.window.1"),
+								"3": this.t("settings.updateManage.window.3"),
+								"7": this.t("settings.updateManage.window.7"),
+								"30": this.t("settings.updateManage.window.30"),
+								"90": this.t("settings.updateManage.window.90"),
+								"365": this.t("settings.updateManage.window.365"),
+							},
+						},
+					},
+					{
+						name: this.t("settings.updateManage.defaultUpdated"),
+						desc: this.t("settings.updateManage.defaultUpdated.desc"),
+						control: {
+							type: "dropdown",
+							key: "defaultUpdatedWithinDays",
+							defaultValue: "off",
+							options: {
+								off: this.t("settings.updateManage.window.off"),
+								"1": this.t("settings.updateManage.window.1"),
+								"3": this.t("settings.updateManage.window.3"),
+								"7": this.t("settings.updateManage.window.7"),
+								"30": this.t("settings.updateManage.window.30"),
+								"90": this.t("settings.updateManage.window.90"),
+								"365": this.t("settings.updateManage.window.365"),
+							},
+						},
+					},
+					{
+						name: this.t("settings.updateManage.healthBadge"),
+						desc: this.t("settings.updateManage.healthBadge.desc"),
+						control: { type: "toggle", key: "showHealthBadge", defaultValue: true },
+					},
+					{
+						name: this.t("settings.updateManage.demoteAtRisk"),
+						desc: this.t("settings.updateManage.demoteAtRisk.desc"),
+						visible: () => this.plugin.settings.showHealthBadge,
+						control: { type: "toggle", key: "demoteAtRisk", defaultValue: false },
+					},
+					{
+						name: this.t("settings.updateManage.healthHealthy"),
+						desc: this.t("settings.updateManage.healthHealthy.desc"),
+						visible: () => this.plugin.settings.showHealthBadge,
+						control: { type: "text", key: "healthHealthyDays", placeholder: "120" },
+					},
+					{
+						name: this.t("settings.updateManage.healthAging"),
+						desc: this.t("settings.updateManage.healthAging.desc"),
+						visible: () => this.plugin.settings.showHealthBadge,
+						control: { type: "text", key: "healthAgingDays", placeholder: "365" },
+					},
+					{
+						name: this.t("settings.updateManage.trendSampling"),
+						desc: this.t("settings.updateManage.trendSampling.desc"),
+						control: { type: "toggle", key: "trendSampling", defaultValue: true },
+					},
+					{
+						name: this.t("settings.updateManage.trendInterval"),
+						visible: () => this.plugin.settings.trendSampling,
+						control: {
+							type: "dropdown",
+							key: "trendIntervalMs",
+							defaultValue: String(6 * 60 * 60 * 1000),
+							options: {
+								"3600000": this.t("settings.updateManage.interval.3600000"),
+								"21600000": this.t("settings.updateManage.interval.21600000"),
+								"43200000": this.t("settings.updateManage.interval.43200000"),
+								"86400000": this.t("settings.updateManage.interval.86400000"),
+							},
+						},
+					},
+					{
+						name: this.t("settings.updateManage.trendKeep"),
+						desc: this.t("settings.updateManage.trendKeep"),
+						visible: () => this.plugin.settings.trendSampling,
+						control: { type: "text", key: "trendKeepDays", placeholder: "90" },
+					},
+					{
+						name: this.t("settings.updateManage.notifyInstalled"),
+						desc: this.t("settings.updateManage.notifyInstalled.desc"),
+						control: { type: "toggle", key: "notifyInstalledUpdates", defaultValue: true },
+					},
+				],
+			},
+			{
+				type: "group",
 				heading: this.t("settings.dataSource"),
 				desc: this.t("settings.dataSource.desc"),
 				items: [
@@ -428,6 +525,17 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			case "embeddingLocalModel":
 			case "embeddingLocalWasmPaths":
 				s[key] = typeof value === "string" ? value.trim() : value;
+				break;
+			// 数字字段：声明式 dropdown/text 回传字符串，收敛为 number（null 表示不过滤）
+			case "defaultNewWithinDays":
+			case "defaultUpdatedWithinDays":
+			case "trendIntervalMs":
+			case "healthHealthyDays":
+			case "healthAgingDays":
+			case "trendKeepDays":
+				s[key] = value == null || value === "" || value === "off"
+					? null
+					: Number(value);
 				break;
 			default:
 				s[key] = value;

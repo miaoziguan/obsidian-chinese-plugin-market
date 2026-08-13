@@ -37,6 +37,13 @@ beforeAll(() => {
 function mkCtx(over: Partial<CardRenderContext> = {}): CardRenderContext {
 	return {
 		t: (k) => k,
+		settings: {
+			showHealthBadge: true,
+			demoteAtRisk: false,
+			healthHealthyDays: 120,
+			healthAgingDays: 365,
+			notifyInstalledUpdates: true,
+		} as unknown as CardRenderContext["settings"],
 		installedIds: new Set(),
 		enabledIds: new Set(),
 		aiSearchResult: null,
