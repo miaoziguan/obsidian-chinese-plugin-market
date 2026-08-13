@@ -73,10 +73,30 @@ export interface ChinesePluginMarketSettings {
 	favorites: string[];
 	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部（跨会话持久化） */
 	favoriteFilter: FavoriteFilter;
-	/** 新上线窗口天数：null 表示不过滤（默认），可选 7/30/90 */
+	/** 新上线窗口天数：null 表示不过滤（默认），可选 1/3/7/30/90/365 */
 	newWithinDays: number | null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件（默认 null = 不过滤） */
 	updatedWithinDays: number | null;
+	/** 默认上线窗口（设置预设，打开市场时套用；null = 不过滤） */
+	defaultNewWithinDays: number | null;
+	/** 默认更新窗口（设置预设，打开市场时套用；null = 不过滤） */
+	defaultUpdatedWithinDays: number | null;
+	/** 卡片显示维护健康度徽标（healthy/aging/at-risk 彩色点） */
+	showHealthBadge: boolean;
+	/** 把 at-risk（停更风险）插件在列表沉底折叠 */
+	demoteAtRisk: boolean;
+	/** 健康度「活跃」阈值天数（≤ 该值判 healthy） */
+	healthHealthyDays: number;
+	/** 健康度「风险」阈值天数（> 该值判 at-risk） */
+	healthAgingDays: number;
+	/** 启用下载趋势采样（trending.ts） */
+	trendSampling: boolean;
+	/** 趋势采样间隔（ms）：1h/6h/12h/24h 之一 */
+	trendIntervalMs: number;
+	/** 趋势采样保留天数（> 该值的旧采样清理） */
+	trendKeepDays: number;
+	/** 已安装插件有可用更新时，在列表卡片标红点提醒（轻量版，无后台轮询） */
+	notifyInstalledUpdates: boolean;
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
 }
@@ -107,6 +127,16 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	favoriteFilter: "all",
 	newWithinDays: null,
 	updatedWithinDays: null,
+	defaultNewWithinDays: null,
+	defaultUpdatedWithinDays: null,
+	showHealthBadge: true,
+	demoteAtRisk: false,
+	healthHealthyDays: 120,
+	healthAgingDays: 365,
+	trendSampling: true,
+	trendIntervalMs: 6 * 60 * 60 * 1000,
+	trendKeepDays: 90,
+	notifyInstalledUpdates: true,
 };
 
 /**
@@ -300,12 +330,14 @@ export class ChinesePluginMarketView extends ItemView {
 		this.favoritesSet = new Set(plugin.settings.favorites);
 		// 水合对比集（从持久化 settings.compare 恢复为 Set，跨会话保留）
 		this.compareSet = new Set(plugin.settings.compare);
-		// 水合新上线窗口天数（null 不过滤，合法值 7/30/90，其余回退 null）
-		const nwd = plugin.settings.newWithinDays;
-		this.newWithinDays = nwd === 7 || nwd === 30 || nwd === 90 ? nwd : null;
-		// 水合近期更新窗口（合法正数或 null，其余回退 null = 不过滤）
-		const uwd = plugin.settings.updatedWithinDays;
-		this.updatedWithinDays = typeof uwd === "number" && uwd > 0 ? uwd : null;
+		// 水合新上线窗口天数：打开市场时套用设置里「默认上线窗口」预设（defaultNewWithinDays）。
+		// default 字段与工具栏临时点选的 newWithinDays 分离，重开回到预设而非残留临时态。
+		const VALID_WINDOWS = new Set([1, 3, 7, 30, 90, 365]);
+		const dnwd = plugin.settings.defaultNewWithinDays;
+		this.newWithinDays = typeof dnwd === "number" && VALID_WINDOWS.has(dnwd) ? dnwd : null;
+		// 水合近期更新窗口：套用设置里「默认更新窗口」预设（defaultUpdatedWithinDays）
+		const duwd = plugin.settings.defaultUpdatedWithinDays;
+		this.updatedWithinDays = typeof duwd === "number" && VALID_WINDOWS.has(duwd) ? duwd : null;
 		// 跨会话恢复列表拉取时间：避免 lastListFetchAt 重启归零导致 isListStale(0,now,6h)
 		// 恒真 → 每次启动都强制重拉列表 + 重译可见项（修复「每次重启都要重新加载翻译」）
 		this.lastListFetchAt = plugin.lastListFetchAt;
@@ -344,6 +376,7 @@ export class ChinesePluginMarketView extends ItemView {
 		const self = this;
 		this.cardPoolCtx = {
 			t: this.t,
+			get settings() { return self.plugin.settings; },
 			get installedIds() { return self.installedIds; },
 			get enabledIds() { return self.enabledIds; },
 			get aiSearchResult() { return self.aiSearchResult; },

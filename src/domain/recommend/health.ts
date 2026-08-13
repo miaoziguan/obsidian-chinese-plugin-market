@@ -28,18 +28,25 @@ const AGING_DAYS = 365;
 
 /**
  * 评估插件维护健康度。
- * @param updated 最近更新时间戳（ms）；0 / undefined / 非法视为未知，归为 aging
- * @param now     当前时间戳（ms），便于测试注入
+ * @param updated     最近更新时间戳（ms）；0 / undefined / 非法视为未知，归为 aging
+ * @param now         当前时间戳（ms），便于测试注入
+ * @param healthyDays 「活跃」阈值天数（默认 120）
+ * @param agingDays   「风险」阈值天数（默认 365）
  */
-export function assessHealth(updated: number | undefined, now: number = Date.now()): Health {
+export function assessHealth(
+	updated: number | undefined,
+	now: number = Date.now(),
+	healthyDays: number = HEALTHY_DAYS,
+	agingDays: number = AGING_DAYS,
+): Health {
 	if (!updated || !Number.isFinite(updated) || updated <= 0) {
 		return { level: "aging", reason: "更新时间未知" };
 	}
 	const days = (now - updated) / DAY;
-	if (days <= HEALTHY_DAYS) {
+	if (days <= healthyDays) {
 		return { level: "healthy", reason: `最近更新于 ${Math.max(0, Math.round(days))} 天前` };
 	}
-	if (days <= AGING_DAYS) {
+	if (days <= agingDays) {
 		return { level: "aging", reason: `已 ${Math.round(days)} 天未更新` };
 	}
 	return { level: "at-risk", reason: `已 ${Math.round(days / 30)} 个月未更新` };

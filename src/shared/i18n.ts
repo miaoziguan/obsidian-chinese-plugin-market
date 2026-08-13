@@ -388,6 +388,47 @@ export const STRINGS = {
 	"settings.cache.desc": { zh: "当前已缓存 " },
 	"settings.cache.clear": { zh: "清除缓存" },
 
+	// 更新管理
+	"settings.updateManage": { zh: "更新管理" },
+	"settings.updateManage.desc": {
+		zh: "管理插件上线 / 更新窗口、维护健康度展示与下载趋势采样等偏好。",
+	},
+	"settings.updateManage.defaultNew": { zh: "默认上线窗口" },
+	"settings.updateManage.defaultNew.desc": { zh: "打开市场时自动套用的「上线」筛选窗口。" },
+	"settings.updateManage.defaultUpdated": { zh: "默认更新窗口" },
+	"settings.updateManage.defaultUpdated.desc": { zh: "打开市场时自动套用的「更新」筛选窗口。" },
+	"settings.updateManage.window.off": { zh: "不过滤" },
+	"settings.updateManage.window.1": { zh: "24h" },
+	"settings.updateManage.window.3": { zh: "3天" },
+	"settings.updateManage.window.7": { zh: "7天" },
+	"settings.updateManage.window.30": { zh: "30天" },
+	"settings.updateManage.window.90": { zh: "90天" },
+	"settings.updateManage.window.365": { zh: "1年" },
+	"settings.updateManage.healthBadge": { zh: "显示健康度徽标" },
+	"settings.updateManage.healthBadge.desc": {
+		zh: "在卡片上用彩色点标注维护状态：活跃 / 放缓 / 停更风险。",
+	},
+	"settings.updateManage.demoteAtRisk": { zh: "停更风险插件沉底" },
+	"settings.updateManage.demoteAtRisk.desc": { zh: "把判定为停更风险的插件在列表末尾折叠。" },
+	"settings.updateManage.healthHealthy": { zh: "活跃阈值（天）" },
+	"settings.updateManage.healthHealthy.desc": { zh: "≤ 该天数未更新判为「活跃」。" },
+	"settings.updateManage.healthAging": { zh: "风险阈值（天）" },
+	"settings.updateManage.healthAging.desc": { zh: "> 该天数未更新判为「停更风险」。" },
+	"settings.updateManage.trendSampling": { zh: "启用下载趋势采样" },
+	"settings.updateManage.trendSampling.desc": {
+		zh: "定期记录下载量以绘制趋势（better-store 对齐）。关闭后将不再累积新趋势数据。",
+	},
+	"settings.updateManage.trendInterval": { zh: "采样间隔" },
+	"settings.updateManage.trendKeep": { zh: "采样保留（天）" },
+	"settings.updateManage.notifyInstalled": { zh: "已装插件更新提醒" },
+	"settings.updateManage.notifyInstalled.desc": {
+		zh: "已安装插件有新版本时，在卡片角落标红点（轻量提示，无后台推送）。",
+	},
+	"settings.updateManage.interval.3600000": { zh: "1 小时" },
+	"settings.updateManage.interval.21600000": { zh: "6 小时" },
+	"settings.updateManage.interval.43200000": { zh: "12 小时" },
+	"settings.updateManage.interval.86400000": { zh: "24 小时" },
+
 	// 个人 AI 固化资产
 	"settings.aidict": { zh: "个人 AI 固化资产" },
 	"settings.aidict.desc": { zh: "已固化的 AI 译文（共 " },

@@ -38,7 +38,7 @@ describe("TrendingEngine.updateWithStats（采样去重）", () => {
 		vi.spyOn(Date, "now").mockImplementation(() => now);
 		const e = new TrendingEngine();
 		e.updateWithStats(statsMap({ a: 100 }));
-		now += 2 * HOUR;
+		now += 7 * HOUR; // 超过默认最小间隔（6h）
 		expect(e.updateWithStats(statsMap({ a: 200 }))).toBe(true);
 	});
 });
