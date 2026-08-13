@@ -31,7 +31,7 @@ import { buildReadmeUrl, rewriteReadmeUrls, classifyNetworkError } from "@domain
 import type { SimilarCandidate } from "@domain/recommend/similar";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { openInsightModal } from "@ui/view/view-cards";
-import { isMacOS, macosSystemTranslate, protectMarkdown, restoreMarkdown } from "@translation/platform/macos-shortcuts";
+import { isMacOS, macosSystemTranslate, splitMarkdownForTranslate } from "@translation/platform/macos-shortcuts";
 import { appendSVG, appendIconText, toHTMLElement } from "@ui/dom/dom";
 
 /** README 会话级缓存（PERF micro）：按 raw url 缓存整篇 markdown，限容防内存膨胀。 */
@@ -399,21 +399,62 @@ export class PluginDetailDrawer {
 		};
 		let failed = 0;
 		try {
-			// 先把代码块/URL/表格行等结构占位保护，翻译后还原，避免翻译破坏格式
-			const { text: protectedMd, blocks } = protectMarkdown(this.readmeRaw);
-			let translated: string | null;
-			if (channel === "macos") {
-				translated = await macosSystemTranslate(protectedMd, setProgress, (f) => (failed = f));
-			} else {
-				translated = await this.translateReadmeSegments(protectedMd, channel, setProgress, (f) => (failed = f));
+			// 方案 B：把 README 拆成「不译结构」（图片/链接/代码/HTML 等）与「可译文本」交替块，
+			// 只把文本块交给翻译引擎，结构块原样保留拼回。结构从不进入引擎，杜绝被改写导致失效。
+			const blocks = splitMarkdownForTranslate(this.readmeRaw);
+			const textBlocks = blocks.filter((b) => !b.isKeep);
+			if (textBlocks.length === 0) {
+				// 无文本可译（整篇全是结构），直接按原文渲染完成
+				this.readmeTranslated = true;
+				this.renderReadme(this.readmeBodyEl, this.readmeRaw, repo);
+				this.updateChannelBtn();
+				return;
+			}
+			const out: string[] = [];
+			setProgress(0, textBlocks.length);
+			let done = 0;
+			for (const b of blocks) {
+				if (b.isKeep) {
+					out.push(b.value);
+					continue;
+				}
+				if (!b.value.trim()) {
+					// 纯空白文本块（如相邻图片间的空格）：无需翻译，原样保留
+					out.push(b.value);
+					done++;
+					setProgress(done, textBlocks.length);
+					continue;
+				}
+				let translatedBlock: string | null;
+				if (channel === "macos") {
+					try {
+						// macosSystemTranslate 内部按 ~900 字符拆批，返回 "" 表示整体失败
+						const r = await macosSystemTranslate(b.value);
+						translatedBlock = r || null;
+					} catch {
+						translatedBlock = null;
+					}
+				} else {
+					translatedBlock = await this.translateReadmeSegments(b.value, channel);
+				}
+				if (translatedBlock == null || translatedBlock.length === 0 || translatedBlock.trim() === b.value.trim()) {
+					// 失败 / 原文回显：保留原文段（best-effort，让用户大部分译文可用）
+					out.push(b.value);
+					failed++;
+				} else {
+					out.push(translatedBlock);
+				}
+				done++;
+				setProgress(done, textBlocks.length);
 			}
 			// 抽屉已关闭或已切到别的插件：丢弃这次结果，否则会把 A 的译文写进 B 的 README
 			if (!this.drawerEl || this.info.id !== reqPluginId || !this.readmeBodyEl) return;
-			if (!translated) {
+			// 全部文本块失败：视为整体失败，走失败提示、按钮保持通道名可重试（而非误切「返回原文」）
+			if (failed === textBlocks.length) {
 				new Notice(this.t("detail.readme.translateFailed"));
 				return;
 			}
-			const restored = restoreMarkdown(translated, blocks);
+			const restored = out.join("");
 			this.readmeTranslated = true;
 			this.renderReadme(this.readmeBodyEl, restored, repo);
 			this.updateChannelBtn();
@@ -457,22 +498,18 @@ export class PluginDetailDrawer {
 	}
 
 	/**
-	 * 腾讯免费 / 腾讯云 README 分段翻译：按 ~500 字符软分段（保护后的 markdown，
-	 * 已在换行处断开，避开代码块/表格结构），串行调用所选通道（限流 1 并发），
-	 * 失败段保留原文继续，最后拼接返回。
+	 * 腾讯免费 / 腾讯云单文本块翻译：按 ~500 字符软分段后串行调用所选通道，
+	 * 失败段保留原文继续。单块内部进度无需回调——外层（sysTranslate）按块上报进度。
 	 */
 	private async translateReadmeSegments(
-		protectedMd: string,
-		channel: "tencent-transmart" | "tencent",
-		onProgress: (done: number, total: number) => void,
-		onFailed: (n: number) => void
+		text: string,
+		channel: "tencent-transmart" | "tencent"
 	): Promise<string | null> {
-		if (!protectedMd) return "";
-		const segments = splitSegments(protectedMd, README_SEGMENT_LIMIT);
+		if (!text) return "";
+		const segments = splitSegments(text, README_SEGMENT_LIMIT);
 		if (segments.length === 0) return "";
 		const out: string[] = [];
 		let failed = 0;
-		onProgress(0, segments.length);
 		for (let i = 0; i < segments.length; i++) {
 			const seg = segments[i];
 			const r = await this.plugin.translator.translateTextSegment(seg, channel);
@@ -483,9 +520,9 @@ export class PluginDetailDrawer {
 			} else {
 				out.push(r);
 			}
-			onProgress(i + 1, segments.length);
 		}
-		onFailed(failed);
+		// 全部段落失败 / 原文回显：视为整体失败，返回 null 让上层走失败提示（而非把原文当译文）
+		if (failed === segments.length) return null;
 		return out.join("");
 	}
 
