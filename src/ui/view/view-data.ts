@@ -265,6 +265,13 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			ctx.applyAIConfig();
 			if (progressHint) progressHint.textContent = "（使用本地缓存）";
 			logger.warn("[Chinese Plugin Market] 网络不可用，已从本地缓存恢复插件列表（%d 个）。", cachedData.length);
+			// stale 优雅降级提示（对齐 better-store）：告知用户当前是缓存数据而非最新，
+			// 避免「列表为什么不更新」的困惑。有上次拉取时间则一并展示相对时间。
+			const staleAt = ctx.lastListFetchAt;
+			const staleHint = staleAt > 0
+				? `（${formatRelativeTime(staleAt, Date.now(), ctx.t)}）`
+				: "";
+			new Notice(`已使用本地缓存列表${staleHint}，网络恢复后自动刷新`);
 			// 等待 vault 翻译记忆回灌完成（同在线路径，避免 tmApproved 为空时兜底）
 			const minVisibleUntilOffline = Date.now() + 200;
 			const tmProgressTimerOffline = window.setInterval(() => {
