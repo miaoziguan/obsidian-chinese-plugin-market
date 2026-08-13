@@ -289,19 +289,33 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const authorName = authorSpan.createSpan({ cls: "pt-author-name" });
 
 	// 「可更新」徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口；初始隐藏
+	// a11y：role=button + tabindex 让键盘可达；Enter/Space 触发与点击一致
 	const updateBadge = metaInfo.createSpan({ cls: "pt-card-update-badge" });
+	updateBadge.setAttribute("role", "button");
+	updateBadge.setAttribute("tabindex", "0");
 	updateBadge.setCssStyles({ display: "none" });
-	updateBadge.addEventListener("click", (e: MouseEvent) => {
+	const goToUpdates = (e: Event) => {
 		e.stopPropagation();
 		asAppInternals(ctx.app).setting?.openTabById?.("community-plugins");
+	};
+	updateBadge.addEventListener("click", goToUpdates);
+	updateBadge.addEventListener("keydown", (e: KeyboardEvent) => {
+		if (e.key === "Enter" || e.key === " ") {
+			e.preventDefault();
+			e.stopPropagation();
+			goToUpdates(e);
+		}
 	});
 
 	// 维护健康度徽标（基于 updated 三档），常驻隐藏，applyCardState 填充
 	const healthBadge = metaInfo.createSpan({ cls: "pt-card-health-badge" });
+	// 状态徽标文本已随卡片可见，对屏幕阅读器隐藏避免重复朗读
+	healthBadge.setAttribute("aria-hidden", "true");
 	healthBadge.setCssStyles({ display: "none" });
 
 	// 「新」标记（近 30 天首次见），纯文字融入作者行，常驻隐藏，applyCardState 填充
 	const newBadge = metaInfo.createSpan({ cls: "pt-card-new-badge" });
+	newBadge.setAttribute("aria-hidden", "true");
 	newBadge.setCssStyles({ display: "none" });
 
 	// ── 描述（固定行数截断，hover 浮层展示完整描述） ──
@@ -409,6 +423,8 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 
 	// ── 趋势 sparkline（常驻隐藏，applyCardState 在有窗口历史时显示） ──
 	const spark = statline.createSpan({ cls: "pt-card-spark" });
+	// 纯装饰性图表：对屏幕阅读器隐藏，避免 SVG 路径被逐段朗读
+	spark.setAttribute("aria-hidden", "true");
 	appendSVG(spark, `<path d=""></path>`);
 	const sparkPath = spark.querySelector("path") as SVGPathElement;
 	spark.setCssStyles({ display: "none" });
