@@ -23,6 +23,7 @@ import {
 	type InstallFilter,
 	type FavoriteFilter,
 	type ChineseEcoFilter,
+	type SeriesFilter,
 } from "@domain/filter/filter";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { type CardRenderContext } from "@ui/components/card-render";
@@ -570,6 +571,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public favoriteFilter: FavoriteFilter = "all";
 	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
 	public chineseEcoFilter: ChineseEcoFilter = "all";
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	public seriesFilter: SeriesFilter = "all";
 	/** 新上线窗口天数：null 不过滤，可选 7/30/90 */
 	public newWithinDays: number | null = null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
@@ -582,6 +585,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public authorFacetList: AuthorGroup[] = [];
 	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json 人工清单；算法判定在 chinese-ecosystem.ts） */
 	public chineseEcoSet: Set<string> = new Set();
+	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json 开发者清单） */
+	public bambooSeriesSet: Set<string> = new Set();
 	/** 作者字母筛选：选中的首字母（null = 不展开任何组，只显示字母条） */
 	public activeAuthorLetter: string | null = null;
 	/** 作者 facet 展开态（字母组作者 > maxVisible 时「更多 ▾/收起 ▴」状态） */

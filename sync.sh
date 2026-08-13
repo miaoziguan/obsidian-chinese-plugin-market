@@ -28,6 +28,7 @@ FILES=(
 	"seeded-translator-cache.json"
 	"plugin-release-dates.json"
 	"plugin-chinese-ecosystem.json"
+	"plugin-bamboo-series.json"
 )
 
 # ── 解析参数 ──

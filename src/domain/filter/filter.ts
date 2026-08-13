@@ -108,6 +108,9 @@ export type FavoriteFilter = "all" | "favorited" | "unfavorited";
 /** 中文生态筛选（"all" 表示全部；"eco" 仅中文生态插件） */
 export type ChineseEcoFilter = "all" | "eco";
 
+/** 系列筛选（"all" 表示全部；"bamboo" 仅竹林中国系列插件） */
+export type SeriesFilter = "all" | "bamboo";
+
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。
  * 供搜索索引预计算与即时匹配共用，保证两路口径一致。
@@ -151,6 +154,10 @@ export interface MatchOptions {
 	chineseEcoFilter?: ChineseEcoFilter;
 	/** 中文生态人工清单 id 集合（plugin-chinese-ecosystem.json） */
 	chineseEcoSet?: Set<string>;
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	seriesFilter?: SeriesFilter;
+	/** 系列插件 id 集合（plugin-bamboo-series.json） */
+	bambooSeriesSet?: Set<string>;
 	/** 新上线窗口天数（number | null；null = 不过滤，7/30/90 生效） */
 	newWithinDays?: number | null;
 	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json（git history 解析） */
@@ -212,6 +219,10 @@ export function matchesPlugin(
 	if (opts.chineseEcoFilter === "eco") {
 		const isEco = opts.chineseEcoSet?.has(p.id) === true || isChineseEcosystem(p);
 		if (!isEco) return false;
+	}
+	// 系列筛选：仅「竹林中国系列」插件（plugin-bamboo-series.json 人工清单）
+	if (opts.seriesFilter === "bamboo") {
+		if (opts.bambooSeriesSet?.has(p.id) !== true) return false;
 	}
 	// 仅看新上线：近 newWithinDays 天「首次进入官方市场」的插件才保留（null = 不过滤）。
 	// 时间源 = releaseDatesMap（插件真实上线日期，来自 obsidian-releases git history），
@@ -283,6 +294,10 @@ export interface FilterParams {
 	chineseEcoFilter?: ChineseEcoFilter;
 	/** 中文生态人工清单 id 集合 */
 	chineseEcoSet?: Set<string>;
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	seriesFilter?: SeriesFilter;
+	/** 系列插件 id 集合（plugin-bamboo-series.json） */
+	bambooSeriesSet?: Set<string>;
 	/** 新上线窗口天数（number | null；null = 不过滤） */
 	newWithinDays?: number | null;
 	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json */
@@ -372,6 +387,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		chineseEcoFilter, chineseEcoSet,
+		seriesFilter, bambooSeriesSet,
 		selectedCategories, pluginTagMap,
 		hasHistoryTranslation,
 		releaseDatesMap,
@@ -384,6 +400,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		chineseEcoFilter, chineseEcoSet,
+		seriesFilter, bambooSeriesSet,
 		selectedCategories, pluginTagMap,
 		releaseDatesMap, newWithinDays, updatedWithinDays,
 		hasHistoryTranslation,
