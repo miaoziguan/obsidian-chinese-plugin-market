@@ -19,6 +19,7 @@ import {
 	callAITranslate,
 } from "@translation/api/api";
 import { buildSelfHostedTranslators, type SelfHostedTranslator } from "@translation/api/self-hosted";
+import { TransmartClient } from "@translation/api/transmart";
 import { AISearcher } from "@domain/search/ai";
 import { CoverageTracker } from "@domain/catalog/coverage";
 import { PluginTagService, type PluginTag } from "@domain/catalog/plugin-tags";
@@ -70,7 +71,7 @@ export interface TranslateResult {
 	/** 翻译来源标记 */
 	source: "custom" | "bulk" | "online" | "ai" | "original";
 	/** online 来源的具体供应商（用于 TM 入队置信度分层；旧缓存无此字段按未知处理） */
-	provider?: "tencent" | "mymemory" | "google" | "deeplx" | "libretranslate" | "macos";
+	provider?: "tencent" | "mymemory" | "google" | "deeplx" | "libretranslate" | "macos" | "tencent-transmart";
 }
 
 export interface AISearchConfig {
@@ -142,6 +143,8 @@ export interface TranslatorConfig {
 	apiConfig: TencentApiConfig | null;
 	aiConfig: AISearchConfig | null;
 	useMyMemory: boolean;
+	/** 腾讯翻译（免费）通道（transmart.qq.com/api/imt，零配置） */
+	useTransmart: boolean;
 }
 
 // ──────── 主类 ────────
@@ -177,7 +180,7 @@ export class Translator {
 	// 配置
 	apiConfig: TencentApiConfig | null = null;
 	aiConfig: AISearchConfig | null = null;
-	translatorConfig: TranslatorConfig = { apiConfig: null, aiConfig: null, useMyMemory: true };
+	translatorConfig: TranslatorConfig = { apiConfig: null, aiConfig: null, useMyMemory: true, useTransmart: true };
 
 	// 标签服务
 	tagService: PluginTagService;
@@ -188,6 +191,7 @@ export class Translator {
 	readonly myMemory: MyMemoryClient;
 	readonly tencentClient: TencentClient;
 	readonly googleClient: GoogleClient;
+	readonly transmartClient: TransmartClient;
 	readonly llm: LLMClient;
 	readonly aiSearcher: AISearcher;
 	readonly coverage: CoverageTracker;
@@ -201,6 +205,7 @@ export class Translator {
 		this.myMemory = new MyMemoryClient();
 		this.tencentClient = new TencentClient();
 		this.googleClient = new GoogleClient();
+		this.transmartClient = new TransmartClient();
 		this.llm = new LLMClient({
 			baseURL: "",
 			apiKey: "",
@@ -231,6 +236,11 @@ export class Translator {
 	setUseMyMemory(enabled: boolean) {
 		this.myMemory.setEnabled(enabled);
 		this.translatorConfig.useMyMemory = enabled;
+	}
+
+	setUseTransmart(enabled: boolean) {
+		this.transmartClient.setEnabled(enabled);
+		this.translatorConfig.useTransmart = enabled;
 	}
 
 	setAIConfig(config: AISearchConfig | null) {
@@ -463,14 +473,17 @@ export class Translator {
 	// ══════════════════════════════════════════════════
 
 	/**
-	 * online 供应商（MyMemory / Tencent / Google / 自托管）译文入队置信度分层：
-	 * 腾讯 0.6；DeepLX（自托管，质量≈DeepL）0.55；Google 非官方接口 0.5；
+	 * online 供应商（MyMemory / Tencent / Google / 自托管 / 腾讯翻译免费）译文入队置信度分层：
+	 * 腾讯 0.6；DeepLX（自托管，质量≈DeepL）0.55；腾讯翻译（免费）0.55；Google 非官方接口 0.5；
 	 * LibreTranslate（自托管开源）0.48；MyMemory 社区记忆库噪声较大 0.4；
 	 * 旧缓存无 provider 字段时按未知处理，0.5。
 	 */
-	private onlineConfidence(provider?: "tencent" | "mymemory" | "google" | "deeplx" | "libretranslate" | "macos"): number {
+	private onlineConfidence(
+		provider?: "tencent" | "mymemory" | "google" | "deeplx" | "libretranslate" | "macos" | "tencent-transmart"
+	): number {
 		if (provider === "tencent") return 0.6;
 		if (provider === "deeplx") return 0.55;
+		if (provider === "tencent-transmart") return 0.55;
 		if (provider === "macos") return 0.52;
 		if (provider === "google") return 0.5;
 		if (provider === "libretranslate") return 0.48;
@@ -654,8 +667,9 @@ export class Translator {
 	 * layer 3 - 个人 AI 固化资产（aiDict，clearCache 不清）
 	 * layer 4 - AI 翻译（callAITranslate → LLM，成功即固化进 layer 3）
 	 * layer 5 - Google 非官方免费接口（零配置，质量优于 MyMemory）
-	 * layer 6 - MyMemory 免费 API
-	 * layer 7 - 腾讯云翻译（需 secretId+secretKey）
+	 * layer 6 - 腾讯翻译（免费）（transmart.qq.com，零配置、无配额）
+	 * layer 7 - MyMemory 免费 API
+	 * layer 8 - 腾讯云翻译（需 secretId+secretKey）
 	 * 兜底   - 原文返回（source="original"）
 	 */
 	async translatePlugin(plugin: PluginInfo, opts?: { skipAI?: boolean }): Promise<TranslateResult> {
@@ -724,7 +738,16 @@ export class Translator {
 			}
 		}
 
-		// 第五层：Google 非官方翻译接口（零配置免费，质量优于 MyMemory 社区库）
+		// 第五层：腾讯翻译（免费）（transmart.qq.com/api/imt，零配置、无配额）。
+		// useTransmart 关闭时 isAvailable() 返回 false，本层直接跳过。
+		const transmartResult = await this.transmartClient.translate(plugin);
+		if (transmartResult) {
+			this.cache[plugin.id] = transmartResult;
+			this.enqueueOnlineTM(plugin.id);
+			return transmartResult;
+		}
+
+		// 第六层：Google 非官方翻译接口（零配置免费，质量优于 MyMemory 社区库）
 		const googleResult = await this.googleClient.translate(plugin);
 		if (googleResult) {
 			this.cache[plugin.id] = googleResult;
@@ -733,7 +756,7 @@ export class Translator {
 			return googleResult;
 		}
 
-		// 第六层：MyMemory 免费 API
+		// 第七层：MyMemory 免费 API
 		const myResult = await this.myMemory.translate(plugin);
 		if (myResult) {
 			this.cache[plugin.id] = myResult;
@@ -742,7 +765,7 @@ export class Translator {
 			return myResult;
 		}
 
-		// 第七层：腾讯云翻译（熔断器开路期间跳过，走原文兜底）
+		// 第八层：腾讯云翻译（熔断器开路期间跳过，走原文兜底）
 		// 与批量路径一致，必须 secretId+secretKey 齐备才调用（只填 ID 时空 Key 签名必败且会误开熔断）
 		if (this.apiConfig?.secretId && this.apiConfig?.secretKey && this.tencentClient.isAvailable()) {
 			try {
