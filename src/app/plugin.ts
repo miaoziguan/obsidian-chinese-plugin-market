@@ -60,6 +60,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	private buildLocalIndexPromise: Promise<void> | null = null;
 	/** 已「见过」的插件 id 集合（产品改进 #16，跨会话落盘，增量提示在重启后仍准确） */
 	seenPluginIds: Set<string> = new Set();
+	/** 插件 id → 首次见时间戳（ms）；0 表示基线旧插件（不报新）。用于卡片「新」标记窗口判断（对齐竞品 newness.ts） */
+	firstSeenMap: Map<string, number> = new Map();
 	/** 上次落盘 translator-cache 的内容指纹（PERF-5：相同内容跳过全量序列化+写盘） */
 	private _lastTranslatorFingerprint = "";
 	/**
@@ -424,6 +426,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.loadPluginTags().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载分类索引失败：", e),
 		);
+		// 后台异步加载插件上线日期索引（「上线」维度用，不阻塞视图启动）
+		this.loadReleaseDates().catch((e) =>
+			logger.warn("[Chinese Plugin Market] 后台加载上线日期失败：", e),
+		);
 
 		// TM/索引就绪：通知已打开的视图用最终数据重渲染一次。
 		// 视图尚未创建时无需处理——其 onOpen 会自然读到已就绪的数据。
@@ -673,6 +679,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.lastListFetchAt = fileData?.lastListFetchAt ?? 0;
 		// 已「见过」的插件 id 集合（产品改进 #16 跨会话落盘，避免重启后误报全量新插件）
 		this.seenPluginIds = new Set(fileData?.seenPluginIds ?? []);
+		// 首次见时间戳映射（卡片「新」标记 + 「上线」维度筛选用）。
+		// 字段语义：>0 = 该插件首次进入清单的真实时刻（ms）；0 = 基线旧插件（历史兼容值，不报新）。
+		// 新插件（运行时 diff 出 newIds）会被标为 now（>0）；存量老插件保持 0 = 不视为"新上线"。
+		const restoredFirstSeen = fileData?.firstSeenIds ?? {};
+		this.firstSeenMap = new Map(Object.entries(restoredFirstSeen).map(([k, v]) => [k, Number(v)]));
+		if (this.firstSeenMap.size === 0 && this.seenPluginIds.size > 0) {
+			for (const id of this.seenPluginIds) this.firstSeenMap.set(id, 0);
+		}
 		if (this.settings.secretId && this.settings.secretKey) {
 			this.translator.setApiConfig({
 				secretId: this.settings.secretId,
@@ -771,6 +785,41 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * 加载随插件分发的插件上线日期索引 plugin-release-dates.json（「上线」维度用）。
+	 * 内容 = 每个插件首次进入官方社区市场的真实时间（ms），由构建期脚本从
+	 * obsidian-releases 的 git history 解析生成。缺失/解析失败时静默降级（「上线」维度无数据）。
+	 */
+	private async loadReleaseDates() {
+		const fileName = "plugin-release-dates.json";
+		try {
+			const adapter = this.app.vault.adapter;
+			const fullPath = `.obsidian/plugins/${this.manifest.id}/${fileName}`;
+			if (!(await adapter.exists(fullPath))) return;
+			const text = await adapter.read(fullPath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (parsed && typeof parsed === "object") {
+				const map = new Map<string, number>();
+				for (const [id, ts] of Object.entries(parsed)) {
+					const n = Number(ts);
+					if (typeof id === "string" && id && Number.isFinite(n)) map.set(id, n * 1000); // 秒→ms
+				}
+				// 注入到已打开的视图并触发重渲染（视图未创建时其 onOpen 会自然读到空 Map，
+				// 上线维度此时为空数据，下次重载插件即生效——属一次性降级，影响极小）
+				for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+					const view = leaf.view;
+					if (view instanceof ChinesePluginMarketView) {
+						view.releaseDatesMap = map;
+						view.invalidateAndRender(false);
+					}
+				}
+				logger.debug(`[Chinese Plugin Market] 已加载 ${map.size} 个插件上线日期`);
+			}
+		} catch (e: unknown) {
+			logger.warn(`[Chinese Plugin Market] 加载插件上线日期失败，已跳过：`, e);
+		}
+	}
+
 	/** 加载官方推荐清单（plugin-recommend.json），种子为羽鳞君的全部插件 */
 	private async loadPluginRecommend() {
 		const fileName = "plugin-recommend.json";
@@ -842,6 +891,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			myMemoryBlockedDate: translatorData.myMemoryBlockedDate ?? "",
 			seenPluginIds: Array.from(this.seenPluginIds),
 			lastListFetchAt: this.lastListFetchAt,
+			firstSeenIds: Object.fromEntries(this.firstSeenMap),
 		});
 		// 仅写盘成功后更新指纹（失败则下次仍会重试写盘）
 		this._lastTranslatorFingerprint = fingerprint;

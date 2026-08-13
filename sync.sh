@@ -26,6 +26,7 @@ FILES=(
 	"ort-wasm-simd-threaded.jsep.wasm"
 	"embedding-worker.bundle.js"
 	"seeded-translator-cache.json"
+	"plugin-release-dates.json"
 )
 
 # ── 解析参数 ──

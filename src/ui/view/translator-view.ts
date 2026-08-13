@@ -73,6 +73,10 @@ export interface ChinesePluginMarketSettings {
 	favorites: string[];
 	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部（跨会话持久化） */
 	favoriteFilter: FavoriteFilter;
+	/** 新上线窗口天数：null 表示不过滤（默认），可选 7/30/90 */
+	newWithinDays: number | null;
+	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件（默认 null = 不过滤） */
+	updatedWithinDays: number | null;
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
 }
@@ -101,6 +105,8 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	favorites: [],
 	compare: [],
 	favoriteFilter: "all",
+	newWithinDays: null,
+	updatedWithinDays: null,
 };
 
 /**
@@ -265,6 +271,8 @@ export class ChinesePluginMarketView extends ItemView {
 
 	// ── 插件统计（下载量/更新时间，产品改进 #1 #6）──
 	public statsMap: Map<string, PluginStat> = new Map();
+	// 插件上线日期（首次进入官方市场，ms），来自 plugin-release-dates.json（构建期 git history 解析）
+	public releaseDatesMap: Map<string, number> = new Map();
 
 	// ── 已安装/已启用状态（产品改进 #7）──
 	public installedIds: Set<string> = new Set();
@@ -292,6 +300,12 @@ export class ChinesePluginMarketView extends ItemView {
 		this.favoritesSet = new Set(plugin.settings.favorites);
 		// 水合对比集（从持久化 settings.compare 恢复为 Set，跨会话保留）
 		this.compareSet = new Set(plugin.settings.compare);
+		// 水合新上线窗口天数（null 不过滤，合法值 7/30/90，其余回退 null）
+		const nwd = plugin.settings.newWithinDays;
+		this.newWithinDays = nwd === 7 || nwd === 30 || nwd === 90 ? nwd : null;
+		// 水合近期更新窗口（合法正数或 null，其余回退 null = 不过滤）
+		const uwd = plugin.settings.updatedWithinDays;
+		this.updatedWithinDays = typeof uwd === "number" && uwd > 0 ? uwd : null;
 		// 跨会话恢复列表拉取时间：避免 lastListFetchAt 重启归零导致 isListStale(0,now,6h)
 		// 恒真 → 每次启动都强制重拉列表 + 重译可见项（修复「每次重启都要重新加载翻译」）
 		this.lastListFetchAt = plugin.lastListFetchAt;
@@ -480,6 +494,10 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public installFilter: InstallFilter = "all";
 	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部 */
 	public favoriteFilter: FavoriteFilter = "all";
+	/** 新上线窗口天数：null 不过滤，可选 7/30/90 */
+	public newWithinDays: number | null = null;
+	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
+	public updatedWithinDays: number | null = null;
 	/** AI/关键字模式：当前选中的分类 facet（空数组表示不筛选，零回归） */
 	public selectedCategories: string[] = [];
 	/** 作者维度：当前按作者精确筛选（null 表示不过滤）。卡片作者钻取与作者 facet 共用此状态 */
