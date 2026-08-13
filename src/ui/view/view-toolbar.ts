@@ -659,34 +659,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			});
 		});
 
-		// ── 启用组合 Profile 快速切换（平铺，与「上线/更新」chip 视觉一致；点选即应用）──
-		const profileRow = advancedInner.createDiv({ cls: "pt-facet-row" });
-		profileRow.createSpan({ cls: "pt-facet-label", text: "组合" });
-		const profileChips = profileRow.createDiv({ cls: "pt-facet-chips" });
-		for (const p of ctx.profiles) {
-			const chip = profileChips.createEl("button", {
-				cls: "pt-filter pt-toggle-profile",
-				text: `${p.name}（${p.enabled.length}）`,
-			});
-			chip.setAttribute("aria-pressed", "false");
-			chip.addEventListener("click", () => {
-				// 应用组合 + 切到「已安装」视角，立即看到启用集变化
-				ctx.installFilter = "installed";
-				updateInstallToggles();
-				ctx.updateFacetVisibility();
-				ctx.track("profile:apply");
-				void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
-			});
-		}
-		if (ctx.profiles.length === 0) {
-			// 无预设时显示占位灰 chip（不可点击），提示用户去设置页保存
-			const empty = profileChips.createEl("button", {
-				cls: "pt-filter pt-toggle-profile is-empty",
-				text: "无组合（设置页保存）",
-			});
-			empty.disabled = true;
-		}
-
 		// ── 收藏筛选（已收藏 / 未收藏），与安装筛选同组 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		favRow.createSpan({ cls: "pt-facet-label", text: "收藏" });
@@ -776,6 +748,34 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.scheduleRender(true);
 		});
 	});
+
+	// ── 启用组合 Profile 快速切换（最末尾一行；平铺 chip 与「上线/更新」视觉一致，点选即应用）──
+	const profileRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	profileRow.createSpan({ cls: "pt-facet-label", text: "组合" });
+	const profileChips = profileRow.createDiv({ cls: "pt-facet-chips" });
+	for (const p of ctx.profiles) {
+		const chip = profileChips.createEl("button", {
+			cls: "pt-filter pt-toggle-profile",
+			text: `${p.name}（${p.enabled.length}）`,
+		});
+		chip.setAttribute("aria-pressed", "false");
+		chip.addEventListener("click", () => {
+			// 应用组合 + 切到「已安装」视角，立即看到启用集变化
+			ctx.installFilter = "installed";
+			updateInstallToggles();
+			ctx.updateFacetVisibility();
+			ctx.track("profile:apply");
+			void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
+		});
+	}
+	if (ctx.profiles.length === 0) {
+		// 无预设时显示占位灰 chip（不可点击），提示用户去设置页保存
+		const empty = profileChips.createEl("button", {
+			cls: "pt-filter pt-toggle-profile is-empty",
+			text: "无组合（设置页保存）",
+		});
+		empty.disabled = true;
+	}
 
 		// 重置筛选：移至标题行右侧（与「筛选与统计」同行右端对齐）
 		const resetBtn = advancedHeading.createEl("button", {
