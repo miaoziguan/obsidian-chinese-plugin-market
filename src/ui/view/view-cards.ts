@@ -97,16 +97,24 @@ export function computeSimilarFor(ctx: ViewContext, info: PluginInfo) : SimilarC
 export async function handleToggleEnabled(ctx: ViewContext, plugin: PluginInfo): Promise<void> {
 	if (ctx.installingIds.has(plugin.id)) return;
 	ctx.installingIds.add(plugin.id);
+	// 仅原地刷新本卡（加锁态），不触发整列表 scheduleRender：
+	// 启用/禁用是单卡 enabledIds 变化，列表签名不含 enabledIds，
+	// 全列表 rAF 重渲会与 Obsidian 异步 disablePlugin 的 enabledIds 生效时序打架，
+	// 产生「旧态帧→新态帧」的中间闪烁（视觉抖动）。
 	ctx.refreshCardState(plugin.id);
-	ctx.scheduleRender(true);
 	try {
 		await togglePluginEnabled(ctx, plugin);
 	} finally {
 		ctx.installingIds.delete(plugin.id);
-		// S2 增量签名优化会导致 renderPluginList 跳过无变化列表，
-		// 但 installingIds 变化属于单卡状态变化，必须显式刷新该卡。
-		ctx.refreshCardState(plugin.id);
-		ctx.scheduleRender(true);
+		// togglePluginEnabled 内部已 snapshotInstalled（更新 enabledIds）+ refreshCardState，
+		// 此处按「列表成员是否可能变化」决定刷新策略：
+		// 当筛选为 enabled / installedNotEnabled 时，禁用会改变列表成员，必须重建窗口；
+		// 其余筛选（all / installed）仅单卡状态变化，原地刷新该卡即可，避免整列重渲抖动。
+		if (ctx.installFilter === "enabled" || ctx.installFilter === "installedNotEnabled") {
+			ctx.invalidateAndRender(true);
+		} else {
+			ctx.refreshCardState(plugin.id);
+		}
 	}
 }
 
@@ -204,7 +212,6 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			openInsightModal(ctx, plugin);
 		} else if (action === "toggle-enabled") {
 			// 已安装插件：切换启用/禁用
-			new Notice(`[DBG] 事件委托 toggle-enabled pid=${pid}`);
 			void handleToggleEnabled(ctx, plugin);
 		} else if (action === "uninstall") {
 			// 已安装插件：卸载（含二次确认）
