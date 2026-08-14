@@ -572,7 +572,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	color: var(--pt-text-faint);
 	text-transform: uppercase;
 	letter-spacing: 0.8px;
-	margin-bottom: var(--pt-space-xxs);
+	margin-bottom: 0;
 }
 .pt-advanced-title-group {
 	display: inline-flex;
@@ -584,7 +584,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	display: flex;
 	flex-direction: column;
 	gap: 0;
-	padding: var(--pt-space-xs) var(--pt-space-md) 0;
+	padding: 0 var(--pt-space-md) 0;
 }
 
 /* 统计行（内联到 .pt-advanced-heading 右侧时紧凑显示） */
@@ -736,8 +736,8 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	display: flex;
 	align-items: center;
 	flex: 1 1 100%;
-	flex-wrap: nowrap; /* chips 内部自身 wrap，外层不 wrap；避免标签被挤到独立行 */
-	padding-block: var(--pt-space-xs);
+	flex-wrap: nowrap; 	/* chips 内部自身 wrap，外层不 wrap；避免标签被挤到独立行 */
+	padding-block: 1px;
 	border-top: 1px solid var(--pt-border);
 }
 .pt-facet-row:first-child {
@@ -752,11 +752,15 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	text-align: left;
 	box-sizing: border-box;
 	padding-right: var(--pt-space-md); /* 标签 ↔ chips 列 12px gap 用 padding 留 */
+	white-space: nowrap;
+	/* 防御：某些 Obsidian 主题/自定义 CSS 会设竖排；强制保持横向，避免「翻译」等二字标签被竖排 */
+	writing-mode: horizontal-tb;
+	text-orientation: mixed;
 }
 .pt-facet-chips {
 	display: flex;
 	flex-wrap: wrap; /* chips 数量多时自然换行，不出现横滚 */
-	gap: var(--pt-space-xs);
+	gap: var(--pt-space-2xs);
 	flex: 1 1 auto;
 	min-width: 0;
 }
@@ -776,6 +780,18 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 }
 .pt-facet-more:hover {
 	background: color-mix(in srgb, var(--pt-accent) 8%, transparent);
+}
+/* 面板内字号统一降一号（sm→xs）+ chip 垂直 padding 略收，进一步压缩面板高度。
+   限定 .pt-advanced 作用域，避免影响顶部工具条的同款 .pt-filter 胶囊。 */
+.pt-advanced .pt-facet-label,
+.pt-advanced .pt-filter,
+.pt-advanced .pt-facet-chip,
+.pt-advanced .pt-facet-more {
+	font-size: var(--pt-text-xs);
+}
+.pt-advanced .pt-filter,
+.pt-advanced .pt-facet-more {
+	padding: 4px 12px;
 }
 
 /* 分类 facet 选中态视觉反馈：与「来源/翻译」维度统一（accent 色文字 + 加粗，无背景填充，border/background 由下方 .pt-view 覆盖块置透明） */

@@ -647,7 +647,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 					if (isKeywordMode(ctx)) ctx.scheduleRender(true);
 				},
 				{
-					maxVisible: 8,
+					maxVisible: 6,
 					expanded: catExpanded,
 					onToggleExpand: () => {
 						catExpanded = !catExpanded;
