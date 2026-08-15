@@ -24,6 +24,9 @@ styles.css
 # PERF-3：embedding worker 独立分发产物（构建生成，随 release 分发，不入库）
 embedding-worker.bundle.js
 
+# 本地调研文档（腾讯 Transmart 接口参考，不入库不进 PR）
+.transmart-docs/
+
 # IDE/调试临时产物
 .playwright-repro/
 .trae-html-share-packages/
@@ -36,3 +39,11 @@ test/e2e/*.bundle.js
 test-results/
 playwright-report/
 playwright/.cache/
+credentials.json
+data.json
+favorites.json
+plugin-list-cache.json
+stats-cache.json
+translator-cache.json
+tm-approved-snapshot.json
+trending-history.json

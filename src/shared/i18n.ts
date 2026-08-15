@@ -54,6 +54,10 @@ export const STRINGS = {
 	// 智能混合翻译（AI 优先，失败自动降级 Google/MyMemory/腾讯免费引擎）
 	"action.aiTranslate": { zh: "智能混合翻译" },
 	"action.aiTranslate.disabled": { zh: "智能混合翻译（未配置）" },
+	// 翻译通道名（详情页 README 翻译按钮/标签）
+	"channel.tencentTransmart": { zh: "腾讯翻译（免费）" },
+	"channel.tencent": { zh: "腾讯云翻译" },
+	"channel.macos": { zh: "macOS 系统翻译" },
 	"ai.translate.guide": { zh: "配置 AI 搜索 API Key 后优先用 AI 翻译，未配置则自动使用 Google/MyMemory/腾讯免费引擎混合翻译" },
 	"ai.translate.progress": { zh: "混合翻译中 {done}/{total}" },
 	"ai.translate.done": { zh: "已用混合翻译 {n} 个插件" },
@@ -158,7 +162,6 @@ export const STRINGS = {
 	"card.favorite": { zh: "收藏" },
 	"card.insight": { zh: "了解功能" },
 	"card.sysTranslate": { zh: "系统翻译" },
-	"card.sysTranslate.readme": { zh: "macOS 翻译" },
 	"card.sysTranslate.done": { zh: "已用系统翻译补全" },
 	"card.sysTranslate.partial": { zh: "系统翻译完成，其中 {n} 段失败已保留原文（可稍后重试）" },
 	"card.sysTranslate.fail": { zh: "系统翻译失败（请确认「快捷指令」App 中有名为「CPM 系统翻译」的指令，且为：接收输入 → 翻译文本到中文 → 停止并输出）" },
@@ -199,7 +202,9 @@ export const STRINGS = {
 	"detail.readme.noUrl": { zh: "无法构造 README 地址。" },
 	"detail.readme.backOriginal": { zh: "返回原文" },
 	"detail.readme.translate": { zh: "翻译 README" },
-	"detail.readme.translating": { zh: "翻译中…" },
+	"detail.readme.translatingN": { zh: "翻译中 {n}/{m}…" },
+	"detail.readme.noChannel": { zh: "无可用翻译通道" },
+	"detail.readme.changeChannel": { zh: "切换翻译通道" },
 	"detail.readme.showOriginal": { zh: "查看原文" },
 	"detail.readme.translateFailed": { zh: "翻译失败，请重试。" },
 	"detail.readme.noContent": { zh: "请先加载 README。" },
@@ -340,6 +345,10 @@ export const STRINGS = {
 	"settings.embedding.mobileWarn": { zh: "移动端提示：本地模型需下载约 26MB WASM 运行时并加载模型权重，可能占用大量内存、拖慢 Obsidian，弱网下首次加载也较慢。推荐使用「关键词」或「API 向量」模式。" },
 	"settings.embedding.mobileLocalNotice": { zh: "移动端本地模型可能占用大量内存，如遇卡顿请切回关键词或 API。" },
 	// 翻译引擎
+	"settings.engine.transmart": { zh: "启用腾讯翻译（免费）" },
+	"settings.engine.transmart.desc": {
+		zh: "零配置免费、无需密钥（transmart.qq.com 接口），默认开启；检测到中文源自动跳过。注意：该接口为非官方逆向接口，依赖腾讯 Transmart 扩展同源实现，可能随时变更或失效，届时自动降级到其它翻译通道。",
+	},
 	"settings.engine.myMemory": { zh: "启用 MyMemory 免费翻译" },
 	"settings.engine.myMemory.desc": {
 		zh: "无需密钥，每天 5000 字符免费，翻译后缓存到本地。",
