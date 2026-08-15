@@ -360,6 +360,21 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		toggleBtn.createSpan({ cls: "pt-toggle-filters-label", text: "筛选" });
 		const filterCaret = toggleBtn.createSpan({ cls: "pt-toggle-filters-caret", text: "▾" });
 
+		// 一键直达本插件设置页（齿轮，置于搜索行最右端）：低频操作，从前端面板直接进设置，
+		// 免去找 Obsidian 设置面板的层级。先 open 再 openTabById（设置未弹出时后者不生效）。
+		const settingsBtn = headerRow.createEl("button", {
+			cls: "pt-icon-btn pt-open-settings",
+			attr: { "aria-label": ctx.t("card.openSettings"), title: ctx.t("card.openSettings"), type: "button" },
+		});
+		setIcon(settingsBtn, "gear");
+		settingsBtn.addEventListener("click", (e: MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			const setting = asAppInternals(ctx.app).setting;
+			setting?.open?.();
+			setting?.openTabById?.(ctx.manifest.id);
+		});
+
 		// #7: 移动端工具栏折叠。窄屏下「刷新 / AI 翻译」等次要按钮收进右上角 ⋮ 溢出菜单，
 		// 避免与搜索框/排序/筛选挤在同一行导致换行或溢出。保留排序↕与筛选▾（核心、图标紧凑）。
 		if (isMobileEnvironment()) {

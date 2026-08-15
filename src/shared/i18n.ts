@@ -176,6 +176,7 @@ export const STRINGS = {
 	"card.uninstall.confirm": { zh: "确定卸载「{name}」？插件文件将从磁盘删除，此操作不可撤销。" },
 	"card.uninstall.done": { zh: "已卸载 {name}" },
 	"card.uninstall.fail": { zh: "卸载 {name} 失败：{reason}" },
+	"card.openSettings": { zh: "打开插件设置" },
 	"favorite.added": { zh: "已收藏" },
 	"favorite.removed": { zh: "已取消收藏" },
 
