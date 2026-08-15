@@ -628,6 +628,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const data: Record<string, unknown> = allData ?? ((await this.loadData()) as Record<string, unknown>) ?? {};
 		// 清理已移除的 locale 字段（旧版本遗留，避免脏数据残留在 data.json）
 		if ("locale" in data) delete data.locale;
+		// 收藏筛选改为会话级（不持久化）：清除旧版残留字段，避免 Object.assign 带进 settings
+		if ("favoriteFilter" in data) delete data.favoriteFilter;
 		// 来源筛选已移除「自定义」选项，旧设置迁移回「全部」
 		const legacyData = data as Record<string, unknown> & { sourceFilter?: string };
 		if (legacyData.sourceFilter === "custom") {
@@ -637,10 +639,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		if (["bulk", "online", "ai"].includes(legacyData.sourceFilter ?? "")) {
 			legacyData.sourceFilter = "translated";
 		}
-		// 收藏筛选从 boolean 迁移为枚举（旧 true/false 分别对应 favorited/all）
-		if (typeof legacyData.favoriteFilter === "boolean") {
-			legacyData.favoriteFilter = legacyData.favoriteFilter ? "favorited" : "all";
-		}
+		// 收藏筛选改为会话级（不持久化），字段已从 settings 移除：
+		// 旧版残留的 favoriteFilter（boolean 或枚举）随 Object.assign 丢弃，不再迁移
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 		// PERF-7：credentials 与 favorites 两个独立文件无依赖，并行读取缩短启动耗时。
 		const [creds, loadedFavorites] = await Promise.all([

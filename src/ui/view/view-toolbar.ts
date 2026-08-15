@@ -151,7 +151,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.authorFilter = null;
 			ctx.installFilter = "all";
 			ctx.favoriteFilter = "all";
-			ctx.settings.favoriteFilter = "all";
 			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
 			// 「已安装/已启动/已安装未启动」按钮：aria-pressed 与文案复位
 			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setAttribute("aria-pressed", "false");
@@ -748,10 +747,9 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		el.addEventListener("click", () => {
 			ctx.favoriteFilter = ctx.favoriteFilter === def.on ? "all" : def.on;
 			updateFavToggles();
-			// 持久化跨会话：与 sourceFilter 同款处理，回写 settings 并落盘
-			ctx.settings.favoriteFilter = ctx.favoriteFilter;
+			// 收藏筛选为会话级（不持久化）：每次打开插件重置为「全部」，
+			// 避免用户误以为默认筛选到「已收藏」（收藏集 favorites 仍持久化）
 			ctx.track(ctx.favoriteFilter === def.on ? def.track : `${def.track}_off`);
-			ctx.saveSettings();
 			ctx.scheduleRender(true);
 		});
 	});
@@ -872,7 +870,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.installFilter = "all";
 			updateInstallToggles();
 			ctx.favoriteFilter = "all";
-			ctx.settings.favoriteFilter = "all";
 			updateFavToggles();
 			// 重置中文生态筛选
 			ctx.chineseEcoFilter = "all";
