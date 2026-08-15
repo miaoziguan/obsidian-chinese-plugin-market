@@ -1788,17 +1788,8 @@ button.pt-card-install-btn--installed {
 .pt-card-desc--clamped {
 	overflow: hidden;
 }
-/* 描述点击展开/收起（方案 C：桌面与移动统一，弃用 hover 浮层） */
-.pt-card-desc--touch {
-	cursor: pointer;
-}
-.pt-card-desc--touch:hover {
-	/* 可点态轻提示：hover 时轻微变色（仅视觉，不弹浮层）。
-	   仅用 text-decoration: underline 短属性——长属性（text-decoration-color 等）
-	   在 Obsidian 1.11.4 部分支持，且此处纯装饰、无需精细化。 */
-	color: var(--pt-text);
-	text-decoration: underline;
-}
+/* 描述区为纯文本展示（点击穿透到整卡打开详情页，非独立可点元素）：
+   不再使用 --touch（原 cursor:pointer + hover 下划线会误导用户以为点描述可展开）。 */
 .pt-card-desc--expanded {
 	-webkit-line-clamp: unset;
 	max-height: none;
@@ -5234,10 +5225,7 @@ button.pt-card-install-btn--installed {
 .pt-mobile .pt-facet-chips {
 	gap: 8px;
 }
-/* 卡片描述可点态：触摸端给轻微视觉提示（点一下展开） */
-.pt-mobile .pt-card-desc--touch {
-	-webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
-}
+/* 卡片描述不再作为独立可点元素（点击穿透到整卡打开详情页），移除移动端 --touch 高亮 */
 
 /* ═══════════════════════════════════════════════════ */
 /*  #7 移动端响应式布局：单列卡片 + 工具栏溢出菜单       */
