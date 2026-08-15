@@ -630,7 +630,9 @@ export function applyCardState(
 	const hasTranslation = !!result?.translatedName && result?.source !== "original";
 	// 默认显示语言：按模式选；切换目标语言（altName）= 另一种语言。
 	// 防御式读取：e2e harness 等构造的 ctx 未必带完整 settings，缺省回退到 translated（原行为）。
-	const nameDisplay = ctx.settings?.nameDisplay ?? "translated";
+	// 局部 settings 兜底：下方 updateBadge / healthBadge 等多处直接读设置项，统一用 ?? {} 避免整段崩溃。
+	const settings = ctx.settings ?? {};
+	const nameDisplay = settings.nameDisplay ?? "translated";
 	const displayName = nameDisplay === "original" ? origName : translatedName;
 	const altName = displayName === origName ? translatedName : origName;
 	const isTranslated = hasTranslation;
@@ -789,7 +791,7 @@ export function applyCardState(
 	// 可更新徽标：官方版本领先本地（仅已装插件），点击跳 Obsidian 社区插件更新入口
 	// 受设置 notifyInstalledUpdates 开关控制（轻量更新提醒，无后台推送）
 	const ub = refs.updateBadge;
-	const outdated = !!ctx.settings.notifyInstalledUpdates && !!ctx.outdatedIds?.has(plugin.id);
+	const outdated = !!settings.notifyInstalledUpdates && !!ctx.outdatedIds?.has(plugin.id);
 	if (outdated && ub) {
 		const info = ctx.outdatedInfo?.get(plugin.id);
 		const label = info ? `可更新 ${info.local} → ${info.latest}` : "可更新";
@@ -803,12 +805,12 @@ export function applyCardState(
 	// 维护健康度：纯文字表达，融入作者行（与竞品 health.ts 同数据，去掉彩色胶囊样式）
 	// 受设置 showHealthBadge 开关控制；阈值由 healthHealthyDays / healthAgingDays 自定义
 	const hb = refs.healthBadge;
-	if (ctx.settings.showHealthBadge) {
+	if (settings.showHealthBadge) {
 		const health = assessHealth(
 			plugin.updated,
 			Date.now(),
-			ctx.settings.healthHealthyDays,
-			ctx.settings.healthAgingDays,
+			settings.healthHealthyDays,
+			settings.healthAgingDays,
 		);
 		const healthLabel = health.level === "healthy" ? "活跃" : health.level === "aging" ? "维护放缓" : "停更风险";
 		hb.textContent = healthLabel;
