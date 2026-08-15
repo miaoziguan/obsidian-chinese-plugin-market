@@ -78,8 +78,6 @@ export interface ChinesePluginMarketSettings {
 	sortBy: SortBy;
 	// 个人收藏集：用户主动收藏的插件 id（持久化，随使用时间复利）
 	favorites: string[];
-	/** 收藏筛选："favorited" 仅已收藏 / "unfavorited" 仅未收藏 / "all" 全部（跨会话持久化） */
-	favoriteFilter: FavoriteFilter;
 	/** 新上线窗口天数：null 表示不过滤（默认），可选 1/3/7/30/90/365 */
 	newWithinDays: number | null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件（默认 null = 不过滤） */
@@ -144,7 +142,6 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	sortBy: "relevance",
 	favorites: [],
 	compare: [],
-	favoriteFilter: "all",
 	newWithinDays: null,
 	updatedWithinDays: null,
 	defaultNewWithinDays: null,

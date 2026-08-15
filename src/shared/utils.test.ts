@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
 	cleanChineseSpaces,
+	stripReviewNotice,
 	parseJSON,
 	parseRecallCandidates,
 	localRecall,
@@ -45,6 +46,45 @@ describe("cleanChineseSpaces", () => {
 		expect(cleanChineseSpaces("")).toBe("");
 		expect(cleanChineseSpaces("   ")).toBe("");
 		expect(cleanChineseSpaces(null as unknown as string)).toBe(null);
+	});
+});
+
+describe("stripReviewNotice", () => {
+	it("剔除描述末尾的 Obsidian 官方审核提示句（含「- 」前缀）", () => {
+		expect(stripReviewNotice("- 此插件尚未经过 Obsidian 工作人员的手动审核。")).toBe("");
+		expect(stripReviewNotice("…驱动。此插件尚未经过 Obsidian 工作人员的手动审核。")).toBe("…驱动");
+	});
+
+	it("覆盖官方/团队/工作人员/员工 × 人工/手动 × 有无「的」× 有无「尚」的多种变体", () => {
+		expect(stripReviewNotice("尚未经过 Obsidian 团队手动审核。")).toBe("");
+		expect(stripReviewNotice("该插件尚未经过 Obsidian 官方人工审核。")).toBe("");
+		expect(stripReviewNotice("此插件尚未经过Obsidian团队的人工审核。")).toBe("");
+		expect(stripReviewNotice("…支持。 - 该插件尚未经过 Obsidian 员工的手动审核。")).toBe("…支持");
+		// 无「尚」变体：用户截图里的 omni-viewer 即此种
+		expect(stripReviewNotice("- 此插件未经过 Obsidian 团队人工审核。")).toBe("");
+		expect(stripReviewNotice("该插件未经过 Obsidian 官方人工审核。")).toBe("");
+		expect(stripReviewNotice("未经过 Obsidian 官方手动审核。")).toBe("");
+	});
+
+	it("无句号、不同分隔符（— ——）同样剔除", () => {
+		expect(stripReviewNotice("此插件尚未经过 Obsidian 工作人员的手动审核")).toBe("");
+		expect(stripReviewNotice("…工作流。 — 此插件尚未经过 Obsidian 官方人工审核。")).toBe("…工作流");
+		expect(stripReviewNotice("……。——此插件尚未经过Obsidian团队人工审核。")).toBe("……");
+	});
+
+	it("不误删正面表述与正常正文", () => {
+		expect(stripReviewNotice("已通过 Obsidian 官方审核。")).toBe("已通过 Obsidian 官方审核。");
+		expect(stripReviewNotice("描述正文。")).toBe("描述正文。");
+		expect(stripReviewNotice("描述…尚未经过审核。但是别删我")).toBe("描述…尚未经过审核。但是别删我");
+		expect(stripReviewNotice("")).toBe("");
+	});
+
+	it("cleanChineseSpaces 不剔除审核句（仅卡片描述调用方叠加 stripReviewNotice，详情页保留原文）", () => {
+		expect(cleanChineseSpaces("- 此插件尚未经过 Obsidian 工作人员的手动审核。")).toBe(
+			"- 此插件尚未经过 Obsidian 工作人员的手动审核。"
+		);
+		// 卡片描述实际渲染路径：cleanChineseSpaces 先清理空格，stripReviewNotice 再剔除审核句
+		expect(stripReviewNotice(cleanChineseSpaces("简明 描述。 - 此插件尚未经过 Obsidian 官方人工审核。"))).toBe("简明描述");
 	});
 });
 

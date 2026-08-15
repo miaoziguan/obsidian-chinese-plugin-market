@@ -1274,7 +1274,7 @@ button.pt-facet-letter-btn.is-active {
 	}
 	.pt-card-desc.pt-card-desc--clamped {
 		-webkit-line-clamp: 3;
-		max-height: calc(var(--pt-text-base, 0.78rem) * 1.5 * 3);
+		max-height: calc(var(--pt-text-sm, 0.72rem) * 1.5 * 3);
 	}
 }
 /* 中等宽度（420-600px）：隐藏信号行，保留统计和 AI 理由，描述截断 4 行 */
@@ -1284,7 +1284,7 @@ button.pt-facet-letter-btn.is-active {
 	}
 	.pt-card-desc.pt-card-desc--clamped {
 		-webkit-line-clamp: 4;
-		max-height: calc(var(--pt-text-base, 0.78rem) * 1.5 * 4);
+		max-height: calc(var(--pt-text-sm, 0.72rem) * 1.5 * 4);
 	}
 }
 
@@ -1770,8 +1770,10 @@ button.pt-card-install-btn--installed {
 /* ── 操作图标按钮（用于 .pt-card-actions-row 常驻行） ── */
 
 /* 描述（完整显示，柔和副文层级；封顶 5 行 + 展开按钮） */
+/* 字号用 --pt-text-sm（较正文 --pt-text-base 略小）：描述是辅助信息，缩小后可读性不变、
+   视觉上让位给标题/按钮等主要可操作元素（产品改进：描述区点击已穿透到整卡打开详情）。 */
 .pt-card-desc {
-	font-size: var(--pt-text-base);
+	font-size: var(--pt-text-sm);
 	line-height: 1.5;
 	color: var(--pt-text-muted);
 	word-break: break-word;

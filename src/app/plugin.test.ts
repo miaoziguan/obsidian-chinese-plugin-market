@@ -78,25 +78,17 @@ describe("Plugin 持久化契约（P0 回归）", () => {
 		expect(plugin.settings.embeddingLocalModel).toBe("Xenova/custom-model");
 	});
 
-	it("收藏筛选（favoriteFilter）从 boolean 迁移为枚举并持久化", async () => {
+	it("收藏筛选（favoriteFilter）改为会话级：不再持久化进 settings", async () => {
 		const { plugin, saveData } = makePlugin();
-		// 旧版 data.json 含 boolean true → 迁移为 "favorited"
+		// 旧版 data.json 残留 favoriteFilter（boolean 或枚举）→ 加载后被丢弃，不回落到 settings
 		await (plugin as any).loadSettings({ favoriteFilter: true } as Record<string, unknown>);
-		expect(plugin.settings.favoriteFilter).toBe("favorited");
-		// 旧版 data.json 含 boolean false → 迁移为 "all"
-		await (plugin as any).loadSettings({ favoriteFilter: false } as Record<string, unknown>);
-		expect(plugin.settings.favoriteFilter).toBe("all");
-		// 缺省（旧版无该字段）应回落到默认 "all"
-		await (plugin as any).loadSettings({} as Record<string, unknown>);
-		expect(plugin.settings.favoriteFilter).toBe("all");
-		// 新枚举值直接透传
+		expect((plugin.settings as any).favoriteFilter).toBeUndefined();
 		await (plugin as any).loadSettings({ favoriteFilter: "unfavorited" } as Record<string, unknown>);
-		expect(plugin.settings.favoriteFilter).toBe("unfavorited");
-		// saveSettings 经 Object.assign(allData, settings) 把 favoriteFilter 写回 data.json
-		(plugin as any).settings.favoriteFilter = "favorited";
+		expect((plugin.settings as any).favoriteFilter).toBeUndefined();
+		// saveSettings 不再写回 favoriteFilter
 		await (plugin as any).flushSaveSettings();
 		const written = (saveData as any).mock.calls.at(-1)[0] as Record<string, unknown>;
-		expect(written.favoriteFilter).toBe("favorited");
+		expect(written.favoriteFilter).toBeUndefined();
 	});
 
 	it("onunload 对挂起的 settings 兜底落盘", async () => {

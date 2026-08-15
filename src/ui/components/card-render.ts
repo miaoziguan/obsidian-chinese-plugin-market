@@ -11,7 +11,7 @@ import { Notice } from "obsidian";
 import type { PluginInfo, TranslateResult, AISearchResult } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import type { I18nKey } from "@shared/i18n";
-import { cleanChineseSpaces } from "@shared/utils";
+import { cleanChineseSpaces, stripReviewNotice } from "@shared/utils";
 import { appendSVG } from "@ui/dom/dom";
 import { isMacOS, macosSystemTranslate } from "@translation/platform/macos-shortcuts";
 import { formatDownloads, formatRelativeTime } from "@domain/catalog/stats";
@@ -706,8 +706,9 @@ export function applyCardState(
 	refs.compareBtn.classList.toggle("is-compare-on", isCompared);
 	refs.favBtn.classList.toggle("is-fav-on", isFav);
 
-	// 描述
-	const descText = cleanChineseSpaces(result?.translatedDesc || plugin.description);
+	// 描述：清理空格 + 剔除末尾 Obsidian 官方审核句（卡片空间有限，平台免责句是噪音；
+	// 详情页描述保留原文，由 detail-drawer 自行处理）
+	const descText = stripReviewNotice(cleanChineseSpaces(result?.translatedDesc || plugin.description));
 	highlightInto(refs.descEl, descText, hl);
 	refs.descEl.dataset.originalDesc = plugin.description;
 	refs.descEl.classList.toggle("pt-desc-pending", !result);
