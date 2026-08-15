@@ -337,12 +337,12 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		if (!nameSpan.classList.contains("pt-card-name--clickable")) return;
 		e.stopPropagation(); // 避免冒泡到整卡，误触发打开详情
 		const showOrig = nameSpan.classList.toggle("pt-card-name--original");
-		const orig = nameSpan.dataset.originalName || "";
 		const disp = nameSpan.dataset.displayName || "";
+		const alt = nameSpan.dataset.altName || nameSpan.dataset.originalName || "";
 		nameSpan.setCssStyles({ opacity: "0" });
 		window.setTimeout(() => {
 			const hl = cardCtxMap.get(card)?.aiSearchResult?.highlightTerms;
-			highlightInto(nameSpan, showOrig ? orig : disp, hl);
+			highlightInto(nameSpan, showOrig ? alt : disp, hl);
 			nameSpan.setAttribute("aria-pressed", String(showOrig));
 			nameSpan.title = showOrig ? ctx.t("card.name.toggleBack") : ctx.t("card.name.toggleOriginal");
 			nameSpan.setCssStyles({ opacity: "1" });
@@ -623,7 +623,15 @@ export function applyCardState(
 	// 不再设置 aria-label：Obsidian 的 tooltip 系统会读取 aria-label 并渲染悬浮气泡，
 	// 与「标题/作者/安装状态」三段拼成的 tooltip 重叠且信息冗余（卡片内本身已可视）。
 	// 卡片内可见文字已覆盖这三条信息，对屏幕阅读器无实质损失。
-	const rawName = result?.translatedName || plugin.name;
+	// 标题显示模式（设置项 nameDisplay）：translated=中文译名优先；original=原标题优先。
+	// 两种模式下只要存在可用译名，标题都可点击在「译名 / 原名」间临时切换。
+	const translatedName = cleanChineseSpaces(result?.translatedName || plugin.name);
+	const origName = plugin.name;
+	const hasTranslation = !!result?.translatedName && result?.source !== "original";
+	// 默认显示语言：按模式选；切换目标语言（altName）= 另一种语言
+	const displayName = ctx.settings.nameDisplay === "original" ? origName : translatedName;
+	const altName = displayName === origName ? translatedName : origName;
+	const isTranslated = hasTranslation;
 
 	// 收藏 / 推荐态
 	cardEl.classList.toggle("is-favorited", isFav);
@@ -631,13 +639,13 @@ export function applyCardState(
 	refs.recommendBadge.setCssStyles({ display: rec ? "" : "none" });
 
 	// 名称 + 原名（点击标题切换中/英）/ 未翻译说明
-	const displayName = cleanChineseSpaces(rawName);
 	refs.nameSpan.dataset.originalName = plugin.name;
 	refs.nameSpan.dataset.displayName = displayName;
+	// altName：点标题切换到的「另一语言」（translated 模式=原名；original 模式=译名）
+	refs.nameSpan.dataset.altName = altName;
 	refs.originalName.setCssStyles({ display: "none" }); // 始终隐藏，点击标题切换取而代之
 	// AI/本地语义搜索命中词高亮（highlightTerms 由 ctx.aiSearchResult 携带）
 	const hl = ctx.aiSearchResult?.highlightTerms;
-	const isTranslated = displayName !== plugin.name && result?.source !== "original";
 	if (!isTranslated) {
 		// 无翻译 / 未翻译：标题即原名或中文，无切换
 		refs.nameSpan.classList.remove("pt-card-name--clickable", "pt-card-name--original");
@@ -651,7 +659,7 @@ export function applyCardState(
 		// 已翻译：标题可点击切换中/英文
 		refs.nameSpan.classList.add("pt-card-name--clickable");
 		const showOrig = refs.nameSpan.classList.contains("pt-card-name--original");
-		highlightInto(refs.nameSpan, showOrig ? plugin.name : displayName, hl);
+		highlightInto(refs.nameSpan, showOrig ? altName : displayName, hl);
 		refs.nameSpan.setCssStyles({ opacity: "1" });
 		refs.nameSpan.title = showOrig ? t("card.name.toggleBack") : t("card.name.toggleOriginal");
 		refs.nameSpan.setAttribute("role", "button");
