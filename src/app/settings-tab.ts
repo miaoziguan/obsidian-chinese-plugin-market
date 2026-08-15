@@ -151,6 +151,19 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							},
 						},
 					},
+					{
+						name: this.t("settings.prefs.nameDisplay"),
+						desc: this.t("settings.prefs.nameDisplay.desc"),
+						control: {
+							type: "dropdown",
+							key: "nameDisplay",
+							defaultValue: "translated",
+							options: {
+								translated: this.t("settings.prefs.nameDisplay.translated"),
+								original: this.t("settings.prefs.nameDisplay.original"),
+							},
+						},
+					},
 				],
 			},
 			{
@@ -661,6 +674,13 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		if (key === "notifyInstalledUpdates") {
 			// 关闭更新提醒时立即清除 ribbon 红点；开启时由下次检测（或打开视图）重算
 			if (!value) this.plugin.setRibbonUpdateBadge(0);
+		}
+		// 标题显示模式变更：即时刷新已打开的列表（标题译名/原名按新模式重绘）
+		if (key === "nameDisplay") {
+			for (const leaf of this.plugin.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+				const view = leaf.view as unknown as { invalidateAndRender?: (preserveScroll: boolean) => void };
+				view.invalidateAndRender?.(false);
+			}
 		}
 		return this.plugin.flushSaveSettings();
 	}

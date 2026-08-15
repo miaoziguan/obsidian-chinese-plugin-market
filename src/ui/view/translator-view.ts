@@ -102,6 +102,8 @@ export interface ChinesePluginMarketSettings {
 	trendKeepDays: number;
 	/** 已安装插件有可用更新时，在列表卡片标红点提醒（轻量版，无后台轮询） */
 	notifyInstalledUpdates: boolean;
+	/** 插件标题显示模式：translated=中文译名优先（点标题可切英文）；original=原标题优先（点标题可切中文） */
+	nameDisplay: "translated" | "original";
 	/** 插件启用组合预设（Profile）：命名快照，一键应用切换启用集。不碰自身。 */
 	profiles: PluginProfile[];
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
@@ -152,6 +154,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	trendIntervalMs: 6 * 60 * 60 * 1000,
 	trendKeepDays: 90,
 	notifyInstalledUpdates: true,
+	nameDisplay: "translated",
 	profiles: [],
 };
 
