@@ -49,6 +49,8 @@ const UPDATE_POLL_MS = 6 * 60 * 60 * 1000;
 
 export interface ChinesePluginMarketSettings {
 	useMyMemory: boolean;
+	/** 腾讯翻译（免费）通道（transmart.qq.com/api/imt，零配置） */
+	useTransmart: boolean;
 	secretId: string;
 	secretKey: string;
 	region: string;
@@ -120,6 +122,7 @@ export interface PluginProfile {
 
 export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	useMyMemory: true,
+	useTransmart: true,
 	secretId: "",
 	secretKey: "",
 	region: "ap-guangzhou",
