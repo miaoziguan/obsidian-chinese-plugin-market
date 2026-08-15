@@ -347,7 +347,7 @@ export const STRINGS = {
 	// 翻译引擎
 	"settings.engine.transmart": { zh: "启用腾讯翻译（免费）" },
 	"settings.engine.transmart.desc": {
-		zh: "零配置免费、无需密钥（transmart.qq.com 接口），默认开启；检测到中文源自动跳过。",
+		zh: "零配置免费、无需密钥（transmart.qq.com 接口），默认开启；检测到中文源自动跳过。注意：该接口为非官方逆向接口，依赖腾讯 Transmart 扩展同源实现，可能随时变更或失效，届时自动降级到其它翻译通道。",
 	},
 	"settings.engine.myMemory": { zh: "启用 MyMemory 免费翻译" },
 	"settings.engine.myMemory.desc": {
