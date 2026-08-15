@@ -317,20 +317,13 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	newBadge.setAttribute("aria-hidden", "true");
 	newBadge.setCssStyles({ display: "none" });
 
-	// ── 描述（固定行数截断，点击展开/收起全文；桌面与移动统一交互） ──
-	// 方案 C：弃用 hover 浮层（闪烁/遮罩/易失），改点按描述区 toggle --expanded。
+	// ── 描述（固定行数截断展示，点击穿透到整卡委托打开详情页） ──
+	// 不再把描述区当成独立可点击元素：原方案 C 点描述 toggle 展开会占用大块可操作区、
+	// 并用 stopPropagation 拦截冒泡，导致「点描述进详情」极难触发（用户痛点）。
+	// 现描述区为纯文本（非 button / 无 data-action），点击冒泡到 onCardClick 委托后
+	// 命中 !actionEl 分支直接打开详情页；卡片高度由 CSS 锁定，展开不改变行高，
+	// 故无需展开交互（想看全文进详情页即可）。
 	const descEl = card.createDiv({ cls: "pt-card-desc pt-card-desc--clamped" });
-	descEl.classList.add("pt-card-desc--touch");
-	descEl.addEventListener("click", (e: MouseEvent) => {
-		e.stopPropagation(); // 避免冒泡到整卡误触发打开详情
-		const fullText = descEl.textContent || "";
-		if (!fullText || descEl.scrollHeight <= descEl.clientHeight + 2) return; // 无截断则不处理
-		const expanded = descEl.classList.toggle("pt-card-desc--expanded");
-		descEl.setAttribute("aria-expanded", String(expanded));
-	});
-	descEl.setAttribute("role", "button");
-	descEl.setAttribute("aria-expanded", "false");
-	descEl.setAttribute("tabindex", "-1");
 
 	// ── 标题点击切换中文/英文原名（方案 D） ──
 	nameSpan.addEventListener("click", (e: MouseEvent) => {
@@ -611,7 +604,7 @@ export function applyCardState(
 ): void {
 	const refs = cardRefsMap.get(cardEl);
 	if (!refs) return;
-	// 池化复用：更新 ctx 引用，确保 descToggle click handler 捕获正确的 onDescToggle
+	// 池化复用：更新 ctx 引用，确保后续交互（标题切换、委托打开详情等）捕获正确 ctx
 	cardCtxMap.set(cardEl, ctx);
 	const t = ctx.t;
 	const isFav = ctx.favoritesSet?.has(plugin.id) ?? false;
