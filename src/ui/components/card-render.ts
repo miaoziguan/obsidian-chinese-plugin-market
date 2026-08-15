@@ -628,8 +628,10 @@ export function applyCardState(
 	const translatedName = cleanChineseSpaces(result?.translatedName || plugin.name);
 	const origName = plugin.name;
 	const hasTranslation = !!result?.translatedName && result?.source !== "original";
-	// 默认显示语言：按模式选；切换目标语言（altName）= 另一种语言
-	const displayName = ctx.settings.nameDisplay === "original" ? origName : translatedName;
+	// 默认显示语言：按模式选；切换目标语言（altName）= 另一种语言。
+	// 防御式读取：e2e harness 等构造的 ctx 未必带完整 settings，缺省回退到 translated（原行为）。
+	const nameDisplay = ctx.settings?.nameDisplay ?? "translated";
+	const displayName = nameDisplay === "original" ? origName : translatedName;
 	const altName = displayName === origName ? translatedName : origName;
 	const isTranslated = hasTranslation;
 
