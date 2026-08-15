@@ -146,6 +146,27 @@ export class Modal {
 	contentEl = document.createElement("div");
 }
 
+/**
+ * E2E mock of Obsidian 的 SecretComponent（敏感字段输入，不显示明文）。
+ * 仅覆盖 e2e 用到的 API（构造 / setValue / onChange），不做真实 DOM 渲染。
+ */
+export class SecretComponent {
+	private _value = "";
+	constructor(_app?: unknown, _containerEl?: HTMLElement) {}
+	setValue(value: string): this {
+		this._value = value;
+		return this;
+	}
+	getValue(): string {
+		return this._value;
+	}
+	onChange(cb: (value: string) => void): this {
+		this._onChange = cb;
+		return this;
+	}
+	private _onChange?: (value: string) => void;
+}
+
 export class PluginSettingTab {
 	constructor(_app?: unknown, _plugin?: unknown) {}
 	display(): void {}
