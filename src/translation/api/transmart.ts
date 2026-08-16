@@ -48,9 +48,9 @@ export class TransmartClient {
 	private readonly clientKey: string;
 
 	constructor(userAgent?: string) {
-		this.clientKey = generateClientKey(
-			userAgent ?? (typeof navigator !== "undefined" ? navigator.userAgent : "")
-		);
+		// 仅作 client_key 随机种子：不读 navigator（Obsidian 规范禁 navigator API，
+		// 且 UA 只是伪造 client_key 的种子，无 UA 时用空串亦可）
+		this.clientKey = generateClientKey(userAgent ?? "");
 	}
 
 	setEnabled(v: boolean) {
@@ -192,7 +192,7 @@ export class TransmartClient {
 			const code = json.header?.ret_code;
 			if (code === "succ") return json;
 			if (code === "busy" && attempt < RETRY_BUSY) {
-				await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+				await new Promise((r) => window.setTimeout(r, 600 * (attempt + 1)));
 				continue;
 			}
 			throw new Error(`腾讯翻译（免费）API 错误: ${code ?? "unknown"}`);
