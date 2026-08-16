@@ -389,13 +389,14 @@ export class PluginDetailDrawer {
 		btn.setAttribute("disabled", "true"); // 翻译中禁用，防止重复点击导致更慢/更易失败
 		// CSS 进度线 + 弧扫指示器驱动：把分段进度 done/total 写入 --pt-progress；
 		// 文案显示「翻译中 N/M…」，与分段计数一致（macOS 通道整篇为 1 段）。
-		btn.style.setProperty("--pt-progress", "0");
+		// 用 Obsidian setCssProps（禁直接 style.setProperty）
+		btn.setCssProps({ "--pt-progress": "0" });
 		const setProgress = (done: number, total: number) => {
 			labelEl.textContent = this.t("detail.readme.translatingN", {
 				n: String(done),
 				m: String(total),
 			});
-			btn.style.setProperty("--pt-progress", String(total > 0 ? done / total : 0));
+			btn.setCssProps({ "--pt-progress": String(total > 0 ? done / total : 0) });
 		};
 		let failed = 0;
 		try {
