@@ -5309,3 +5309,38 @@ button.pt-card-install-btn--installed {
 	margin-top: 8px;
 	width: 100%;
 }
+
+/* 设置页：鸣谢清单（硬编码贡献者，每行名字可点击跳 GitHub）
+   主布局在 renderThanks 里用内联样式强制（特异性最高），这里仅作兜底/细节样式。 */
+.pt-thanks-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 4px;
+	align-items: flex-start;
+	width: 100%;
+}
+.pt-thanks-row {
+	line-height: 1.6;
+	width: 100%;
+	text-align: left;
+}
+.pt-thanks-name {
+	font-weight: 600;
+	color: var(--pt-text);
+}
+.pt-thanks-link {
+	font-weight: 500;
+	text-decoration: none;
+	word-break: break-all;
+}
+.pt-thanks-link:hover {
+	text-decoration: underline;
+}
+.pt-thanks-prologue {
+	margin-bottom: 10px;
+	line-height: 1.6;
+	text-align: left;
+	font-size: var(--pt-text-sm, 13px);
+	color: var(--pt-text-muted, var(--text-muted));
+}
