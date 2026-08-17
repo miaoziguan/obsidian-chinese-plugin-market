@@ -16,6 +16,7 @@ import { asAppInternals } from "@data/platform/obsidian-internals";
 import { VIEW_TYPE } from "@shared/constants";
 import { logger } from "@shared/logger";
 import type { PluginProfile, ChinesePluginMarketView } from "@ui/view/translator-view";
+import { CONTRIBUTORS, contributorGitHubUrl } from "@shared/contributors";
 
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
@@ -122,6 +123,18 @@ export class TranslatorSettingTab extends PluginSettingTab {
 	getSettingDefinitions(): SettingDefinitionItem[] {
 		const s = this.plugin.settings;
 		return [
+			{
+				type: "group",
+				heading: this.t("settings.thanks"),
+				desc: this.t("settings.thanks.desc"),
+				items: [
+					{
+						// 左侧 label 留空：group 标题已经是「鸣谢」，无需重复显示
+						name: "",
+						render: (setting) => this.renderThanks(setting),
+					},
+				],
+			},
 			{
 				type: "group",
 				heading: this.t("settings.prefs"),
@@ -580,6 +593,46 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				],
 			},
 		];
+	}
+
+	/** 鸣谢清单渲染：遍历 CONTRIBUTORS，每行「昵称 + 可点击 GitHub 链接」。
+	 * 用内联样式（特异性最高，高于任何 class 选择器）强制整行左对齐，
+	 * 避免被 Obsidian 主题 .setting-item 的 space-between 推到右侧。 */
+	private renderThanks(setting: Setting): void {
+		// 整行：block 布局，左对齐
+		setting.settingEl.style.setProperty("display", "block");
+		setting.settingEl.style.setProperty("text-align", "left");
+		// 隐藏左侧空 label 占位
+		if (setting.infoEl) {
+			setting.infoEl.style.setProperty("display", "none");
+		}
+		// control 区：占满整行、左对齐（不再被 space-between 推右）
+		setting.controlEl.style.setProperty("display", "block");
+		setting.controlEl.style.setProperty("width", "100%");
+		setting.controlEl.style.setProperty("text-align", "left");
+		setting.controlEl.empty();
+		// 开场文案：致敬贡献者（写在清单上方，左对齐）
+		setting.controlEl.createDiv({
+			cls: "pt-thanks-prologue",
+			text: this.t("settings.thanks.epilogue"),
+		});
+		const list = setting.controlEl.createDiv({ cls: "pt-thanks-list" });
+		for (const c of CONTRIBUTORS) {
+			const row = list.createDiv({ cls: "pt-thanks-row" });
+			const url = contributorGitHubUrl(c.github);
+			// 昵称文本（非链接，便于识别贡献者）
+			row.createSpan({ text: c.name, cls: "pt-thanks-name" });
+			row.createSpan({ text: " " });
+			// GitHub 链接：直接显示 URL，可点击
+			const link = row.createEl("a", {
+				text: url,
+				href: url,
+				cls: "pt-thanks-link",
+			});
+			// 外链：新标签打开，避免离开 Obsidian 上下文
+			link.setAttr("target", "_blank");
+			link.setAttr("rel", "noopener noreferrer");
+		}
 	}
 
 	/** 读取当前真正启用的插件 id 集合（来自 app.plugins.enabledPlugins，不依赖视图是否打开） */

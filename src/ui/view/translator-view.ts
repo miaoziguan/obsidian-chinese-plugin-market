@@ -9,7 +9,6 @@ import {
 	ItemView,
 	WorkspaceLeaf,
 	Platform,
-	Notice,
 } from "obsidian";
 import { toHTMLElement } from "@ui/dom/dom";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
@@ -456,8 +455,6 @@ export class ChinesePluginMarketView extends ItemView {
 		window.setTimeout(() => {
 			if (this.disposed) return;
 			snapshotInstalled(this._ctx);
-			const n = (this._ctx.enabledIds as Set<string> | undefined)?.size ?? 0;
-			new Notice(`[DBG] 延迟snapshot enabledIds 共 ${n} 个`);
 		}, 2500);
 	}
 

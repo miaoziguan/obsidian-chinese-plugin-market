@@ -455,6 +455,15 @@ export const STRINGS = {
 	"settings.profiles.save": { zh: "保存当前为预设" },
 	"settings.profiles.apply": { zh: "应用" },
 	"settings.profiles.delete": { zh: "删除" },
+
+	// 鸣谢清单（硬编码常量 src/shared/contributors.ts）
+	"settings.thanks": { zh: "鸣谢" },
+	"settings.thanks.desc": {
+		zh: "向为本插件开发做出贡献的人致敬——提交代码、提出建议、参与测试的每一位，都是推动这件事向前的人。",
+	},
+	"settings.thanks.epilogue": {
+		zh: "感谢以下贡献者为人类文明发展所作出的无私贡献，历史将永远铭记各位。",
+	},
 	"settings.profiles.applied": { zh: "已应用「{name}」：启用 {n} 个 / 停用 {m} 个" },
 	"settings.profiles.saved": { zh: "已保存预设「{name}」（{n} 个启用插件）" },
 	"settings.profiles.deleted": { zh: "已删除预设「{name}」" },
