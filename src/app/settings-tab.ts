@@ -541,13 +541,10 @@ export class TranslatorSettingTab extends PluginSettingTab {
 						// 现有预设列表 + 保存新预设（动态渲染，增删后重画本设置页）
 						render: (setting) => {
 							const list = this.plugin.settings.profiles;
-							// 与 renderThanks 同款：用内联样式强制整行左对齐，规避设置项 label 列挤压。
-							// 否则「日常（5）·绑定布局 ✓」+ 4 个按钮会被挤进 40% 窄列，竖排成乱码。
-							setting.settingEl.style.setProperty("display", "block");
-							if (setting.infoEl) setting.infoEl.style.setProperty("display", "none");
-							setting.controlEl.style.setProperty("display", "block");
-							setting.controlEl.style.setProperty("width", "100%");
-							setting.controlEl.style.setProperty("text-align", "left");
+							// 布局样式用 CSS 类（与 renderThanks 同款），规避内联 style 违反规范。
+							setting.settingEl.addClass("pt-setting-full-width");
+							if (setting.infoEl) setting.infoEl.addClass("pt-setting-info-hidden");
+							setting.controlEl.addClass("pt-setting-control-full");
 							// 预设列表：每行「名称 · N个 · 布局状态」+ 应用 + 绑定布局 + 删除
 							for (const p of list) {
 								const row = setting.controlEl.createDiv({ cls: "pt-profile-row" });
@@ -616,20 +613,12 @@ export class TranslatorSettingTab extends PluginSettingTab {
 	}
 
 	/** 鸣谢清单渲染：遍历 CONTRIBUTORS，每行「昵称 + 可点击 GitHub 链接」。
-	 * 用内联样式（特异性最高，高于任何 class 选择器）强制整行左对齐，
-	 * 避免被 Obsidian 主题 .setting-item 的 space-between 推到右侧。 */
+	 * 布局样式收敛到 CSS 类 pt-setting-full-width（规避 Obsidian no-static-styles-assignment
+	 * 规范：不得用内联 style.setProperty，须用 CSS 类）。 */
 	private renderThanks(setting: Setting): void {
-		// 整行：block 布局，左对齐
-		setting.settingEl.style.setProperty("display", "block");
-		setting.settingEl.style.setProperty("text-align", "left");
-		// 隐藏左侧空 label 占位
-		if (setting.infoEl) {
-			setting.infoEl.style.setProperty("display", "none");
-		}
-		// control 区：占满整行、左对齐（不再被 space-between 推右）
-		setting.controlEl.style.setProperty("display", "block");
-		setting.controlEl.style.setProperty("width", "100%");
-		setting.controlEl.style.setProperty("text-align", "left");
+		setting.settingEl.addClass("pt-setting-full-width");
+		if (setting.infoEl) setting.infoEl.addClass("pt-setting-info-hidden");
+		setting.controlEl.addClass("pt-setting-control-full");
 		setting.controlEl.empty();
 		// 开场文案：致敬贡献者（写在清单上方，左对齐）
 		setting.controlEl.createDiv({

@@ -5444,3 +5444,18 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-sm, 13px);
 	color: var(--pt-text-muted, var(--text-muted));
 }
+
+/* 设置页通用：整行 block 左对齐（renderThanks / profiles 渲染区共用）。
+   规避 Obsidian no-static-styles-assignment 规范：不得内联 style.setProperty。 */
+.pt-setting-full-width {
+	display: block;
+	text-align: left;
+}
+.pt-setting-info-hidden {
+	display: none;
+}
+.pt-setting-control-full {
+	display: block;
+	width: 100%;
+	text-align: left;
+}
