@@ -118,7 +118,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				// 用 requestAnimationFrame 等一次布局，确保 offsetWidth 已包含新文案
 				window.requestAnimationFrame(() => {
 					const w = aiBadge.offsetWidth;
-					clearBtn.style.right = w > 0 ? `${w + 10}px` : "";
+					clearBtn.setCssStyles({ right: w > 0 ? `${w + 10}px` : "" });
 				});
 			} else {
 				// 本地语义：无需 Key、无需联网；且 badge 与左侧下拉标签重复，本地模式直接隐藏
@@ -287,7 +287,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 						text.setPlaceholder(ctx.t("settings.profiles.name.ph"))
 							.setValue(this.name)
 							.onChange((v) => (this.name = v));
-						text.inputEl.style.width = "100%";
+						text.inputEl.setCssStyles({ width: "100%" });
 						// 回车即保存
 						text.inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
 							if (e.key === "Enter") {
