@@ -5,7 +5,7 @@
  * 的 DOM 构建与事件绑定。返回 { searchInput } 供 loadAndRender 后续（自动聚焦、"/" 快捷键）使用。
  */
 
-import { setIcon, Menu, Notice } from "obsidian";
+import { setIcon, Menu, Notice, Modal, Setting, type App } from "obsidian";
 import { isMobileEnvironment } from "@shared/platform";
 import { type I18nKey } from "@shared/i18n";
 import { type SearchMode, type InstallFilter, type FavoriteFilter } from "@domain/filter/filter";
@@ -250,26 +250,118 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 图标用「图层 layers」而非「切换 switch」：组合表达的是「一组启用方案/场景预设」，
 		// 叠层意象比箭头交换更精准（箭头更像切换排序方向等）。
 		setIcon(profileBtn, "layers");
-		const buildProfileMenu = (): Menu | null => {
-			if (ctx.profiles.length === 0) {
-				new Notice("暂无组合预设，可在设置 → 插件启用组合中保存当前启用集");
-				return null;
+
+		/** 判断某 profile 的启用集是否与当前实际启用集一致（用于标注「当前生效」） */
+		const isProfileActive = (p: { enabled: string[] }): boolean => {
+			const cur = ctx.enabledIds;
+			if (p.enabled.length !== cur.size) return false;
+			return p.enabled.every((id) => cur.has(id));
+		};
+		/** 计算应用某 profile 会带来的 diff 数量（用于确认弹窗） */
+		const diffCounts = (p: { enabled: string[] }): { enable: number; disable: number } => {
+			const cur = ctx.enabledIds;
+			const target = new Set(p.enabled);
+			const enable = [...target].filter((id) => !cur.has(id)).length;
+			const disable = [...cur].filter((id) => !target.has(id)).length;
+			return { enable, disable };
+		};
+
+		/** 轻量「另存为」模态框：输入预设名 → 保存当前启用集 */
+		class SaveAsModal extends Modal {
+			private name = "";
+			constructor(app: App) {
+				super(app);
 			}
+			onOpen(): void {
+				const { contentEl } = this;
+				contentEl.empty();
+				contentEl.addClass("pt-save-as-modal");
+				contentEl.createEl("h3", { text: ctx.t("profiles.saveAs.title") });
+				contentEl.createEl("p", {
+					cls: "pt-save-as-desc",
+					text: ctx.t("profiles.saveAs.desc"),
+				});
+				new Setting(contentEl)
+					.setName(ctx.t("settings.profiles.name"))
+					.addText((text) => {
+						text.setPlaceholder(ctx.t("settings.profiles.name.ph"))
+							.setValue(this.name)
+							.onChange((v) => (this.name = v));
+						text.inputEl.style.width = "100%";
+						// 回车即保存
+						text.inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
+							if (e.key === "Enter") {
+								e.preventDefault();
+								this.commit();
+							}
+						});
+					})
+					.addButton((btn) =>
+						btn
+							.setButtonText(ctx.t("settings.profiles.save"))
+							.setCta()
+							.onClick(() => this.commit())
+					);
+			}
+			private commit(): void {
+				const name = this.name.trim();
+				if (!name) {
+					new Notice(ctx.t("settings.profiles.nameRequired"));
+					return;
+				}
+				const overwritten = ctx.pluginSaveProfile(name);
+				new Notice(
+					overwritten
+						? ctx.t("settings.profiles.exists", { name })
+						: ctx.t("settings.profiles.saved", { name, n: String(ctx.enabledIds.size) })
+				);
+				this.close();
+			}
+			onClose(): void {
+				this.contentEl.empty();
+			}
+		}
+
+		const buildProfileMenu = (): Menu | null => {
 			const menu = new Menu();
-			for (const p of ctx.profiles) {
+			// ① 应用区：每个 profile 一行，标注「当前生效」
+			if (ctx.profiles.length === 0) {
 				menu.addItem((item) =>
 					item
-						.setTitle(`${p.name}（${p.enabled.length}）`)
+						.setTitle(ctx.t("profiles.empty"))
+						.setDisabled(true)
+				);
+			}
+			for (const p of ctx.profiles) {
+				const active = isProfileActive(p);
+				const title = active
+					? `${p.name}（${p.enabled.length}）✓ ${ctx.t("profiles.current")}`
+					: `${p.name}（${p.enabled.length}）`;
+				menu.addItem((item) =>
+					item
+						.setTitle(title)
+						.setIcon(active ? "check" : "layers")
 						.onClick(() => {
-							// 应用组合 + 切到「已安装」视角，立即看到启用集变化
-							ctx.installFilter = "installed";
-							updateInstallToggles();
-							ctx.updateFacetVisibility();
+							const { enable, disable } = diffCounts(p);
+							// 已是当前组合：无需切换（应用结果由 applyProfile 的 Notice 反馈）
+							if (enable === 0 && disable === 0) {
+								new Notice(ctx.t("profiles.alreadyActive", { name: p.name }));
+								return;
+							}
+							// 直接应用（不强制切换筛选状态：保留用户当前浏览上下文）
 							ctx.track("profile:apply");
 							void ctx.applyProfile(p).then(() => ctx.scheduleRender(true));
 						})
 				);
 			}
+			// ① 另存为当前启用集
+			menu.addSeparator();
+			menu.addItem((item) =>
+				item
+					.setTitle(ctx.t("profiles.saveAs.menu"))
+					.setIcon("save")
+					.onClick(() => new SaveAsModal(ctx.app).open())
+			);
 			return menu;
 		};
 		profileBtn.addEventListener("click", (ev: MouseEvent) => {

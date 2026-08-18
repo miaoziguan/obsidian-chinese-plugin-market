@@ -109,12 +109,18 @@ export interface ChinesePluginMarketSettings {
 	compare: string[];
 }
 
-/** 单个启用组合 Profile：命名 + 启用插件 id 列表 */
+/** 单个启用组合 Profile：命名 + 启用插件 id 列表 + 可选绑定工作区布局 */
 export interface PluginProfile {
 	/** 预设名（如「写作」「阅读」「项目管理」） */
 	name: string;
 	/** 该预设下应启用的插件 id 集合 */
 	enabled: string[];
+	/**
+	 * 绑定的工作区布局快照（app.workspace.getLayout() 的返回对象）。
+	 * 切换组合时若存在则 changeLayout 恢复该布局；null/缺省=不切布局。
+	 * 自管快照（纯公开 API），不复用 Obsidian「管理工作区」的已存布局。
+	 */
+	layout?: Record<string, unknown> | null;
 }
 
 export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {

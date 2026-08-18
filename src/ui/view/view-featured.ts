@@ -35,15 +35,17 @@ function objId(o: object | null | undefined): number {
 
 export function renderFeaturedSection(ctx: ViewContext) {
 
-	// 首页即强曝光推荐，不受来源/安装筛选影响。
-	// 关键词模式、无搜索词（默认落地页）时强曝光，避免重复曝光。
-	// 仅在主动搜索、按作者钻取、或已开「推荐」筛选（列表已是推荐全集）时隐藏。
+	// 推荐区只在「全部」安装维度下强曝光：切到已安装/已启用/未启用等筛选时隐藏，
+	// 避免推荐插件混入其他维度的列表造成重复曝光、干扰用户筛选意图。
+	// 关键词模式、无搜索词（默认落地页）时强曝光。
+	// 仅在主动搜索、按作者钻取、开「推荐」筛选、或非「全部」安装维度时隐藏。
 	const show =
 		!ctx.searchQuery.trim() &&
 		!ctx.authorFilter &&
 		!ctx.recommendedOnly &&
 		!ctx.compareMode &&
-		ctx.searchMode === "keyword";
+		ctx.searchMode === "keyword" &&
+		ctx.installFilter === "all";
 
 		if (!show) {
 			ctx.hideFeaturedSection();

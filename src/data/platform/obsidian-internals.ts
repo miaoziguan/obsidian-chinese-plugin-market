@@ -43,6 +43,16 @@ export interface AppPlugins {
 	enablePlugin?: (arg: PluginManifestLike | string) => Promise<void>;
 	/** 禁用单个插件（半官方 API，可选） */
 	disablePlugin?: (arg: PluginManifestLike | string) => Promise<void>;
+	/**
+	 * 启用单个插件并落盘保存（半官方 API，chinabrat/BRAT 使用）。
+	 * 与 enablePlugin 区别：会写 community-plugins.json，重启后仍生效。
+	 */
+	enablePluginAndSave?: (arg: PluginManifestLike | string) => Promise<void>;
+	/**
+	 * 禁用单个插件并落盘保存（半官方 API，plugin-manager 等使用）。
+	 * 与 disablePlugin 区别：会从 community-plugins.json 移除，重启后保持禁用。
+	 */
+	disablePluginAndSave?: (arg: PluginManifestLike | string) => Promise<void>;
 }
 
 /** 设置面板（app.setting）的最小可读形状 */

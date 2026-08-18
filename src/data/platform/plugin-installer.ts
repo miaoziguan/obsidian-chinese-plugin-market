@@ -462,21 +462,27 @@ async function tryEnablePlugin(
 ): Promise<boolean> {
 	const manifestEntry = plugins.manifests?.[id];
 	const enableFn = plugins.enablePlugin?.bind(plugins);
+	const enableSaveFn = plugins.enablePluginAndSave?.bind(plugins);
 	const loadFn = plugins.loadPlugin?.bind(plugins);
-	logger.debug(`[Chinese Plugin Market] tryEnable: enablePlugin=${typeof enableFn} loadPlugin=${typeof loadFn} manifestEntry=${Boolean(manifestEntry)}`);
+	logger.debug(`[Chinese Plugin Market] tryEnable: enablePlugin=${typeof enableFn} enablePluginAndSave=${typeof enableSaveFn} loadPlugin=${typeof loadFn} manifestEntry=${Boolean(manifestEntry)}`);
 
 	const isEnabled = () => Boolean(plugins.enabledPlugins?.has?.(id));
 
-	// 主路径：官方 enablePlugin 触发加载（manifest 或 id 两种签名都试），不据此判定成功。
+	// 主路径：优先官方 enablePluginAndSave（内部写 community-plugins.json，重启后保持启用）。
+	// 注意：enablePluginAndSave / disablePluginAndSave 官方签名接受【字符串 id】，
+	// 传 manifest 对象会静默失败（曾实证：传 manifestEntry 后 enabledPlugins.has 仍为 false）。
+	// 缺失时回退 enablePlugin 触发加载（manifest 或 id 两种签名都试），不据此判定成功。
 	try {
-		if (typeof enableFn === "function" && manifestEntry) {
+		if (typeof enableSaveFn === "function") {
+			await enableSaveFn(id);
+		} else if (typeof enableFn === "function" && manifestEntry) {
 			await enableFn(manifestEntry);
 		} else if (typeof enableFn === "function") {
 			await enableFn(id);
 		}
 	} catch (e: unknown) {
 		const msg = e instanceof Error ? e.message : String(e);
-		logger.warn("[Chinese Plugin Market] enablePlugin 调用异常（继续手动维护）：", msg);
+		logger.warn("[Chinese Plugin Market] enablePlugin(AndSave) 调用异常（继续手动维护）：", msg);
 	}
 
 	// 让事件循环推进，给 enablePlugin 内部异步加载一点时间
@@ -534,10 +540,16 @@ async function tryDisablePlugin(
 	plugins: AppPlugins,
 	id: string
 ): Promise<boolean> {
+	// 优先官方 disablePluginAndSave（写 community-plugins.json 持久化，重启后保持禁用）；
+	// disablePlugin 只改内存不写盘，是「重启后禁用失效」的根因之一。
 	try {
-		await plugins.disablePlugin?.call(plugins, id);
+		if (typeof plugins.disablePluginAndSave?.call === "function") {
+			await plugins.disablePluginAndSave.call(plugins, id);
+		} else {
+			await plugins.disablePlugin?.call(plugins, id);
+		}
 	} catch (e: unknown) {
-		logger.warn("[Chinese Plugin Market] disablePlugin 调用异常（继续手动维护）：", e instanceof Error ? e.message : String(e));
+		logger.warn("[Chinese Plugin Market] disablePlugin(AndSave) 调用异常（继续手动维护）：", e instanceof Error ? e.message : String(e));
 	}
 	// 让事件循环推进
 	await new Promise((r) => window.setTimeout(r, 30));
@@ -819,23 +831,35 @@ export async function togglePluginEnabled(
 	const isEnabled = () => Boolean(plugins.enabledPlugins?.has?.(plugin.id));
 
 	if (isEnabled()) {
-		// 当前启用 → 禁用。依赖官方 disablePlugin 自身更新内存 enabledPlugins 并持久化
-		// 到 app.json（Obsidian 关闭时会以内存为准回写，手动改 app.json 会被覆盖，故必须用官方方法）。
+		// 当前启用 → 禁用。
+		// 社区插件持久化的真相源是 community-plugins.json，而非 app.json.enabledPlugins（核心插件用）。
+		// 因此优先走官方 disablePluginAndSave(id)（内部会写 community-plugins.json，重启后保持禁用），
+		// disablePlugin(id) 只改内存不写盘，是此前「重启后禁用失效」的根因。
 		let disabled = false;
-		if (typeof disableFn === "function") {
+		const disableSaveFn = plugins.disablePluginAndSave?.bind(plugins);
+		if (typeof disableSaveFn === "function") {
+			try {
+				await disableSaveFn(plugin.id);
+			} catch (e: unknown) {
+				logger.warn("[Chinese Plugin Market] disablePluginAndSave(id) 失败：", e);
+			}
+		} else if (typeof disableFn === "function") {
 			try {
 				await disableFn(plugin.id);
 			} catch (e: unknown) {
 				logger.warn("[Chinese Plugin Market] disablePlugin(id) 失败：", e);
 			}
 		}
-		// 1.13 下 disablePlugin 在非交互上下文也可能不真正移除，显式维护运行时 Set + 写 app.json
+		// 1.13 下禁用可能不真正从内存移除，显式维护运行时 Set
 		const ep = plugins.enabledPlugins as unknown as Set<string> | undefined;
 		if (ep && typeof ep.delete === "function") {
 			ep.delete(plugin.id);
 			disabled = true;
 		}
 		if (disabled) {
+			// 兜底双写：从 community-plugins.json 移除（官方 API 未写盘时的保障），
+			// 并从 app.json.enabledPlugins 移除（历史版本曾错误地把社区插件写进 app.json，清理残留）。
+			await syncCommunityPluginsJson(ctx, plugin.id, false);
 			await removeEnabledPlugin(ctx, plugin.id);
 			new Notice(t("notice.install.disabled", { name: plugin.name }));
 			ctx.snapshotInstalled();
