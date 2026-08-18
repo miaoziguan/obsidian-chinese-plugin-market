@@ -141,7 +141,7 @@ export class DirectInstallModal extends Modal {
 				text.setPlaceholder("https://example.com/myplugin/")
 					.setValue(this.url)
 					.onChange((v) => (this.url = v));
-				text.inputEl.style.width = "100%";
+				text.inputEl.setCssStyles({ width: "100%" });
 			})
 			.addButton((btn) =>
 				btn
