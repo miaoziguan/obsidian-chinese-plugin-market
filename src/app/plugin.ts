@@ -7,6 +7,7 @@
  */
 
 import { Plugin, Notice, Menu, TFile, TFolder, Platform, normalizePath } from "obsidian";
+import { DirectInstallModal } from "@app/direct-install";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
 import { type PluginStat } from "@domain/catalog/stats";
@@ -114,7 +115,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		"bamboo-immortals",
 		"bamboo-walking",
 	];
-	static readonly FALLBACK_RECOMMENDED_TITLE = "官方推荐 · 羽鳞君";
+	static readonly FALLBACK_RECOMMENDED_TITLE = "羽鳞君出品";
 	/** 官方推荐插件 id 集合（供视图打标与过滤） */
 	getRecommendedIds(): Set<string> {
 		return this.recommendedIds;
@@ -542,6 +543,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			: await applyProfileByIds(this.app, this.getCurrentEnabledIds(), target, selfId);
 		const t = makeT();
 		new Notice(t("settings.profiles.applied", { name: p.name, n: String(r.enabled), m: String(r.disabled) }));
+		// 布局联动：先切插件（已 await 完成），再恢复绑定的工作区布局快照。
+		// 串行避免 changeLayout 重排 leaf 与 enable/disable 的异步加载并发打架。
+		if (p.layout) {
+			try {
+				await this.app.workspace.changeLayout(p.layout);
+			} catch (e: unknown) {
+				logger.warn(`[Chinese Plugin Market] 恢复工作区布局失败（组合「${p.name}」）：`, e);
+			}
+		}
 	}
 
 	/** 读取当前真正启用的插件 id 集合（来自 app.plugins.enabledPlugins） */
@@ -552,6 +562,25 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const ep = plugins?.enabledPlugins;
 		if (!ep) return new Set();
 		return new Set(ep);
+	}
+
+	/**
+	 * 把「当前启用集」存为命名预设（设置页与视图工具栏「另存为」共用）。
+	 * 同名则覆盖（覆盖前由调用方决定是否确认），覆盖/新增都会刷新 profile 命令。
+	 * @returns 是否覆盖了同名旧预设
+	 */
+	saveCurrentAsProfile(name: string): boolean {
+		const enabled = this.getCurrentEnabledIds();
+		const profiles = this.settings.profiles.slice();
+		const idx = profiles.findIndex((x) => x.name === name);
+		const profile: PluginProfile = { name, enabled: [...enabled] };
+		const overwritten = idx >= 0;
+		if (overwritten) profiles[idx] = profile;
+		else profiles.push(profile);
+		this.settings.profiles = profiles;
+		void this.flushSaveSettings();
+		this.refreshProfileCommands();
+		return overwritten;
 	}
 
 	/**
@@ -603,6 +632,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				);
 			}
 		}
+		menu.addSeparator();
+		menu.addItem((item) =>
+			item
+				.setTitle(t("directInstall.menu"))
+				.setIcon("download")
+				.onClick(() => new DirectInstallModal(this.app).open())
+		);
 		menu.addSeparator();
 		menu.addItem((item) =>
 			item

@@ -120,7 +120,7 @@ export async function handleToggleEnabled(ctx: ViewContext, plugin: PluginInfo):
 
 /**
  * 卸载已安装插件（供事件委托与卡片直接回调共用）。
- * 点击卸载图标即直接卸载，不再弹二次确认（产品改进：省去多余面板）；卸载中加锁防重复点击。
+ * 点击卸载图标即直接卸载；卸载中加锁防重复点击。
  */
 export async function handleUninstall(ctx: ViewContext, plugin: PluginInfo): Promise<void> {
 	if (ctx.installingIds.has(plugin.id)) return;

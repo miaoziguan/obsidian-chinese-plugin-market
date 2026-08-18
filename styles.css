@@ -5189,6 +5189,87 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-gold, #d99a1c);
 }
 
+/* ── 直链安装（DirectInstallModal）── */
+.pt-direct-install-modal {
+	padding: var(--pt-space-md);
+	max-width: 560px;
+}
+.pt-direct-install-modal h3 {
+	margin: 0 0 4px;
+	font-size: var(--pt-text-lg);
+	font-weight: 600;
+	color: var(--pt-text-strong, var(--text-normal));
+}
+.pt-direct-install-modal .pt-direct-install-desc {
+	margin: 0 0 var(--pt-space-sm);
+	font-size: var(--pt-text-xs, 12px);
+	line-height: 1.55;
+	color: var(--text-muted);
+}
+.pt-direct-install-modal .setting-item {
+	border: none;
+	padding: 0;
+	/* 标签描述独占一行，输入框与按钮另起一行，避免横向空间被 label 挤占 */
+	flex-direction: column;
+	align-items: stretch;
+	gap: 10px;
+}
+.pt-direct-install-modal .setting-item .setting-item-info {
+	width: 100%;
+	margin-right: 0;
+}
+.pt-direct-install-modal .setting-item .setting-item-description {
+	white-space: normal;
+}
+.pt-direct-install-modal .setting-item-control {
+	width: 100%;
+	justify-content: flex-end;
+	gap: 10px;
+}
+.pt-direct-install-modal .setting-item-control input[type="text"] {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+}
+.pt-direct-install-modal .setting-item-control button {
+	flex: none;
+}
+
+/* ── 另存为启用组合（SaveAsModal）── */
+.pt-save-as-modal {
+	padding: var(--pt-space-md);
+	max-width: 480px;
+}
+.pt-save-as-modal h3 {
+	margin: 0 0 4px;
+	font-size: var(--pt-text-lg);
+	font-weight: 600;
+	color: var(--pt-text-strong, var(--text-normal));
+}
+.pt-save-as-modal .pt-save-as-desc {
+	margin: 0 0 var(--pt-space-md);
+	font-size: var(--pt-text-sm);
+	line-height: 1.6;
+	color: var(--text-muted);
+}
+.pt-save-as-modal .setting-item {
+	border: none;
+	padding: 0;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 10px;
+}
+.pt-save-as-modal .setting-item-control {
+	width: 100%;
+	justify-content: flex-end;
+	gap: 10px;
+}
+.pt-save-as-modal .setting-item-control input[type="text"] {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+}
+
 /* ═══════════════════════════════════════════════════ */
 /*  #5 移动端触摸适配：放大触控热区（iOS 人机界面指南推荐 ≥44px） */
 /*  仅作用于 .pt-mobile（view-chrome 在移动端给视图根加的类），不影响桌面。 */
@@ -5292,22 +5373,41 @@ button.pt-card-install-btn--installed {
 .pt-profile-row {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	margin: 4px 0;
+	gap: 6px;
+	margin: 6px 0;
+	flex-wrap: nowrap;
+	/* 名称占满剩余空间但允许收缩（避免被长名撑爆） */
+	min-width: 0;
 }
 .pt-profile-name {
-	flex: 1;
+	flex: 1 1 auto;
+	min-width: 0;
 	font-weight: 500;
+	/* 名称过长省略：避免「日常（5）·绑定布局 ✓」长名撑破布局 */
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .pt-profile-row button {
 	margin: 0;
+	flex: none;
 }
 .pt-profile-del {
 	color: var(--text-error, #e5693f);
 }
-.pt-profile-input {
+.pt-profile-save-row {
+	display: flex;
+	gap: 8px;
 	margin-top: 8px;
-	width: 100%;
+}
+.pt-profile-save-row .pt-profile-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+}
+.pt-profile-save-row button {
+	flex: none;
+	margin: 0;
 }
 
 /* 设置页：鸣谢清单（硬编码贡献者，每行名字可点击跳 GitHub）

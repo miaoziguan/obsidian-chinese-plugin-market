@@ -94,6 +94,8 @@ export interface ViewContext {
 	saveVectorIndex: () => Promise<void>;
 	/** 应用启用组合 Profile（委托 plugin.applyProfile：命令/菜单/设置/工具栏共用入口） */
 	applyProfile: (p: PluginProfile) => Promise<void>;
+	/** 把当前启用集存为命名预设（委托 plugin.saveCurrentAsProfile；返回是否覆盖同名旧预设） */
+	pluginSaveProfile: (name: string) => boolean;
 	/** 当前已保存的启用组合 Profile 列表（读 settings.profiles 的便捷委托） */
 	profiles: PluginProfile[];
 	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json 人工清单） */
@@ -390,7 +392,12 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		// 委托 plugin.applyProfile（DrawerHostPlugin 最小端口不含此方法，运行时 view.plugin 为完整插件）
 		applyProfile: (p) =>
 			(view.plugin as unknown as { applyProfile(p: PluginProfile): Promise<void> }).applyProfile(p),
-		profiles: view.plugin.settings.profiles,
+		// 委托 plugin.saveCurrentAsProfile（视图工具栏「另存为」复用，返回是否覆盖同名旧预设）
+		pluginSaveProfile: (name: string) =>
+			(view.plugin as unknown as { saveCurrentAsProfile(n: string): boolean }).saveCurrentAsProfile(name),
+		// profiles 用 getter 动态读（不用值拷贝）：另存为/删除后 settings.profiles 换新数组，
+		// 值拷贝会持旧引用导致工具栏下拉看不到新组合（与 chineseEcoSet 同款修复）。
+		get profiles() { return view.plugin.settings.profiles; },
 		// 中文生态/系列清单是异步加载的（可能晚于视图创建）：用 getter 动态读，
 		// 避免值拷贝持有空 Set 导致筛选恒空（修复：视图先开时系列筛选为空）
 		get chineseEcoSet() { return view.chineseEcoSet; },

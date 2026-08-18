@@ -245,8 +245,13 @@ export function postRenderSync(ctx: ViewContext) {
 
 export function refreshCardState(ctx: ViewContext, pluginId: string) {
 	// 必须 CSS.escape：插件 id 可能含引号等特殊字符，直接内插会抛 SyntaxError 中断刷新
+	// 卡片可能出现在三个层：主列表（scrollCardLayer）、官方推荐网格（featuredGridEl）、
+	// 或卡片详情页的「相似推荐」侧栏（scrollCardLayer 同源）。先查主列表，未命中再查推荐区。
+	const selector = `.pt-card[data-plugin-id="${CSS.escape(pluginId)}"]`;
 	const card = toHTMLElement(
-		ctx.scrollCardLayer?.querySelector(`.pt-card[data-plugin-id="${CSS.escape(pluginId)}"]`) ?? null
+		ctx.scrollCardLayer?.querySelector(selector) ??
+			ctx.featuredGridEl?.querySelector(selector) ??
+			null
 	);
 	if (!card) return;
 	// 更新收藏态

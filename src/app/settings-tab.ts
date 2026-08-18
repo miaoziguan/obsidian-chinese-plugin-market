@@ -15,7 +15,7 @@ import { isWebGPUAvailable } from "@semantic/embedding";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { VIEW_TYPE } from "@shared/constants";
 import { logger } from "@shared/logger";
-import type { PluginProfile, ChinesePluginMarketView } from "@ui/view/translator-view";
+import type { ChinesePluginMarketView } from "@ui/view/translator-view";
 import { CONTRIBUTORS, contributorGitHubUrl } from "@shared/contributors";
 
 export class TranslatorSettingTab extends PluginSettingTab {
@@ -541,12 +541,39 @@ export class TranslatorSettingTab extends PluginSettingTab {
 						// 现有预设列表 + 保存新预设（动态渲染，增删后重画本设置页）
 						render: (setting) => {
 							const list = this.plugin.settings.profiles;
-							// 预设列表：每行「名称 · N个」+ 应用 + 删除
+							// 与 renderThanks 同款：用内联样式强制整行左对齐，规避设置项 label 列挤压。
+							// 否则「日常（5）·绑定布局 ✓」+ 4 个按钮会被挤进 40% 窄列，竖排成乱码。
+							setting.settingEl.style.setProperty("display", "block");
+							if (setting.infoEl) setting.infoEl.style.setProperty("display", "none");
+							setting.controlEl.style.setProperty("display", "block");
+							setting.controlEl.style.setProperty("width", "100%");
+							setting.controlEl.style.setProperty("text-align", "left");
+							// 预设列表：每行「名称 · N个 · 布局状态」+ 应用 + 绑定布局 + 删除
 							for (const p of list) {
 								const row = setting.controlEl.createDiv({ cls: "pt-profile-row" });
-								row.createSpan({ text: `${p.name}（${p.enabled.length}）`, cls: "pt-profile-name" });
+								const bound = p.layout ? this.t("settings.profiles.layoutBind") + " ✓" : "";
+								row.createSpan({ text: `${p.name}（${p.enabled.length}）${bound ? " · " + bound : ""}`, cls: "pt-profile-name" });
 								row.createEl("button", { text: this.t("settings.profiles.apply") }).addEventListener("click", () => {
 									void this.plugin.applyProfile(p);
+								});
+								// 绑定当前布局快照到该组合（自管布局，getLayout() 存快照）
+								row.createEl("button", {
+									text: p.layout ? this.t("settings.profiles.layoutBind.clear") : this.t("settings.profiles.layoutBind.save"),
+								}).addEventListener("click", () => {
+									if (p.layout) {
+										p.layout = null;
+										new Notice(this.t("settings.profiles.layoutCleared", { name: p.name }));
+									} else {
+										try {
+											p.layout = this.plugin.app.workspace.getLayout();
+											new Notice(this.t("settings.profiles.layoutBound", { name: p.name }));
+										} catch {
+											new Notice(this.t("settings.profiles.layoutFail"));
+											return;
+										}
+									}
+									void this.plugin.flushSaveSettings();
+									this.update();
 								});
 								row.createEl("button", { text: this.t("settings.profiles.delete"), cls: "pt-profile-del" }).addEventListener("click", () => {
 									this.plugin.settings.profiles = list.filter((x) => x !== p);
@@ -557,12 +584,13 @@ export class TranslatorSettingTab extends PluginSettingTab {
 									this.update();
 								});
 							}
-							// 保存当前为预设
-							const nameInput = setting.controlEl.createEl("input", {
+							// 保存当前为预设（输入框 + 按钮同一行，flex 适配）
+							const saveRow = setting.controlEl.createDiv({ cls: "pt-profile-save-row" });
+							const nameInput = saveRow.createEl("input", {
 								cls: "pt-profile-input",
 								placeholder: this.t("settings.profiles.name.ph"),
 							});
-							setting.controlEl.createEl("button", {
+							saveRow.createEl("button", {
 								text: this.t("settings.profiles.save"),
 								cls: "pt-profile-save",
 							}).addEventListener("click", () => {
@@ -571,20 +599,12 @@ export class TranslatorSettingTab extends PluginSettingTab {
 									new Notice(this.t("settings.profiles.nameRequired"));
 									return;
 								}
-								const enabled = this.getCurrentEnabledIds();
-								const profiles = this.plugin.settings.profiles.slice();
-								const idx = profiles.findIndex((x) => x.name === name);
-								const profile: PluginProfile = { name, enabled: [...enabled] };
-								if (idx >= 0) {
-									profiles[idx] = profile;
-									new Notice(this.t("settings.profiles.exists", { name }));
-								} else {
-									profiles.push(profile);
-									new Notice(this.t("settings.profiles.saved", { name, n: String(enabled.size) }));
-								}
-								this.plugin.settings.profiles = profiles;
-								void this.plugin.flushSaveSettings();
-								this.plugin.refreshProfileCommands();
+								const overwritten = this.plugin.saveCurrentAsProfile(name);
+								new Notice(
+									overwritten
+										? this.t("settings.profiles.exists", { name })
+										: this.t("settings.profiles.saved", { name, n: String(this.getCurrentEnabledIds().size) })
+								);
 								// 1.13+ 声明式设置刷新用 update()，display() 已弃用
 								this.update();
 							});
