@@ -9,10 +9,10 @@
  * 在主翻译链中按质量序调用。
  */
 
-import { createHash } from "node:crypto";
 import { netRequest } from "@data/net/net";
 import { CircuitBreaker } from "@translation/api/guard";
 import { logger } from "@shared/logger";
+import { md5Hex } from "@shared/md5";
 
 export interface BaiduApiConfig {
 	appId: string;
@@ -34,10 +34,6 @@ const BAIDU_ERROR_MESSAGES: Record<string, string> = {
 	"58001": "语言不支持（from/to 组合无效）",
 	"90107": "appid 未开通翻译服务权限",
 };
-
-function md5Hex(input: string): string {
-	return createHash("md5").update(input, "utf8").digest("hex");
-}
 
 /**
  * 百度机器翻译客户端。
