@@ -6,7 +6,6 @@
  */
 
 import { setIcon, Menu, Notice, Modal, Setting, type App } from "obsidian";
-import { isMobileEnvironment } from "@shared/platform";
 import { type I18nKey } from "@shared/i18n";
 import { type SearchMode, type InstallFilter, type FavoriteFilter } from "@domain/filter/filter";
 import { renderFacetChips } from "@ui/components/facet-chips";
@@ -466,40 +465,37 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			setting?.openTabById?.(ctx.manifest.id);
 		});
 
-		// #7: 移动端工具栏折叠。窄屏下「刷新 / AI 翻译」等次要按钮收进右上角 ⋮ 溢出菜单，
-		// 避免与搜索框/排序/筛选挤在同一行导致换行或溢出。保留排序↕与筛选▾（核心、图标紧凑）。
-		if (isMobileEnvironment()) {
-			refreshBtn.setCssStyles({ display: "none" });
-			checkUpdateBtn.setCssStyles({ display: "none" });
-			ctx.aiTranslateBtnEl.setCssStyles({ display: "none" });
-			const overflowBtn = headerRow.createEl("button", {
-				cls: "pt-overflow-btn",
-				attr: { "aria-label": "更多操作", "aria-haspopup": "menu", type: "button" },
-			});
-			setIcon(overflowBtn, "more-vertical");
-			overflowBtn.addEventListener("click", (e: MouseEvent) => {
-				const menu = new Menu();
-				menu.addItem((item) =>
-					item
-						.setTitle(ctx.t("action.refresh"))
-						.setIcon("refresh-cw")
-						.onClick(() => onRefresh())
-				);
-				menu.addItem((item) =>
-					item
-						.setTitle(ctx.t("action.checkUpdate"))
-						.setIcon("download-cloud")
-						.onClick(() => onCheckUpdate())
-				);
-				menu.addItem((item) =>
-					item
-						.setTitle(ctx.t("action.aiTranslate"))
-						.setIcon("sparkles")
-						.onClick(() => onAiTranslate())
-				);
-				menu.showAtMouseEvent(e);
-			});
-		}
+		// #7: 窄屏工具栏折叠。搜索行右侧的「刷新 / AI 翻译 / 检查更新」等次要按钮，
+		// 在窄 viewport 下（容器查询 @container pt-header ≤520px）收进右上角 ⋮ 溢出菜单，
+		// 避免与搜索框/排序/筛选挤在同一行导致换行或溢出。始终挂载 ⋮ 按钮本身，
+		// 由 CSS 容器查询控制其显隐，确保窄屏状态切换（或 DevTools 模拟窄屏）都能可靠折叠。
+		const overflowBtn = headerRow.createEl("button", {
+			cls: "pt-overflow-btn",
+			attr: { "aria-label": "更多操作", "aria-haspopup": "menu", type: "button" },
+		});
+		setIcon(overflowBtn, "more-vertical");
+		overflowBtn.addEventListener("click", (e: MouseEvent) => {
+			const menu = new Menu();
+			menu.addItem((item) =>
+				item
+					.setTitle(ctx.t("action.refresh"))
+					.setIcon("refresh-cw")
+					.onClick(() => onRefresh())
+			);
+			menu.addItem((item) =>
+				item
+					.setTitle(ctx.t("action.checkUpdate"))
+					.setIcon("download-cloud")
+					.onClick(() => onCheckUpdate())
+			);
+			menu.addItem((item) =>
+				item
+					.setTitle(ctx.t("action.aiTranslate"))
+					.setIcon("sparkles")
+					.onClick(() => onAiTranslate())
+			);
+			menu.showAtMouseEvent(e);
+		});
 
 		const sortBtn = sortWrap.createEl("button", {
 			cls: "pt-sort-btn",
