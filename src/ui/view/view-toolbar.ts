@@ -7,6 +7,7 @@
 
 import { setIcon, Menu, Notice, Modal, Setting, type App } from "obsidian";
 import { type I18nKey } from "@shared/i18n";
+import { isAISearchUsable } from "@shared/utils";
 import { type SearchMode, type InstallFilter, type FavoriteFilter } from "@domain/filter/filter";
 import { renderFacetChips } from "@ui/components/facet-chips";
 import { setListState } from "@ui/dom/list-state";
@@ -101,7 +102,11 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				return;
 			}
 			aiBadge.setCssStyles({ display: "" });
-			const hasKey = ctx.settings.aiSearchEnabled && ctx.settings.aiSearchApiKey;
+			const hasKey = isAISearchUsable(
+				ctx.settings.aiSearchEnabled,
+				ctx.settings.aiSearchBaseURL,
+				ctx.settings.aiSearchApiKey
+			);
 			if (ctx.searchMode === "ai") {
 				if (hasKey) {
 					aiBadge.className = "pt-ai-badge pt-ai-ready";
@@ -128,7 +133,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		};
 		// 无 Key 的 AI 模式点击徽章跳设置；本地模式不显示 badge
 		aiBadge.addEventListener("click", () => {
-			if (ctx.searchMode === "ai" && !(ctx.settings.aiSearchEnabled && ctx.settings.aiSearchApiKey)) {
+			if (ctx.searchMode === "ai" && !isAISearchUsable(ctx.settings.aiSearchEnabled, ctx.settings.aiSearchBaseURL, ctx.settings.aiSearchApiKey)) {
 				asAppInternals(ctx.app).setting?.openTabById?.(ctx.manifest.id);
 			}
 		});

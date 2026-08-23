@@ -57,6 +57,7 @@ export const STRINGS = {
 	// 翻译通道名（详情页 README 翻译按钮/标签）
 	"channel.tencentTransmart": { zh: "腾讯翻译（免费）" },
 	"channel.tencent": { zh: "腾讯云翻译" },
+	"channel.baidu": { zh: "百度机器翻译" },
 	"channel.macos": { zh: "macOS 系统翻译" },
 	"ai.translate.guide": { zh: "配置 AI 搜索 API Key 后优先用 AI 翻译，未配置则自动使用 Google/MyMemory/腾讯免费引擎混合翻译" },
 	"ai.translate.progress": { zh: "混合翻译中 {done}/{total}" },
@@ -251,7 +252,7 @@ export const STRINGS = {
 	},
 	"settings.ai.baseUrl": { zh: "API Base URL" },
 	"settings.ai.baseUrl.desc": {
-		zh: "OpenAI 兼容接口地址。默认 DeepSeek，可改为通义千问 / 智谱 / 本地模型等。",
+		zh: "OpenAI 兼容接口地址。默认 DeepSeek，可改为通义千问 / 智谱 / 硅基流动 / 本地模型等。可填根地址（如 https://api.siliconflow.cn）或完整端点（如 https://api.siliconflow.cn/v1/chat/completions），二者等价。",
 
 	},
 	"settings.ai.key": { zh: "API Key" },
@@ -268,14 +269,28 @@ export const STRINGS = {
 	"settings.ai.test.desc": { zh: "发一次最小请求，验证 API Key 与地址是否可用。" },
 	"settings.ai.test.btn": { zh: "测试连接" },
 	"settings.ai.test.noKey": { zh: "请先填写 API Key" },
-	"settings.ai.test.testing": { zh: "正在测试连接..." },
 	"settings.ai.test.ok": { zh: "连接成功" },
-	"settings.ai.test.badKey": { zh: "连接失败：API Key 无效或已过期，请检查" },
+	"settings.ai.test.badKey": { zh: "连接失败：API Key 无效或已过期" },
+	"settings.ai.test.badKey.hint": {
+		zh: "请按顺序排查：\n① Key 与 Base URL 是否属于同一平台（最常见：DeepSeek Key 配成了硅基流动 URL，或反之）\n② Key 是否正确、未过期，可在平台控制台新建一个测试\n③ 模型名是否在平台支持列表中（大小写敏感）\n④ 网络是否可达该 Base URL（海外模型需特殊网络）",
+	},
 	"settings.ai.test.rate": { zh: "连接失败：请求过于频繁或额度不足，请稍后重试" },
 	"settings.ai.test.server": { zh: "连接失败：服务器错误" },
 	"settings.ai.test.http": { zh: "连接失败" },
 	"settings.ai.test.netfail": { zh: "网络连接失败，请检查 API URL 或网络设置" },
 	"settings.ai.test.fail": { zh: "连接失败" },
+	"settings.baidu.test": { zh: "测试连接" },
+	"settings.baidu.test.desc": { zh: "发一次最小请求，验证 APP ID 与密钥是否可用。" },
+	"settings.baidu.test.btn": { zh: "测试连接" },
+	"settings.baidu.test.noKey": { zh: "请先填写 APP ID 与密钥" },
+	"settings.baidu.test.testing": { zh: "正在测试连接..." },
+	"settings.baidu.test.ok": { zh: "连接成功" },
+	"settings.baidu.test.badKey": { zh: "连接失败：APP ID 或密钥无效，或未开通通用翻译服务（请检查 appid 是否在白名单、余额是否充足）" },
+	"settings.baidu.test.rate": { zh: "连接失败：请求过于频繁或额度不足，请稍后重试" },
+	"settings.baidu.test.server": { zh: "连接失败：服务器错误" },
+	"settings.baidu.test.http": { zh: "连接失败" },
+	"settings.baidu.test.netfail": { zh: "网络连接失败，请检查网络设置" },
+	"settings.baidu.test.fail": { zh: "连接失败" },
 	"settings.ai.showReason": { zh: "显示 AI 排序理由" },
 	"settings.ai.showReason.desc": {
 		zh: "在插件卡片中显示 AI 为什么推荐该插件（会增加 token 消耗）。",
@@ -362,6 +377,15 @@ export const STRINGS = {
 	"settings.tencent.secretKey.desc": { zh: "腾讯云 API 密钥" },
 	"settings.tencent.region": { zh: "Region" },
 	"settings.tencent.region.desc": { zh: "API 调用地域，默认 ap-guangzhou" },
+	// 百度机器翻译（可选）
+	"settings.baidu.title": { zh: "百度机器翻译（可选）" },
+	"settings.baidu.desc": {
+		zh: "填百度通用翻译 API 的 APP ID 与密钥（需先在百度翻译开放平台开通通用翻译服务），质量与腾讯云翻译同档。留空则不启用，不影响现有免费翻译。",
+	},
+	"settings.baidu.appId": { zh: "APP ID" },
+	"settings.baidu.appId.desc": { zh: "百度翻译开放平台分配的 APP ID" },
+	"settings.baidu.key": { zh: "密钥" },
+	"settings.baidu.key.desc": { zh: "百度翻译开放平台分配的密钥（Secret Key）" },
 	"settings.mirror": { zh: "数据源镜像" },
 	"settings.mirror.desc": {
 		zh: "默认使用 GitHub 原始源。若访问受限，可手动切换到 jsDelivr 等镜像源；插件列表 / 统计 / README 均走对应镜像源。",

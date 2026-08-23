@@ -420,7 +420,7 @@ export class LLMClient {
 					url: `${normalizeBaseUrl(this.config.baseURL)}/v1/chat/completions`,
 					method: "POST",
 					headers: {
-						"Authorization": `Bearer ${this.config.apiKey}`,
+						...(this.config.apiKey ? { "Authorization": `Bearer ${this.config.apiKey}` } : {}),
 						"Content-Type": "application/json",
 					},
 					body: JSON.stringify(body),

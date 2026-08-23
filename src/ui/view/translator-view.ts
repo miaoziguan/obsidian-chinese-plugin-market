@@ -53,6 +53,9 @@ export interface ChinesePluginMarketSettings {
 	secretId: string;
 	secretKey: string;
 	region: string;
+	// 百度机器翻译（可选，通用翻译 API：appid + 密钥）
+	baiduAppId: string;
+	baiduKey: string;
 	sourceFilter: SourceFilter;
 	// AI 智能搜索
 	aiSearchEnabled: boolean;
@@ -129,6 +132,8 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	secretId: "",
 	secretKey: "",
 	region: "ap-guangzhou",
+	baiduAppId: "",
+	baiduKey: "",
 	sourceFilter: "all",
 	aiSearchEnabled: false,
 	aiSearchBaseURL: "https://api.deepseek.com",
