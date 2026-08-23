@@ -7,6 +7,7 @@
 
 import { type I18nKey } from "@shared/i18n";
 import { isMobileEnvironment } from "@shared/platform";
+import { isAISearchUsable } from "@shared/utils";
 import { logger } from "@shared/logger";
 import { setListState } from "@ui/dom/list-state";
 import { isAIMode, isKeywordMode } from "@domain/search/search-mode";
@@ -181,15 +182,23 @@ export function updateStats(ctx: ViewContext) {
 export function applyAIConfig(ctx: ViewContext) {
 
 		const s = ctx.settings;
-		if (s.aiSearchEnabled && s.aiSearchApiKey) {
-			ctx.translator.setAIConfig({
-				baseURL: s.aiSearchBaseURL,
-				apiKey: s.aiSearchApiKey,
-				model: s.aiSearchModel,
-			});
-		} else {
-			ctx.translator.setAIConfig(null);
-		}
+	if (isAISearchUsable(s.aiSearchEnabled, s.aiSearchBaseURL, s.aiSearchApiKey)) {
+		ctx.translator.setAIConfig({
+			baseURL: s.aiSearchBaseURL,
+			apiKey: s.aiSearchApiKey,
+			model: s.aiSearchModel,
+			embedding: {
+				source: s.embeddingSource,
+				baseURL: s.embeddingBaseURL,
+				apiKey: s.embeddingApiKey,
+				model: s.embeddingModel,
+				localModel: s.embeddingLocalModel,
+				localWasmPaths: s.embeddingLocalWasmPaths,
+			},
+		});
+	} else {
+		ctx.translator.setAIConfig(null);
+	}
 	
 }
 

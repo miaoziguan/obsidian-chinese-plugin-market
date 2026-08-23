@@ -22,6 +22,43 @@ export function normalizeBaseUrl(raw: string): string {
 }
 
 /**
+ * 判定 Base URL 是否指向本机（localhost / 127.0.0.1 / [::1]）。
+ *
+ * 本地大模型（如 Ollama `http://localhost:11434`、LM Studio、vLLM 等）
+ * 通常**不要求 API Key 鉴权**，留空 Key 是合法用法。此函数供「AI 是否可用」
+ * 判定使用：本地地址时放宽对 Key 的强制要求，避免把无 Key 的本地模型误判为未配置。
+ */
+export function isLocalBaseUrl(raw: string): boolean {
+	const u = (raw ?? "").trim();
+	if (!u) return false;
+	try {
+		const root = new URL(u);
+		return (
+			root.protocol === "http:" &&
+			/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(root.hostname)
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * 判定 AI 智能搜索是否可用（启用且鉴权就绪）。
+ *
+ * - 必须开启 `aiSearchEnabled`。
+ * - Key 缺失时：仅当 Base URL 指向本机（无鉴权模型）才视为可用，
+ *   否则仍需要 API Key。避免在本地模型场景卡死「未配置 API Key」。
+ */
+export function isAISearchUsable(
+	enabled: boolean,
+	baseURL: string,
+	apiKey: string
+): boolean {
+	if (!enabled) return false;
+	return isLocalBaseUrl(baseURL) || !!apiKey;
+}
+
+/**
  * 判定本地插件列表快照是否已「过期」，需要重新拉取（产品改进 #15）。
  * - lastFetchAt <= 0：从未拉取过 → 视为过期（应拉取）。
  * - now - lastFetchAt > ttlMs：超过有效期 → 过期。

@@ -9,6 +9,7 @@
 
 import { Notice } from "obsidian";
 import { logger } from "@shared/logger";
+import { isAISearchUsable } from "@shared/utils";
 import type { ViewContext } from "@ui/view/view-context";
 
 /** 根据 Base URL 判断是否国内模型（直连可达，无需 VPN） */
@@ -32,12 +33,12 @@ export async function runAISearch(
 	const tStart = Date.now();
 
 	if (!isLocal) {
-		// AI 模式：需开启 + API Key
+		// AI 模式：需开启 + 鉴权就绪（本地模型无 Key 亦可用）
 		if (!settings.aiSearchEnabled) {
 			ctx.showAIConfigGuide("disabled");
 			return;
 		}
-		if (!settings.aiSearchApiKey) {
+		if (!isAISearchUsable(true, settings.aiSearchBaseURL, settings.aiSearchApiKey)) {
 			ctx.showAIConfigGuide("noKey");
 			return;
 		}
@@ -142,13 +143,23 @@ export async function runAISearch(
 	} catch (err: unknown) {
 		ctx.aiSearchResult = null;
 		aiBadge.className = "pt-ai-badge pt-ai-ready";
+		const errMsg = err instanceof Error ? err.message : String(err);
 		aiBadge.setAttribute("title", isLocal ? "本地语义失败" : "AI 排序失败，已使用常规搜索");
-		const hint = isLocal
-			? ctx.t("notice.ai.localFail")
-			: isCnModelBaseUrl(settings.aiSearchBaseURL)
-				? ctx.t("notice.ai.fail.cn")
-				: ctx.t("notice.ai.fail.oversea");
-		new Notice(`${isLocal ? ctx.t("notice.ai.localFail") : ctx.t("notice.ai.fail")}：${(err as Error).message}）\n${hint}`, 9000);
+		let detail: string;
+		if (errMsg === "NO_API_KEY") {
+			// 极少见：进入搜索时前置门禁已放行，此处捕获说明配置时序异常（如本地模型未启 API Key）。
+			detail = isLocal
+				? "本地模型未配置 API Key 且未识别为本地地址，请确认 Base URL 指向本机（localhost/127.0.0.1）"
+				: "未配置 API Key，请在设置中填写 AI 搜索的 API Key（本地模型可留空）";
+		} else {
+			const hint = isLocal
+				? ctx.t("notice.ai.localFail")
+				: isCnModelBaseUrl(settings.aiSearchBaseURL)
+					? ctx.t("notice.ai.fail.cn")
+					: ctx.t("notice.ai.fail.oversea");
+			detail = `${isLocal ? ctx.t("notice.ai.localFail") : ctx.t("notice.ai.fail")}${errMsg}）\n${hint}`;
+		}
+		new Notice(detail, 9000);
 	} finally {
 		ctx.aiSearchPending = false;
 		searchInput.removeClass("ai-loading");

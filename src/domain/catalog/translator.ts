@@ -8,7 +8,7 @@
  * - src/coverage.ts        (覆盖率追踪)
  */
 
-import { mapWithConcurrency } from "@shared/utils";
+import { mapWithConcurrency, normalizeBaseUrl } from "@shared/utils";
 import { logger } from "@shared/logger";
 import { type TencentApiConfig } from "@translation/api/tencent-signer";
 import {
@@ -18,6 +18,7 @@ import {
 	LLMClient,
 	callAITranslate,
 } from "@translation/api/api";
+import { BaiduTranslateClient, type BaiduApiConfig } from "@translation/api/baidu";
 import { buildSelfHostedTranslators, type SelfHostedTranslator } from "@translation/api/self-hosted";
 import { TransmartClient } from "@translation/api/transmart";
 import { AISearcher } from "@domain/search/ai";
@@ -71,7 +72,7 @@ export interface TranslateResult {
 	/** 翻译来源标记 */
 	source: "custom" | "bulk" | "online" | "ai" | "original";
 	/** online 来源的具体供应商（用于 TM 入队置信度分层；旧缓存无此字段按未知处理） */
-	provider?: "tencent" | "mymemory" | "google" | "deeplx" | "libretranslate" | "macos" | "tencent-transmart";
+	provider?: "tencent" | "mymemory" | "google" | "deeplx" | "libretranslate" | "macos" | "tencent-transmart" | "baidu";
 }
 
 export interface AISearchConfig {
@@ -179,6 +180,7 @@ export class Translator {
 
 	// 配置
 	apiConfig: TencentApiConfig | null = null;
+	baiduConfig: BaiduApiConfig | null = null;
 	aiConfig: AISearchConfig | null = null;
 	translatorConfig: TranslatorConfig = { apiConfig: null, aiConfig: null, useMyMemory: true, useTransmart: true };
 
@@ -194,6 +196,7 @@ export class Translator {
 	readonly transmartClient: TransmartClient;
 	readonly llm: LLMClient;
 	readonly aiSearcher: AISearcher;
+	readonly baiduClient: BaiduTranslateClient;
 	readonly coverage: CoverageTracker;
 	/** 自托管翻译源（DeepLX / LibreTranslate），按质量序；空数组=未配置 */
 	selfHosted: SelfHostedTranslator[] = [];
@@ -206,6 +209,7 @@ export class Translator {
 		this.tencentClient = new TencentClient();
 		this.googleClient = new GoogleClient();
 		this.transmartClient = new TransmartClient();
+		this.baiduClient = new BaiduTranslateClient();
 		this.llm = new LLMClient({
 			baseURL: "",
 			apiKey: "",
@@ -228,9 +232,21 @@ export class Translator {
 	// ══════════════════════════════════════════════════
 
 	setApiConfig(config: TencentApiConfig | null) {
-		this.apiConfig = config;
-		if (config) this.tencentClient.setConfig(config);
-		this.translatorConfig.apiConfig = config;
+		// 防御性 trim：避免设置页/外部代码传入的 secret 字段带前后空白污染签名
+		const normalized = config
+			? { ...config, secretId: config.secretId?.trim() ?? "", secretKey: config.secretKey?.trim() ?? "" }
+			: null;
+		this.apiConfig = normalized;
+		if (normalized) this.tencentClient.setConfig(normalized);
+		this.translatorConfig.apiConfig = normalized;
+	}
+
+	setBaiduConfig(config: BaiduApiConfig | null) {
+		const normalized = config
+			? { appId: config.appId?.trim() ?? "", key: config.key?.trim() ?? "" }
+			: null;
+		this.baiduConfig = normalized;
+		if (normalized) this.baiduClient.setConfig(normalized);
 	}
 
 	setUseMyMemory(enabled: boolean) {
@@ -249,8 +265,14 @@ export class Translator {
 		const normalized = config
 			? {
 					...config,
-					baseURL: config.baseURL?.trim() || DEFAULT_AI_BASE_URL,
+					baseURL: normalizeBaseUrl(config.baseURL) || DEFAULT_AI_BASE_URL,
+					apiKey: config.apiKey?.trim() || "",
 					model: config.model?.trim() || DEFAULT_AI_MODEL,
+					// embedding baseURL 同样允许用户填完整端点（/v1/embeddings），
+					// 这里一并归一化，避免 AISearcher 内部拼接成双重路径导致 401/404。
+					embedding: config.embedding
+						? { ...config.embedding, baseURL: normalizeBaseUrl(config.embedding.baseURL ?? "") || DEFAULT_AI_BASE_URL }
+						: undefined,
 			  }
 			: null;
 		this.aiConfig = normalized;
@@ -479,9 +501,10 @@ export class Translator {
 	 * 旧缓存无 provider 字段时按未知处理，0.5。
 	 */
 	private onlineConfidence(
-		provider?: "tencent" | "mymemory" | "google" | "deeplx" | "libretranslate" | "macos" | "tencent-transmart"
+		provider?: "tencent" | "mymemory" | "google" | "deeplx" | "libretranslate" | "macos" | "tencent-transmart" | "baidu"
 	): number {
 		if (provider === "tencent") return 0.6;
+		if (provider === "baidu") return 0.6;
 		if (provider === "deeplx") return 0.55;
 		if (provider === "tencent-transmart") return 0.55;
 		if (provider === "macos") return 0.52;
@@ -717,7 +740,8 @@ export class Translator {
 		}
 
 		// 第四层：AI 翻译（LLM）。skipAI 时跳过（本地语义模式懒翻译，避免触发 LLM 超时/烧 token）
-		if (this.aiConfig?.apiKey && !opts?.skipAI) {
+		// 注意：本地大模型（本机地址）无需 API Key 即可用，故以 aiConfig 是否存在为准，不卡 apiKey。
+		if (this.aiConfig && !opts?.skipAI) {
 			const aiResult = await callAITranslate(this.llm, plugin);
 			if (aiResult) {
 				this.solidifyAI(plugin.id, aiResult);
@@ -738,7 +762,23 @@ export class Translator {
 			}
 		}
 
-		// 第五层：腾讯翻译（免费）（transmart.qq.com/api/imt，零配置、无配额）。
+		// 第五层：百度机器翻译（通用翻译 API，需 appid+key，质量与腾讯云同档、优于免费 transmart/google）
+		if (this.baiduConfig?.appId && this.baiduConfig?.key && this.baiduClient.isAvailable()) {
+			try {
+				const [translatedName, translatedDesc] = await Promise.all([
+					this.baiduClient.translate(plugin.name),
+					this.baiduClient.translate(plugin.description),
+				]);
+				const result: TranslateResult = { translatedName, translatedDesc, source: "online", provider: "baidu" };
+				this.cache[plugin.id] = result;
+				this.enqueueOnlineTM(plugin.id);
+				return result;
+			} catch (e: unknown) {
+				logger.warn("[Chinese Plugin Market] 百度翻译失败:", e);
+			}
+		}
+
+		// 第六层：腾讯翻译（免费）（transmart.qq.com/api/imt，零配置、无配额）。
 		// useTransmart 关闭时 isAvailable() 返回 false，本层直接跳过。
 		const transmartResult = await this.transmartClient.translate(plugin);
 		if (transmartResult) {
@@ -796,11 +836,11 @@ export class Translator {
 	/**
 	 * 详情页 README 分段翻译入口：按用户显式选择的通道译单段文本（失败不降级，返回 null 由调用方保留原文段）。
 	 * 输入是长文本片段而非插件对象，用于 README 等富文本。
-	 * 支持："tencent-transmart"（腾讯翻译·免费）/ "tencent"（腾讯云翻译，需密钥）。
+	 * 支持："tencent-transmart"（腾讯翻译·免费）/ "tencent"（腾讯云翻译，需密钥）/ "baidu"（百度机器翻译，需 appid+key）。
 	 */
 	async translateTextSegment(
 		text: string,
-		provider: "tencent-transmart" | "tencent"
+		provider: "tencent-transmart" | "tencent" | "baidu"
 	): Promise<string | null> {
 		if (provider === "tencent-transmart") {
 			if (!this.transmartClient.isAvailable()) return null;
@@ -808,6 +848,16 @@ export class Translator {
 				return await this.transmartClient.translateSegment(text);
 			} catch (e: unknown) {
 				logger.warn("[Chinese Plugin Market] 腾讯翻译（免费）README 分段失败:", e);
+				return null;
+			}
+		}
+		if (provider === "baidu") {
+			if (!(this.baiduConfig?.appId && this.baiduConfig?.key)) return null;
+			if (!this.baiduClient.isAvailable()) return null;
+			try {
+				return await this.baiduClient.translate(text);
+			} catch (e: unknown) {
+				logger.warn("[Chinese Plugin Market] 百度翻译 README 分段失败:", e);
 				return null;
 			}
 		}
@@ -1029,7 +1079,8 @@ export class Translator {
 	// ══════════════════════════════════════════════════
 
 	hasAI(): boolean {
-		return !!(this.aiConfig?.apiKey);
+		// 本地大模型（本机地址）无需 API Key 即可用，故以 aiConfig 是否存在为准。
+		return !!this.aiConfig;
 	}
 
 	/**

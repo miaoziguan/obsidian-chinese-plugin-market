@@ -10,7 +10,7 @@
  * 所有 LLM 调用统一走 LLMClient，不再耦合 Translator 状态。
  */
 
-import { parseJSON, parseRecallCandidates, fuzzyTitleScores, rrfFuse, topNFused } from "@shared/utils";
+import { parseJSON, parseRecallCandidates, fuzzyTitleScores, rrfFuse, topNFused, isLocalBaseUrl } from "@shared/utils";
 import { logger } from "@shared/logger";
 import { tokenizeForBM25, bm25Score } from "@domain/search/bm25";
 import { t2sForEmbed } from "@translation/lexicon/t2s";
@@ -195,7 +195,8 @@ export class AISearcher {
 		onPhase?: (phase: string, detail: string) => void,
 		filterCategories?: string[],
 	): Promise<AISearchResult> {
-		if (!this.aiConfig.apiKey) throw new Error("未配置 API Key");
+		if (!this.aiConfig.apiKey && !isLocalBaseUrl(this.aiConfig.baseURL))
+			throw new Error("NO_API_KEY");
 		if (!allPlugins.length) throw new Error("无插件数据，请先加载列表");
 		const tStart = Date.now();
 
@@ -344,7 +345,7 @@ export class AISearcher {
 
 	/** AI 深度对比（基于真实信号：commands / 依赖 / 标签 / README，不单靠描述） */
 	async compare(items: CompareItem[]): Promise<string | null> {
-		if (!this.aiConfig?.apiKey) return null;
+		if (!this.aiConfig?.apiKey && !isLocalBaseUrl(this.aiConfig.baseURL)) return null;
 		const system =
 			"你是 Obsidian 插件选品顾问。用户正在对比若干功能相近的插件，需要你基于给出的" +
 			"市场元数据与仓库真实信号，输出结构化的中文对比分析。只输出 Markdown 正文（不要代码块包裹、不要任何前后解释），" +

@@ -24,7 +24,7 @@ import {
 import { makeT } from "@shared/i18n";
 import { setScrollDebug } from "@ui/view/view-render";
 import { TranslatorSettingTab } from "@app/settings-tab";
-import { debounce, mapWithConcurrency, contentHash } from "@shared/utils";
+import { debounce, mapWithConcurrency, contentHash, isAISearchUsable } from "@shared/utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
 import { setWorkerSourceLoader } from "@semantic/workers/worker-backend";
 import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings, type PluginProfile } from "@ui/view/translator-view";
@@ -863,16 +863,31 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 		this.translator.setUseMyMemory(this.settings.useMyMemory);
 		this.translator.setUseTransmart(this.settings.useTransmart);
+		// 同步百度机器翻译配置（需 appid + 密钥齐备才启用，否则留空走其它来源）
+		if (this.settings.baiduAppId && this.settings.baiduKey) {
+			this.translator.setBaiduConfig({
+				appId: this.settings.baiduAppId,
+				key: this.settings.baiduKey,
+			});
+		}
 		// 同步自托管翻译源（DeepLX / LibreTranslate）；空列表清空，行为完全不变
 		this.translator.setSelfHostedTranslators(this.settings.selfHostedTranslators);
 		// 从 settings 同步 AI 配置（与腾讯配置同款处理）。
 		// 若不在此同步，translator.aiConfig 冷启动为 null，hasAI() 为假，
 		// 导致已配置 API Key 的用户重启后 AI 翻译/搜索静默失效，直至打开设置页才恢复。
-		if (this.settings.aiSearchEnabled && this.settings.aiSearchApiKey) {
+		if (isAISearchUsable(this.settings.aiSearchEnabled, this.settings.aiSearchBaseURL, this.settings.aiSearchApiKey)) {
 			this.translator.setAIConfig({
 				baseURL: this.settings.aiSearchBaseURL,
 				apiKey: this.settings.aiSearchApiKey,
 				model: this.settings.aiSearchModel,
+				embedding: {
+					source: this.settings.embeddingSource,
+					baseURL: this.settings.embeddingBaseURL,
+					apiKey: this.settings.embeddingApiKey,
+					model: this.settings.embeddingModel,
+					localModel: this.settings.embeddingLocalModel,
+					localWasmPaths: this.settings.embeddingLocalWasmPaths,
+				},
 			});
 		}
 	}

@@ -484,7 +484,7 @@ class InsightModal extends Modal {
 	private async generate(body: HTMLElement) {
 		const t = this.host.t;
 		const translator = this.host.translator;
-		if (!translator.aiConfig?.apiKey) {
+		if (!translator.aiConfig) {
 			body.textContent = this.plugin.description || t("insight.noContent");
 			body.createDiv({ cls: "pt-insight-warn", text: t("insight.noAI") });
 			return;

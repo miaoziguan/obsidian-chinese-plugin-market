@@ -1,7 +1,6 @@
 import {
 	PluginSettingTab,
 	Setting,
-	SecretComponent,
 	Notice,
 	requestUrl,
 	Platform,
@@ -10,7 +9,8 @@ import {
 } from "obsidian";
 import type ChinesePluginMarket from "@app/main";
 import { makeT, type I18nKey } from "@shared/i18n";
-import { normalizeBaseUrl } from "@shared/utils";
+import { normalizeBaseUrl, isLocalBaseUrl, isAISearchUsable } from "@shared/utils";
+import { BaiduTranslateClient } from "@translation/api/baidu";
 import { isWebGPUAvailable } from "@semantic/embedding";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { VIEW_TYPE } from "@shared/constants";
@@ -32,7 +32,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 	private syncTranslatorAIConfig() {
 		const s = this.plugin.settings;
 		this.plugin.translator.setAIConfig(
-			s.aiSearchEnabled && s.aiSearchApiKey
+			isAISearchUsable(s.aiSearchEnabled, s.aiSearchBaseURL, s.aiSearchApiKey)
 				? {
 						baseURL: s.aiSearchBaseURL,
 						apiKey: s.aiSearchApiKey,
@@ -60,21 +60,25 @@ export class TranslatorSettingTab extends PluginSettingTab {
 	/** 测试 AI 连接是否联通（参照竹叶飞刃的做法：发一次最小请求，按 HTTP 状态给友好提示） */
 	private async testAIConnection(): Promise<void> {
 		const s = this.plugin.settings;
-		if (!s.aiSearchApiKey) {
+		const baseURL = normalizeBaseUrl(s.aiSearchBaseURL || "https://api.openai.com");
+		const isLocal = isLocalBaseUrl(s.aiSearchBaseURL || "");
+		// 本地模型（如 Ollama / LM Studio）通常无需 API Key，留空 Key 属合法用法；
+		// 仅当非本地且无 Key 时才拦截。
+		if (!s.aiSearchApiKey && !isLocal) {
 			new Notice(this.t("settings.ai.test.noKey"));
 			return;
 		}
-		const baseURL = normalizeBaseUrl(s.aiSearchBaseURL || "https://api.openai.com");
 		const model = s.aiSearchModel || "deepseek-chat";
+		// Key 可能被前后空白污染（复制粘贴常见坑），自动 trim 用于本次请求，保留 settings 原值不动
+		const apiKey = s.aiSearchApiKey?.trim() ?? "";
 		try {
-			new Notice(this.t("settings.ai.test.testing"));
 			const startTime = Date.now();
 			const response = await requestUrl({
 				url: `${baseURL}/v1/chat/completions`,
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${s.aiSearchApiKey}`,
+					...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
 				},
 				body: JSON.stringify({
 					model,
@@ -84,25 +88,31 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				throw: false,
 			});
 			const latency = Date.now() - startTime;
+			// 把请求目标回显（脱敏），便于用户核对「我以为发的是 A，实际是不是 A」
+			const reqInfo = `${baseURL} · ${model}`;
 			if (response.status === 200) {
 				const json = response.json as
 					| { model?: string; usage?: { total_tokens?: number } }
 					| undefined;
-				const respModel = json?.model || model;
 				const tokensUsed = json?.usage?.total_tokens;
 				const tokenInfo = tokensUsed ? ` · 消耗 ${tokensUsed} tokens` : "";
 				new Notice(
-					`✓ ${this.t("settings.ai.test.ok")} · ${respModel} · ${latency}ms${tokenInfo}`,
+					`✓ ${this.t("settings.ai.test.ok")}\n${reqInfo} · ${latency}ms${tokenInfo}`,
 					8000
 				);
 			} else if (response.status === 401 || response.status === 403) {
-				new Notice(`✗ ${this.t("settings.ai.test.badKey")}`, 10000);
+				// 鉴权失败：最常见原因是「Key 与 Base URL 不属于同一平台」（如 DeepSeek Key 配硅基流动 URL）。
+				// 提示里点明两类原因 + 当前请求目标，便于用户定位。
+				new Notice(
+					`✗ ${this.t("settings.ai.test.badKey")}\n${reqInfo}\n${this.t("settings.ai.test.badKey.hint")}`,
+					14000
+				);
 			} else if (response.status === 429) {
-				new Notice(`✗ ${this.t("settings.ai.test.rate")}`, 10000);
+				new Notice(`✗ ${this.t("settings.ai.test.rate")}\n${reqInfo}`, 10000);
 			} else if (response.status >= 500) {
-				new Notice(`✗ ${this.t("settings.ai.test.server")}（HTTP ${response.status}）`, 10000);
+				new Notice(`✗ ${this.t("settings.ai.test.server")}（HTTP ${response.status}）\n${reqInfo}`, 10000);
 			} else {
-				new Notice(`✗ ${this.t("settings.ai.test.http")}（HTTP ${response.status}）`, 8000);
+				new Notice(`✗ ${this.t("settings.ai.test.http")}（HTTP ${response.status}）\n${reqInfo}`, 8000);
 			}
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error);
@@ -114,6 +124,38 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		}
 	}
 
+	/** 百度机器翻译连接测试：发一次最小翻译请求，验证 appid + 密钥是否有效 */
+	private async testBaiduConnection(): Promise<void> {
+		const s = this.plugin.settings;
+		if (!s.baiduAppId || !s.baiduKey) {
+			new Notice(this.t("settings.baidu.test.noKey"));
+			return;
+		}
+		try {
+			new Notice(this.t("settings.baidu.test.testing"));
+			const client = new BaiduTranslateClient();
+			client.setConfig({ appId: s.baiduAppId, key: s.baiduKey });
+			const result = await client.translate("你好");
+			if (result && result.trim()) {
+				new Notice(`✓ ${this.t("settings.baidu.test.ok")}：${result}`, 8000);
+			} else {
+				new Notice(`✗ ${this.t("settings.baidu.test.http")}`, 8000);
+			}
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error);
+			let friendly = msg;
+			if (msg.includes("Failed to fetch") || msg.includes("network") || msg.includes("ENOTFOUND")) {
+				friendly = this.t("settings.baidu.test.netfail");
+			} else if (msg.includes("54003") || msg.includes("54005")) {
+				friendly = this.t("settings.baidu.test.rate");
+			} else if (msg.includes("52003") || msg.includes("54001") || msg.includes("58000") || msg.includes("90107")) {
+				friendly = this.t("settings.baidu.test.badKey");
+			} else if (msg.includes("52002") || msg.includes("502")) {
+				friendly = this.t("settings.baidu.test.server");
+			}
+			new Notice(`✗ ${this.t("settings.baidu.test.fail")}：${friendly}`, 10000);
+		}
+	}
 
 	/**
 	 * 声明式设置定义（Obsidian 1.13+ 可搜索设置面板）。
@@ -341,6 +383,34 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								name: this.t("settings.tencent.region"),
 								desc: this.t("settings.tencent.region.desc"),
 								control: { type: "text", key: "region", placeholder: "ap-guangzhou" },
+							},
+						],
+					},
+					{
+						type: "page",
+						name: this.t("settings.baidu.title"),
+						items: [
+							{
+								name: this.t("settings.baidu.appId"),
+								desc: this.t("settings.baidu.appId.desc"),
+								control: { type: "text", key: "baiduAppId", placeholder: "2025xxxx" },
+							},
+							{
+								name: this.t("settings.baidu.key"),
+								desc: this.t("settings.baidu.key.desc"),
+								// 密钥用 SecretComponent：不显示明文，防肩窥
+								render: (setting) => this.renderSecretField(setting, "baiduKey"),
+							},
+							{
+								name: this.t("settings.baidu.test"),
+								desc: this.t("settings.baidu.test.desc"),
+								render: (setting) => {
+									setting.addButton((btn) =>
+										btn
+											.setButtonText(this.t("settings.baidu.test.btn"))
+											.onClick(() => void this.testBaiduConnection())
+									);
+								},
 							},
 						],
 					},
@@ -667,15 +737,27 @@ export class TranslatorSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * 用 Obsidian SecretComponent 渲染敏感字段输入（方案 1：设置面板不显示明文、防肩窥）。
-	 * 值仍走 setControlValue → settings + credentials.json 持久化，行为与 text 一致。
+	 * 渲染敏感字段输入（防肩窥）。
+	 * 之前用 Obsidian 原生 SecretComponent，但它内置的「添加密钥」模态框强制要填 ID（用于 Keychain 命名空间），
+	 * 而我们每个字段只用一把密钥，不需要 ID 命名 → 改用 Setting.addText + type=password：
+	 * - 无 ID 模态框，用户体验更直接
+	 * - 仍然密码遮罩、防肩窥
+	 * - 值仍走 setControlValue → settings + credentials.json 持久化，与原来一致
 	 */
 	private renderSecretField(setting: Setting, key: string): void {
-		const secret = new SecretComponent(this.app, setting.controlEl);
-		const current = (this.plugin.settings as unknown as Record<string, unknown>)[key];
-		secret.setValue(typeof current === "string" ? current : "");
-		secret.onChange((value) => {
-			void this.setControlValue(key, value);
+		setting.addText((text) => {
+			const current = (this.plugin.settings as unknown as Record<string, unknown>)[key];
+			text
+				.setPlaceholder("在此粘贴密钥")
+				.setValue(typeof current === "string" ? current : "")
+				.onChange(async (value) => {
+					await this.setControlValue(key, value);
+				});
+			// 改为密码类型，输入框遮罩显示（防肩窥）
+			text.inputEl.type = "password";
+			// 防止浏览器自动填充干扰（Obsidian 桌面端影响不大，移动端/Safari 有意义）
+			text.inputEl.autocomplete = "off";
+			text.inputEl.spellcheck = false;
 		});
 	}
 

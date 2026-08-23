@@ -46,7 +46,7 @@ function cacheReadme(url: string, md: string): void {
 }
 
 /** 详情页 README 可用的翻译通道（显式选择，失败不降级） */
-export type ReadmeChannel = "tencent-transmart" | "tencent" | "macos";
+export type ReadmeChannel = "tencent-transmart" | "tencent" | "baidu" | "macos";
 
 /** 腾讯翻译（免费）/腾讯云单次请求的安全上限（与 transmart.qq.com 实测一致） */
 const README_SEGMENT_LIMIT = 500;
@@ -476,16 +476,17 @@ export class PluginDetailDrawer {
 		}
 	}
 
-	/** 详情页 README 可用的翻译通道（按可用性：腾讯免费开关 / 腾讯云密钥 / macOS 桌面端） */
+	/** 详情页 README 可用的翻译通道（按可用性：腾讯免费开关 / 腾讯云密钥 / 百度 appid+key / macOS 桌面端） */
 	private availableReadmeChannels(): ReadmeChannel[] {
 		const list: ReadmeChannel[] = [];
 		if (this.plugin.settings.useTransmart) list.push("tencent-transmart");
 		if (this.plugin.settings.secretId && this.plugin.settings.secretKey) list.push("tencent");
+		if (this.plugin.settings.baiduAppId && this.plugin.settings.baiduKey) list.push("baidu");
 		if (isMacOS()) list.push("macos");
 		return list;
 	}
 
-	/** 当前 README 翻译通道：会话内显式选择优先，否则默认（腾讯免费 > 腾讯云 > macOS） */
+	/** 当前 README 翻译通道：会话内显式选择优先，否则默认（腾讯免费 > 腾讯云 > 百度 > macOS） */
 	private getCurrentReadmeChannel(): ReadmeChannel | null {
 		if (this.readmeChannel) return this.readmeChannel;
 		return this.availableReadmeChannels()[0] ?? null;
@@ -495,6 +496,7 @@ export class PluginDetailDrawer {
 	private readmeChannelLabel(ch: ReadmeChannel): string {
 		if (ch === "macos") return this.t("channel.macos");
 		if (ch === "tencent") return this.t("channel.tencent");
+		if (ch === "baidu") return this.t("channel.baidu");
 		return this.t("channel.tencentTransmart");
 	}
 
@@ -504,7 +506,7 @@ export class PluginDetailDrawer {
 	 */
 	private async translateReadmeSegments(
 		text: string,
-		channel: "tencent-transmart" | "tencent"
+		channel: "tencent-transmart" | "tencent" | "baidu"
 	): Promise<string | null> {
 		if (!text) return "";
 		const segments = splitSegments(text, README_SEGMENT_LIMIT);
