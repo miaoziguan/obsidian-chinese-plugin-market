@@ -159,6 +159,8 @@
 	flex-direction: column;
 	gap: var(--pt-space-sm);
 	margin-bottom: var(--pt-space-sm);
+	container-type: inline-size;
+	container-name: pt-header;
 }
 
 /* 单行头部：搜索框 + 模式下拉 + 工具按钮 */
@@ -5331,9 +5333,150 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-text-strong, var(--text-normal));
 }
 
-/* 移动端次要按钮已收进菜单，确保工具栏单行不换行 */
-.pt-mobile .pt-header-row {
-	flex-wrap: nowrap;
+/*
+ * 窄屏工具栏兜底（不依赖 JS 的 pt-mobile 类）：用容器查询针对 .pt-header 的内联宽度。
+ * 桌面 Obsidian 客户端用 DevTools 模拟窄 viewport、或侧栏收纳后右侧空间被压缩时，
+ * 搜索行里「关键词▾ + 输入 + 排序 + 筛选▾ + 齿轮 + ⋯」挤在一起没有空间。
+ * 此处按 .pt-header 容器宽度 ≤520px 折叠：
+ *   1. 把 refresh / checkUpdate / AI 翻译 收进 ⋮ 溢出菜单（默认隐藏溢出按钮）；
+ *   2. 「筛选」按钮只保留图标 + caret，省 60+px；
+ *   3. 模式段「关键词▾」用紧凑变体（缩 padding + 缩字号 + min-width:0），省 30px+，并保留 tooltip 解释含义；
+ *   4. 结果计数隐藏，腾给搜索框；
+ *   5. 搜索栏单独成行：header-row 改 flex-wrap，搜索框 flex: 0 0 100% 占满第一行，
+ *      排序/组合/筛选/设置/溢出自然落到第二行，移动端输入更舒适。
+ * 与既有 .pt-mobile 选段不冲突，二者并集生效（设备是移动端 + 容器窄，都折叠）。
+ */
+@container pt-header (max-width: 520px) {
+	/* 次要按钮进 ⋮：桌面与窄屏容器都隐藏 */
+	.pt-header-row .pt-refresh,
+	.pt-header-row .pt-check-update,
+	.pt-header-row .pt-ai-icon-btn {
+		display: none !important;
+	}
+	/* ⋮ 溢出：默认隐藏，窄屏下显示 */
+	.pt-overflow-btn {
+		display: inline-flex;
+		min-height: 32px;
+		min-width: 32px;
+		padding: 0 6px;
+		margin: 0;
+		border: none;
+		background: none;
+		color: var(--pt-text-muted, var(--text-muted));
+		cursor: pointer;
+		border-radius: var(--pt-radius);
+	}
+	.pt-overflow-btn:hover {
+		color: var(--pt-text-strong, var(--text-normal));
+		background: var(--pt-surface-3, var(--background-modifier-hover));
+	}
+	/* 「筛选」按钮只显示图标：隐藏 "筛选" 文字，保留 lucide icon + caret，
+	   并缩 padding 到图标按钮尺寸，与同排排序/组合/设置/溢出视觉一致 */
+	.pt-toggle-filters--text .pt-toggle-filters-label {
+		display: none;
+	}
+	.pt-toggle-filters--text {
+		padding: 0 10px;
+		min-height: 32px;
+	}
+	/* 模式段窄屏紧凑化：只缩 padding 保留宽度，不缩字号（字号继承基础 --pt-text-sm），
+	   防止 select 内文字与 input placeholder 因字号不同出现 baseline 视觉错位。
+	   同步去掉右 border 让 select 与输入段视觉连贯，避免窄屏下两段紧贴产生的挤压感。 */
+	.pt-search-mode {
+		padding: 0 14px 0 10px;
+		min-width: 0;
+		vertical-align: middle;
+		line-height: 36px;
+		height: 36px;
+		border-right: 0;
+		background: transparent;
+	}
+	.pt-mode-wrap {
+		flex-shrink: 1;
+		min-width: 0;
+		display: inline-flex;
+		align-items: center;
+	}
+	/* 模式段 caret 在窄 padding 下贴更近，避免与右分隔线撞车 */
+	.pt-mode-caret {
+		right: 6px;
+	}
+	/* 移动端直接隐藏搜索放大镜图标：窄屏空间珍贵且图标与文字的间距问题价值不高，
+	   去掉后 placeholder 紧贴模式段右缘、无重叠风险，输入区纯文本更清爽。 */
+	.pt-search-field::before {
+		display: none;
+	}
+	.pt-search-input {
+		/* 放大镜已隐藏，左侧 padding 让出空间不必保留，缩到常规即可 */
+		padding: 0 44px 0 12px;
+		/* 内嵌子元素不重复画圆角，由外框 .pt-search 独自负责视觉圆角 + overflow 裁剪，
+		   避免窄屏下「内部 input 圆角与外框圆角错位 1px」造成的尖角瑕疵。
+		   appearance:none + !important 清空 iOS WebView 给 <input> 独立渲染的"控件胶囊"
+		   （即使 transparent / border:0 仍可能保留内嵌 visual layer）。 */
+		appearance: none;
+		-webkit-appearance: none;
+		background: transparent !important;
+		border: 0 !important;
+		border-radius: 0 !important;
+		box-shadow: none !important;
+	}
+	.pt-search-mode {
+		border-radius: 0;
+	}
+	/* 外框加 overflow:hidden 让 input/select 在视觉上彻底裁到外框圆角之内；
+	   rounded-end 改为方形（border-radius:0 是为了和 input/select 严格圆角统一）。 */
+	.pt-search {
+		overflow: hidden;
+		border-radius: var(--pt-radius-input);
+	}
+	/* 关键：「视觉语言不统一」原是因为 select / input 都各自被 UA 画了一个圆角胶囊（即使切了
+	   border-radius 也清不掉 iOS / Chromium 上的部分 user-agent stylesheet 控件视觉层），
+	   让 select / input 区段视觉上"碎在"外框里像拼贴块。
+	   解法：在窄屏下将 segmented 内部分两段，分别由 .pt-mode-wrap 和 .pt-search-field 显式担纲：
+	   • 模式段：本身和 select 一起保留独立浅色 chip（已有"关键词▾"视觉块，已存在合理），
+	   • 输入段：让 .pt-search-field 干脆取消自己的几何形，让 input 彻底融合进外框——
+	     直接让 .pt-search-field 自己不画任何独立视觉，几何跟随外框。
+	   实现：.pt-search-field 的 overflow clip 把内部 input 渲染限制在它自身边界内，
+	   并强制 input 与 field 几何与父级 .pt-search 完全一致（同色透明，无 own border-radius 绘制）。 */
+	.pt-search-field,
+	.pt-mode-wrap {
+		/* 让这两个 wrapper 不再创建独立视觉块；几何边界完全依靠外框 border + overflow 切圆角。 */
+		background: transparent;
+		box-shadow: none;
+	}
+	/* 模式段：select 即使被 appearance:none 仍可能在 UA 层画一个圆角胶囊（iOS WebView 上 select
+	   永远带 box-shadow / 边框）。让 select 进一步全透明并彻底融进 .pt-mode-wrap： */
+	.pt-search-mode,
+	.pt-mode-wrap select {
+		appearance: none;
+		-webkit-appearance: none;
+		background: transparent !important;
+		border: 0 !important;
+		box-shadow: none !important;
+	}
+	/* 结果计数给搜索让位 */
+	.pt-result-count {
+		display: none;
+	}
+
+	/* 搜索栏单独成行：header-row 改换行，搜索框占满第一行，
+	   排序/组合/筛选/设置/溢出自动落到第二行（flex 容器自然换行）。
+	   搜索框 100% 宽度保证不被右侧图标挤窄，移动端输入更舒适。 */
+	.pt-header-row {
+		flex-wrap: wrap;
+	}
+	.pt-header-row .pt-search {
+		flex: 0 0 100%;
+		min-width: 0;
+	}
+	/* 第二行（工具簇）左对齐排布，与搜索框左缘对齐 */
+	.pt-header-row .pt-sort-wrap,
+	.pt-header-row .pt-profile-dropdown,
+	.pt-header-row .pt-toggle-filters,
+	.pt-header-row .pt-open-settings,
+	.pt-header-row .pt-overflow-btn {
+		flex: 0 0 auto;
+	}
 }
 
 /*
@@ -5346,9 +5489,6 @@ button.pt-card-install-btn--installed {
 		   避免纯数学列数推导挤出 1.5 列导致横向撕裂。
 		   .pt-card 基础定义未设 min-width，此处为其唯一声明，无需 !important。 */
 		min-width: 100%;
-	}
-	.pt-view .pt-header-row {
-		flex-wrap: nowrap;
 	}
 }
 
