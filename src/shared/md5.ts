@@ -85,7 +85,7 @@ function utf8Encode(str: string): number[] {
 function convertToWordArrayFromBytes(bytes: number[]): number[] {
 	const messageLength = bytes.length;
 	const numberOfWords = (((messageLength + 8) >> 6) + 1) * 16;
-	const words: number[] = new Array(numberOfWords).fill(0);
+	const words: number[] = Array.from({ length: numberOfWords }, () => 0);
 	let j = 0;
 	for (let i = 0; i < messageLength; i++) {
 		words[j >>> 2] |= bytes[i] << ((j % 4) * 8);

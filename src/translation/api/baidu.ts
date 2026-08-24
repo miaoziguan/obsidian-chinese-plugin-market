@@ -81,7 +81,9 @@ export class BaiduTranslateClient {
 			logger.warn("[Baidu] 翻译请求失败：", msg);
 			throw new Error(`百度翻译网络请求失败：${msg}`);
 		}
-		const json = (typeof resp.json === "function" ? resp.json() : resp.json) as {
+		// HttpResponse.json 类型为 unknown：可用时调用它取对象，否则直接用该值
+		const rawJson: unknown = typeof resp.json === "function" ? resp.json() : resp.json;
+		const json = rawJson as {
 			error_code?: string;
 			error_msg?: string;
 			trans_result?: { dst: string }[];
