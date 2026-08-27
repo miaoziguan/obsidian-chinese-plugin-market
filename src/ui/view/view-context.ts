@@ -320,6 +320,9 @@ export interface ViewContext {
 	/** 当前已渲染窗口 [windowStart, windowEnd)，用于滚动时跳过无变化的重排 */
 	windowStart: number;
 	windowEnd: number;
+	/** 上/下 spacer 元素引用缓存（renderWindow 写入，updateWindowImpl 每滚动帧复用，避免重复 querySelector） */
+	spacerTop: HTMLElement | null;
+	spacerBottom: HTMLElement | null;
 	onCardClick: (ev: MouseEvent) => void;
 	toggleFavorite: (pluginId: string) => boolean;
 	onCardKeydown: (ev: KeyboardEvent) => void;
@@ -668,6 +671,10 @@ get authorFacetList() { return view.authorFacetList; },
 		set windowStart(v) { view.windowStart = v; },
 		get windowEnd() { return view.windowEnd; },
 		set windowEnd(v) { view.windowEnd = v; },
+		get spacerTop() { return view.spacerTop; },
+		set spacerTop(v) { view.spacerTop = v; },
+		get spacerBottom() { return view.spacerBottom; },
+		set spacerBottom(v) { view.spacerBottom = v; },
 		measureLayout: view.measureLayout.bind(view),
 		measureLayoutIfNeeded: view.measureLayoutIfNeeded.bind(view),
 		scheduleRender: view.scheduleRender.bind(view),

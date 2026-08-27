@@ -7,7 +7,7 @@
 
 import { type PluginInfo } from "@domain/catalog/translator";
 import { filterAndSortPlugins, resolveEmptyState } from "@domain/filter/filter";
-import { computeColCount, computeWindowRange, computeSpacerHeights } from "@ui/dom/virtual-scroll";
+import { computeColCount, computeWindowRange, computeSpacerHeights, type VirtualWindow } from "@ui/dom/virtual-scroll";
 import { createCardElement, applyCardState, type CardRenderContext } from "@ui/components/card-render";
 import { computeSmartSignals } from "@domain/filter/smart-signal";
 import { scoreAllPlugins } from "@domain/recommend/engine";
@@ -279,11 +279,11 @@ export function refreshCardState(ctx: ViewContext, pluginId: string) {
  * 供 renderWindow / fillVisibleWindow（卡片内容懒填充）复用。
  * 退化条件（缺视口 / 列数 / 行高未知）下回退 [0, total)，保证不漏译 / 不空白。
  */
-function computeVisibleWindowRange(ctx: ViewContext): { start: number; end: number } {
+function computeVisibleWindowRange(ctx: ViewContext): VirtualWindow {
 	const vp = ctx.scrollViewport;
 	const layer = ctx.scrollCardLayer;
 	const total = ctx.visibleList.length;
-	if (!vp || !layer || !ctx.colCount || total === 0) return { start: 0, end: total };
+	if (!vp || !layer || !ctx.colCount || total === 0) return { start: 0, end: total, firstRow: 0, lastRow: 0, totalRows: total };
 	// 优先用缓存行高，避免每帧 getComputedStyle 触发样式/布局回流（缓存未就绪时降级读取一次）。
 	let rowH = ctx.cachedRowH;
 	if (rowH <= 0) {
@@ -291,16 +291,16 @@ function computeVisibleWindowRange(ctx: ViewContext): { start: number; end: numb
 		const rowGap = parseFloat(getComputedStyle(layer).rowGap) || 0;
 		rowH = cardH + rowGap;
 	}
-	if (rowH <= 0) return { start: 0, end: total };
+	if (rowH <= 0) return { start: 0, end: total, firstRow: 0, lastRow: 0, totalRows: total };
 	// #4: 速度自适应预取。慢速滚动只预取 1 行（省填充成本），快速甩动时预取 3~5 行
 	// 保证窗口边缘不空白（滚动快时用户会快速越过缓冲区）。静止/初始（速度 0）回退到 LAYOUT 默认。
 	const v = ctx.scrollVelocity;
 	const PREFETCH_ROWS = v > 0
 		? (v < 500 ? 1 : v < 2000 ? 3 : 5)
 		: LAYOUT.PREFETCH_ROWS;
-	// 复用纯函数（#3 虚拟滚动数学），与 spacer 高度计算同源
-	const win = computeWindowRange(vp.scrollTop, vp.clientHeight, rowH, ctx.colCount, total, PREFETCH_ROWS);
-	return { start: win.start, end: win.end };
+	// 复用纯函数（#3 虚拟滚动数学），返回完整 VirtualWindow（含 firstRow/lastRow/totalRows），
+	// 供 updateWindowImpl 直接喂给 computeSpacerHeights，避免二次 computeWindowRange。
+	return computeWindowRange(vp.scrollTop, vp.clientHeight, rowH, ctx.colCount, total, PREFETCH_ROWS);
 }
 
 /**
@@ -496,6 +496,9 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 		const spacerBottom = createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" });
 		layer.appendChild(spacerTop);
 		layer.appendChild(spacerBottom);
+		// 缓存引用，供 updateWindowImpl 每滚动帧复用（避免对 5600+ 节点 layer 反复 querySelector）
+		ctx.spacerTop = spacerTop;
+		ctx.spacerBottom = spacerBottom;
 
 		// 关键：全量重建前必须让窗口守卫失效（设为 -1），否则 updateWindowImpl 的
 		// windowStart/End 守卫会因「上次窗口与本次相同」而直接 return，
@@ -540,7 +543,6 @@ function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void 
 	const vp = ctx.scrollViewport;
 	if (!layer || !vp || ctx.visibleList.length === 0) return;
 
-	const total = ctx.visibleList.length;
 	const win = computeVisibleWindowRange(ctx);
 	// 窗口未越界：跳过整轮重写（滚动静止 / 窗口内微动不重排）
 	if (win.start === ctx.windowStart && win.end === ctx.windowEnd) return;
@@ -578,16 +580,15 @@ function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void 
 
 	// ── 3. 计算 spacer 高度（撑出总高，使窗口卡落在正确滚动位置）──
 	const rowH = ctx.cachedRowH > 0 ? ctx.cachedRowH : (LAYOUT.DEFAULT_ROW_H + ctx.rowGap);
-	const pureWin = computeWindowRange(
-		vp.scrollTop, vp.clientHeight, rowH, ctx.colCount, total,
-		ctx.scrollVelocity > 0 ? (ctx.scrollVelocity < 500 ? 1 : ctx.scrollVelocity < 2000 ? 3 : 5) : LAYOUT.PREFETCH_ROWS,
-	);
-	const { top, bottom } = computeSpacerHeights(pureWin, rowH);
-	// 确保 spacer 存在（renderWindow 已建；兜底：缺失时补建，避免空引用）
-	let spacerTop = q(layer, ".pt-list-spacer-top");
-	let spacerBottom = q(layer, ".pt-list-spacer-bottom");
-	if (!spacerTop) { spacerTop = createDiv({ cls: "pt-list-spacer pt-list-spacer-top" }); }
-	if (!spacerBottom) { spacerBottom = createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" }); }
+	// 复用第 1 步已算出的窗口范围（win 已含速度自适应预取量），避免重复 computeWindowRange。
+	// 原实现此处又用相同入参算一遍 pureWin，两次数学完全一致，纯属冗余。
+	const { top, bottom } = computeSpacerHeights(win, rowH);
+	// 复用缓存的 spacer 引用（renderWindow 创建时写入 ctx），避免每滚动帧对 5600+ 节点 layer 做 querySelector；
+	// 兜底：引用丢失（如 layer 被外部清空）时补建，保持健壮。
+	let spacerTop = ctx.spacerTop;
+	let spacerBottom = ctx.spacerBottom;
+	if (!spacerTop) { spacerTop = createDiv({ cls: "pt-list-spacer pt-list-spacer-top" }); ctx.spacerTop = spacerTop; }
+	if (!spacerBottom) { spacerBottom = createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" }); ctx.spacerBottom = spacerBottom; }
 	spacerTop.setCssStyles({ height: `${top}px` });
 	spacerBottom.setCssStyles({ height: `${bottom}px` });
 
