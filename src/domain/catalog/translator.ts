@@ -8,7 +8,7 @@
  * - src/coverage.ts        (覆盖率追踪)
  */
 
-import { mapWithConcurrency, normalizeBaseUrl } from "@shared/utils";
+import { mapWithConcurrency, normalizeBaseUrl, isLocalBaseUrl } from "@shared/utils";
 import { logger } from "@shared/logger";
 import { type TencentApiConfig } from "@translation/api/tencent-signer";
 import {
@@ -741,7 +741,10 @@ export class Translator {
 
 		// 第四层：AI 翻译（LLM）。skipAI 时跳过（本地语义模式懒翻译，避免触发 LLM 超时/烧 token）
 		// 注意：本地大模型（本机地址）无需 API Key 即可用，故以 aiConfig 是否存在为准，不卡 apiKey。
-		if (this.aiConfig && !opts?.skipAI) {
+		// Bug 修复：云端（非本机）地址却缺 Key 时，不应发起必败请求（OpenAI 等会 401），
+		// 否则熔断器开路前每个批量首个插件都白打一次网络 + 刷 warn。与 AISearcher.search 的
+		// NO_API_KEY 判定对齐：仅「非本机且无 Key」才跳过 AI 翻译层。
+		if (this.aiConfig && !opts?.skipAI && (isLocalBaseUrl(this.aiConfig.baseURL) || this.aiConfig.apiKey)) {
 			const aiResult = await callAITranslate(this.llm, plugin);
 			if (aiResult) {
 				this.solidifyAI(plugin.id, aiResult);
