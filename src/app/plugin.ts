@@ -26,7 +26,7 @@ import { setScrollDebug } from "@ui/view/view-render";
 import { TranslatorSettingTab } from "@app/settings-tab";
 import { debounce, mapWithConcurrency, contentHash, isAISearchUsable } from "@shared/utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
-import { setWorkerSourceLoader } from "@semantic/workers/worker-backend";
+import { setWorkerSourceLoader, setModelProgressReporter } from "@semantic/workers/worker-backend";
 import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings, type PluginProfile } from "@ui/view/translator-view";
 import { refreshOutdated } from "@ui/view/view-data";
 import { VIEW_TYPE } from "@shared/constants";
@@ -64,6 +64,18 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		message?: string;
 		error?: string;
 	} = { status: "idle", progress: 0, total: 0 };
+	/**
+	 * 本地模型下载/加载状态（与 localIndexState 互补：后者是「向量索引构建」进度，
+	 * 本字段是「首次下载量化模型权重」进度）。首次本地语义搜索触发 worker 加载模型时，
+	 * worker 经 setModelProgressReporter 把下载进度写入此处，供搜索视图/设置页轮询展示
+	 * 与设置页同款的 <progress> 进度条 + 百分比。模型已就绪后维持 ready，刷新/重启后置 idle。
+	 */
+	localModelState: {
+		status: "idle" | "downloading" | "ready" | "error";
+		loaded: number;
+		total: number;
+		error?: string;
+	} = { status: "idle", loaded: 0, total: 0 };
 	/** 当前构建的 Promise（并发去重用：让多次调用共享同一次构建，而非直接 return） */
 	private buildLocalIndexPromise: Promise<void> | null = null;
 	/** 已「见过」的插件 id 集合（产品改进 #16，跨会话落盘，增量提示在重启后仍准确） */
@@ -151,6 +163,21 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 独立文件（不再构建期内联进 main.js），首次本地语义搜索时才付出读取成本。
 		const workerBundlePath = `.obsidian/plugins/${this.manifest.id}/embedding-worker.bundle.js`;
 		setWorkerSourceLoader(() => this.app.vault.adapter.read(workerBundlePath));
+		// 本地模型下载进度上报：首次本地语义搜索/设置页预建触发 worker 下载量化模型时，
+		// 把进度归约写入 localModelState，供搜索视图轮询展示与设置页同款的进度条 + 百分比。
+		setModelProgressReporter((p) => {
+			if (p.status === "downloading") {
+				this.localModelState = {
+					status: "downloading",
+					loaded: p.loaded ?? 0,
+					total: p.total ?? 0,
+				};
+			} else if (p.status === "ready") {
+				this.localModelState = { status: "ready", loaded: 0, total: 0 };
+			} else if (p.status === "error") {
+				this.localModelState = { status: "error", loaded: 0, total: 0, error: p.error };
+			}
+		});
 
 		// 防御：data.json 若因中断写盘而损坏（存在但 JSON 解析失败），
 		// Obsidian 的 loadData() 会从 JSON.parse 直接抛出，导致整个 onload 中止、

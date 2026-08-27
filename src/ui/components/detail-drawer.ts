@@ -88,6 +88,17 @@ export interface DrawerHostPlugin {
 		current: number;
 		total: number;
 	} | null;
+	/**
+	 * 本地模型下载/加载状态（首次本地语义搜索触发 worker 下载量化模型权重时更新）。
+	 * 供搜索视图轮询展示与设置页同款的进度条 + 百分比。模型已就绪后为 "ready"，
+	 * 刷新/重启后置 "idle"。
+	 */
+	localModelState: {
+		status: "idle" | "downloading" | "ready" | "error";
+		loaded: number;
+		total: number;
+		error?: string;
+	};
 }
 
 export interface DrawerOptions {

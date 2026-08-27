@@ -30,6 +30,30 @@ export function setWorkerSourceLoader(loader: WorkerSourceLoader): void {
 	workerSourceLoader = loader;
 }
 
+/**
+ * 本地模型下载/加载进度上报器（首次触发时供搜索视图/设置页展示同款进度条）。
+ * 由 app 层（plugin）注册，把 worker 的 `progress`/`ready`/`init-error` 事件
+ * 统一归约成 { status, loaded, total }，写入 plugin.localModelState 供 UI 轮询。
+ * 默认 no-op：未注册时 worker 仍正常加载，只是没有进度 UI。
+ *
+ * 为什么走模块级注册而非构造注入：WorkerLocalBackend 经 getShared 单例缓存，
+ * 上层 LocalEmbeddingProvider 构造链（ai.ts → embedding.ts）未透传 UI 回调，
+ * 模块级上报器以最小侵入把「下载进度」这一种跨层信号暴露出去，不改动 provider 链。
+ */
+export type ModelProgress = {
+	status: "downloading" | "ready" | "error";
+	loaded?: number;
+	total?: number;
+	error?: string;
+};
+type ModelProgressReporter = (p: ModelProgress) => void;
+let modelProgressReporter: ModelProgressReporter | null = null;
+
+/** 注册本地模型进度上报器（plugin.onload 调用一次）。 */
+export function setModelProgressReporter(fn: ModelProgressReporter): void {
+	modelProgressReporter = fn;
+}
+
 type PendingEmbed = {
 	resolve: (vecs: Float32Array[]) => void;
 	reject: (err: Error) => void;
@@ -198,11 +222,17 @@ export class WorkerLocalBackend implements LocalModelBackend {
 			}
 			logger.debug(`[Chinese Plugin Market] 本地 embedding 就绪（dim=${m.dimension}）`);
 			this.ready = true;
+			modelProgressReporter?.({ status: "ready" });
 			this.initResolve?.();
 		} else if (m.type === "init-error") {
+			modelProgressReporter?.({ status: "error", error: m.message });
 			this.failInit(new Error(`本地模型加载失败：${m.message}`));
 		} else if (m.type === "progress") {
 			logger.debug(`[Chinese Plugin Market] 模型下载 ${Math.round((m.loaded / Math.max(1, m.total)) * 100)}%${m.phase ? ` ${m.phase}` : ""}`);
+			// 上报下载进度：供首次本地搜索时复用设置页同款进度条/百分比
+			if (typeof m.loaded === "number" && typeof m.total === "number" && m.total > 0) {
+				modelProgressReporter?.({ status: "downloading", loaded: m.loaded, total: m.total });
+			}
 		} else if (m.type === "result") {
 			const p = this.pending.get(m.id);
 			if (!p) return;

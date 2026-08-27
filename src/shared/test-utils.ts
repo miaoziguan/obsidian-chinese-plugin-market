@@ -34,6 +34,8 @@ export function makeMockPlugin(
 	return {
 		settings: (overrides.settings ?? {}) as ChinesePluginMarketSettings,
 		translator: overrides.translator ?? ({} as Translator),
+		// 默认本地模型下载状态：idle（测试一般不触发真实 worker 下载）
+		localModelState: { status: "idle", loaded: 0, total: 0 },
 		...overrides,
 	} as DrawerHostPlugin & { [k: string]: unknown };
 }
