@@ -64,6 +64,10 @@ export async function runAISearch(
 	searchInput.addClass("ai-loading");
 	searchInput.closest?.(".pt-search")?.addClass("pt-search--ai-loading");
 
+	// 首次本地语义搜索的模型下载进度条（与设置页同款）。声明在 try 外，供 finally 清理。
+	let modelBar: { el: HTMLElement; pct: HTMLElement } | null = null;
+	let modelBarTimer = 0;
+
 	try {
 		const pluginArgs = ctx.plugins.map((p) => ({
 			id: p.id,
@@ -89,6 +93,17 @@ export async function runAISearch(
 		if (isLocal && !ctx.translator.getVectorIndex()) {
 			new Notice(ctx.t("notice.local.indexing"), 8000);
 		}
+
+		// 首次本地语义搜索：worker 会后台下载量化模型权重（~23MB）。挂载与设置页同款的
+		// <progress> 进度条 + 百分比，轮询 plugin.localModelState 实时展示下载进度，
+		// 避免「看似无反应」（此前仅有 8s Notice，下载慢时无任何进度反馈）。
+		// 模型已就绪（status==="ready" 或本地模型此前预热过）则不显示进度条。
+		modelBar = isLocal && ctx.plugin.localModelState.status !== "ready"
+			? mountLocalModelProgressBar(searchInput)
+			: null;
+		modelBarTimer = modelBar
+			? window.setInterval(() => updateLocalModelProgressBar(modelBar!, ctx.plugin.localModelState, aiBadge), 150)
+			: 0;
 
 		const tSearch = Date.now();
 		const aiResult = isLocal
@@ -167,6 +182,49 @@ export async function runAISearch(
 		ctx.aiSearchPending = false;
 		searchInput.removeClass("ai-loading");
 		searchInput.closest?.(".pt-search")?.removeClass("pt-search--ai-loading");
+		// 清理模型下载进度条轮询（若挂载过）
+		if (modelBarTimer) window.clearInterval(modelBarTimer);
+		if (modelBar) modelBar.el.remove();
 		ctx.renderPluginList();
+	}
+}
+
+/**
+ * 在搜索输入框容器内挂载与设置页同款的本地模型下载进度条（原生 <progress> + 百分比文案）。
+ * 返回 { el, pct } 供轮询更新；组件本身随 runAISearch 的 finally 一并移除。
+ */
+function mountLocalModelProgressBar(searchInput: HTMLInputElement): { el: HTMLElement; pct: HTMLElement } | null {
+	const field = searchInput.closest?.(".pt-search-field");
+	if (!field) return null;
+	const wrap = field.createDiv({ cls: "pt-model-progress" });
+	const bar = wrap.createEl("progress", { cls: "pt-index-progress" });
+	bar.max = 100;
+	bar.value = 0;
+	bar.setCssStyles({ display: "none", width: "100%", margin: "6px 0 0" });
+	const pct = wrap.createSpan({ cls: "pt-model-progress-pct", text: "" });
+	pct.setCssStyles({ display: "none", fontSize: "11px", opacity: "0.8", margin: "2px 0 0" });
+	return { el: wrap, pct };
+}
+
+/** 轮询回调：根据 plugin.localModelState 更新进度条可见性与百分比。 */
+function updateLocalModelProgressBar(
+	bar: { el: HTMLElement; pct: HTMLElement },
+	st: { status: "idle" | "downloading" | "ready" | "error"; loaded: number; total: number },
+	aiBadge: HTMLElement
+): void {
+	const progress = bar.el.querySelector("progress");
+	if (!progress) return;
+	if (st.status === "downloading" && st.total > 0) {
+		const p = Math.round((st.loaded / st.total) * 100);
+		progress.value = p;
+		progress.setCssStyles({ display: "" });
+		bar.pct.setText(`正在下载本地模型 ${p}%`);
+		bar.pct.setCssStyles({ display: "" });
+		aiBadge.setText("下载模型中");
+		aiBadge.setAttribute("title", `正在下载本地模型（${p}%）…`);
+	} else {
+		// 下载完成（ready）/出错/空闲：隐藏进度条（badge 由 runAISearch 主流程接管文案）
+		progress.setCssStyles({ display: "none" });
+		bar.pct.setCssStyles({ display: "none" });
 	}
 }

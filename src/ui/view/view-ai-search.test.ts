@@ -126,4 +126,54 @@ describe("runAISearch (P2-1: 从 view-data 拆离 AI 搜索编排)", () => {
 		expect(ctx.renderPluginList).toHaveBeenCalled();
 		expect(ctx.aiSearchPending).toBe(false);
 	});
+
+	it("本地语义首次触发：挂载模型下载进度条（设置页同款），且 finally 清理", async () => {
+		// 构造支持 closest 的 searchInput：.pt-search-field 用于挂载进度条，.pt-search 用于 finally 移除 loading 类
+		const field = {
+			createDiv: vi.fn().mockReturnValue({
+				createEl: vi.fn().mockReturnValue({ max: 0, value: 0, setCssStyles: vi.fn(), querySelector: () => ({ value: 0, setCssStyles: vi.fn() }) }),
+				createSpan: vi.fn().mockReturnValue({ setText: vi.fn(), setCssStyles: vi.fn() }),
+				querySelector: vi.fn().mockReturnValue({ value: 0, setCssStyles: vi.fn() }),
+				remove: vi.fn(),
+			}),
+			removeClass: vi.fn(),
+			addClass: vi.fn(),
+		};
+		const searchInput = { addClass: vi.fn(), removeClass: vi.fn(), closest: vi.fn().mockReturnValue(field) } as any;
+		const aiBadge = { className: "", setAttribute: vi.fn(), setText: vi.fn(), setCssStyles: vi.fn() } as any;
+		const translator = {
+			aiSearchLocal: vi.fn().mockResolvedValue({ rankedIds: ["a", "b"] }),
+			getVectorIndex: vi.fn().mockReturnValue(null),
+		} as any;
+		const plugin = makeMockPlugin({
+			settings: { ...({ embeddingSource: "local" } as any), aiSearchEnabled: true, aiSearchApiKey: "k", aiSearchBaseURL: "u" },
+			localModelState: { status: "idle", loaded: 0, total: 0 },
+			saveVectorIndex: vi.fn(),
+		});
+		const ctx = makeMockContext({
+			plugin,
+			settings: plugin.settings,
+			saveVectorIndex: plugin.saveVectorIndex,
+			translator,
+			t: (k: string) => String(k),
+			searchQuery: "vue",
+			searchMode: "local",
+			plugins: [{ id: "a", name: "A", description: "d" }],
+			aiSearchPending: false,
+			aiSearchResult: null,
+			aiSearchQueryCache: "",
+			lastAiSearchResult: null,
+			lastAiSearchQuery: "",
+			selectedCategories: [],
+			ensureDataLoaded: vi.fn().mockResolvedValue(true),
+			renderPluginList: vi.fn(),
+			showAIConfigGuide: vi.fn(),
+		} as any) as ViewContext;
+
+		await runAISearch(ctx, searchInput, aiBadge);
+		// 进度条容器已被创建（与设置页同款 <progress class="pt-index-progress">）
+		expect(field.createDiv).toHaveBeenCalled();
+		expect(translator.aiSearchLocal).toHaveBeenCalled();
+		expect(ctx.aiSearchResult).toEqual({ rankedIds: ["a", "b"] });
+	});
 });
