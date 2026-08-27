@@ -319,6 +319,10 @@ export class ChinesePluginMarketView extends ItemView {
 	/** #3 虚拟滚动：当前已渲染窗口 [windowStart, windowEnd)，滚动时若未越界则跳过重排 */
 	public windowStart = 0;
 	public windowEnd = 0;
+	/** 上/下 spacer 元素引用缓存：renderWindow 创建、updateWindowImpl 每滚动帧复用，
+	 *  避免每帧对 5600+ 节点的 layer 做 2 次 querySelector（content-visibility 下仍为 O(n) 遍历）。 */
+	public spacerTop: HTMLElement | null = null;
+	public spacerBottom: HTMLElement | null = null;
 	/** 滚动位置指示徽标（S7）：滚动中显示「第 x / 共 n」，滚停淡出 */
 	public scrollPosEl: HTMLElement | null = null;
 	public scrollPosTimer: number | undefined;
