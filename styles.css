@@ -5351,7 +5351,7 @@ button.pt-card-install-btn--installed {
 	.pt-header-row .pt-refresh,
 	.pt-header-row .pt-check-update,
 	.pt-header-row .pt-ai-icon-btn {
-		display: none !important;
+		display: none;
 	}
 	/* ⋮ 溢出：默认隐藏，窄屏下显示 */
 	.pt-overflow-btn {
@@ -5406,19 +5406,21 @@ button.pt-card-install-btn--installed {
 	.pt-search-field::before {
 		display: none;
 	}
-	.pt-search-input {
+	/* 提升特异性（.pt-header 祖先前缀）压过 UA/主题对 <input> 的内置控件层，
+	   替代原 !important，避免 iOS WebView 圆角胶囊回归（container query 内特异性不变，靠祖先类提权）。 */
+	.pt-header .pt-search-input {
 		/* 放大镜已隐藏，左侧 padding 让出空间不必保留，缩到常规即可 */
 		padding: 0 44px 0 12px;
 		/* 内嵌子元素不重复画圆角，由外框 .pt-search 独自负责视觉圆角 + overflow 裁剪，
 		   避免窄屏下「内部 input 圆角与外框圆角错位 1px」造成的尖角瑕疵。
-		   appearance:none + !important 清空 iOS WebView 给 <input> 独立渲染的"控件胶囊"
+		   appearance:none 清空 iOS WebView 给 <input> 独立渲染的"控件胶囊"
 		   （即使 transparent / border:0 仍可能保留内嵌 visual layer）。 */
 		appearance: none;
 		-webkit-appearance: none;
-		background: transparent !important;
-		border: 0 !important;
-		border-radius: 0 !important;
-		box-shadow: none !important;
+		background: transparent;
+		border: 0;
+		border-radius: 0;
+		box-shadow: none;
 	}
 	.pt-search-mode {
 		border-radius: 0;
@@ -5446,13 +5448,14 @@ button.pt-card-install-btn--installed {
 	}
 	/* 模式段：select 即使被 appearance:none 仍可能在 UA 层画一个圆角胶囊（iOS WebView 上 select
 	   永远带 box-shadow / 边框）。让 select 进一步全透明并彻底融进 .pt-mode-wrap： */
-	.pt-search-mode,
+	/* 提升特异性（.pt-header 祖先前缀）压过 UA/主题对 select 的内置控件层，替代原 !important */
+	.pt-header .pt-search-mode,
 	.pt-mode-wrap select {
 		appearance: none;
 		-webkit-appearance: none;
-		background: transparent !important;
-		border: 0 !important;
-		box-shadow: none !important;
+		background: transparent;
+		border: 0;
+		box-shadow: none;
 	}
 	/* 结果计数给搜索让位 */
 	.pt-result-count {
