@@ -247,7 +247,12 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 		ctx.renderAuthorFacet();
 		ctx.updateFacetVisibility();
 
-		// 数据已就绪，立即渲染列表（含官方推荐 featured 区），不依赖后续 stats 网络请求
+		// 数据已就绪，进入「渲染」阶段：先切换 loading 文案，再让浏览器 paint 一帧
+		// （避免渲染文案被 rAF 瞬间覆盖而不可见），最后才真正渲染列表。三阶段
+		// （拉取列表 → 合并词典 → 渲染）文案清晰切换，降低「卡住」焦虑。
+		if (progressHint) progressHint.textContent = ctx.t("loading.rendering");
+		await new Promise<void>((r) => window.requestAnimationFrame(() => r()));
+		// 立即渲染列表（含官方推荐 featured 区），不依赖后续 stats 网络请求
 		ctx.scheduleRender();
 
 		// 异步非阻塞刷新最新 stats（失败记录日志，不阻断主列表；回来再 render 一次合并）
@@ -300,6 +305,9 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			ctx.buildSearchIndex();
 			ctx.renderAuthorFacet();
 			ctx.updateFacetVisibility();
+			// 进入「渲染」阶段：切换 loading 文案并让浏览器 paint 一帧，避免被瞬间覆盖
+			if (progressHint) progressHint.textContent = ctx.t("loading.rendering");
+			await new Promise<void>((r) => window.requestAnimationFrame(() => r()));
 			// 立即渲染（不依赖 stats 网络请求）
 			ctx.scheduleRender();
 			void ctx.fetchStatsAndMerge()
