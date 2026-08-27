@@ -30,7 +30,7 @@ vi.mock("obsidian", async () => {
 		aiSearch: vi.fn().mockResolvedValue({ rankedIds: ["a", "b"] }),
 	} as any;
 	const searchInput = { addClass: vi.fn(), removeClass: vi.fn() } as any;
-	const aiBadge = { className: "", setAttribute: vi.fn(), setText: vi.fn() } as any;
+	const aiBadge = { className: "", setAttribute: vi.fn(), setText: vi.fn(), setCssStyles: vi.fn() } as any;
 	const ctx = makeMockContext({
 		plugin,
 		settings,

@@ -55,6 +55,9 @@ export async function runAISearch(
 
 	ctx.aiSearchPending = true;
 	ctx.aiSearchQueryCache = query;
+	// 确保 badge 在搜索进行中可见（本地模式默认 badge 常驻，但此处兜底重置 display，
+	// 避免任何路径下 loading 态被隐藏导致「看似无反应」）
+	aiBadge.setCssStyles({ display: "" });
 	aiBadge.className = "pt-ai-badge pt-ai-active";
 	aiBadge.setText(isLocal ? "本地检索中" : "AI 分析中");
 	aiBadge.setAttribute("title", isLocal ? "本地语义检索中..." : "AI 正在分析排序...");
@@ -82,9 +85,9 @@ export async function runAISearch(
 		};
 		const cats = ctx.selectedCategories.length ? ctx.selectedCategories : undefined;
 
-		// 本地语义：若索引尚未构建，先提示（首次会后台下载模型+建索引，可能耗时）
+		// 本地语义：若索引尚未构建，先提示（首次会后台下载量化模型权重 ~23MB + 建索引，可能耗时）
 		if (isLocal && !ctx.translator.getVectorIndex()) {
-			new Notice(ctx.t("notice.local.indexing"), 6000);
+			new Notice(ctx.t("notice.local.indexing"), 8000);
 		}
 
 		const tSearch = Date.now();
