@@ -14,7 +14,8 @@
     "test:e2e": "node scripts/build-e2e.mjs && npx playwright test",
     "sync": "./sync.sh",
     "gen-tags": "esbuild scripts/gen-tags.ts --bundle --platform=node --format=esm --external:undici --outfile=scripts/gen-tags.mjs && node scripts/gen-tags.mjs",
-    "check-dict": "esbuild scripts/check-dict-delta.ts --bundle --platform=node --format=esm --outfile=scripts/check-dict-delta.mjs && node scripts/check-dict-delta.mjs"
+    "check-dict": "esbuild scripts/check-dict-delta.ts --bundle --platform=node --format=esm --outfile=scripts/check-dict-delta.mjs && node scripts/check-dict-delta.mjs",
+    "release": "node scripts/release.mjs"
   },
   "keywords": [],
   "author": "羽鳞君",
