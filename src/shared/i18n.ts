@@ -304,7 +304,7 @@ export const STRINGS = {
 	},
 	"settings.embedding.mode": { zh: "召回方式" },
 	"settings.embedding.mode.desc": {
-		zh: "关键词：纯本地匹配（默认，无需下载任何模型，速度最快）；API 向量：调用云端 Embedding 接口做语义搜索（需填密钥）；本地模型：本机离线运行 transformers.js 模型做语义搜索（首次会自动下载约 110MB 模型，无需联网即可语义检索）。",
+		zh: "关键词：纯本地匹配（默认，无需下载任何模型，速度最快）；API 向量：调用云端 Embedding 接口做语义搜索（需填密钥）；本地模型：本机离线运行 transformers.js 模型做语义搜索（首次会自动下载量化模型权重约 23MB，无需联网即可语义检索）。",
 
 	},
 	"settings.embedding.keyword": { zh: "关键词（本地，默认）" },
@@ -327,7 +327,7 @@ export const STRINGS = {
 	},
 	"settings.embedding.localModel": { zh: "本地模型名" },
 	"settings.embedding.localModel.desc": {
-		zh: "本地语义用的 transformers.js 模型 ID，插件已内置默认模型 Xenova/bge-small-zh-v1.5（中文语义，约 110MB，首次自动下载）。一般无需修改；仅当你想换成其它本地模型（如 bge-base、all-MiniLM 等）时再填。",
+		zh: "本地语义用的 transformers.js 模型 ID，插件已内置默认模型 Xenova/bge-small-zh-v1.5（中文语义，量化后约 23MB，首次自动下载）。一般无需修改；仅当你想换成其它本地模型（如 bge-base、all-MiniLM 等）时再填。",
 
 	},
 	"settings.embedding.wasm": { zh: "ONNX Runtime WASM 路径（高级，可选）" },
@@ -350,7 +350,7 @@ export const STRINGS = {
 	"settings.embedding.index": { zh: "本地向量索引" },
 	"settings.embedding.index.btn": { zh: "构建/重建" },
 	"settings.embedding.index.buildingBtn": { zh: "构建中…" },
-	"settings.embedding.index.start": { zh: "开始后台构建（需本地模型，首次约数百 MB 下载，耗时数秒~十几秒）…" },
+	"settings.embedding.index.start": { zh: "开始后台构建（需本地模型，首次下载量化模型权重约 23MB，耗时数秒~十几秒）…" },
 	"settings.embedding.index.building": { zh: "正在构建本地向量索引… {p}/{t}" },
 	"settings.embedding.index.idle": { zh: "尚未构建。首次使用「本地语义」模式会自动构建；也可点击按钮手动预建（推荐，避免首次搜索等待）。" },
 	"settings.embedding.index.done": { zh: "本地向量索引已就绪，可离线语义搜索。" },
@@ -566,7 +566,7 @@ export const STRINGS = {
 		zh: "本地语义搜索失败",
 	},
 	"notice.local.indexing": {
-		zh: "正在构建本地向量索引（首次需下载模型，稍候）…",
+		zh: "正在下载本地模型（约 23MB）并构建向量索引，首次稍候…",
 	},
 	"notice.market.opened": { zh: "已跳转到社区市场" },
 	"notice.install.noRepo": { zh: "该插件缺少仓库信息，无法一键安装" },

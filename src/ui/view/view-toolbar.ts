@@ -125,10 +125,14 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 					clearBtn.setCssStyles({ right: w > 0 ? `${w + 10}px` : "" });
 				});
 			} else {
-				// 本地语义：无需 Key、无需联网；且 badge 与左侧下拉标签重复，本地模式直接隐藏
-				aiBadge.setCssStyles({ display: "none" });
-				aiBadge.setAttribute("title", "");
-				clearBtn.setCssStyles({ right: "" }); // 本地语义 badge 已隐藏，清除按钮用默认 right
+				// 本地语义：无需 Key、无需联网。保留 badge 可见（显示「本地」），
+				// 与左侧下拉标签并不重复——它是「当前处于本地语义模式」的状态指示，
+				// 且搜索进行中会被 runAISearch 改写为「本地检索中」/「正在下载本地模型」，
+				// 提供检索进度反馈（此前误设为 display:none 导致本地模式加载态对用户不可见）。
+				aiBadge.className = "pt-ai-badge pt-ai-ready";
+				aiBadge.setText("本地");
+				aiBadge.setAttribute("title", "本地语义模式：离线向量召回，免 API Key");
+				clearBtn.setCssStyles({ right: "" });
 			}
 		};
 		// 无 Key 的 AI 模式点击徽章跳设置；本地模式不显示 badge
