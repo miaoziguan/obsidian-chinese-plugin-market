@@ -88,8 +88,11 @@ export class BaiduTranslateClient {
 			logger.warn("[Baidu] 翻译请求失败：", msg);
 			throw new Error(`百度翻译网络请求失败：${msg}`);
 		}
-		// HttpResponse.json 类型为 unknown：可用时调用它取对象，否则直接用该值
-		const rawJson: unknown = typeof resp.json === "function" ? resp.json() : resp.json;
+		// HttpResponse.json 类型为 unknown。Obsidian adapter 实际返回已解析对象（非函数），
+		// 这里保留「若为函数则调用」的兼容分支；显式收窄为 () => unknown 以消除 no-unsafe-call。
+		const jsonField = resp.json;
+		const rawJson: unknown =
+			typeof jsonField === "function" ? (jsonField as () => unknown)() : jsonField;
 		const json = rawJson as {
 			error_code?: string;
 			error_msg?: string;
