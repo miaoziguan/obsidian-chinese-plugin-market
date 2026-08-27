@@ -10,9 +10,12 @@
  */
 
 import { netRequest } from "@data/net/net";
-import { CircuitBreaker } from "@translation/api/guard";
+import { CircuitBreaker, withTimeout } from "@translation/api/guard";
 import { logger } from "@shared/logger";
 import { md5Hex } from "@shared/md5";
+
+/** 百度翻译请求超时（与其它在线翻译源一致，避免弱网/网关无响应时挂起整条 fallback 链） */
+const BAIDU_TIMEOUT = 8000;
 
 export interface BaiduApiConfig {
 	appId: string;
@@ -69,12 +72,16 @@ export class BaiduTranslateClient {
 		});
 		let resp;
 		try {
-			resp = await netRequest({
-				url: "https://fanyi-api.baidu.com/api/trans/vip/translate",
-				method: "POST",
-				headers: { "Content-Type": "application/x-www-form-urlencoded" },
-				body: params.toString(),
-			});
+			resp = await withTimeout(
+				netRequest({
+					url: "https://fanyi-api.baidu.com/api/trans/vip/translate",
+					method: "POST",
+					headers: { "Content-Type": "application/x-www-form-urlencoded" },
+					body: params.toString(),
+				}),
+				BAIDU_TIMEOUT,
+				"百度翻译"
+			);
 		} catch (e: unknown) {
 			this.breaker.recordFailure();
 			const msg = e instanceof Error ? e.message : String(e);
