@@ -198,6 +198,11 @@
 /* 排序按钮容器（定位上下文，下拉菜单挂在此容器下） */
 .pt-sort-wrap {
 	position: relative;
+	/* 建立显式高 z-index 的 stacking context，盖住下方 .pt-scroll-viewport / .pt-list-layer
+	   各自的 contain / will-change context（均 z=auto≈0），否则下拉菜单下半部分会被
+	   卡片遮挡（同 stacking context 内 DOM 序后者压前者，菜单在 header，卡片在列表里）。 */
+	z-index: var(--pt-z-dropdown);
+	isolation: isolate;
 	flex-shrink: 0;
 }
 
@@ -2061,6 +2066,15 @@ button.pt-card-install-btn--installed {
 :root {
     --pt-progress: 0;        /* 0~1，由 JS 写入；CSS 进度线/弧扫光都从这里读 */
     --pt-sys-ease: cubic-bezier(0.4, 0, 0.2, 1);
+    /* 统一浮层 z-index 层级（集中管理，避免散落魔法数字导致未来新增浮层被卡片层遮挡）。
+       背景：.pt-list-layer 有 will-change:transform + contain，.pt-scroll-viewport 有 contain:paint，
+       二者各建独立 stacking context（z=auto≈0）；任何「挂在 header、展开后下盖卡片」的自定义浮层，
+       容器必须显式 z-index 高于 auto 才能压过它们。 */
+    --pt-z-dropdown: 10;     /* 工具条下拉（排序等）：容器层级，配合 isolation:isolate 浮于卡片之上 */
+    --pt-z-fab: 20;          /* 悬浮操作按钮（回到顶部 / 置底） */
+    --pt-z-tray: 30;         /* 对比托盘 / 滚动位置徽标 */
+    --pt-z-drawer: 50;       /* Drawer 遮罩 */
+    --pt-z-drawer-panel: 51; /* Drawer 面板 */
 }
 
 /* ── 卡片：🍎 系统翻译按钮加载态 ──────────────────────────────────────── */
