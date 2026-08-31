@@ -608,12 +608,21 @@ export class PluginDetailDrawer {
 		const p = this.info;
 		const displayName = cleanChineseSpaces(this.result?.translatedName || p.name);
 
-		// ── 滚动容器（承载 max-width 内容） ──
+		// ── 头部固定块（drawer 直接子，position:absolute 相对 drawer 顶部）──
+		// 红框 1：标题 + 元数据 + 描述 + 操作 + README 标题行。
+		// 用 absolute 而非 sticky：sticky 即便去掉 backdrop-filter / transform，
+		// Chromium/Electron 下吸顶时仍有合成层亚像素抖动（每帧重算位置），
+		// 表现为头部轻微移动；absolute 完全脱离滚动、相对 drawer 固定 → 零抖动。
+		// 滚动容器 scroll 后续用 padding-top = head-block 高度占位，让 README
+		// 正文从头部下方开始滚动。
+		const headBlock = this.drawerEl.createDiv({ cls: "pt-detail-head-block" });
+
+		// ── 滚动容器（承载 max-width 内容；padding-top = 头部高度占位）──
 		const scroll = this.drawerEl.createDiv({ cls: "pt-detail-page-scroll" });
 		const inner = scroll.createDiv({ cls: "pt-detail-page-inner" });
 
 		// ── 头部：关闭按钮 + 标题 + back ──
-		const head = inner.createDiv({ cls: "pt-drawer-head" });
+		const head = headBlock.createDiv({ cls: "pt-drawer-head" });
 		const headLeft = head.createDiv({ cls: "pt-drawer-head-left" });
 
 		// 后退按钮（从相似推荐跳转后可用）
@@ -653,7 +662,7 @@ export class PluginDetailDrawer {
 		const main = inner.createDiv({ cls: "pt-detail-main" });
 
 		// ── 元数据区（图标 + 标签 + 值） ──
-		const meta = main.createDiv({ cls: "pt-detail-meta" });
+		const meta = headBlock.createDiv({ cls: "pt-detail-meta" });
 		const iconAuthor = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
 		const iconId = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
 		const iconDownload = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
@@ -687,14 +696,14 @@ export class PluginDetailDrawer {
 		}
 
 		// ── 描述（含来源信息 chip） ──
-		const descSection = main.createDiv({ cls: "pt-detail-desc-section" });
+		const descSection = headBlock.createDiv({ cls: "pt-detail-desc-section" });
 		const desc = cleanChineseSpaces(this.result?.translatedDesc || p.description);
 		if (desc) {
 			descSection.createDiv({ cls: "pt-detail-desc", text: desc });
 		}
 
 		// ── 操作按钮 ──
-		const actions = main.createDiv({ cls: "pt-detail-actions" });
+		const actions = headBlock.createDiv({ cls: "pt-detail-actions" });
 
 		// 安装状态：区分未安装 / 已安装(未启用) / 已启用
 		let isInstalled = false;
@@ -795,9 +804,8 @@ export class PluginDetailDrawer {
 			appendIconText(copyBtn, `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`, this.t("card.copy"));
 		};
 
-		// ── README 区（懒加载） ──
-		const readmeWrap = main.createDiv({ cls: "pt-detail-readme" });
-		const readmeHeader = readmeWrap.createDiv({ cls: "pt-detail-section-head" });
+		// ── README 标题行（移到 head-block：README 翻译/了解功能按钮随滚动常驻贴顶） ──
+		const readmeHeader = headBlock.createDiv({ cls: "pt-detail-section-head pt-detail-section-head--readme" });
 		readmeHeader.createSpan({ cls: "pt-detail-section-dot" });
 		readmeHeader.createSpan({
 			cls: "pt-detail-readme-title",
@@ -872,7 +880,8 @@ export class PluginDetailDrawer {
 			});
 		}
 
-		const readmeBody = readmeWrap.createDiv({ cls: "pt-detail-readme-body" });
+		// README 正文挂 main（head-block 外）：唯一可滚动区域，红框 1 之外的内容。
+		const readmeBody = main.createDiv({ cls: "pt-detail-readme-body" });
 		this.readmeBodyEl = readmeBody;
 		void this.loadReadme(readmeBody);
 
@@ -892,6 +901,21 @@ export class PluginDetailDrawer {
 		} else {
 			this.renderSimilarPanelInto(similarWrap);
 		}
+
+		// ── 头部块高度 → CSS 变量，供右栏相似推荐对齐头部底部 ──
+		// 头部为 absolute 固定块（不透明铺满顶部，不随滚动），右栏同样 absolute 挂在其下方；
+		// 头部实际高度随内容/pane 宽度变化，故用 JS 测量写入 --pt-detail-head-h，
+		// 右栏 top 取「该高度 + 间距」即可贴在头部正下方常驻。pane 宽度变化会重排头部，
+		// 用 ResizeObserver 同步，并在清理时 disconnect。
+		const syncHeadH = () => {
+			if (!this.drawerEl) return;
+			const h = headBlock.offsetHeight;
+			scroll.setCssProps({ "--pt-detail-head-h": `${h}px` });
+		};
+		window.requestAnimationFrame(syncHeadH);
+		const headRO = new ResizeObserver(syncHeadH);
+		headRO.observe(headBlock);
+		this._cleanupFns.push(() => headRO.disconnect());
 	}
 
 	private renderSimilarPanelInto(parent: HTMLElement) {

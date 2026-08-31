@@ -2710,6 +2710,12 @@ button.pt-card-install-btn--installed {
 	transition: transform var(--pt-duration-normal) var(--pt-ease), opacity var(--pt-duration-normal) var(--pt-ease);
 	padding: var(--pt-space-lg);
 	padding-top: var(--pt-space-xl);
+	/* 容器查询根：以「抽屉/pane 宽度」而非窗口宽度决定双栏断点，
+	 * 这样在 Obsidian 把插件视图放在窄侧栏时不会误触双栏。
+	 * 必须挂在 drawer（本身不滚动）上，不能挂到 .pt-detail-page-scroll：
+	 * container-type 隐含 contain: layout，会让该元素成为其内部 absolute 子元素的
+	 * containing block —— 一旦放在滚动容器上，右栏就相对滚动内容定位，跟着 README 滚走。 */
+	container-type: inline-size;
 }
 .pt-drawer--open {
 	transform: translateX(0);
@@ -2748,16 +2754,17 @@ button.pt-card-install-btn--installed {
 	height: 100%;
 	overflow-y: auto;
 	overflow-x: hidden;
-	scroll-behavior: smooth;
+	/* 顶部 padding = 头部固定块高度（JS 写入 --pt-detail-head-h），让 README
+	   正文从头部下方开始滚动；头部是 absolute 脱离文档流，需此占位避免遮挡。 */
+	padding-top: var(--pt-detail-head-h, 0px);
 	padding-bottom: var(--pt-space-2xl);
 	animation: pt-detail-fadein 0.25s var(--pt-ease);
-	/* 作为容器查询根：以「抽屉/pane 宽度」而非窗口宽度决定双栏断点，
-	 * 这样在 Obsidian 把插件视图放在窄侧栏时不会误触双栏。 */
-	container-type: inline-size;
 }
+/* 仅淡入、不含 transform：transform 会让滚动容器成为内部 sticky 头部的
+   containing block，导致吸顶基准偏移、滚动时头部轻微移动，故只用 opacity。 */
 @keyframes pt-detail-fadein {
-	from { opacity: 0; transform: translateY(8px); }
-	to   { opacity: 1; transform: translateY(0); }
+	from { opacity: 0; }
+	to   { opacity: 1; }
 }
 
 /* ── 内容内层（居中 max-width 提升长文本阅读舒适度） ── */
@@ -2778,31 +2785,43 @@ button.pt-card-install-btn--installed {
  * 双栏让「相似推荐」在阅读 README 时始终可见，不必滚到页面底部。
  * 从 720px 降到 640px：Obsidian 默认主编辑区约 600-800px，640px 让更多实际场景命中双栏。 */
 @container (min-width: 640px) {
+	/* 双栏采用「只有正文列滚动」：scroll 停止滚动，滚动下放到 .pt-detail-main。
+	   这样右栏作为 grid 列天然静止，既不必用 sticky（会抖动），也不必用 absolute
+	   （需手工计算 inner 居中偏移，脆弱且易与正文重叠）。 */
+	.pt-detail-page-scroll {
+		overflow: hidden;              /* 滚动交给 main 列 */
+		display: flex;                 /* 让 inner 撑满可用高度 */
+	}
 	.pt-detail-page-inner {
+		flex: 1;
+		min-height: 0;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 280px;
-		grid-template-areas:
-			"head  head"
-			"main  rail";
+		grid-template-rows: 100%;      /* 单行且行高受控，main 才能内部滚动 */
+		/* 头部固定块改 absolute 脱离 grid 流（drawer 直接子，详见 .pt-detail-head-block 注释），
+		   grid 只需承担 main + rail 双栏；head 占位由 scroll 的 padding-top 提供。 */
+		grid-template-areas: "main rail";
 		max-width: 1140px;
 		padding-left: var(--pt-space-xl);
 		padding-right: var(--pt-space-xl);
 	}
-	.pt-drawer-head { grid-area: head; }
-	.pt-detail-main { grid-area: main; min-width: 0; }
-	/* 右栏：粘在视口顶部，README 长滚时推荐常驻。
-	   用 margin-left 模拟原 column-gap（--pt-space-xl），避免 multicolumn 误报；轨道仍 280px。 */
+	.pt-detail-main {
+		grid-area: main;
+		min-width: 0;
+		min-height: 0;
+		overflow-y: auto;              /* 正文列独立滚动 */
+	}
+	/* 右栏：grid 列，随 grid 静止（scroll 已停止滚动）→ 天然常驻、零抖动。
+	   max-height: 100% + 自身滚动，推荐项较多时仍可完整浏览。 */
 	.pt-detail-similar-rail {
 		grid-area: rail;
 		align-self: start;
-		position: sticky;
-		top: var(--pt-space-lg);
+		max-height: 100%;
 		margin-left: var(--pt-space-xl);
-		border-top: none;
 		margin-top: 0;
+		border-top: none;
 		border-left: 1px solid var(--background-modifier-border);
 		padding: 24px 20px;
-		max-height: calc(100vh - 80px);
 		overflow-y: auto;
 	}
 	/* 右栏宽度有限：默认隐藏英文原名行（明细挂在译名 hover tooltip 上） */
@@ -2811,12 +2830,35 @@ button.pt-card-install-btn--installed {
 	}
 }
 
-/* Drawer 头部（整页模式：sticky + 毛玻璃，确保标题始终可见） */
+/* Drawer 头部（仅承载标题/关闭按钮本身；外层由 .pt-detail-head-block 统一 sticky） */
 .pt-drawer-head {
 	display: flex;
 	align-items: flex-start;
 	gap: var(--pt-space-sm);
-	margin-bottom: var(--pt-space-lg);
+}
+
+/*
+ * 详情页头部固定块：position:absolute 相对 .pt-drawer 顶部（drawer 是
+ * position:absolute/包含块），完全脱离滚动容器。
+ * 历史方案用 sticky，但 Chromium/Electron 下 sticky 即便无 backdrop-filter /
+ * transform，吸顶时仍有合成层亚像素抖动（每帧重算位置），表现为头部轻微
+ * 移动；改为 absolute 后头部彻底静止。滚动容器 scroll 通过
+ * padding-top = head-block 高度（CSS 变量 --pt-detail-head-h）占位，
+ * 让 README 正文从头部下方开始滚动。头部宽度铺满 drawer：left/right:0。
+ */
+.pt-detail-head-block {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 5;
+	padding: var(--pt-space-lg);
+	background: var(--background-primary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	box-shadow: 0 1px 0 color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
+}
+.pt-detail-head-block > .pt-drawer-head {
+	margin-bottom: var(--pt-space-md);
 	padding-bottom: var(--pt-space-md);
 	border-bottom: 1px solid var(--background-modifier-border);
 }
@@ -3148,7 +3190,8 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-md);
 	line-height: 1.7;
 	max-width: 680px;           /* 阅读友好宽度 */
-	margin-top: var(--pt-space-sm);
+	margin-top: var(--pt-space-lg);
+	padding-top: var(--pt-space-md);
 	color: var(--pt-text-muted, var(--text-muted));
 }
 .pt-detail-readme-body img {
