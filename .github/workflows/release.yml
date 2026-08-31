@@ -50,7 +50,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }} · CI 构建" \
+          TAG="${{ github.ref_name }}"
+          # 幂等保护：先查 release 是否已存在，已存在则跳过，避免重跑或本地/CI
+          # 重复发布时 `gh release create` 报同名 tag 已存在而失败退出。
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "✓ Release $TAG 已存在，跳过（幂等保护）。"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --title "$TAG · CI 构建" \
             --notes "由 CI 自动构建并附构建来源证明（artifact attestations）。" \
             dist/main.js dist/manifest.json dist/styles.css dist/versions.json
