@@ -549,11 +549,15 @@ export const STRINGS = {
 	"settings.tm.desc": { zh: "AI 与在线（腾讯/MyMemory）译文直接沉淀为 vault 笔记（单条 O(1) 写入、可随 Sync 同步、可手编），无需审核。" },
 	"settings.tm.clearApproved": { zh: "清除已采纳" },
 	"settings.tm.clearDesc": { zh: "删除「翻译记忆库」文件夹下全部已采纳笔记及其索引" },
+	"settings.tm.folder": { zh: "记忆库存放路径" },
+	"settings.tm.folder.desc": { zh: "vault 内翻译记忆笔记的文件夹（vault 根相对路径）。留空或保持默认「插件翻译记忆库」；设为子目录（如 01-附件/TM）可让记忆归整到你指定的位置。" },
+	"settings.tm.apply": { zh: "应用并迁移记忆库" },
 	"tm.clear.command": { zh: "清除翻译记忆库已采纳" },
 	"notice.tmNoApproved": { zh: "暂无已采纳的 TM" },
 	"notice.tmCleared": { zh: "已清除 {n} 条已采纳的 TM" },
 	"notice.tmApproved": { zh: "已采纳并写入 vault 笔记" },
 	"notice.tmRejected": { zh: "已忽略" },
+	"notice.tmMigrated": { zh: "已将 {n} 条记忆从默认文件夹迁移到新路径，并重新扫描" },
 
 	// 通知
 	"notice.ai.fail": { zh: "AI 智能排序暂不可用，已保留常规搜索结果（原因：" },

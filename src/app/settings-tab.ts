@@ -11,6 +11,7 @@ import type ChinesePluginMarket from "@app/main";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { normalizeBaseUrl, isLocalBaseUrl, isAISearchUsable } from "@shared/utils";
 import { BaiduTranslateClient } from "@translation/api/baidu";
+import { TM_FOLDER } from "@translation/memory/translation-memory";
 import { isWebGPUAvailable } from "@semantic/embedding";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { VIEW_TYPE } from "@shared/constants";
@@ -596,6 +597,27 @@ export class TranslatorSettingTab extends PluginSettingTab {
 									.setButtonText(this.t("settings.tm.clearApproved"))
 									.setDestructive()
 									.onClick(() => void this.plugin.clearApprovedTM())
+							);
+						},
+					},
+					{
+						name: this.t("settings.tm.folder"),
+						desc: this.t("settings.tm.folder.desc"),
+						render: (setting) => {
+							setting.addText((text) =>
+								text
+									.setPlaceholder(TM_FOLDER)
+									.setValue(this.plugin.settings.tmFolder)
+									.onChange(async (v) => {
+										await this.setControlValue("tmFolder", v.trim());
+									})
+							);
+							setting.addButton((btn) =>
+								btn
+									.setButtonText(this.t("settings.tm.apply"))
+									.onClick(async () => {
+										await this.plugin.migrateTMFromDefault();
+									})
 							);
 						},
 					},
