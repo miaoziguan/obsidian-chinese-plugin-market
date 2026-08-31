@@ -371,9 +371,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 * 手编的 TM 笔记仍能被实时发现，无需重启后全量扫描。
 	 */
 	private registerTMVaultEvents(): void {
-		const prefix = normalizePath(TM_FOLDER) + "/";
-		const isTMFile = (path: string) =>
-			path === normalizePath(TM_FOLDER) || path.startsWith(prefix);
+		const effective = this.tmFolderEffective();
+		const tmPaths = [normalizePath(TM_FOLDER), normalizePath(effective)];
+		const isTMFile = (path: string) => {
+			const p = normalizePath(path);
+			return tmPaths.includes(p) || tmPaths.some((base) => path.startsWith(base + "/"));
+		};
 
 		this.registerEvent(
 			this.app.vault.on("create", (file) => {
@@ -394,6 +397,37 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				}
 			}),
 		);
+	}
+
+	/** 生效的 TM 文件夹：用户自定义且非空则用自定义，否则默认 TM_FOLDER */
+	private tmFolderEffective(): string {
+		const v = this.settings.tmFolder?.trim();
+		return v ? normalizePath(v) : TM_FOLDER;
+	}
+
+	/** 把默认「插件翻译记忆库」下的已采纳笔记迁移到当前自定义路径并重扫索引。
+	 * 仅当 tmFolder 指向非默认路径时执行；否则仅重新扫描（等同应用）。 */
+	async migrateTMFromDefault(): Promise<void> {
+		const t = makeT();
+		const dst = this.tmFolderEffective();
+		const src = TM_FOLDER;
+		if (normalizePath(dst) === normalizePath(src)) {
+			await this.scanVaultTM();
+			return;
+		}
+		const files = this.collectTMFiles(src);
+		let n = 0;
+		for (const f of files) {
+			const content = await this.app.vault.cachedRead(f);
+			const e = parseTMNote(content);
+			if (e?.id) {
+				await writeTMNote(this.noteStorage, e, dst);
+				await removeTMNote(this.noteStorage, e.id, src);
+				n++;
+			}
+		}
+		await this.scanVaultTM();
+		new Notice(t("notice.tmMigrated", { n: String(n) }));
 	}
 
 	/** 单文件解析并回灌进 tmApproved（供 create 事件与增量重扫复用） */
@@ -1202,7 +1236,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		for (let i = 0; i < ids.length; i += BATCH) {
 			await Promise.all(
 				ids.slice(i, i + BATCH).map(async (id) => {
-					await removeTMNote(this.noteStorage, id);
+					await removeTMNote(this.noteStorage, id, this.tmFolderEffective());
 					this.translator.removeTMApproved(id);
 				})
 			);
@@ -1229,7 +1263,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				return;
 			}
 			try {
-				await writeTMNote(this.noteStorage, e);
+				await writeTMNote(this.noteStorage, e, this.tmFolderEffective());
 				this.translator.clearTMDirty(id);
 			} catch (err: unknown) {
 				logger.warn("[Chinese Plugin Market] 写入 TM 笔记失败，已保留待重试：", id, err);
@@ -1238,7 +1272,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const removed = this.translator.peekTMRemoved();
 		await mapWithConcurrency(removed, 20, async (id) => {
 			try {
-				await removeTMNote(this.noteStorage, id);
+				await removeTMNote(this.noteStorage, id, this.tmFolderEffective());
 				this.translator.clearTMRemoved(id);
 			} catch (err: unknown) {
 				logger.warn("[Chinese Plugin Market] 删除 TM 笔记失败，已保留待重试：", id, err);
@@ -1287,7 +1321,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 *   的少量笔记，未变的 6372 条直接信任快照，避免每次 reload 都重扫全 vault。
 	 */
 		private async scanVaultTM(): Promise<void> {
-		const folder = TM_FOLDER; // "插件翻译记忆库"（vault 根相对路径）
+		const folder = this.tmFolderEffective(); // 生效路径（默认或用户自定义）
 		// 只遍历 TM 文件夹子树（collectTMFiles 内部用 getAbstractFileByPath + 子树遍历，
 		// 不调用 vault.getFiles/getMarkdownFiles 等枚举全 vault 的 API，避免 Vault Enumeration）。
 		// 若极端环境下取不到文件夹对象，返回空集合；运行期新增/手编的 TM 笔记由

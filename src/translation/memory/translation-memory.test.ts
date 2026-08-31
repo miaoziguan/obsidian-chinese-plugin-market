@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { Translator } from "@domain/catalog/translator";
+import { MemoryNoteStorage } from "@translation/memory/note-port";
 import {
 	renderTMNote,
 	parseTMNote,
 	tmNotePath,
+	writeTMNote,
 	type TMEntry,
 } from "@translation/memory/translation-memory";
 
@@ -50,6 +52,23 @@ describe("TM 笔记序列化", () => {
 		expect(parseTMNote(note)!.id).toBe("a#b:c");
 	});
 });
+
+	it("writeTMNote 支持自定义 folder（记忆库可自定义路径）", async () => {
+		const notes = new MemoryNoteStorage();
+		const e: TMEntry = {
+			id: "a/b:c",
+			name: "测试名",
+			description: "描",
+			source: "human",
+			status: "approved",
+			confidence: 1,
+			created: 1700000000000,
+		};
+		await writeTMNote(notes, e, "我的记忆/TM");
+		expect(notes.notes.has("我的记忆/TM/a_b_c.md")).toBe(true);
+		// 自定义路径优先：默认文件夹不应被写入
+		expect(notes.notes.has("插件翻译记忆库/a_b_c.md")).toBe(false);
+	});
 
 	it("T1: source=online 的 TM 条目往返序列化保持来源", () => {
 		const e: TMEntry = {

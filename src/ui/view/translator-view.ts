@@ -41,6 +41,7 @@ import type ChinesePluginMarketPlugin from "@app/plugin";
 // 全局常量（VIEW_TYPE / LAYOUT / SEARCH_MODES / PLUGINS_URL）已收敛至 ./constants，
 // 作为唯一来源，避免 view 模块跨文件引用本中枢模块的常量（审计 P2-4）。
 import { VIEW_TYPE, LAYOUT } from "@shared/constants";
+import { TM_FOLDER } from "@translation/memory/translation-memory";
 import { cancelIdle } from "@shared/platform";
 
 /** 后台更新检测轮询间隔：对齐 stats 缓存 TTL（6h），避免过频网络请求 */
@@ -110,6 +111,8 @@ export interface ChinesePluginMarketSettings {
 	profiles: PluginProfile[];
 	/** 选品对比集：用户暂存比对清单的插件 id（跨会话持久化） */
 	compare: string[];
+	/** 翻译记忆库存放文件夹（vault 根相对路径）；留空或默认「插件翻译记忆库」 */
+	tmFolder: string;
 }
 
 /** 单个启用组合 Profile：命名 + 启用插件 id 列表 + 可选绑定工作区布局 */
@@ -152,6 +155,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	sortBy: "relevance",
 	favorites: [],
 	compare: [],
+	tmFolder: TM_FOLDER,
 	newWithinDays: null,
 	updatedWithinDays: null,
 	defaultNewWithinDays: null,

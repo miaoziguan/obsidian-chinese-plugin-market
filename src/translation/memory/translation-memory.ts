@@ -41,9 +41,9 @@ export function normalizeTMPath(path: string): string {
 }
 
 /** 安全文件名：插件 id 可能含 / : 等非法字符，统一转义 */
-export function tmNotePath(id: string): string {
+export function tmNotePath(id: string, folder: string = TM_FOLDER): string {
 	const safe = id.replace(/[\\/:#^|[\]]/g, "_");
-	return normalizeTMPath(`${TM_FOLDER}/${safe}.md`);
+	return normalizeTMPath(`${folder}/${safe}.md`);
 }
 
 /** 渲染 vault 笔记：frontmatter 机器可读，正文人类可读 */
@@ -100,16 +100,16 @@ export function parseTMNote(content: string): TMEntry | null {
 }
 
 /** 写入/更新单条 vault 笔记（Obsidian-native 单条 O(1) 写，经 NoteStoragePort 落盘） */
-export async function writeTMNote(notes: NoteStoragePort, e: TMEntry): Promise<void> {
-	const folder = notes.normalizePath(TM_FOLDER);
-	if (!notes.exists(folder)) {
+export async function writeTMNote(notes: NoteStoragePort, e: TMEntry, folder: string = TM_FOLDER): Promise<void> {
+	const folderPath = notes.normalizePath(folder);
+	if (!notes.exists(folderPath)) {
 		// 并发写入时可能竞态触发「已存在」，容错吞掉
-		await notes.createFolder(folder).catch(() => {});
+		await notes.createFolder(folderPath).catch(() => {});
 	}
-	await notes.writeNote(tmNotePath(e.id), renderTMNote(e));
+	await notes.writeNote(tmNotePath(e.id, folder), renderTMNote(e));
 }
 
 /** 删除单条 vault 笔记 */
-export async function removeTMNote(notes: NoteStoragePort, id: string): Promise<void> {
-	await notes.deleteNote(tmNotePath(id));
+export async function removeTMNote(notes: NoteStoragePort, id: string, folder: string = TM_FOLDER): Promise<void> {
+	await notes.deleteNote(tmNotePath(id, folder));
 }
