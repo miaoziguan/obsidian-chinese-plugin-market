@@ -5373,6 +5373,12 @@ button.pt-card-install-btn--installed {
 /*  #7 移动端响应式布局：单列卡片 + 工具栏溢出菜单       */
 /* ═══════════════════════════════════════════════════ */
 
+/* ⋮ 溢出按钮：默认隐藏，仅在 .pt-mobile（移动设备）或窄容器（≤520px）下显示，
+   避免桌面端与散开的 refresh / checkUpdate / AI 翻译按钮同时出现造成重复。 */
+.pt-overflow-btn {
+	display: none;
+}
+
 /* 移动端溢出菜单按钮（收起 刷新/AI翻译 等次要操作） */
 .pt-mobile .pt-overflow-btn {
 	display: inline-flex;
