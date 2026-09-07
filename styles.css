@@ -2760,6 +2760,23 @@ button.pt-card-install-btn--installed {
 	padding-bottom: var(--pt-space-2xl);
 	animation: pt-detail-fadein 0.25s var(--pt-ease);
 }
+
+/* 详情页文本可选中复制：显式开启 user-select，跨主题/版本确保自由选中。
+   部分 Obsidian 主题/设置会对容器默认设 user-select:none，导致详情正文选不中；
+   此处强制文本区域可选 + 文本光标提示，满足「自由选中复制」诉求。
+   选择器避开 .pt-detail-btn 等交互控件，按钮文字保持不可选、不被误选。 */
+.pt-drawer-title,
+.pt-drawer-subtitle,
+.pt-detail-desc,
+.pt-detail-meta,
+.pt-detail-meta-value,
+.pt-detail-readme-body,
+.pt-detail-readme-body .markdown-rendered {
+	user-select: text;
+	-webkit-user-select: text;
+	cursor: text;
+}
+
 /* 仅淡入、不含 transform：transform 会让滚动容器成为内部 sticky 头部的
    containing block，导致吸顶基准偏移、滚动时头部轻微移动，故只用 opacity。 */
 @keyframes pt-detail-fadein {
