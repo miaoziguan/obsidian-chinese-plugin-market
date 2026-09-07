@@ -3,6 +3,7 @@ import { type StoragePort } from "@data/storage/storage-port";
 import { type PluginStat, parseStatsJson } from "@domain/catalog/stats";
 import { type TrendSnapshot } from "@domain/recommend/trending";
 import { type TranslateResult, type DictEntry, type CoverageSnapshot } from "@domain/catalog/translator";
+import { emptyInstallHistory, type InstallHistoryFile } from "@domain/journal/install-history";
 
 /** 翻译缓存持久化结构（与主 data.json 分离，独立成 translator-cache.json）。 */
 export interface TranslatorPersistedData {
@@ -104,6 +105,34 @@ export class PluginStorage {
 			);
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 保存趋势历史失败：", e);
+		}
+	}
+
+	private get installHistoryFilePath(): string {
+		return `.obsidian/plugins/${this.pluginId}/install-history.json`;
+	}
+
+	/** 读取安装历史索引；缺失/损坏时返回空索引（不阻断首屏与已安装徽标） */
+	async loadInstallHistory(): Promise<InstallHistoryFile> {
+		try {
+			const adapter = this.storage;
+			if (!(await adapter.exists(this.installHistoryFilePath))) return emptyInstallHistory();
+			const text = await adapter.read(this.installHistoryFilePath);
+			const parsed = JSON.parse(text) as InstallHistoryFile;
+			if (!parsed || typeof parsed !== "object" || !parsed.entries) return emptyInstallHistory();
+			return parsed;
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 读取安装历史失败：", e);
+			return emptyInstallHistory();
+		}
+	}
+
+	/** 写安装历史索引（记录插件装/卸足迹；调用方亦 fire-and-forget，这里再兜一层） */
+	async saveInstallHistory(file: InstallHistoryFile): Promise<void> {
+		try {
+			await this.storage.write(this.installHistoryFilePath, JSON.stringify(file));
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 保存安装历史失败：", e);
 		}
 	}
 

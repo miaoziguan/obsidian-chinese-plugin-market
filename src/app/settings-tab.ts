@@ -627,8 +627,22 @@ export class TranslatorSettingTab extends PluginSettingTab {
 										await this.plugin.openTMFolder();
 									})
 							);
-						},
-					},
+							},
+							},
+							{
+							name: this.t("settings.review.folder"),
+							desc: this.t("settings.review.folder.desc"),
+							render: (setting) => {
+							setting.addText((text) =>
+								text
+									.setPlaceholder(this.plugin.getDefaultReviewFolder())
+									.setValue(this.plugin.settings.reviewFolder)
+									.onChange(async (v) => {
+										await this.setControlValue("reviewFolder", v.trim());
+									})
+							);
+							},
+							},
 				],
 			},
 			{
