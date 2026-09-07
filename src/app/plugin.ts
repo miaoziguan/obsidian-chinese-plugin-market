@@ -64,8 +64,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		enabledIds: Set<string>,
 	): Promise<void> {
 		try {
-			const file = await this.storage.loadInstallHistory();
-			const entries = mergeInstallDiff(file.entries, {
+			// 优先用内存中已加载的历史为基（避免每次读盘造成的异步 RMW 竞态丢写）；
+			// 内存未就绪时再读盘（首屏前、onload 预载尚未完成的极小窗口）。
+			const base = this.journalHistory ?? (await this.storage.loadInstallHistory());
+			const entries = mergeInstallDiff(base.entries, {
 				added,
 				removed,
 				installedIds,
@@ -73,9 +75,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				nameOf: (id) => id,
 				now: Date.now(),
 			});
-			file.entries = entries;
-			await this.storage.saveInstallHistory(file);
-			this.journalHistory = file; // 缓存到内存，供 getInstallFacts 同步读取
+			base.entries = entries;
+			await this.storage.saveInstallHistory(base);
+			this.journalHistory = base; // 缓存到内存，供 getInstallFacts 同步读取
 			this.journalTriedIds = new Set(Object.keys(entries));
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 记录安装历史失败：", e);

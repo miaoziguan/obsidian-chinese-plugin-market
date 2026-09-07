@@ -1010,7 +1010,6 @@ export class PluginDetailDrawer {
 				}
 				const editor = renderJournalEditor(inner, p.id, displayName, initial, {
 					t: this.t,
-					load: (id) => this.plugin.loadJournalEntry(id),
 					save: (e) => void this.plugin.saveJournalEntry(e),
 					facts: this.plugin.getInstallFacts(p.id),
 				});

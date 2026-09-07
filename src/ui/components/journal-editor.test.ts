@@ -121,7 +121,7 @@ describe("renderJournalEditor（评测台账编辑区）", () => {
 		const facts = container.querySelector(".pt-journal-facts")?.textContent ?? "";
 		expect(facts).toContain("journal.autoFacts");
 		expect(facts).toContain("journal.uninstalledAt");
-		expect(facts).toContain("journal.reinstallCount");
+		expect(facts).toContain("journal.installCount");
 		dispose();
 	});
 
