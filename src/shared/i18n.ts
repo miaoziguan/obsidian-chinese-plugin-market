@@ -210,6 +210,8 @@ export const STRINGS = {
 	"detail.readme.showOriginal": { zh: "查看原文" },
 	"detail.readme.translateFailed": { zh: "翻译失败，请重试。" },
 	"detail.readme.noContent": { zh: "请先加载 README。" },
+	"detail.readme.copy": { zh: "复制 README" },
+	"detail.readme.copy.done": { zh: "已复制" },
 	"detail.readme.noTranslator": {
 		zh: "请先在设置中配置 LLM（AI 搜索）或腾讯翻译 API。",
 	},
