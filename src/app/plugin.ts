@@ -52,6 +52,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	journalTriedIds: Set<string> = new Set();
 	/** 安装历史索引内存缓存（recordInstallDiff 维护 / onload 预载），供抽屉事实区同步读取 */
 	journalHistory: InstallHistoryFile | null = null;
+	/** 用户评测为 abandoned 的插件 id 集合（saveJournalEntry 增量维护 / onload 后台种子） */
+	journalAbandonedIds: Set<string> = new Set();
 
 	/**
 	 * 记录一次安装/卸载 diff 到历史索引（评测台账）。fire-and-forget：失败只 warn，
@@ -125,8 +127,35 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				await this.noteStorage.createFolder(dir);
 			}
 			await this.noteStorage.writeNote(`${dir}/${e.id}.md`, renderJournalNote(e));
+			// 增量维护「已弃用」集合（零额外 IO：本就在写盘）
+			if (e.status === "abandoned") this.journalAbandonedIds.add(e.id);
+			else this.journalAbandonedIds.delete(e.id);
 		} catch (err: unknown) {
 			logger.warn("[Chinese Plugin Market] 保存评测笔记失败：", err);
+		}
+	}
+
+	/** 后台种子「已弃用」集合：扫描评测笔记目录，解析 status=abandoned 填入集合后通知视图重渲染 */
+	private async ensureAbandonedIndex(): Promise<void> {
+		try {
+			const dir = this.journalFolder();
+			const files = await this.noteStorage.listMarkdown(dir);
+			const ids = new Set<string>();
+			for (const path of files) {
+				const text = await this.noteStorage.readNote(path);
+				const entry = parseJournalNote(text);
+				if (entry && entry.status === "abandoned") ids.add(entry.id);
+			}
+			this.journalAbandonedIds = ids;
+			// 注入已打开视图并触发重渲染（视图未创建时其 onOpen 会自然读到集合）
+			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+				const view = leaf.view;
+				if (view instanceof ChinesePluginMarketView) {
+					view.invalidateAndRender(false);
+				}
+			}
+		} catch {
+			// 目录不存在或无笔记：静默降级（集合保持空）
 		}
 	}
 
@@ -301,6 +330,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			.then((f) => {
 				this.journalHistory = f;
 				this.journalTriedIds = new Set(Object.keys(f.entries));
+				// 预载完成：通知已开视图重渲染，使「装过」筛选/徽标即时生效
+				this.refreshOpenViews();
 			})
 			.catch(() => {});
 		await this.loadSettings(allData);
@@ -727,6 +758,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.loadBambooSeries().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载竹林系列清单失败：", e),
 		);
+		// 后台异步种子「已弃用」集合（扫描评测笔记，不阻塞视图启动）
+		void this.ensureAbandonedIndex();
 
 		// TM 就绪：通知已打开的视图用最终数据重渲染一次。
 		this.refreshOpenViews();

@@ -34,6 +34,9 @@ export class FilterCache {
 	private _updatedWithinDays: number | null = null;
 	/** 上一次过滤所处的搜索模式（H1：AI 召回子集不得被关键词模式当前缀基础集复用） */
 	private _mode: SearchMode = "keyword";
+	/** 上一次的 triedFilter / abandonedFilter（缓存失效判断，避免切回「全部」复用已收窄子集） */
+	private _tried: TriedFilter = "all";
+	private _abandoned: AbandonedFilter = "all";
 
 	/** 将 FilterResult 的回写值同步到缓存 */
 	sync(result: FilterResult): void {
@@ -48,6 +51,8 @@ export class FilterCache {
 		this._newWithinDays = result.nextFilterNewWithinDays ?? null;
 		this._updatedWithinDays = result.nextFilterUpdatedWithinDays ?? null;
 		this._mode = result.nextFilterMode ?? "keyword";
+		this._tried = result.nextFilterTried ?? "all";
+		this._abandoned = result.nextFilterAbandoned ?? "all";
 	}
 
 	/** 生成传给 filterAndSortPlugins 的快照字段 */
@@ -55,7 +60,8 @@ export class FilterCache {
 		| "lastFiltered" | "lastFilterQuery" | "lastFilterSource"
 		| "lastFilterAuthor" | "lastFilterInstall"
 		| "lastFilterRecommendedOnly" | "lastFilterCategories"
-		| "lastFilterFavorites" | "lastFilterNewWithinDays" | "lastFilterUpdatedWithinDays" | "lastFilterMode"> {
+		| "lastFilterFavorites" | "lastFilterNewWithinDays" | "lastFilterUpdatedWithinDays" | "lastFilterMode"
+		| "lastFilterTried" | "lastFilterAbandoned"> {
 		return {
 			lastFiltered: this._list,
 			lastFilterQuery: this._query,
@@ -68,6 +74,8 @@ export class FilterCache {
 			lastFilterNewWithinDays: this._newWithinDays,
 			lastFilterUpdatedWithinDays: this._updatedWithinDays,
 			lastFilterMode: this._mode,
+			lastFilterTried: this._tried,
+			lastFilterAbandoned: this._abandoned,
 		};
 	}
 
@@ -90,6 +98,8 @@ export class FilterCache {
 		this._newWithinDays = null;
 		this._updatedWithinDays = null;
 		this._mode = "keyword";
+		this._tried = "all";
+		this._abandoned = "all";
 	}
 }
 
@@ -110,6 +120,12 @@ export type ChineseEcoFilter = "all" | "eco";
 
 /** 系列筛选（"all" 表示全部；"bamboo" 仅竹林中国系列插件） */
 export type SeriesFilter = "all" | "bamboo";
+
+/** 装过筛选（"all" 表示全部；"tried" 仅曾安装过，含已卸载） */
+export type TriedFilter = "all" | "tried";
+
+/** 已弃用筛选（"all" 表示全部；"abandoned" 仅用户评测 status=abandoned） */
+export type AbandonedFilter = "all" | "abandoned";
 
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。
@@ -158,6 +174,14 @@ export interface MatchOptions {
 	seriesFilter?: SeriesFilter;
 	/** 系列插件 id 集合（plugin-bamboo-series.json） */
 	bambooSeriesSet?: Set<string>;
+	/** 装过筛选："tried" 仅曾安装过（含已卸载） / "all" 全部 */
+	triedFilter?: TriedFilter;
+	/** 曾安装过的插件 id 集合（含已卸载），来自安装历史索引 */
+	journalTriedIds?: Set<string>;
+	/** 已弃用筛选："abandoned" 仅用户评测 status=abandoned / "all" 全部 */
+	abandonedFilter?: AbandonedFilter;
+	/** 用户评测为 abandoned 的插件 id 集合 */
+	journalAbandonedIds?: Set<string>;
 	/** 新上线窗口天数（number | null；null = 不过滤，7/30/90 生效） */
 	newWithinDays?: number | null;
 	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json（git history 解析） */
@@ -224,6 +248,10 @@ export function matchesPlugin(
 	if (opts.seriesFilter === "bamboo") {
 		if (opts.bambooSeriesSet?.has(p.id) !== true) return false;
 	}
+	// 装过筛选：仅保留曾安装过（含已卸载）的插件
+	if (opts.triedFilter === "tried" && !(opts.journalTriedIds?.has(p.id) ?? false)) return false;
+	// 已弃用筛选：仅保留用户评测 status=abandoned 的插件
+	if (opts.abandonedFilter === "abandoned" && !(opts.journalAbandonedIds?.has(p.id) ?? false)) return false;
 	// 仅看新上线：近 newWithinDays 天「首次进入官方市场」的插件才保留（null = 不过滤）。
 	// 时间源 = releaseDatesMap（插件真实上线日期，来自 obsidian-releases git history），
 	// 与用户是否见过无关，是稳定的插件维度。缺失/无记录则不命中。
@@ -298,6 +326,22 @@ export interface FilterParams {
 	seriesFilter?: SeriesFilter;
 	/** 系列插件 id 集合（plugin-bamboo-series.json） */
 	bambooSeriesSet?: Set<string>;
+	/** 装过筛选："tried" 仅曾安装过 / "all" 全部 */
+	triedFilter?: TriedFilter;
+	/** 曾安装过的插件 id 集合（含已卸载） */
+	journalTriedIds?: Set<string>;
+	/** 已弃用筛选："abandoned" 仅已弃用 / "all" 全部 */
+	abandonedFilter?: AbandonedFilter;
+	/** 用户评测为 abandoned 的插件 id 集合 */
+	journalAbandonedIds?: Set<string>;
+	/** 上一次的 triedFilter（缓存失效判断，避免切回「全部」时复用已收窄子集） */
+	lastFilterTried?: TriedFilter;
+	/** 上一次的 abandonedFilter（缓存失效判断） */
+	lastFilterAbandoned?: AbandonedFilter;
+	/** 回写的 triedFilter（供下次缓存失效判断） */
+	nextFilterTried?: TriedFilter;
+	/** 回写的 abandonedFilter（供下次缓存失效判断） */
+	nextFilterAbandoned?: AbandonedFilter;
 	/** 新上线窗口天数（number | null；null = 不过滤） */
 	newWithinDays?: number | null;
 	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json */
@@ -365,6 +409,10 @@ export interface FilterResult {
 	nextFilterCategories?: string[];
 	/** 回写的搜索模式（供下次缓存复用判定：AI 子集不得被关键词模式复用） */
 	nextFilterMode: SearchMode;
+	/** 回写的 triedFilter */
+	nextFilterTried?: TriedFilter;
+	/** 回写的 abandonedFilter */
+	nextFilterAbandoned?: AbandonedFilter;
 	/** 非 AI 路径下是否应清空残留的 aiSearchResult（视图据此置 null） */
 	clearAiResult: boolean;
 }
@@ -388,11 +436,15 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		chineseEcoFilter, chineseEcoSet,
 		seriesFilter, bambooSeriesSet,
+		triedFilter, journalTriedIds,
+		abandonedFilter, journalAbandonedIds,
 		selectedCategories, pluginTagMap,
 		hasHistoryTranslation,
 		releaseDatesMap,
 		newWithinDays, updatedWithinDays,
 		lastFilterUpdatedWithinDays = null,
+		lastFilterTried = "all",
+		lastFilterAbandoned = "all",
 	} = params;
 
 	const matchOpts: MatchOptions = {
@@ -401,6 +453,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		chineseEcoFilter, chineseEcoSet,
 		seriesFilter, bambooSeriesSet,
+		triedFilter, journalTriedIds,
+		abandonedFilter, journalAbandonedIds,
 		selectedCategories, pluginTagMap,
 		releaseDatesMap, newWithinDays, updatedWithinDays,
 		hasHistoryTranslation,
@@ -417,6 +471,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	let nextFilterNewWithinDays: number | null | undefined;
 	let nextFilterUpdatedWithinDays: number | null | undefined;
 	let nextFilterCategories: string[] | undefined;
+	let nextFilterTried: TriedFilter | undefined;
+	let nextFilterAbandoned: AbandonedFilter | undefined;
 	let clearAiResult = false;
 
 	if ((searchMode === "ai" || searchMode === "local") && query) {
@@ -495,6 +551,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 			lastFilterInstall === installFilter &&
 			lastFilterRecommendedOnly === recommendedOnly &&
 			lastFilterFavorites === favoriteFilter &&
+			lastFilterTried === triedFilter &&
+			lastFilterAbandoned === abandonedFilter &&
 			lastFilterNewWithinDays === (newWithinDays ?? null) &&
 			lastFilterUpdatedWithinDays === (updatedWithinDays ?? null) &&
 			sameCategories &&
@@ -558,6 +616,8 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		nextFilterNewWithinDays,
 		nextFilterUpdatedWithinDays,
 		nextFilterCategories,
+		nextFilterTried,
+		nextFilterAbandoned,
 		nextFilterMode: searchMode,
 		clearAiResult,
 	};

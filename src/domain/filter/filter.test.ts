@@ -249,6 +249,29 @@ describe("matchesPlugin", () => {
 
 // ── filterAndSortPlugins ──
 
+describe("matchesPlugin · 评测台账筛选（阶段4）", () => {
+	it("装过筛选：triedFilter='tried' 仅保留 journalTriedIds 内的插件", () => {
+		const opts = baseMatchOpts({ triedFilter: "tried", journalTriedIds: new Set(["obsidian-git"]) });
+		expect(matchesPlugin(P_GIT, "", opts)).toBe(true); // 在集合内
+		expect(matchesPlugin(P_MIND, "", opts)).toBe(false); // 不在集合内
+	});
+	it("已弃用筛选：abandonedFilter='abandoned' 仅保留 journalAbandonedIds 内的插件", () => {
+		const opts = baseMatchOpts({ abandonedFilter: "abandoned", journalAbandonedIds: new Set(["calendar"]) });
+		expect(matchesPlugin(P_CAL, "", opts)).toBe(true);
+		expect(matchesPlugin(P_GIT, "", opts)).toBe(false);
+	});
+	it("装过/已弃用筛选为 'all' 时不过滤", () => {
+		const opts = baseMatchOpts({
+			triedFilter: "all",
+			journalTriedIds: new Set(),
+			abandonedFilter: "all",
+			journalAbandonedIds: new Set(),
+		});
+		expect(matchesPlugin(P_GIT, "", opts)).toBe(true);
+		expect(matchesPlugin(P_CAL, "", opts)).toBe(true);
+	});
+});
+
 describe("filterAndSortPlugins", () => {
 	it("空查询返回全量（保持来源顺序）", () => {
 		const r = filterAndSortPlugins(baseFilterParams());

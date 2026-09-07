@@ -46,7 +46,7 @@ describe("renderJournalEditor（评测台账编辑区）", () => {
 	it("渲染标题、状态/评分/弃用原因控件与备注框", () => {
 		const { dispose } = renderJournalEditor(container, "p1", "插件1", null, {
 			t,
-			load: async () => null,
+
 			save: () => {},
 		});
 		expect(container.querySelector(".pt-journal-title")?.textContent).toBe("journal.title");
@@ -62,10 +62,10 @@ describe("renderJournalEditor（评测台账编辑区）", () => {
 		const save = vi.fn();
 		const { dispose } = renderJournalEditor(container, "p1", "插件1", null, {
 			t,
-			load: async () => null,
+
 			save,
 		});
-		const usingBtn = [...container.querySelectorAll<HTMLElement>(".pt-journal-chip")].find(
+		const usingBtn = Array.from(container.querySelectorAll<HTMLElement>(".pt-journal-chip")).find(
 			(b) => b.textContent === "在用",
 		)!;
 		usingBtn.click();
@@ -81,10 +81,10 @@ describe("renderJournalEditor（评测台账编辑区）", () => {
 		const save = vi.fn();
 		const { dispose } = renderJournalEditor(container, "p1", "插件1", null, {
 			t,
-			load: async () => null,
+
 			save,
 		});
-		const chips = [...container.querySelectorAll<HTMLElement>(".pt-journal-chip")];
+		const chips = Array.from(container.querySelectorAll<HTMLElement>(".pt-journal-chip"));
 		const bug = chips.find((b) => b.textContent === "有 bug")!;
 		const heavy = chips.find((b) => b.textContent === "太重")!;
 		bug.click();
@@ -100,7 +100,7 @@ describe("renderJournalEditor（评测台账编辑区）", () => {
 		const save = vi.fn();
 		const { dispose } = renderJournalEditor(container, "p1", "插件1", null, {
 			t,
-			load: async () => null,
+
 			save,
 		});
 		const ta = container.querySelector<HTMLTextAreaElement>("textarea.pt-journal-note")!;
@@ -114,7 +114,7 @@ describe("renderJournalEditor（评测台账编辑区）", () => {
 	it("事实区按 host.facts 渲染首次安装/卸载/重装", () => {
 		const { dispose } = renderJournalEditor(container, "p1", "插件1", null, {
 			t,
-			load: async () => null,
+
 			save: () => {},
 			facts: { firstInstalled: 1000, lastInstalled: 2000, uninstalled: 3000, installCount: 3 },
 		});
@@ -128,11 +128,11 @@ describe("renderJournalEditor（评测台账编辑区）", () => {
 	it("无评测时控件为空态（状态未按下、星标全灭、备注空）", () => {
 		const { dispose } = renderJournalEditor(container, "p1", "插件1", null, {
 			t,
-			load: async () => null,
+
 			save: () => {},
 			facts: {},
 		});
-		const pressed = [...container.querySelectorAll<HTMLElement>(".pt-journal-chip")].filter(
+		const pressed = Array.from(container.querySelectorAll<HTMLElement>(".pt-journal-chip")).filter(
 			(b) => b.getAttribute("aria-pressed") === "true",
 		);
 		expect(pressed.length).toBe(0);
