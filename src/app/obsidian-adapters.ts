@@ -6,7 +6,7 @@
  * 由 app/plugin.ts 在 onload 最早期完成注入。
  */
 
-import { Platform, TFile, requestUrl, normalizePath, type App } from "obsidian";
+import { Platform, TFile, TFolder, requestUrl, normalizePath, type App } from "obsidian";
 import { type HttpClient, type HttpRequestOptions, type HttpResponse } from "@data/net/http-port";
 import { type StoragePort } from "@data/storage/storage-port";
 import { type NoteStoragePort } from "@translation/memory/note-port";
@@ -41,30 +41,130 @@ export class ObsidianStoragePort implements StoragePort {
 	}
 }
 
-/** NoteStoragePort 实现：走 Vault 的笔记 CRUD（TM 条目以用户可见笔记落盘） */
+/**
+ * NoteStoragePort 实现：按路径前缀在两种后端间择一。
+ *
+ * - **vault 内路径**（用户在设置里自定义的 vault 相对路径）：走 Vault 高层 API，
+ *   笔记进 vault 文件树、可被用户检索/手编，行为与旧版一致。
+ * - **`.obsidian/` 路径**（默认落点）：走底层 `vault.adapter`，绕过 vault 文件树 /
+ *   create·delete 事件 / metadataCache——不被其他插件检索、不污染 vault、
+ *   写入 .obsidian 私有目录（与 translator-cache / vector-index 同级）。
+ *
+ * 两条后端对 NoteStoragePort 八能力的语义一致，故 TM 业务逻辑（写/扫/迁/解析）
+ * 无需感知后端差异。
+ */
 export class ObsidianNoteStorage implements NoteStoragePort {
 	constructor(private app: App) {}
+
+	/** 是否落在 .obsidian 私有目录：走底层 adapter，绕过 vault 文件树/事件/metadataCache */
+	private isAdapterPath(p: string): boolean {
+		return normalizePath(p).startsWith(".obsidian/");
+	}
 
 	normalizePath(path: string): string {
 		return normalizePath(path);
 	}
-	exists(path: string): boolean {
-		return this.app.vault.getAbstractFileByPath(path) != null;
+
+	exists(path: string): boolean | Promise<boolean> {
+		const p = normalizePath(path);
+		if (this.isAdapterPath(p)) return this.app.vault.adapter.exists(p);
+		return this.app.vault.getAbstractFileByPath(p) != null;
 	}
+
 	async createFolder(path: string): Promise<void> {
-		await this.app.vault.createFolder(path);
+		const p = normalizePath(path);
+		if (this.isAdapterPath(p)) {
+			// adapter.mkdir 不递归：逐级创建，已存在静默容错（供并发写入竞态使用）
+			const parts = p.split("/");
+			let cur = "";
+			for (const part of parts) {
+				cur = cur ? `${cur}/${part}` : part;
+				if (cur && !(await this.app.vault.adapter.exists(cur))) {
+					await this.app.vault.adapter.mkdir(cur).catch(() => {});
+				}
+			}
+			return;
+		}
+		await this.app.vault.createFolder(p);
 	}
+
 	async writeNote(path: string, content: string): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(path);
+		const p = normalizePath(path);
+		if (this.isAdapterPath(p)) {
+			await this.app.vault.adapter.write(p, content);
+			return;
+		}
+		const file = this.app.vault.getAbstractFileByPath(p);
 		if (file instanceof TFile) {
 			await this.app.vault.modify(file, content);
 		} else {
-			await this.app.vault.create(path, content);
+			await this.app.vault.create(p, content);
 		}
 	}
+
 	async deleteNote(path: string): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(path);
+		const p = normalizePath(path);
+		if (this.isAdapterPath(p)) {
+			if (await this.app.vault.adapter.exists(p)) {
+				await this.app.vault.adapter.remove(p);
+			}
+			return;
+		}
+		const file = this.app.vault.getAbstractFileByPath(p);
 		if (file instanceof TFile) await this.app.fileManager.trashFile(file);
+	}
+
+	async listMarkdown(folder: string): Promise<string[]> {
+		const base = normalizePath(folder);
+		if (this.isAdapterPath(base)) {
+			const listing = await this.app.vault.adapter.list(base);
+			return listing.files.filter(
+				(f) => f.startsWith(base + "/") && f.endsWith(".md"),
+			);
+		}
+		const af = this.app.vault.getAbstractFileByPath(base);
+		if (af instanceof TFolder) {
+			const out: string[] = [];
+			const walk = (fo: TFolder) => {
+				for (const child of fo.children) {
+					if (child instanceof TFile) {
+						if (child.path.endsWith(".md")) out.push(child.path);
+					} else if (child instanceof TFolder) {
+						walk(child);
+					}
+				}
+			};
+			walk(af);
+			return out;
+		}
+		return [];
+	}
+
+	async readNote(path: string): Promise<string> {
+		const p = normalizePath(path);
+		if (this.isAdapterPath(p)) return this.app.vault.adapter.read(p);
+		// vault 路径：优先 cachedRead（命中 metadataCache），失败回退 adapter 直读
+		try {
+			const file = this.app.vault.getAbstractFileByPath(p);
+			if (!(file instanceof TFile)) throw new Error("not a file");
+			return await this.app.vault.cachedRead(file);
+		} catch {
+			return this.app.vault.adapter.read(p);
+		}
+	}
+
+	async statMtime(path: string): Promise<number> {
+		const p = normalizePath(path);
+		if (this.isAdapterPath(p)) {
+			try {
+				const s = await this.app.vault.adapter.stat(p);
+				return s?.mtime ?? 0;
+			} catch {
+				return 0;
+			}
+		}
+		const file = this.app.vault.getAbstractFileByPath(p);
+		return file instanceof TFile ? file.stat?.mtime ?? 0 : 0;
 	}
 }
 

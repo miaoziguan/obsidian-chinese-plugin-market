@@ -11,7 +11,6 @@ import type ChinesePluginMarket from "@app/main";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { normalizeBaseUrl, isLocalBaseUrl, isAISearchUsable } from "@shared/utils";
 import { BaiduTranslateClient } from "@translation/api/baidu";
-import { TM_FOLDER } from "@translation/memory/translation-memory";
 import { isWebGPUAvailable } from "@semantic/embedding";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { VIEW_TYPE } from "@shared/constants";
@@ -606,7 +605,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 						render: (setting) => {
 							setting.addText((text) =>
 								text
-									.setPlaceholder(TM_FOLDER)
+									.setPlaceholder(this.plugin.getDefaultTMFolder())
 									.setValue(this.plugin.settings.tmFolder)
 									.onChange(async (v) => {
 										await this.setControlValue("tmFolder", v.trim());
@@ -615,8 +614,17 @@ export class TranslatorSettingTab extends PluginSettingTab {
 							setting.addButton((btn) =>
 								btn
 									.setButtonText(this.t("settings.tm.apply"))
+									.setTooltip(this.t("settings.tm.apply.tip"))
 									.onClick(async () => {
 										await this.plugin.migrateTMFromDefault();
+									})
+							);
+							setting.addButton((btn) =>
+								btn
+									.setButtonText(this.t("settings.tm.openFolder"))
+									.setTooltip(this.t("settings.tm.openFolder.tip"))
+									.onClick(async () => {
+										await this.plugin.openTMFolder();
 									})
 							);
 						},

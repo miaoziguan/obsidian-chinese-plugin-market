@@ -6,7 +6,7 @@
  * 视图本身由 translator-view.ts 的 ChinesePluginMarketView 承载。
  */
 
-import { Plugin, Notice, Menu, TFile, TFolder, Platform, normalizePath } from "obsidian";
+import { Plugin, Notice, Menu, TFile, Platform, normalizePath } from "obsidian";
 import { DirectInstallModal } from "@app/direct-install";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
@@ -332,6 +332,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			callback: () => void this.clearApprovedTM(),
 		});
 
+		// 命令：打开翻译记忆库文件夹（桌面端用系统文件管理器定位）
+		this.addCommand({
+			id: "tm-open-folder",
+			name: t("settings.tm.openFolder"),
+			callback: () => void this.openTMFolder(),
+		});
+
 		// 命令：一键检查已安装插件更新（桌面/移动端均可在命令面板触发）
 		this.addCommand({
 			id: "check-updates",
@@ -372,6 +379,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 */
 	private registerTMVaultEvents(): void {
 		const effective = this.tmFolderEffective();
+		// .obsidian 私有目录的变更不广播 vault create/delete 事件，靠启动时全扫覆盖，无需注册
+		if (effective.startsWith(".obsidian/")) return;
 		const tmPaths = [normalizePath(TM_FOLDER), normalizePath(effective)];
 		const isTMFile = (path: string) => {
 			const p = normalizePath(path);
@@ -383,7 +392,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				if (!(file instanceof TFile) || !isTMFile(file.path)) return;
 				if (!file.path.endsWith(".md")) return;
 				// 延迟到 metadataCache 就绪后读 frontmatter（新建笔记瞬时可能未建索引）
-				void this.resolveTMFileIntoIndex(file);
+				void this.resolveTMFileIntoIndex(file.path);
 			}),
 		);
 		this.registerEvent(
@@ -399,10 +408,26 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		);
 	}
 
-	/** 生效的 TM 文件夹：用户自定义且非空则用自定义，否则默认 TM_FOLDER */
+	/** 翻译记忆库默认落点：藏进 .obsidian 私有目录，不污染 vault、不被其他插件检索 */
+	private defaultTMFolder(): string {
+		return normalizePath(`.obsidian/plugins/${this.manifest.id}/tm`);
+	}
+
+	/** 供设置面板展示的默认落点（公开只读） */
+	getDefaultTMFolder(): string {
+		return this.defaultTMFolder();
+	}
+
+	/**
+	 * 生效的 TM 文件夹：
+	 * - 设置留空 → 新默认（.obsidian 私有目录）；
+	 * - 设置等于旧默认「插件翻译记忆库」→ 视为未配置，同样走新默认（触发旧数据迁移）；
+	 * - 否则用用户自定义路径（vault 相对，可含子目录）。
+	 */
 	private tmFolderEffective(): string {
 		const v = this.settings.tmFolder?.trim();
-		return v ? normalizePath(v) : TM_FOLDER;
+		if (!v || v === TM_FOLDER) return this.defaultTMFolder();
+		return normalizePath(v);
 	}
 
 	/** 把默认「插件翻译记忆库」下的已采纳笔记迁移到当前自定义路径并重扫索引。
@@ -415,10 +440,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			await this.scanVaultTM();
 			return;
 		}
-		const files = this.collectTMFiles(src);
+		const files = await this.collectTMFiles(src);
 		let n = 0;
-		for (const f of files) {
-			const content = await this.app.vault.cachedRead(f);
+		for (const p of files) {
+			const content = await this.noteStorage.readNote(p);
 			const e = parseTMNote(content);
 			if (e?.id) {
 				await writeTMNote(this.noteStorage, e, dst);
@@ -430,17 +455,48 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		new Notice(t("notice.tmMigrated", { n: String(n) }));
 	}
 
-	/** 单文件解析并回灌进 tmApproved（供 create 事件与增量重扫复用） */
-	private async resolveTMFileIntoIndex(file: TFile): Promise<void> {
-		const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
-		let e: TMEntry | null = null;
-		if (fm && fm.id) {
-			e = this.entryFromFrontmatter(fm);
-		} else {
-			e = parseTMNote(await this.app.vault.cachedRead(file));
+	/**
+	 * 启动静默迁移：若 vault 根旧默认「插件翻译记忆库」尚有笔记，迁到当前生效路径（默认 .obsidian）。
+	 * 仅在生效路径 ≠ 旧默认时执行；先写后删确保不丢数据；无旧数据则跳过（零副作用）。
+	 */
+	private async autoMigrateTMIfNeeded(): Promise<void> {
+		const effective = this.tmFolderEffective();
+		const legacy = TM_FOLDER;
+		if (normalizePath(effective) === normalizePath(legacy)) return;
+		const files = await this.collectTMFiles(legacy);
+		if (files.length === 0) return;
+		let n = 0;
+		for (const p of files) {
+			const content = await this.noteStorage.readNote(p);
+			const e = parseTMNote(content);
+			if (e?.id) {
+				await writeTMNote(this.noteStorage, e, effective);
+				await removeTMNote(this.noteStorage, e.id, legacy);
+				n++;
+			}
 		}
+		if (n > 0) {
+			logger.debug(`[Chinese Plugin Market] 自动迁移 ${n} 条旧翻译记忆到：${effective}`);
+		}
+	}
+
+	/** 用系统文件管理器打开当前记忆库文件夹（桌面端有效；移动端/失败给提示） */
+	async openTMFolder(): Promise<void> {
+		const t = makeT();
+		const path = this.tmFolderEffective();
+		try {
+			(this.app as any).openWithDefaultApp(normalizePath(path));
+		} catch {
+			new Notice(t("settings.tm.openFolder.failed", { path }));
+		}
+	}
+
+	/** 单文件解析并回灌进 tmApproved（供扫描与增量重扫复用），path 为 vault 相对路径 */
+	private async resolveTMFileIntoIndex(path: string): Promise<void> {
+		const content = await this.noteStorage.readNote(path);
+		const e = parseTMNote(content);
 		if (e && e.id) {
-			this._lastTMIdsByPath[file.path] = e.id;
+			this._lastTMIdsByPath[path] = e.id;
 			if (e.status === "approved") {
 				this.translator.tmApproved[e.id] = e;
 			} else {
@@ -471,6 +527,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		if (this.settings.embeddingSource === "local") {
 			window.setTimeout(() => this.warmupLocalEmbedding(), 3000);
 		}
+		// 启动先把 vault 根旧默认「插件翻译记忆库」静默迁到新落点（默认 .obsidian），避免旧数据丢失
+		await this.autoMigrateTMIfNeeded();
 		// 启动双向回灌：vault 手编笔记 → tmApproved 索引（必须完成后再 mergeOffline）
 		try {
 			await this.scanVaultTM();
@@ -1280,35 +1338,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		});
 	}
 
-	/**
-	 * 收集 TM 文件夹下的 markdown 文件。
-	 *
-	 * 只遍历目标文件夹的「子树」（`TFolder.children`），不调用 vault.getFiles /
-	 * getMarkdownFiles 等会枚举整个 vault 的 API——避免 Vault Enumeration 权限审查告警。
-	 *
-	 * 路径先经 normalizePath 规范化（处理中文/分隔符编码），绝大多数环境可命中文件夹对象；
-	 * 仅在极端环境下 getAbstractFileByPath 仍返回 null 时返回空集合，此时 TM 笔记发现改由
-	 * vault 的 create 事件增量捕获（见 registerTMVaultEvents），不回退到全 vault 枚举。
-	 */
-	private collectTMFiles(folder: string): TFile[] {
-		const normalized = this.app.vault.getAbstractFileByPath(normalizePath(folder));
-		if (normalized instanceof TFolder) {
-			return this.collectMarkdownRecursive(normalized);
-		}
-		return [];
-	}
-
-	/** 递归收集 TFolder 下的所有 markdown 文件（按路径后缀判断，兼容 TFile 无 extension 的环境） */
-	private collectMarkdownRecursive(folder: TFolder): TFile[] {
-		const out: TFile[] = [];
-		for (const child of folder.children) {
-			if (child instanceof TFile) {
-				if (child.path.endsWith(".md")) out.push(child);
-			} else if (child instanceof TFolder) {
-				out.push(...this.collectMarkdownRecursive(child));
-			}
-		}
-		return out;
+	/** 列出 TM 文件夹下全部 .md 笔记路径（含子目录），经 NoteStoragePort 适配 vault/adapter 双后端 */
+	private async collectTMFiles(folder: string): Promise<string[]> {
+		return this.noteStorage.listMarkdown(folder);
 	}
 
 	/**
@@ -1326,7 +1358,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 不调用 vault.getFiles/getMarkdownFiles 等枚举全 vault 的 API，避免 Vault Enumeration）。
 		// 若极端环境下取不到文件夹对象，返回空集合；运行期新增/手编的 TM 笔记由
 		// registerTMVaultEvents 的 create/delete 事件增量捕获，无需枚举全 vault。
-		const files = this.collectTMFiles(folder);
+		const files = await this.collectTMFiles(folder);
 		// 进度：准备阶段（即使空文件夹也标记 done，避免加载页永远停在旧文案）
 		this.tmProgress = { phase: "resolving", current: 0, total: files.length };
 		if (files.length === 0) {
@@ -1349,20 +1381,21 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 		// ── 增量核对：只处理变化的文件 ──
 		const snapMtimes = snapshot?.mtimes ?? {};
-		const pending: TFile[] = [];
+		const pending: string[] = [];
 		let unchangedCount = 0;
-		for (const f of files) {
-			const prev = snapMtimes[f.path];
-			if (prev !== undefined && prev === f.stat?.mtime) {
+		for (const p of files) {
+			const prev = snapMtimes[p];
+			const mtime = await this.noteStorage.statMtime(p);
+			if (prev !== undefined && prev === mtime) {
 				// mtime 未变：信任快照，跳过（占绝大多数）
 				unchangedCount++;
 			} else {
-				pending.push(f); // 新增 / 修改 → 需重扫
+				pending.push(p); // 新增 / 修改 → 需重扫
 			}
 		}
 		// 删除检测：快照里记录过、但当前文件列表已不存在的笔记 → 从 tmApproved 移除
 		if (snapshot) {
-			const currentPaths = new Set(files.map((f) => f.path));
+			const currentPaths = new Set(files);
 			for (const p of Object.keys(snapMtimes)) {
 				if (!currentPaths.has(p)) {
 					const id = snapshot.idsByPath[p];
@@ -1397,7 +1430,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 * 仅处理 mtime 变化/新增/删除的少量笔记；未变的信任快照。
 	 */
 	private async runIncrementalRescan(
-		pending: TFile[],
+		pending: string[],
 		snapMtimes: Record<string, number>,
 		snapshot: { version: 1; mtimes: Record<string, number>; idsByPath: Record<string, string>; entries: Record<string, TMEntry> } | null,
 	): Promise<void> {
@@ -1409,33 +1442,19 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.tmProgress = { phase: "indexing", current: 0, total: pending.length };
 		const BATCH = 200; // 提高并发批次，加快回退读盘
 		const newMtimes: Record<string, number> = { ...snapMtimes };
-		let diskReads = 0;
 		for (let i = 0; i < pending.length; i += BATCH) {
 			const batch = pending.slice(i, i + BATCH);
 			await Promise.all(
-				batch.map(async (f) => {
-					// 优先内存路径（metadataCache 多半已就绪）；否则回退 cachedRead
-					const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
-					let e: TMEntry | null = null;
-					if (fm && fm.id) {
-						if (fm.status !== "approved") {
-							newMtimes[f.path] = f.stat?.mtime ?? 0;
-							delete this._lastTMIdsByPath[f.path];
-							return;
-						}
-						e = this.entryFromFrontmatter(fm);
-					} else {
-						diskReads++;
-						e = parseTMNote(await this.app.vault.cachedRead(f));
-					}
-					newMtimes[f.path] = f.stat?.mtime ?? 0;
-					if (e && e.id) {
-						this._lastTMIdsByPath[f.path] = e.id;
-					}
-					if (e && e.status === "approved") {
+				batch.map(async (p) => {
+					const content = await this.noteStorage.readNote(p);
+					const e = parseTMNote(content);
+					newMtimes[p] = await this.noteStorage.statMtime(p);
+					if (!e || !e.id) return;
+					this._lastTMIdsByPath[p] = e.id;
+					if (e.status === "approved") {
 						// vault 笔记权威：以笔记为准覆盖内存索引（用户手编更新）
 						this.translator.tmApproved[e.id] = e;
-					} else if (e && e.status !== "approved") {
+					} else {
 						// 状态变化（如改为 suggested）：从已采纳层移除
 						delete this.translator.tmApproved[e.id];
 					}
@@ -1449,32 +1468,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 
 		logger.debug(
-			`[Chinese Plugin Market] TM 增量重扫：回退读盘 ${diskReads} 篇、待处理 ${pending.length} 篇`
+			`[Chinese Plugin Market] TM 增量重扫：待处理 ${pending.length} 篇`
 		);
 
 		// 落盘新快照（后台，不阻塞首屏）
 		await this.saveTMApprovedSnapshot(newMtimes);
-	}
-
-	/** 从 frontmatter 构造 TMEntry（复用回灌解析逻辑） */
-	private entryFromFrontmatter(fm: Record<string, unknown>): TMEntry | null {
-		// 脏 frontmatter 防护：缺 id 时 fm.id 为 undefined，String(undefined)==="undefined"
-		// 会绕过空值判断污染 tmApproved 索引（语义召回/去重失真，#27）。
-		// 必须是非空字符串，非法值直接丢弃。
-		const rawId = fm.id;
-		if (typeof rawId !== "string" || !rawId.trim()) return null;
-		const id = rawId.trim();
-		return {
-			id,
-			name: String(fm.name ?? id),
-			description: String(fm.description ?? ""),
-			source: (fm.source as TMEntry["source"]) ?? "human",
-			status: (fm.status as TMEntry["status"]) ?? "approved",
-			confidence: Number(fm.confidence) || 0,
-			created: Number(fm.created) || Date.now(),
-			promoted: fm.promoted ? Number(fm.promoted) : undefined,
-			flagged: fm.flagged === true || fm.flagged === "true",
-		};
 	}
 
 	/** TM 已采纳快照（基线）：path→mtime 映射 + 解析结果，热启动免重扫全 vault */

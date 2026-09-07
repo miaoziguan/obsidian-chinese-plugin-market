@@ -45,6 +45,22 @@ class FakeVault {
 		remove: async (p: string) => {
 			this.files.delete(p);
 		},
+		list: async (p: string) => {
+			const base = p.endsWith("/") ? p : p + "/";
+			const files = [...this.files.keys()].filter(
+				(f) => f.startsWith(base) && f.endsWith(".md"),
+			);
+			const folders = [...this.folders.keys()].filter((f) => f.startsWith(base));
+			return { files, folders };
+		},
+		stat: async (p: string) => {
+			if (this.files.has(p)) return { mtime: 1, ctime: 0, size: 0, type: "file" } as any;
+			return { mtime: 0, ctime: 0, size: 0, type: "folder" } as any;
+		},
+		mkdir: async (p: string) => {
+			p = p.replace(/\/$/, "");
+			if (!this.folders.has(p)) this.folders.set(p, new FakeTFolder(p));
+		},
 	};
 
 	getAbstractFileByPath(p: string): FakeTFile | FakeTFolder | null {
@@ -116,17 +132,18 @@ describe("TM 笔记落盘（集成）", () => {
 		expect(note?.source).toBe("ai");
 	});
 
-	it("scanVaultTM 能从 vault 笔记重建 tmApproved 索引（重启后不丢）", async () => {
+	it("scanVaultTM 能从 vault 自定义路径笔记重建 tmApproved 索引（重启后不丢）", async () => {
 		const { TFolder, TFile } = await import("obsidian");
 		const vault = new FakeVault() as any;
-		const folder = new (TFolder as any)(TM_FOLDER);
-		vault.folders.set(TM_FOLDER, folder);
+		const customFolder = "我的记忆库"; // vault 内自定义路径（非旧默认「插件翻译记忆库」）
+		const folder = new (TFolder as any)(customFolder);
+		vault.folders.set(customFolder, folder);
 		// 预置一个已采纳笔记
 		const note = `---\nid: "calendar"\nname: "日历"\ndescription: "追踪每日笔记"\nsource: human\nstatus: approved\nconfidence: 1\n---\n\n# 日历\n\n追踪每日笔记`;
-		const f = new (TFile as any)(`${TM_FOLDER}/calendar.md`);
-		(f as any).path = `${TM_FOLDER}/calendar.md`;
+		const f = new (TFile as any)(`${customFolder}/calendar.md`);
+		(f as any).path = `${customFolder}/calendar.md`;
 		(f as any).content = note;
-		vault.files.set(`${TM_FOLDER}/calendar.md`, f);
+		vault.files.set(`${customFolder}/calendar.md`, f);
 		folder.children.push(f);
 
 		const app = {
@@ -137,6 +154,8 @@ describe("TM 笔记落盘（集成）", () => {
 		Object.assign(plugin, {
 			manifest: { id: "test-plugin" },
 			app,
+			settings: { tmFolder: customFolder } as any,
+			noteStorage: new ObsidianNoteStorage(app),
 			translator: new Translator(),
 			_data: {} as Record<string, unknown>,
 			loadData: vi.fn(async () => ({})),
@@ -147,6 +166,50 @@ describe("TM 笔记落盘（集成）", () => {
 		await (plugin as any).scanVaultTM();
 		expect(plugin.translator.isTMApproved("calendar")).toBe(true);
 		expect(plugin.translator.tmApproved["calendar"].name).toBe("日历");
+	});
+
+	it("默认路径藏进 .obsidian 时 scanVaultTM 仍能回灌，且 vault 可见文件树无污染", async () => {
+		const vault = new FakeVault() as any;
+		const app = {
+			vault,
+			metadataCache: { getFileCache: () => null, resolved: true },
+		} as any;
+		const plugin = new ChinesePluginMarketPlugin({} as never, {} as never);
+		Object.assign(plugin, {
+			manifest: { id: "test-plugin" },
+			app,
+			settings: {} as any, // 留空 → 默认 .obsidian 私有目录
+			noteStorage: new ObsidianNoteStorage(app),
+			translator: new Translator(),
+			_data: {} as Record<string, unknown>,
+			loadData: vi.fn(async () => ({})),
+		});
+		(plugin as any).waitMetadataResolved = async () => {};
+
+		const effective = (plugin as any).tmFolderEffective();
+		expect(effective).toBe(`.obsidian/plugins/test-plugin/tm`);
+
+		// 经 NoteStorage 写入默认落点（底层 adapter 后端，绕过 vault 文件树）
+		const notes = new ObsidianNoteStorage(app);
+		const e = {
+			id: "docker",
+			name: "Docker",
+			description: "容器化部署",
+			source: "ai",
+			status: "approved",
+			confidence: 0.9,
+			created: Date.now(),
+			promoted: Date.now(),
+		} as any;
+		await writeTMNote(notes, e, effective);
+
+		await (plugin as any).scanVaultTM();
+		expect(plugin.translator.isTMApproved("docker")).toBe(true);
+		expect(plugin.translator.tmApproved["docker"].name).toBe("Docker");
+
+		// 底层 adapter 确实落了盘（真实 Obsidian 中 .obsidian 写入不进 vault 文件树，
+		// 因而不会被其他插件检索——#46 的核心诉求；FakeVault 无法区分后端，仅验证落盘）
+		expect(vault.files.has(`${effective}/docker.md`)).toBe(true);
 	});
 });
 
