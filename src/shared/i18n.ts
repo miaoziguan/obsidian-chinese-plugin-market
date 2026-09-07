@@ -225,7 +225,7 @@ export const STRINGS = {
 	"journal.notePlaceholder": { zh: "记下踩过的坑、为什么留 / 走、替代方案…" },
 	"journal.autoFacts": { zh: "自动记录" },
 	"journal.uninstalledAt": { zh: "卸载于" },
-	"journal.reinstallCount": { zh: "重装次数" },
+	"journal.installCount": { zh: "安装次数" },
 	"card.tried": { zh: "装过" },
 	"settings.review.folder": { zh: "评测台账笔记目录" },
 	"settings.review.folder.desc": { zh: "留空 = 默认藏进 .obsidian 私有目录；填 vault 相对路径可让笔记出现在文件树" },

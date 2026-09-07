@@ -13,8 +13,6 @@ import { VERDICT_PRESETS, type JournalEntry, type JournalStatus } from "@domain/
 
 export interface JournalEditorHost {
 	t: (key: I18nKey) => string;
-	/** 读取当前插件的评测（无则 null） */
-	load: (id: string) => Promise<JournalEntry | null>;
 	/** 保存（内部自行防抖，fire-and-forget） */
 	save: (entry: JournalEntry) => void;
 	/** 自动记录的事实（只读展示） */
@@ -121,9 +119,9 @@ export function renderJournalEditor(
 				text: ` · ${t("journal.uninstalledAt")} ${fmtDate(host.facts.uninstalled)}`,
 			});
 		}
-		if (host.facts.installCount && host.facts.installCount > 1) {
+		if (host.facts.installCount) {
 			facts.createSpan({
-				text: ` · ${t("journal.reinstallCount")} ${host.facts.installCount}`,
+				text: ` · ${t("journal.installCount")} ${host.facts.installCount}`,
 			});
 		}
 	}
