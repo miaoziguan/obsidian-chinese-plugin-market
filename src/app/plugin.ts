@@ -440,19 +440,55 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			await this.scanVaultTM();
 			return;
 		}
-		const files = await this.collectTMFiles(src);
-		let n = 0;
-		for (const p of files) {
-			const content = await this.noteStorage.readNote(p);
-			const e = parseTMNote(content);
-			if (e?.id) {
-				await writeTMNote(this.noteStorage, e, dst);
-				await removeTMNote(this.noteStorage, e.id, src);
-				n++;
-			}
-		}
+		// 手动触发：不设预算（用户主动执行且有 Notice 反馈），但同样走并发批处理
+		const { done } = await this.migrateTMFiles(src, dst);
 		await this.scanVaultTM();
-		new Notice(t("notice.tmMigrated", { n: String(n) }));
+		new Notice(t("notice.tmMigrated", { n: String(done) }));
+	}
+
+	/**
+	 * 批量迁移 TM 笔记：先写后删（不丢数据），单条容错，按批并发。
+	 *
+	 * 串行 await 时每条笔记要 3 次 IO，数千条会耗时数十秒；而启动迁移位于
+	 * scanVaultTM 之前，会一路阻塞 tmApprovedReady → 首屏撞上 15s 安全阀。
+	 * 故按 BATCH 并发（与 flushTMVault 对齐），并支持 budgetMs 预算：
+	 * 到点即中止剩余批次，未迁移的源文件仍在，下个 reload 继续（先写后删，幂等）。
+	 */
+	private async migrateTMFiles(
+		src: string,
+		dst: string,
+		budgetMs = 0,
+	): Promise<{ done: number; total: number; timedOut: boolean }> {
+		const files = await this.collectTMFiles(src);
+		if (files.length === 0) return { done: 0, total: 0, timedOut: false };
+		const deadline = budgetMs > 0 ? Date.now() + budgetMs : 0;
+		const BATCH = 20;
+		let done = 0;
+		for (let i = 0; i < files.length; i += BATCH) {
+			if (deadline && Date.now() > deadline) {
+				return { done, total: files.length, timedOut: true };
+			}
+			const batch = files.slice(i, i + BATCH);
+			const oks = await Promise.all(
+				batch.map(async (p) => {
+					try {
+						const content = await this.noteStorage.readNote(p);
+						const e = parseTMNote(content);
+						if (!e?.id) return false;
+						await writeTMNote(this.noteStorage, e, dst);
+						await removeTMNote(this.noteStorage, e.id, src);
+						return true;
+					} catch (err: unknown) {
+						// 单条失败不中断整体迁移：一条坏笔记不该卡死启动链路
+						// （迁移未完成只是少了部分 vault 译名，下个 reload 会重试）。
+						logger.warn(`[Chinese Plugin Market] 迁移单条翻译记忆失败，已跳过：${p}`, err);
+						return false;
+					}
+				}),
+			);
+			done += oks.filter(Boolean).length;
+		}
+		return { done, total: files.length, timedOut: false };
 	}
 
 	/**
@@ -463,20 +499,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const effective = this.tmFolderEffective();
 		const legacy = TM_FOLDER;
 		if (normalizePath(effective) === normalizePath(legacy)) return;
-		const files = await this.collectTMFiles(legacy);
-		if (files.length === 0) return;
-		let n = 0;
-		for (const p of files) {
-			const content = await this.noteStorage.readNote(p);
-			const e = parseTMNote(content);
-			if (e?.id) {
-				await writeTMNote(this.noteStorage, e, effective);
-				await removeTMNote(this.noteStorage, e.id, legacy);
-				n++;
-			}
-		}
-		if (n > 0) {
-			logger.debug(`[Chinese Plugin Market] 自动迁移 ${n} 条旧翻译记忆到：${effective}`);
+		const t0 = Date.now();
+		// 预算 8s：并发后绝大多数库在数秒内搬完；极端大库到点先放行首屏，
+		// 剩余笔记（源文件未删）下个 reload 继续，避免首屏被迁移拖到 15s 安全阀。
+		const { done, total, timedOut } = await this.migrateTMFiles(legacy, effective, 8000);
+		if (done > 0 || timedOut) {
+			logger.debug(
+				`[Chinese Plugin Market] 自动迁移 ${done}/${total} 条旧翻译记忆到：${effective}` +
+					`（耗时 ${Date.now() - t0}ms${timedOut ? "，已达预算上限，剩余下个 reload 继续" : ""}）`,
+			);
 		}
 	}
 
@@ -527,8 +558,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		if (this.settings.embeddingSource === "local") {
 			window.setTimeout(() => this.warmupLocalEmbedding(), 3000);
 		}
-		// 启动先把 vault 根旧默认「插件翻译记忆库」静默迁到新落点（默认 .obsidian），避免旧数据丢失
-		await this.autoMigrateTMIfNeeded();
+		// 启动先把 vault 根旧默认「插件翻译记忆库」静默迁到新落点（默认 .obsidian），避免旧数据丢失。
+		// 必须容错：迁移只是「数据搬家」，失败绝不能中断后面的 scanVaultTM —— 否则
+		// tmApprovedReady 永不 resolve，首屏只能干等 15s 安全阀（曾因 .obsidian/.../tm/
+		// 目录未建导致 adapter.write 抛 ENOENT，整条延迟初始化在此中断）。
+		try {
+			await this.autoMigrateTMIfNeeded();
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 旧翻译记忆迁移失败（不影响启动，下个 reload 会重试）：", e);
+		}
 		// 启动双向回灌：vault 手编笔记 → tmApproved 索引（必须完成后再 mergeOffline）
 		try {
 			await this.scanVaultTM();
@@ -542,19 +580,30 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				delete this.translator.cache[id];
 			}
 		}
-		// 恢复落盘向量索引（跨会话复用，无则下次搜索时重建）
-		// PERF-7：向量索引与 stats/trending/分类索引彼此无依赖，并行加载缩短延迟初始化耗时。
-		// loadVectorIndex 走 SQLite（反量化数千向量）最慢，与后三者并行可让 stats/trending 提前就绪。
-		const [, stats, trending] = await Promise.all([
-			this.loadVectorIndex(),
-			this.storage.loadStatsCache(),
-			this.storage.loadTrendingHistory(),
-		]);
+		// PERF（方案 1）：原先三者 Promise.all 后「统一赋值」，导致最快的 stats/trending
+		// 被最慢的 loadVectorIndex（sql.js WASM 初始化 + 数千向量反量化 + 归一化）拖住才可用，
+		// 而首屏 ensureDataLoaded 会空转等 cachedStats —— 加载页因此长时间停在
+		// 「正在合并离线翻译词典」。改为各自就绪即赋值（谁先完成谁先可用）。
+		this.storage
+			.loadStatsCache()
+			.then((s) => {
+				// 恢复 stats 缓存（带 TTL，超期返回 null 由视图重新拉取）
+				this.cachedStats = s;
+			})
+			.catch((e) => logger.warn("[Chinese Plugin Market] 恢复 stats 缓存失败：", e));
+		this.storage
+			.loadTrendingHistory()
+			.then((t) => {
+				// 恢复趋势采样历史（跨会话累积才能算出真实下载增速，H1/H2 修复）
+				this.cachedTrendingHistory = t;
+			})
+			.catch((e) => logger.warn("[Chinese Plugin Market] 恢复趋势历史失败：", e));
+		// 恢复落盘向量索引（跨会话复用，无则下次搜索时重建）。
+		// 不 await：它最慢且首屏用不到（仅 AI / 本地语义搜索的向量召回需要），
+		// 后台加载即可；完成后再通知已打开的视图重渲染一次，
+		// 与原先「await 后统一重渲」的语义保持一致。
+		void this.loadVectorIndex().then(() => this.refreshOpenViews());
 		// 注：本地 embedding 预热已在上方并行启动，无需在此再次触发。
-		// 恢复 stats 缓存（带 TTL，超期返回 null 由视图重新拉取）
-		this.cachedStats = stats;
-		// 恢复趋势采样历史（跨会话累积才能算出真实下载增速，H1/H2 修复）
-		this.cachedTrendingHistory = trending;
 		// 后台异步加载插件分类索引（不阻塞视图启动，加载完成后同步更新 pluginTagMap）
 		this.loadPluginTags().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载分类索引失败：", e),
@@ -572,8 +621,16 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			logger.warn("[Chinese Plugin Market] 后台加载竹林系列清单失败：", e),
 		);
 
-		// TM/索引就绪：通知已打开的视图用最终数据重渲染一次。
-		// 视图尚未创建时无需处理——其 onOpen 会自然读到已就绪的数据。
+		// TM 就绪：通知已打开的视图用最终数据重渲染一次。
+		this.refreshOpenViews();
+		// 注：向量索引后台加载完成后会再调用一次 refreshOpenViews（见上方 .then）。
+	}
+
+	/**
+	 * 通知所有已打开的翻译视图用最新数据重渲染一次。
+	 * 视图尚未创建时无需处理——其 onOpen 会自然读到已就绪的数据。
+	 */
+	private refreshOpenViews(): void {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 			const view = leaf.view;
 			if (view instanceof ChinesePluginMarketView) {
@@ -1932,7 +1989,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 						const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
 						if (n === 0 || n === 1) return v; // 零向量原样返回；已是单位向量免拷贝
 						const inv = 1 / n;
-						return new Float32Array(v.length).map((_, i) => v[i] * inv);
+						// 原地归一化（方案 3）：getAllVecs 每次反量化都返回全新的 Float32Array
+						// （store 内部只存量化的 bytes），就地改写无副作用；相比
+						// `new Float32Array(len).map(...)` 省掉一次全量临时数组分配
+						// 与逐元素闭包回调（6000×512 规模下可观）。
+						for (let i = 0; i < v.length; i++) v[i] *= inv;
+						return v;
 					});
 					const model = store.getMeta("model") || "";
 					const hash = store.getMeta("hash") || "";

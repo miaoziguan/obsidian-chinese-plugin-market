@@ -142,9 +142,16 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			? q(ctx.scrollCardLayer, ".pt-empty-hint")
 			: null;
 		try {
+			// PERF 插桩：首屏分阶段耗时打点（定位加载页停留真因，见下方 logger.debug 汇总）
+			const t0 = performance.now();
+			let tFetch = t0;
+			let tTm = t0;
+			let tCov = t0;
+			let tStatsWait = t0;
 			// 首屏默认走 jsDelivr，但仍可能因网络/版本受限失败。
 			// 失败时按优先级自动探测其它镜像（jsDelivr→ghproxy→github），命中即用。
 			let data = await ctx.fetchPlugins();
+			tFetch = performance.now();
 			// 拉取成功后缓存到本地（离线重启时秒开，不受网络影响）
 			// 性能：写独立文件而非内嵌 data.json（1.6MB 大对象曾拖慢每一次防抖保存）
 		void ctx.savePluginListCache(data);
@@ -180,6 +187,7 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			} finally {
 				window.clearInterval(tmProgressTimer);
 			}
+			tTm = performance.now();
 			if (progressHint) progressHint.textContent = ctx.t("loading.translating");
 			// 计算并记录覆盖率快照（趋势追踪：跨版本对比）。
 			// 已采纳译名（tmApproved，含原批量词典沉淀的 vault 笔记）作为开箱即用覆盖统计来源。
@@ -187,15 +195,22 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			const covStat = computeCoverage(new Set(data.map((p) => p.id)), ctx.translator.tmApproved, td.cache);
 			ctx.translator.recordCoverage(covStat, ctx.manifest.version);
 			ctx.saveTranslatorData();
+			tCov = performance.now();
 
 			// 同步合并已缓存的 stats（首屏不空白）并快照已安装状态。
-			// 等 cachedStats 就绪（onload 异步加载可能慢于视图打开），避免竞态下
-			// statsMap 为空导致 downloads/updated 未写入、进而「更新」维度筛空。
-			// 最多等 8s；超时仍空则主动重新从磁盘读一次 stats 缓存做最后兜底（不阻断首屏）。
-			const deadline = Date.now() + 8000;
+			// PERF（方案 2）：原「最多等 8s」会把首屏死死钉住——cachedStats 的赋值原先卡在
+			// initDeferredLoad 的 `await Promise.all([...])` 之后，必须等最慢的 loadVectorIndex
+			// （sql.js WASM 初始化 + 数千向量反量化 + 归一化）完成，而首屏文案却停在
+			// 「合并离线翻译词典」，表面像词典合并慢，实为空转等向量索引。
+			// 现在 stats/trending 已改为「就绪即赋值」的独立 .then（见 plugin.initDeferredLoad），
+			// 首屏只需一个极短窗口即可命中；超时不再阻塞，交给下方已有的
+			// fetchStatsAndMerge 异步补齐（stats 非渲染必需，只影响 downloads/updated 两列）。
+			if (progressHint) progressHint.textContent = ctx.t("loading.stats");
+			const deadline = Date.now() + 300;
 			while (!ctx.cachedStats && Date.now() < deadline) {
 				await new Promise((r) => window.setTimeout(r, 50));
 			}
+			tStatsWait = performance.now();
 			if (!ctx.cachedStats) {
 				try {
 					const reloaded = await ctx.loadStatsCache();
@@ -209,6 +224,16 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			// 未命中项先给原文兜底渲染，真正的在线翻译推迟到「当前结果集可见时」按需进行。
 			const { results: offline } = ctx.translator.mergeOffline(data);
 			ctx.translatedResults = offline;
+			// PERF 插桩汇总：确认首屏真实耗时分布（重点看 waitStats 是否仍吃满）
+			logger.debug(
+				`[Chinese Plugin Market] 首屏耗时 fetch=${Math.round(tFetch - t0)}ms` +
+					` tmReady=${Math.round(tTm - tFetch)}ms` +
+					` coverage=${Math.round(tCov - tTm)}ms` +
+					` waitStats=${Math.round(tStatsWait - tCov)}ms` +
+					` mergeOffline=${Math.round(performance.now() - tStatsWait)}ms` +
+					` total=${Math.round(performance.now() - t0)}ms` +
+					` plugins=${data.length} statsHit=${!!ctx.cachedStats}`,
+			);
 			// 离线命中（bulk/user）已写入 cache，落盘一次供下次秒开
 			ctx.saveTranslatorData();
 

@@ -1,0 +1,25 @@
+perf: 首屏秒开（修复 TM 目录未创建导致的启动中断 + stats 空转 8s）
+
+fix(translation-memory): writeTMNote 建目录判断补 await
+
+exists 在 adapter 后端返回 Promise，未 await 时 `!promise` 恒为 false，
+createFolder 从未执行 → .obsidian/.../tm/ 目录从不创建 → 桌面端
+adapter.write 抛 ENOENT → 延迟初始化中断 → scanVaultTM 未执行 →
+tmApprovedReady 不 resolve → 首屏死等 15s 安全阀（vault 译名亦不回灌）。
+
+perf(plugin): cachedStats/cachedTrendingHistory 就绪即赋值
+
+原在 `await Promise.all` 后统一赋值，使最快的 stats 被最慢的 loadVectorIndex
+（sql.js WASM + 数千向量反量化）拖住；首屏 waitStats 由 8s 降至 300ms。
+loadVectorIndex 改为后台加载，完成后再 refreshOpenViews。
+
+perf(plugin): TM 迁移改为 BATCH=20 并发 + 8s 预算保护
+
+原串行每条 3 次 IO，数千条耗时数十秒且阻塞首屏；先写后删，未迁移的源文件
+保留，下个 reload 继续（幂等）。手动迁移 migrateTMFromDefault 复用同一实现。
+
+fix(obsidian-adapters): writeNote 写前递归建父目录；listMarkdown 目录不存在时容错
+perf(plugin): 向量归一化改为原地计算，省去临时数组分配
+feat(i18n): 加载页新增「正在加载插件统计数据…」阶段文案
+chore(view-data): 首屏各阶段 performance 打点（debug 日志）
+docs: 新增 RELEASE-NOTES-2.48.0.md

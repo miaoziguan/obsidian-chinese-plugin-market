@@ -102,7 +102,10 @@ export function parseTMNote(content: string): TMEntry | null {
 /** 写入/更新单条 vault 笔记（Obsidian-native 单条 O(1) 写，经 NoteStoragePort 落盘） */
 export async function writeTMNote(notes: NoteStoragePort, e: TMEntry, folder: string = TM_FOLDER): Promise<void> {
 	const folderPath = notes.normalizePath(folder);
-	if (!notes.exists(folderPath)) {
+	// 必须 await：exists 在 adapter 后端（.obsidian 路径）返回 Promise，
+	// 未 await 时 `!promise` 恒为 false → 建目录分支永不执行 → tm/ 目录从未创建，
+	// 后续 writeNote 在桌面端直接抛 ENOENT（根因）。
+	if (!(await notes.exists(folderPath))) {
 		// 并发写入时可能竞态触发「已存在」，容错吞掉
 		await notes.createFolder(folderPath).catch(() => {});
 	}
