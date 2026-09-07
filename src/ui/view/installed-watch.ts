@@ -61,6 +61,17 @@ export function startInstalledWatch(ctx: ViewContext): () => void {
 		const changed = new Set<string>();
 		for (const id of after) if (!before.has(id)) changed.add(id);
 		for (const id of before) if (!after.has(id)) changed.add(id);
+
+		// 评测台账：把本次 diff 合并进安装历史索引（历史只从本插件启用后开始记录；
+		// 这一层把已运行的监听直接转化为「装过 / 卸过」足迹，无需新增任何监听）。
+		const added = new Set<string>();
+		const removed = new Set<string>();
+		for (const id of after) if (!before.has(id)) added.add(id);
+		for (const id of before) if (!after.has(id)) removed.add(id);
+		if (added.size > 0 || removed.size > 0) {
+			void ctx.plugin.recordInstallDiff(added, removed, after, ctx.enabledIds ?? new Set());
+		}
+
 		if (changed.size === 0) return;
 
 		logger.debug(

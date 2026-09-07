@@ -26,6 +26,8 @@ import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/tr
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import { makeT, type TFunc, type I18nKey } from "@shared/i18n";
 import { cleanChineseSpaces } from "@shared/utils";
+import type { JournalEntry } from "@domain/journal/journal-entry";
+import { renderJournalEditor } from "@ui/components/journal-editor";
 import { formatDownloads, formatUpdated } from "@domain/catalog/stats";
 import { buildReadmeUrl, rewriteReadmeUrls, classifyNetworkError } from "@domain/catalog/mirror";
 import type { SimilarCandidate } from "@domain/recommend/similar";
@@ -99,6 +101,27 @@ export interface DrawerHostPlugin {
 		total: number;
 		error?: string;
 	};
+	/**
+	 * 记录一次安装/卸载 diff 到评测台账的历史索引（评测台账阶段 2）。
+	 * 由 installed-watch 监听插件目录变化时调用；fire-and-forget，失败只 warn，
+	 * 绝不影响首屏与已安装徽标刷新。
+	 */
+	recordInstallDiff: (
+		added: Set<string>,
+		removed: Set<string>,
+		installedIds: Set<string>,
+		enabledIds: Set<string>,
+	) => Promise<void>;
+	// 评测台账（P3）：抽屉内的「我的评测」编辑区所需端口
+	journalEnabled: () => boolean;
+	loadJournalEntry: (id: string) => Promise<JournalEntry | null>;
+	saveJournalEntry: (e: JournalEntry) => Promise<void>;
+	getInstallFacts: (id: string) => {
+		firstInstalled?: number;
+		lastInstalled?: number;
+		uninstalled?: number | null;
+		installCount?: number;
+	} | undefined;
 }
 
 export interface DrawerOptions {
@@ -182,6 +205,8 @@ export class PluginDetailDrawer {
 	private _boundKeydown: (e: KeyboardEvent) => void;
 	private _boundBackdropClick: (e: MouseEvent) => void;
 	private _cleanupFns: (() => void)[] = [];
+	/** 评测编辑区 dispose（重渲/关闭时释放，确保防抖窗口内的编辑落盘） */
+	private _journalDispose?: () => void;
 
 	private readonly t: TFunc = makeT();
 
@@ -971,6 +996,28 @@ export class PluginDetailDrawer {
 		const headRO = new ResizeObserver(syncHeadH);
 		headRO.observe(headBlock);
 		this._cleanupFns.push(() => headRO.disconnect());
+
+		// 评测台账（P3）：抽屉内「我的评测」编辑区。
+		// 挂 inner 末尾；initial 需读盘（异步），故 .then 注入；抽屉可能在异步
+		// 期间重建，用 !this.drawerEl 二次守卫避免挂到旧 DOM。
+		if (this.plugin.journalEnabled()) {
+			this._journalDispose?.(); // 重渲时先释放上一次编辑器（同步）
+			this._journalDispose = undefined;
+			void this.plugin.loadJournalEntry(p.id).then((initial) => {
+				if (!this.drawerEl) {
+					this._journalDispose = undefined;
+					return;
+				}
+				const editor = renderJournalEditor(inner, p.id, displayName, initial, {
+					t: this.t,
+					load: (id) => this.plugin.loadJournalEntry(id),
+					save: (e) => void this.plugin.saveJournalEntry(e),
+					facts: this.plugin.getInstallFacts(p.id),
+				});
+				this._journalDispose = editor.dispose;
+			});
+			this._cleanupFns.push(() => this._journalDispose?.());
+		}
 	}
 
 	private renderSimilarPanelInto(parent: HTMLElement) {

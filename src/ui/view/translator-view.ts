@@ -112,6 +112,8 @@ export interface ChinesePluginMarketSettings {
 	compare: string[];
 	/** 翻译记忆库存放文件夹（vault 根相对路径）；留空或默认「插件翻译记忆库」 */
 	tmFolder: string;
+	/** 评测台账笔记存放文件夹（vault 根相对路径）；留空 = 默认藏进 .obsidian 私有目录 */
+	reviewFolder: string;
 }
 
 /** 单个启用组合 Profile：命名 + 启用插件 id 列表 + 可选绑定工作区布局 */
@@ -155,6 +157,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	favorites: [],
 	compare: [],
 	tmFolder: "", // 留空 = 默认藏进 .obsidian 私有目录（不污染 vault、不被其他插件检索）
+	reviewFolder: "", // 留空 = 默认藏进 .obsidian 私有目录下的 reviews/
 	newWithinDays: null,
 	updatedWithinDays: null,
 	defaultNewWithinDays: null,
@@ -434,6 +437,7 @@ export class ChinesePluginMarketView extends ItemView {
 			get outdatedIds() { return self.outdatedIds; },
 			get outdatedInfo() { return self.outdatedInfo; },
 			get installingIds() { return self.installingIds; },
+			get journalTriedIds() { return self.plugin.journalTriedIds; },
 			app: self.app,
 			// 卡片高度已固定（CSS contain + 锁高），描述展开不再改变布局，无需重绘
 			onDescToggle: () => {},

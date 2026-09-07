@@ -119,6 +119,8 @@ export interface CardRenderContext {
 	installedIds: Set<string>;
 	/** 已启用插件 id 集合 */
 	enabledIds: Set<string>;
+	/** 评测台账：曾安装过的插件 id（含已卸载），供卡片「装过」徽标 */
+	journalTriedIds?: Set<string>;
 	/** AI 搜索结果（含排序理由，可选） */
 	aiSearchResult: AISearchResult | null;
 	/** 选品对比：当前已选中的插件 id 集合（用于卡片初始高亮态） */
@@ -228,6 +230,8 @@ interface CardRefs {
 	healthBadge: HTMLElement;
 	/** 「新」标记（近 30 天首次见），纯文字融入作者行，常驻隐藏，applyCardState 填充 */
 	newBadge: HTMLElement;
+	/** 「装过」标记：曾安装（含已卸载，不含当前已安装），融入作者行，常驻隐藏，applyCardState 填充 */
+	triedBadge: HTMLElement;
 }
 
 const cardRefsMap = new WeakMap<HTMLElement, CardRefs>();
@@ -316,6 +320,11 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const newBadge = metaInfo.createSpan({ cls: "pt-card-new-badge" });
 	newBadge.setAttribute("aria-hidden", "true");
 	newBadge.setCssStyles({ display: "none" });
+
+	// 「装过」标记：曾安装（含已卸载，不含当前已安装），融入作者行，常驻隐藏，applyCardState 填充
+	const triedBadge = metaInfo.createSpan({ cls: "pt-card-tried-badge" });
+	triedBadge.setAttribute("aria-hidden", "true");
+	triedBadge.setCssStyles({ display: "none" });
 
 	// ── 描述（固定行数截断展示，点击穿透到整卡委托打开详情页） ──
 	// 不再把描述区当成独立可点击元素：原方案 C 点描述 toggle 展开会占用大块可操作区、
@@ -438,7 +447,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		nameSpan, originalName, installBtn, insightBtn, compareBtn, favBtn, macosBtn, toggleSwitch, uninstallBtn,
 		descEl, statline, spark, sparkPath, dlChip, dlText, clkChip, clkText,
 		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, recommendBadge, matchSignals,
-		updateBadge, healthBadge, newBadge,
+		updateBadge, healthBadge, newBadge, triedBadge,
 	});
 	cardCtxMap.set(card, ctx);
 	return card;
@@ -822,5 +831,14 @@ export function applyCardState(
 		nb.setCssStyles({ display: "" });
 	} else {
 		nb.setCssStyles({ display: "none" });
+	}
+
+	// 「装过」标记：曾安装但当前未安装（当前已装的卡片已有启用/安装态，无需重复标）
+	const tb = refs.triedBadge;
+	if (ctx.journalTriedIds?.has(plugin.id) && !ctx.installedIds.has(plugin.id)) {
+		tb.textContent = t("card.tried");
+		tb.setCssStyles({ display: "" });
+	} else {
+		tb.setCssStyles({ display: "none" });
 	}
 }

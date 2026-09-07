@@ -2638,6 +2638,84 @@ button.pt-card-install-btn--installed {
 	.pt-detail-similar-skeleton-card { animation: none; }
 }
 
+/* ── 评测台账编辑区（详情抽屉内「我的评测」） ── */
+.pt-journal-editor {
+	margin-top: var(--pt-space-lg);
+	padding-top: var(--pt-space-lg);
+	border-top: 1px solid var(--background-modifier-border);
+}
+.pt-journal-title {
+	font-size: var(--pt-text-lg);
+	font-weight: var(--pt-weight-semibold);
+	color: var(--pt-text-strong, var(--text-normal));
+	margin-bottom: var(--pt-space-md);
+}
+.pt-journal-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+.pt-journal-label {
+	font-size: var(--pt-text-sm);
+	color: var(--pt-text-muted);
+	min-width: 56px;
+}
+.pt-journal-chip {
+	font-size: var(--pt-text-sm);
+	padding: 2px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	cursor: pointer;
+}
+.pt-journal-chip[aria-pressed="true"] {
+	background: color-mix(in srgb, var(--pt-accent) 18%, var(--background-primary));
+	border-color: var(--pt-accent, var(--interactive-accent));
+	color: var(--pt-accent, var(--interactive-accent));
+}
+.pt-journal-star {
+	font-size: 18px;
+	line-height: 1;
+	background: none;
+	border: none;
+	color: var(--text-faint);
+	cursor: pointer;
+	padding: 0 2px;
+}
+.pt-journal-star.is-on {
+	color: var(--pt-accent, var(--interactive-accent));
+}
+.pt-journal-note {
+	width: 100%;
+	box-sizing: border-box;
+	resize: vertical;
+	font-size: var(--pt-text-sm);
+	line-height: 1.5;
+	padding: 8px 10px;
+	border-radius: var(--pt-radius-card);
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	margin-top: 4px;
+}
+.pt-journal-facts {
+	font-size: var(--pt-text-xs);
+	color: var(--pt-text-muted);
+	opacity: 0.8;
+	margin-top: 8px;
+	line-height: 1.6;
+}
+
+.pt-card-tried-badge {
+	font-size: var(--pt-text-xs);
+	color: var(--pt-text-muted);
+	opacity: 0.8;
+	margin-left: 4px;
+}
+
 /* ── 无障碍 ── */
 /* 屏幕阅读器专用（视觉隐藏但可被读屏器读出） */
 .pt-sr-only {

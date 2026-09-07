@@ -216,6 +216,20 @@ export const STRINGS = {
 	"detail.readme.noTranslator": {
 		zh: "请先在设置中配置 LLM（AI 搜索）或腾讯翻译 API。",
 	},
+
+	// 评测台账（P3）：详情抽屉内「我的评测」编辑区
+	"journal.title": { zh: "我的评测" },
+	"journal.status": { zh: "状态" },
+	"journal.rating": { zh: "评分" },
+	"journal.verdict": { zh: "弃用原因" },
+	"journal.notePlaceholder": { zh: "记下踩过的坑、为什么留 / 走、替代方案…" },
+	"journal.autoFacts": { zh: "自动记录" },
+	"journal.uninstalledAt": { zh: "卸载于" },
+	"journal.reinstallCount": { zh: "重装次数" },
+	"card.tried": { zh: "装过" },
+	"settings.review.folder": { zh: "评测台账笔记目录" },
+	"settings.review.folder.desc": { zh: "留空 = 默认藏进 .obsidian 私有目录；填 vault 相对路径可让笔记出现在文件树" },
+
 	// 一键了解功能（基于仓库 manifest 元数据，不读 README）
 	"detail.insight": { zh: "了解功能" },
 	"insight.descHint": { zh: "综合 manifest、main.js 实际命令与 README 由 AI 生成（缓存 24 项以内，旧版自动重算）" },

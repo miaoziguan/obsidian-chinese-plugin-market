@@ -34,6 +34,8 @@ import { writeTMNote, removeTMNote, TM_FOLDER, parseTMNote, type TMEntry } from 
 import { SqliteVectorStore, initSqlJsStatic, type PersistAdapter } from "@semantic/vec-store";
 import { applyProfileByIds, applyEnabledProfile } from "@data/platform/plugin-installer";
 import type { TrendSnapshot } from "@domain/recommend/trending";
+import { mergeInstallDiff, type InstallHistoryFile } from "@domain/journal/install-history";
+import { parseJournalNote, renderJournalNote, type JournalEntry } from "@domain/journal/journal-entry";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
 /** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
 type LoadDataRaw = NonNullable<Parameters<Translator["loadData"]>[0]>;
@@ -46,6 +48,102 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	cachedStats: Map<string, PluginStat> | null = null;
 	/** 趋势采样历史（onload 时恢复，视图的 TrendingEngine 从此水合；跨会话才有真实增速） */
 	cachedTrendingHistory: Record<string, TrendSnapshot[]> | null = null;
+	/** 评测台账：曾安装过的插件 id 集合（含已卸载），供卡片「装过」徽标与列表筛选 */
+	journalTriedIds: Set<string> = new Set();
+	/** 安装历史索引内存缓存（recordInstallDiff 维护 / onload 预载），供抽屉事实区同步读取 */
+	journalHistory: InstallHistoryFile | null = null;
+
+	/**
+	 * 记录一次安装/卸载 diff 到历史索引（评测台账）。fire-and-forget：失败只 warn，
+	 * 绝不影响首屏与已安装徽标刷新（installed-watch 在主路径上同步调用，必须零风险）。
+	 */
+	async recordInstallDiff(
+		added: Set<string>,
+		removed: Set<string>,
+		installedIds: Set<string>,
+		enabledIds: Set<string>,
+	): Promise<void> {
+		try {
+			const file = await this.storage.loadInstallHistory();
+			const entries = mergeInstallDiff(file.entries, {
+				added,
+				removed,
+				installedIds,
+				enabledIds,
+				nameOf: (id) => id,
+				now: Date.now(),
+			});
+			file.entries = entries;
+			await this.storage.saveInstallHistory(file);
+			this.journalHistory = file; // 缓存到内存，供 getInstallFacts 同步读取
+			this.journalTriedIds = new Set(Object.keys(entries));
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 记录安装历史失败：", e);
+		}
+	}
+
+	/** 评测台账是否启用（默认开启；预留开关位供后续设置页接入） */
+	journalEnabled(): boolean {
+		return true;
+	}
+
+	/** 评测笔记目录：默认 .obsidian 私有目录下的 reviews/，设置可切 vault 路径 */
+	private journalFolder(): string {
+		const v = this.settings.reviewFolder?.trim();
+		if (v) return normalizePath(v);
+		return `.obsidian/plugins/${this.manifest.id}/reviews`;
+	}
+
+	/** 供设置面板展示的评测笔记默认落点（公开只读） */
+	getDefaultReviewFolder(): string {
+		return `.obsidian/plugins/${this.manifest.id}/reviews`;
+	}
+
+	/** 读取某插件的评测笔记（无则 null；容错：坏笔记返回 null 不影响抽屉打开） */
+	async loadJournalEntry(id: string): Promise<JournalEntry | null> {
+		try {
+			const path = `${this.journalFolder()}/${id}.md`;
+			if (!(await this.noteStorage.exists(path))) return null;
+			return parseJournalNote(await this.noteStorage.readNote(path));
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 读取评测笔记失败：", e);
+			return null;
+		}
+	}
+
+	/**
+	 * 保存评测笔记（首次自动建目录）。
+	 * 必须 await exists + createFolder：adapter 后端不会自动建目录
+	 * （v2.48.0 的 ENOENT 事故即源于此处漏 await，新功能务必复用已修逻辑）。
+	 */
+	async saveJournalEntry(e: JournalEntry): Promise<void> {
+		try {
+			const dir = this.journalFolder();
+			if (!(await this.noteStorage.exists(dir))) {
+				await this.noteStorage.createFolder(dir);
+			}
+			await this.noteStorage.writeNote(`${dir}/${e.id}.md`, renderJournalNote(e));
+		} catch (err: unknown) {
+			logger.warn("[Chinese Plugin Market] 保存评测笔记失败：", err);
+		}
+	}
+
+	/** 同步返回某插件的自动记录事实（供抽屉只读展示）；缓存未就绪时为 undefined */
+	getInstallFacts(id: string): {
+		firstInstalled?: number;
+		lastInstalled?: number;
+		uninstalled?: number | null;
+		installCount?: number;
+	} | undefined {
+		const rec = this.journalHistory?.entries[id];
+		if (!rec) return undefined;
+		return {
+			firstInstalled: rec.firstInstalled,
+			lastInstalled: rec.lastInstalled,
+			uninstalled: rec.uninstalled,
+			installCount: rec.installCount,
+		};
+	}
 	/** 左侧栏 ribbon 图标元素（用于更新提醒红点标记） */
 	ribbonEl: HTMLElement | null = null;
 	/** 中文生态插件 id 集合（plugin-chinese-ecosystem.json，人工精修清单；算法判定在 chinese-ecosystem.ts） */
@@ -196,6 +294,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const allData = this._data;
 		// 独立缓存存储层（stats / trending / 插件列表），先行初始化以供后续加载使用
 		this.storage = new PluginStorage(new ObsidianStoragePort(this.app), this.manifest.id);
+		// 评测台账：加载安装历史索引到内存（供抽屉事实区同步读取；失败不阻断启动）
+		void this.storage.loadInstallHistory()
+			.then((f) => {
+				this.journalHistory = f;
+				this.journalTriedIds = new Set(Object.keys(f.entries));
+			})
+			.catch(() => {});
 		await this.loadSettings(allData);
 		await this.loadTranslatorData(allData);
 
