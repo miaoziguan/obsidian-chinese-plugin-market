@@ -47,7 +47,8 @@ export interface JournalEntry {
 	note: string;
 }
 
-const STATUSES: readonly string[] = ["using", "abandoned", "watching"];
+/** 用 as const + satisfies 收紧：拼错字面量会在编译期报错，而不是让 status 静默失效 */
+const STATUSES = ["using", "abandoned", "watching"] as const satisfies readonly JournalStatus[];
 
 /**
  * 解析 frontmatter 段。
@@ -56,13 +57,28 @@ const STATUSES: readonly string[] = ["using", "abandoned", "watching"];
 function parseFrontmatter(
 	raw: string,
 ): { kv: Record<string, string>; body: string } | null {
-	const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
+	// 容忍 BOM 与前导空行：用户在 vault 里手编过的笔记可能带 BOM 或首行空行，
+	// 不容忍则解析失败 → 已写的评测被当成「没有笔记」而静默丢失
+	const m = /^\uFEFF?\s*---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
 	if (!m) return null;
 	const kv: Record<string, string> = {};
 	for (const line of m[1].split(/\r?\n/)) {
 		const i = line.indexOf(":");
 		if (i <= 0) continue;
-		kv[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+		const k = line.slice(0, i).trim();
+		let v = line.slice(i + 1).trim();
+		// 渲染时 id/name 用 JSON 引号包裹（防 `#`/`:` 被 YAML 截断），此处还原
+		if (
+			(v.startsWith('"') && v.endsWith('"')) ||
+			(v.startsWith("'") && v.endsWith("'"))
+		) {
+			try {
+				v = JSON.parse(v) as string;
+			} catch {
+				/* 保留原值 */
+			}
+		}
+		kv[k] = v;
 	}
 	return { kv, body: m[2].replace(/^\r?\n/, "") };
 }
@@ -99,9 +115,13 @@ export function parseJournalNote(raw: string): JournalEntry | null {
 			id: kv.id,
 			name: kv.name ?? kv.id,
 			status,
-			// 评分只接受 1–5，越界当作未填（用户在 vault 里手写 10 星不算数）
+			// 评分只接受 1–5 的整数（越界 / 小数 / 非数字一律当作未填：
+			// 面板要按 n 渲染 ★n，小数会让渲染出半颗星）
 			rating:
-				rating !== undefined && rating >= 1 && rating <= 5
+				rating !== undefined &&
+				Number.isInteger(rating) &&
+				rating >= 1 &&
+				rating <= 5
 					? rating
 					: undefined,
 			verdict: parseArray(kv.verdict),
@@ -125,7 +145,13 @@ export function parseJournalNote(raw: string): JournalEntry | null {
 
 /** 渲染为笔记全文（frontmatter + 空行 + 正文） */
 export function renderJournalNote(e: JournalEntry): string {
-	const lines: string[] = ["---", `id: ${e.id}`, `name: ${e.name}`];
+	// id / name 用 JSON 引号包裹：插件 id 或名字可能含 `#`、`:` ，
+	// 裸写会被 YAML 当成注释或键值分隔符截断（TM 侧曾踩过同样的坑）
+	const lines: string[] = [
+		"---",
+		`id: ${JSON.stringify(e.id)}`,
+		`name: ${JSON.stringify(e.name)}`,
+	];
 	if (e.status) lines.push(`status: ${e.status}`);
 	if (e.rating) lines.push(`rating: ${e.rating}`);
 	if (e.verdict?.length) lines.push(`verdict: [${e.verdict.join(", ")}]`);

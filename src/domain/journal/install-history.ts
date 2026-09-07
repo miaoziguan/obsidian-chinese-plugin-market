@@ -88,10 +88,18 @@ export function mergeInstallDiff(
 
 	for (const id of Object.keys(out)) {
 		if (added.has(id) || removed.has(id)) continue;
+		const prev = out[id];
+		const stillInstalled = installedIds.has(id);
+		// 跨会话卸载：Obsidian 关闭期间被删掉的插件不会产生 watch 的 removed 事件
+		// （watcher 基线里已无该 id）。若历史记着「仍安装」而当前快照已无此 id，
+		// 补写 uninstalled —— 否则会留下「既非安装中、又没有卸载时间」的矛盾记录，
+		// 面板按卸载时间排序时会出现空值。
+		const orphaned = !stillInstalled && prev.uninstalled === null;
 		out[id] = {
-			...out[id],
-			currentlyInstalled: installedIds.has(id),
+			...prev,
+			currentlyInstalled: stillInstalled,
 			currentlyEnabled: enabledIds.has(id),
+			uninstalled: orphaned ? now : prev.uninstalled,
 		};
 	}
 
