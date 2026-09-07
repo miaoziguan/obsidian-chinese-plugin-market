@@ -71,18 +71,26 @@ export class ObsidianNoteStorage implements NoteStoragePort {
 		return this.app.vault.getAbstractFileByPath(p) != null;
 	}
 
+	/**
+	 * 逐级确保 adapter 目录存在。
+	 * adapter.mkdir 不递归（且已存在时会抛错），故逐级检查后创建；
+	 * 每级失败静默容错，供并发写入竞态使用。
+	 */
+	private async ensureAdapterDir(dir: string): Promise<void> {
+		const parts = normalizePath(dir).split("/").filter(Boolean);
+		let cur = "";
+		for (const part of parts) {
+			cur = cur ? `${cur}/${part}` : part;
+			if (!(await this.app.vault.adapter.exists(cur))) {
+				await this.app.vault.adapter.mkdir(cur).catch(() => {});
+			}
+		}
+	}
+
 	async createFolder(path: string): Promise<void> {
 		const p = normalizePath(path);
 		if (this.isAdapterPath(p)) {
-			// adapter.mkdir 不递归：逐级创建，已存在静默容错（供并发写入竞态使用）
-			const parts = p.split("/");
-			let cur = "";
-			for (const part of parts) {
-				cur = cur ? `${cur}/${part}` : part;
-				if (cur && !(await this.app.vault.adapter.exists(cur))) {
-					await this.app.vault.adapter.mkdir(cur).catch(() => {});
-				}
-			}
+			await this.ensureAdapterDir(p);
 			return;
 		}
 		await this.app.vault.createFolder(p);
@@ -91,6 +99,12 @@ export class ObsidianNoteStorage implements NoteStoragePort {
 	async writeNote(path: string, content: string): Promise<void> {
 		const p = normalizePath(path);
 		if (this.isAdapterPath(p)) {
+			// 关键：adapter.write 不会自动创建父目录（桌面端 NodeFsAdapter 直接抛
+			// ENOENT），必须显式逐级建目录。首次把笔记写进 .obsidian/.../tm/ 时
+			// 该目录尚不存在，缺这一步会让整条延迟初始化中断（曾导致首屏干等
+			// 15s 安全阀：scanVaultTM 未执行 → tmApprovedReady 不 resolve）。
+			const idx = p.lastIndexOf("/");
+			if (idx > 0) await this.ensureAdapterDir(p.slice(0, idx));
 			await this.app.vault.adapter.write(p, content);
 			return;
 		}
@@ -117,7 +131,10 @@ export class ObsidianNoteStorage implements NoteStoragePort {
 	async listMarkdown(folder: string): Promise<string[]> {
 		const base = normalizePath(folder);
 		if (this.isAdapterPath(base)) {
-			const listing = await this.app.vault.adapter.list(base);
+			// 目录尚不存在时部分 adapter 实现会抛 ENOENT（首次使用 / 迁移前）。
+			// 统一视为「没有笔记」而非错误，避免中断 scanVaultTM 链路。
+			const listing = await this.app.vault.adapter.list(base).catch(() => null);
+			if (!listing) return [];
 			return listing.files.filter(
 				(f) => f.startsWith(base + "/") && f.endsWith(".md"),
 			);

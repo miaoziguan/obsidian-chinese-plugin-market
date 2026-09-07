@@ -105,6 +105,7 @@ export const STRINGS = {
 
 	// 加载进度（UX: 分阶段提示，减少等待焦虑）
 	"loading.translating": { zh: "正在合并离线翻译词典…" },
+	"loading.stats": { zh: "正在加载插件统计数据…" },
 	"loading.rendering": { zh: "正在渲染插件列表…" },
 	"loading.tm.resolving": { zh: "正在准备翻译记忆库索引…" },
 	"loading.tm.scanning": { zh: "正在扫描翻译记忆库… {current}/{total}" },
