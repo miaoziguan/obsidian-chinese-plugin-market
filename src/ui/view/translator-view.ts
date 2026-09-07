@@ -23,6 +23,8 @@ import {
 	type FavoriteFilter,
 	type ChineseEcoFilter,
 	type SeriesFilter,
+	type TriedFilter,
+	type AbandonedFilter,
 } from "@domain/filter/filter";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { type CardRenderContext } from "@ui/components/card-render";
@@ -595,6 +597,10 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public chineseEcoFilter: ChineseEcoFilter = "all";
 	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
 	public seriesFilter: SeriesFilter = "all";
+	/** 装过筛选："tried" 仅曾安装过（含已卸载） / "all" 全部 */
+	public triedFilter: TriedFilter = "all";
+	/** 已弃用筛选："abandoned" 仅用户评测 status=abandoned / "all" 全部 */
+	public abandonedFilter: AbandonedFilter = "all";
 	/** 新上线窗口天数：null 不过滤，可选 7/30/90 */
 	public newWithinDays: number | null = null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */

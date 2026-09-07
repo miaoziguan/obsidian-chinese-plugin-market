@@ -80,7 +80,7 @@ describe("PluginStorage · 安装历史索引（评测台账）", () => {
 	it("写入后可回读，且 round-trip 等价", async () => {
 		const { storage } = make();
 		const file = {
-			version: 1,
+			version: 1 as const,
 			entries: {
 				git: {
 					name: "Git",

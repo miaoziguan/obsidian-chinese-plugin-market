@@ -21,7 +21,7 @@
 
 import type { PluginInfo, TranslateResult, AISearchResult, Translator } from "@domain/catalog/translator";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
-import type { SearchMode, SourceFilter, InstallFilter, FavoriteFilter, ChineseEcoFilter, SeriesFilter, FilterCache, EmptyState } from "@domain/filter/filter";
+import type { SearchMode, SourceFilter, InstallFilter, FavoriteFilter, ChineseEcoFilter, SeriesFilter, TriedFilter, AbandonedFilter, FilterCache, EmptyState } from "@domain/filter/filter";
 import type { SortBy } from "@domain/filter/sort";
 import type { PluginStat } from "@domain/catalog/stats";
 import type { SimilarCandidate } from "@domain/recommend/similar";
@@ -122,6 +122,14 @@ export interface ViewContext {
 	chineseEcoFilter: ChineseEcoFilter;
 	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
 	seriesFilter: SeriesFilter;
+	/** 装过筛选："tried" 仅曾安装过 / "all" 全部 */
+	triedFilter: TriedFilter;
+	/** 已弃用筛选："abandoned" 仅已弃用 / "all" 全部 */
+	abandonedFilter: AbandonedFilter;
+	/** 曾安装过的插件 id 集合（含已卸载） */
+	journalTriedIds: Set<string>;
+	/** 用户评测为 abandoned 的插件 id 集合 */
+	journalAbandonedIds: Set<string>;
 	/** 新上线窗口天数：null 表示不过滤；合法值 7/30/90 */
 	newWithinDays: number | null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
@@ -432,6 +440,12 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set chineseEcoFilter(v) { view.chineseEcoFilter = v; },
 		get seriesFilter() { return view.seriesFilter; },
 		set seriesFilter(v) { view.seriesFilter = v; },
+		get triedFilter() { return view.triedFilter; },
+		set triedFilter(v) { view.triedFilter = v; },
+		get abandonedFilter() { return view.abandonedFilter; },
+		set abandonedFilter(v) { view.abandonedFilter = v; },
+		get journalTriedIds() { return view.plugin.journalTriedIds; },
+		get journalAbandonedIds() { return view.plugin.journalAbandonedIds; },
 		get newWithinDays() { return view.newWithinDays; },
 		set newWithinDays(v) { view.newWithinDays = v; },
 		get updatedWithinDays() { return view.updatedWithinDays; },

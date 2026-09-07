@@ -890,6 +890,42 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.scheduleRender(true);
 	});
 
+	// ── 装过筛选（曾安装过，含已卸载；数据来自安装历史索引） ──
+	const triedRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	triedRow.createSpan({ cls: "pt-facet-label", text: "评测" });
+	const triedChips = triedRow.createDiv({ cls: "pt-facet-chips" });
+	const triedToggle = triedChips.createEl("button", { cls: "pt-filter pt-toggle-tried", text: "装过" });
+	const updateTriedToggle = () => {
+		const active = ctx.triedFilter === "tried";
+		triedToggle.setAttribute("aria-pressed", active ? "true" : "false");
+		triedToggle.textContent = "装过";
+	};
+	updateTriedToggle();
+	triedToggle.addEventListener("click", () => {
+		ctx.triedFilter = ctx.triedFilter === "tried" ? "all" : "tried";
+		updateTriedToggle();
+		ctx.track(ctx.triedFilter === "tried" ? "filter:tried" : "filter:tried_off");
+		ctx.scheduleRender(true);
+	});
+
+	// ── 已弃用筛选（用户评测 status=abandoned；集合由插件后台种子） ──
+	const abandonedRow = advancedInner.createDiv({ cls: "pt-facet-row" });
+	abandonedRow.createSpan({ cls: "pt-facet-label", text: "" });
+	const abandonedChips = abandonedRow.createDiv({ cls: "pt-facet-chips" });
+	const abandonedToggle = abandonedChips.createEl("button", { cls: "pt-filter pt-toggle-abandoned", text: "已弃用" });
+	const updateAbandonedToggle = () => {
+		const active = ctx.abandonedFilter === "abandoned";
+		abandonedToggle.setAttribute("aria-pressed", active ? "true" : "false");
+		abandonedToggle.textContent = "已弃用";
+	};
+	updateAbandonedToggle();
+	abandonedToggle.addEventListener("click", () => {
+		ctx.abandonedFilter = ctx.abandonedFilter === "abandoned" ? "all" : "abandoned";
+		updateAbandonedToggle();
+		ctx.track(ctx.abandonedFilter === "abandoned" ? "filter:abandoned" : "filter:abandoned_off");
+		ctx.scheduleRender(true);
+	});
+
 	// ── 新上线筛选（近 N 天首次见；null = 不过滤） ──
 	const newRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 	newRow.createSpan({ cls: "pt-facet-label", text: "上线" });
@@ -974,6 +1010,11 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			// 重置系列筛选
 			ctx.seriesFilter = "all";
 			updateSeriesToggle();
+			// 重置装过 / 已弃用筛选
+			ctx.triedFilter = "all";
+			updateTriedToggle();
+			ctx.abandonedFilter = "all";
+			updateAbandonedToggle();
 			// 重置新上线 + 近期更新筛选
 			ctx.newWithinDays = null;
 			ctx.settings.newWithinDays = null;
