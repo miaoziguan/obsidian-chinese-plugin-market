@@ -52,7 +52,9 @@ export function emptyInstallHistory(): InstallHistoryFile {
  * 合并规则：
  * - 新增：首次则记 firstInstalled；installCount +1；清空 uninstalled
  * - 移除：记 uninstalled，且不再视为安装/启用（firstInstalled 等历史保留）
- * - 其余：仅同步启用态（禁用/启用不改变安装历史）
+ * - 其余：同步启用态；若历史记着「仍安装」而当前快照已无此 id（Obsidian
+ *   关闭期间被删，不会产生 watch 的 removed 事件），补写 uninstalled（跨会话卸载），
+ *   避免出现「既非安装中、又无卸载时间」的矛盾记录
  */
 export function mergeInstallDiff(
 	current: Record<string, InstallRecord>,

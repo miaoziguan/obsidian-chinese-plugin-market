@@ -107,7 +107,9 @@ export function parseJournalNote(raw: string): JournalEntry | null {
 		if (!parsed) return null;
 		const { kv, body } = parsed;
 		if (!kv.id) return null;
-		const status = STATUSES.includes(kv.status)
+		// STATUSES 用 as const 收窄为字面量元组，includes 参数被推断为字面量联合，
+		// 需先把元组当作 readonly string[] 才能接受 kv.status 这种宽泛 string
+		const status = (STATUSES as readonly string[]).includes(kv.status)
 			? (kv.status as JournalStatus)
 			: undefined;
 		const rating = num(kv.rating);
