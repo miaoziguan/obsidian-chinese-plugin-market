@@ -41,7 +41,6 @@ import type ChinesePluginMarketPlugin from "@app/plugin";
 // 全局常量（VIEW_TYPE / LAYOUT / SEARCH_MODES / PLUGINS_URL）已收敛至 ./constants，
 // 作为唯一来源，避免 view 模块跨文件引用本中枢模块的常量（审计 P2-4）。
 import { VIEW_TYPE, LAYOUT } from "@shared/constants";
-import { TM_FOLDER } from "@translation/memory/translation-memory";
 import { cancelIdle } from "@shared/platform";
 
 /** 后台更新检测轮询间隔：对齐 stats 缓存 TTL（6h），避免过频网络请求 */
@@ -155,7 +154,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	sortBy: "relevance",
 	favorites: [],
 	compare: [],
-	tmFolder: TM_FOLDER,
+	tmFolder: "", // 留空 = 默认藏进 .obsidian 私有目录（不污染 vault、不被其他插件检索）
 	newWithinDays: null,
 	updatedWithinDays: null,
 	defaultNewWithinDays: null,

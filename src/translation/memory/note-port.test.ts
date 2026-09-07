@@ -55,6 +55,9 @@ describe("translation-memory · NoteStoragePort 端口注入", () => {
 			createFolder: () => Promise.reject(new Error("already exists")),
 			writeNote: vi.fn(() => Promise.resolve()),
 			deleteNote: () => Promise.resolve(),
+			listMarkdown: () => Promise.resolve([]),
+			readNote: () => Promise.resolve(""),
+			statMtime: () => Promise.resolve(0),
 		};
 		await expect(writeTMNote(notes, entry())).resolves.toBeUndefined();
 		expect(notes.writeNote).toHaveBeenCalledOnce();
