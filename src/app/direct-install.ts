@@ -11,7 +11,7 @@
  * 与 BRAT / chinabrat 一致；其余皆公开 API（requestUrl / vault.adapter / requireApiVersion）。
  */
 
-import { Modal, Notice, Setting, type App } from "obsidian";
+import { Modal, Notice, Setting, type App, requestUrl, requireApiVersion } from "obsidian";
 import { makeT } from "@shared/i18n";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 
@@ -48,7 +48,6 @@ export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 	const fetchText = async (name: string): Promise<string | null> => {
 		const u = new URL(root);
 		u.pathname += name;
-		const { requestUrl } = await import("obsidian");
 		const r = await requestUrl({ url: u.href, throw: false });
 		if (r.status >= 200 && r.status < 300) return r.text;
 		// 只有「确实没有」才算可选文件缺失：500/403 当成缺失会误删已装好的旧样式
@@ -70,7 +69,6 @@ export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 	}
 	// 写盘不可逆，先确认这版跑得起来，别把能用的版本覆盖成装不上的
 	if (man.minAppVersion) {
-		const { requireApiVersion } = await import("obsidian");
 		if (!requireApiVersion(man.minAppVersion)) {
 			throw new Error(t("directInstall.minApp", { v: man.minAppVersion }));
 		}

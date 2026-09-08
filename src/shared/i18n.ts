@@ -557,6 +557,7 @@ export const STRINGS = {
 	"settings.profiles.nameRequired": { zh: "请先输入预设名称" },
 	"settings.profiles.exists": { zh: "已存在同名预设「{name}」，已覆盖" },
 	"command.applyProfile.prefix": { zh: "应用组合" },
+	"ribbon.applyProfile": { zh: "应用 {name}" },
 
 	// 视图工具栏「启用组合」下拉增强
 	"profiles.empty": { zh: "暂无组合预设，可在设置 → 插件启用组合中保存当前启用集" },

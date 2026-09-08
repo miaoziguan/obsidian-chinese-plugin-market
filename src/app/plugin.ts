@@ -1060,11 +1060,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		);
 		if (this.settings.profiles.length > 0) {
 			menu.addSeparator();
+			// 标题特化为「应用 name」+ play 图标：此前用「应用组合：name」+ switch 图标，
+			// 读着像分类标题而非可点击动作，用户反馈「缺少应用功能」。
+			// 命令面板仍保留「应用组合：name」带类别前缀（命令面板场景下合理）。
 			for (const p of this.settings.profiles) {
 				menu.addItem((item) =>
 					item
-						.setTitle(`${t("command.applyProfile.prefix")}：${p.name}`)
-						.setIcon("switch")
+						.setTitle(t("ribbon.applyProfile", { name: p.name }))
+						.setIcon("play")
 						.onClick(() => void this.applyProfile(p))
 				);
 			}
