@@ -121,6 +121,10 @@ export interface CardRenderContext {
 	enabledIds: Set<string>;
 	/** 评测台账：曾安装过的插件 id（含已卸载），供卡片「装过」徽标 */
 	journalTriedIds?: Set<string>;
+	/** 已写评测笔记的插件 id 集合（供卡片「评测」图标高亮） */
+	journalEntryIds?: Set<string>;
+	/** 点击卡片「评测」图标：打开详情抽屉并聚焦评测区 */
+	onOpenReview?: (pluginId: string) => void;
 	/** AI 搜索结果（含排序理由，可选） */
 	aiSearchResult: AISearchResult | null;
 	/** 选品对比：当前已选中的插件 id 集合（用于卡片初始高亮态） */
@@ -141,6 +145,10 @@ export interface CardRenderContext {
 	app?: import("obsidian").App;
 	/** 正在一键安装中的插件 id 集合（用于按钮显示「安装中…」并防重点） */
 	installingIds?: Set<string>;
+	/** 正在一键更新中的插件 id 集合（用于按钮显示「更新中…」并防重点） */
+	updatingIds?: Set<string>;
+	/** 点击卡片「更新」按钮的回调（由视图注入，调用 updatePluginCore 升级插件） */
+	onUpdatePlugin?: (pluginId: string) => void;
 	/** 描述展开/收起时的回调（用于虚拟滚动重测行高） */
 	onDescToggle?: () => void;
 	/** 「🍎 系统翻译」成功后落库回调（由视图注入，调用 translator.persistSystemTranslation） */
@@ -158,6 +166,8 @@ export interface CardRenderContext {
 const ICON_COMPARE = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="7" height="16" rx="1.2"/><rect x="13.5" y="4" width="7" height="16" rx="1.2"/></svg>`;
 // 收藏：星形（描边风，与并列双栏一致；选中态由 CSS 填充金色）
 const ICON_FAVORITE = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+// 评测：评论框（带文本行，语义化表达「写评测」）
+const ICON_REVIEW = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/></svg>`;
 // 了解功能：灯泡
 const ICON_INSIGHT = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>`;
 // 系统翻译（macOS 快捷指令，按需）：苹果标
@@ -201,6 +211,7 @@ interface CardRefs {
 	installBtn: HTMLElement;
 	compareBtn: HTMLElement;
 	insightBtn: HTMLElement;
+	reviewBtn: HTMLElement;
 	favBtn: HTMLElement;
 	macosBtn: HTMLElement | null;
 	toggleSwitch: HTMLElement;
@@ -226,6 +237,8 @@ interface CardRefs {
 	matchSignals: HTMLElement;
 	/** 可更新徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口 */
 	updateBadge?: HTMLElement;
+	/** 一键更新按钮：仅「可更新」时显示，点击就地升级（更新中显示「更新中…」并禁用防重点） */
+	updateBtn?: HTMLElement;
 	/** 维护健康度徽标（基于 updated 三档：活跃/放缓/风险），常驻隐藏，applyCardState 填充 */
 	healthBadge: HTMLElement;
 	/** 「新」标记（近 30 天首次见），纯文字融入作者行，常驻隐藏，applyCardState 填充 */
@@ -308,6 +321,19 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 			e.stopPropagation();
 			goToUpdates(e);
 		}
+	});
+
+	// 一键更新按钮：仅「可更新」时显示；点击就地升级（桌面端），更新中禁用防重点
+	const updateBtn = metaInfo.createEl("button", { cls: "pt-card-update-btn pt-meta-chip" });
+	updateBtn.setAttribute("data-action", "update");
+	updateBtn.setAttribute("aria-label", ctx.t("action.update"));
+	updateBtn.textContent = ctx.t("action.update");
+	updateBtn.setCssStyles({ display: "none" });
+	updateBtn.addEventListener("click", (e: MouseEvent) => {
+		e.stopPropagation();
+		const pid = card.dataset.pluginId;
+		const liveCtx = cardCtxMap.get(card) ?? ctx;
+		if (pid && liveCtx.onUpdatePlugin) liveCtx.onUpdatePlugin(pid);
 	});
 
 	// 维护健康度徽标（基于 updated 三档），常驻隐藏，applyCardState 填充
@@ -401,11 +427,14 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	appendSVG(compareBtn, ICON_COMPARE);
 	const favBtn = makeIconBtn("pt-icon-btn pt-card-favorite", "favorite", ctx.t("card.favorite"), ctx);
 	appendSVG(favBtn, ICON_FAVORITE);
+	// 评测入口（点击由 onCardClick 委托处理 action="review"，打开详情抽屉并聚焦评测区）
+	const reviewBtn = makeIconBtn("pt-icon-btn pt-card-review", "review", ctx.t("card.review"), ctx);
+	appendSVG(reviewBtn, ICON_REVIEW);
 	// 卸载按钮（仅已安装插件显示，默认隐藏，由 applyCardState 按安装态显隐）
 	const uninstallBtn = makeIconBtn("pt-icon-btn pt-card-uninstall", "uninstall", ctx.t("card.uninstall"), ctx);
 	appendSVG(uninstallBtn, ICON_TRASH);
 	uninstallBtn.setCssStyles({ display: "none" });
-	actionsRow.append(insightBtn, compareBtn, favBtn, uninstallBtn);
+	actionsRow.append(insightBtn, compareBtn, reviewBtn, favBtn, uninstallBtn);
 
 	// macOS 系统翻译（按需按钮，仅 macOS 桌面端渲染）
 	let macosBtn: HTMLElement | null = null;
@@ -444,10 +473,10 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	});
 
 	cardRefsMap.set(card, {
-		nameSpan, originalName, installBtn, insightBtn, compareBtn, favBtn, macosBtn, toggleSwitch, uninstallBtn,
+		nameSpan, originalName, installBtn, insightBtn, compareBtn, reviewBtn, favBtn, macosBtn, toggleSwitch, uninstallBtn,
 		descEl, statline, spark, sparkPath, dlChip, dlText, clkChip, clkText,
 		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, recommendBadge, matchSignals,
-		updateBadge, healthBadge, newBadge, triedBadge,
+		updateBadge, healthBadge, newBadge, triedBadge, updateBtn,
 	});
 	cardCtxMap.set(card, ctx);
 	return card;
@@ -714,6 +743,8 @@ export function applyCardState(
 	// 对比 / 收藏图标态
 	refs.compareBtn.classList.toggle("is-compare-on", isCompared);
 	refs.favBtn.classList.toggle("is-fav-on", isFav);
+	// 评测图标态：已写评测则金色高亮（更易发现）
+	refs.reviewBtn.classList.toggle("is-review-on", (ctx.journalEntryIds?.has(plugin.id)) ?? false);
 
 	// 描述：清理空格 + 剔除末尾 Obsidian 官方审核句（卡片空间有限，平台免责句是噪音；
 	// 详情页描述保留原文，由 detail-drawer 自行处理）
@@ -794,7 +825,9 @@ export function applyCardState(
 	// 可更新徽标：官方版本领先本地（仅已装插件），点击跳 Obsidian 社区插件更新入口
 	// 受设置 notifyInstalledUpdates 开关控制（轻量更新提醒，无后台推送）
 	const ub = refs.updateBadge;
+	const updBtn = refs.updateBtn;
 	const outdated = !!settings.notifyInstalledUpdates && !!ctx.outdatedIds?.has(plugin.id);
+	const updating = !!ctx.updatingIds?.has(plugin.id);
 	if (outdated && ub) {
 		const info = ctx.outdatedInfo?.get(plugin.id);
 		const label = info ? `可更新 ${info.local} → ${info.latest}` : "可更新";
@@ -803,6 +836,17 @@ export function applyCardState(
 		ub.setCssStyles({ display: "" });
 	} else if (ub) {
 		ub.setCssStyles({ display: "none" });
+	}
+	// 一键更新按钮：可更新且视图提供了回调时显示；更新中禁用并提示「更新中…」防重点
+	if (updBtn) {
+		const show = outdated && !!ctx.onUpdatePlugin;
+		updBtn.setCssStyles({ display: show ? "" : "none" });
+		if (show) {
+			updBtn.textContent = updating ? "更新中…" : ctx.t("action.update");
+			if (updating) updBtn.setAttribute("disabled", "true");
+			else updBtn.removeAttribute("disabled");
+			updBtn.classList.toggle("is-loading", updating);
+		}
 	}
 
 	// 维护健康度：纯文字表达，融入作者行（与竞品 health.ts 同数据，去掉彩色胶囊样式）

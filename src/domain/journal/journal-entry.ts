@@ -21,7 +21,6 @@ export const VERDICT_PRESETS = [
 	"有 bug",
 	"有替代",
 	"太重",
-	"收费",
 	"不更新",
 	"冲突",
 	"用不上",
@@ -113,7 +112,7 @@ export function parseJournalNote(raw: string): JournalEntry | null {
 			? (kv.status as JournalStatus)
 			: undefined;
 		const rating = num(kv.rating);
-		return {
+		const entry: JournalEntry = {
 			id: kv.id,
 			name: kv.name ?? kv.id,
 			status,
@@ -140,6 +139,18 @@ export function parseJournalNote(raw: string): JournalEntry | null {
 			updated: num(kv.updated),
 			note: body.trim(),
 		};
+		// 无实质内容（未选状态/评分/弃用原因，且备注为空）视为「非评测笔记」返回 null：
+		// 兜住旧版本或手动残留的 {id, name, note:""} 空笔记，
+		// 避免被错算成已评测而误点亮卡片图标（用户痛点）。
+		if (
+			!entry.status &&
+			entry.rating === undefined &&
+			(!entry.verdict || entry.verdict.length === 0) &&
+			!entry.note
+		) {
+			return null;
+		}
+		return entry;
 	} catch {
 		return null;
 	}

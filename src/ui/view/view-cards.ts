@@ -17,7 +17,7 @@ import { logger } from "@shared/logger";
 import type { MirrorConfig } from "@domain/catalog/mirror";
 import { installCommunityPlugin, togglePluginEnabled, uninstallCommunityPlugin } from "@data/platform/plugin-installer";
 
-export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard: HTMLElement | null = null) {
+export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard: HTMLElement | null = null, focusJournal = false) {
 	const info = ctx.plugins.find((p) => p.id === pluginId);
 	if (!info) return;
 	// 信号门控：用户对插件表现出真实兴趣（打开详情），
@@ -42,6 +42,7 @@ export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard
 	if (ctx.activeDrawer) {
 		ctx.activeDrawer.navigate(pluginId, info, result, []);
 		fillSimilar(ctx.activeDrawer);
+		if (focusJournal) ctx.activeDrawer.focusJournalArea();
 		return;
 	}
 	const drawer = new PluginDetailDrawer({
@@ -58,6 +59,7 @@ export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard
 		installedIds: ctx.installedIds,
 		container: ctx.contentEl,
 		mode: "page",
+		focusJournal,
 		onClose: () => { ctx.exitDetailMode(); },
 	});
 	ctx.activeDrawer = drawer;
@@ -208,6 +210,9 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 		} else if (action === "detail") {
 			void ctx.saveSettings();
 			ctx.openDetailDrawer(pid, card);
+		} else if (action === "review") {
+			// 打开详情抽屉并聚焦「我的评测」编辑区
+			ctx.openReviewDrawer(pid, card);
 		} else if (action === "insight") {
 			openInsightModal(ctx, plugin);
 		} else if (action === "toggle-enabled") {

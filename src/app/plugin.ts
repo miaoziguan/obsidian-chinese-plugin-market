@@ -37,6 +37,7 @@ import type { TrendSnapshot } from "@domain/recommend/trending";
 import { mergeInstallDiff, type InstallHistoryFile } from "@domain/journal/install-history";
 import { parseJournalNote, renderJournalNote, type JournalEntry } from "@domain/journal/journal-entry";
 import { computeJournalStats, buildVerdictIndex, type JournalStats } from "@domain/journal/journal-stats";
+import { JournalView, JOURNAL_VIEW_TYPE } from "@ui/view/journal-view";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
 /** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
 type LoadDataRaw = NonNullable<Parameters<Translator["loadData"]>[0]>;
@@ -55,6 +56,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	journalHistory: InstallHistoryFile | null = null;
 	/** 用户评测为 abandoned 的插件 id 集合（saveJournalEntry 增量维护 / onload 后台种子） */
 	journalAbandonedIds: Set<string> = new Set();
+	/** 已写评测笔记的插件 id 集合（供卡片「评测」图标高亮；由 refreshJournalStats 扫描填充，零额外 IO） */
+	journalEntryIds: Set<string> = new Set();
 	/** 全局评测统计（弃用率 / 踩坑 Top 等，onload 后台扫描聚合，供「踩坑洞察」面板） */
 	journalStats: JournalStats | null = null;
 	/** 弃用原因 → 插件 id 集合索引（来自评测笔记 verdict，供踩坑 Top 点击联动筛选） */
@@ -126,6 +129,35 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 * （v2.48.0 的 ENOENT 事故即源于此处漏 await，新功能务必复用已修逻辑）。
 	 */
 	async saveJournalEntry(e: JournalEntry): Promise<void> {
+		// 无实质内容（未选状态/评分/弃用原因，且备注为空）视为「未评测」：
+		// 删除目录里可能残留的 .md（用户清空了之前的评测），维护高亮集合后直接返回，不落盘。
+		const hasContent = !!(
+			e.status ||
+			e.rating ||
+			(e.verdict && e.verdict.length) ||
+			(e.note && e.note.trim())
+		);
+		if (!hasContent) {
+			try {
+				const dir = this.journalFolder();
+				const p = `${dir}/${e.id}.md`;
+				if (await this.noteStorage.exists(p)) {
+					await this.noteStorage.deleteNote(p);
+				}
+			} catch {
+				// 忽略删除失败（笔记本就不存在时 exists 即返回 false）
+			}
+			this.journalEntryIds.delete(e.id);
+			this.journalAbandonedIds.delete(e.id);
+			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+				const view = leaf.view;
+				if (view instanceof ChinesePluginMarketView) {
+					view.refreshCardState(e.id);
+				}
+			}
+			void this.refreshJournalStats();
+			return;
+		}
 		try {
 			const dir = this.journalFolder();
 			if (!(await this.noteStorage.exists(dir))) {
@@ -135,6 +167,17 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			// 增量维护「已弃用」集合（零额外 IO：本就在写盘）
 			if (e.status === "abandoned") this.journalAbandonedIds.add(e.id);
 			else this.journalAbandonedIds.delete(e.id);
+			// 增量维护「已写评测」集合：避免后续 refreshJournalStats 走 adapter.list
+			// 时被 .obsidian/ 路径下的缓存滞后漏掉新文件，导致刚写的评测图标不变色。
+			this.journalEntryIds.add(e.id);
+			// 立即对已打开视图的目标卡片刷新评测高亮（单卡局部刷新，不依赖
+			// refreshJournalStats 的异步全量重扫，用户保存瞬间即可看到图标变金）
+			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+				const view = leaf.view;
+				if (view instanceof ChinesePluginMarketView) {
+					view.refreshCardState(e.id);
+				}
+			}
 		} catch (err: unknown) {
 			logger.warn("[Chinese Plugin Market] 保存评测笔记失败：", err);
 		}
@@ -157,6 +200,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				entries.push(entry);
 			}
 			this.journalAbandonedIds = ids;
+			// 已写「有效」评测笔记的 id 集合：仅采纳 parseJournalNote 成功解析的 entry.id，
+			// 避免评测目录里残留的 .md（空文件 / 损坏笔记 / 用户别处放进来的笔记等）文件名
+			// 误命中 plugin id 导致卡片莫名高亮。
+			this.journalEntryIds = new Set(entries.map((e) => e.id));
 			this.journalStats = computeJournalStats(entries);
 			this.journalVerdictIds = buildVerdictIndex(entries);
 			// 注入已打开视图并触发重渲染（视图未创建时其 onOpen 会自然读到集合/统计）
@@ -393,9 +440,17 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		});
 
 		// 注册视图
-		this.registerView(VIEW_TYPE, (leaf) => new ChinesePluginMarketView(leaf, this));
-
 		const t = makeT();
+		this.registerView(VIEW_TYPE, (leaf) => new ChinesePluginMarketView(leaf, this));
+		// 评测台账：独立标签页「我的插件足迹」视图（单例复用已有 leaf）
+		this.registerView(JOURNAL_VIEW_TYPE, (leaf) =>
+			new JournalView(leaf, {
+				loadHistory: () => this.storage.loadInstallHistory().then((f) => f.entries),
+				listEntries: () => this.listJournalEntries(),
+				openPlugin: (id) => void this.openJournalTarget(id),
+				t: (k) => t(k),
+			}),
+		);
 
 		// 命令：打开搜索视图
 		this.addCommand({
@@ -403,6 +458,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			name: t("app.search"),
 			callback: () => {
 				void this.openTranslatorView();
+			},
+		});
+
+		// 命令：打开「我的插件足迹」
+		this.addCommand({
+			id: "open-journal-view",
+			name: t("journal.openCmd"),
+			callback: () => {
+				void this.openJournalView();
 			},
 		});
 
@@ -835,6 +899,52 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			active: true,
 		});
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });
+	}
+
+	/** 打开「我的插件足迹」独立视图（单例复用已有 leaf） */
+	async openJournalView(): Promise<void> {
+		const existing = this.app.workspace.getLeavesOfType(JOURNAL_VIEW_TYPE);
+		if (existing.length > 0) {
+			this.app.workspace.setActiveLeaf(existing[0], { focus: true });
+			return;
+		}
+		const leaf = this.app.workspace.getLeaf("tab");
+		await leaf.setViewState({ type: JOURNAL_VIEW_TYPE, active: true });
+		this.app.workspace.setActiveLeaf(leaf, { focus: true });
+	}
+
+	/**
+	 * 从足迹表格点击某行跳转：打开主视图并把搜索词设为该插件 id
+	 * （主视图无 openPluginById，用 searchQuery 退化定位）。
+	 */
+	async openJournalTarget(id: string): Promise<void> {
+		await this.openTranslatorView();
+		const view = (this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view) as unknown as
+			| { searchQuery: string; scheduleRender: () => void }
+			| undefined;
+		if (view) {
+			view.searchQuery = id;
+			view.scheduleRender();
+		} else {
+			new Notice(makeT()("journal.openFail"));
+		}
+	}
+
+	/** 读取全部评测笔记（容错：单条坏笔记跳过） */
+	async listJournalEntries(): Promise<JournalEntry[]> {
+		try {
+			const dir = this.journalFolder();
+			const files = await this.noteStorage.listMarkdown(dir);
+			const out: JournalEntry[] = [];
+			for (const path of files) {
+				const text = await this.noteStorage.readNote(path);
+				const e = parseJournalNote(text);
+				if (e) out.push(e);
+			}
+			return out;
+		} catch {
+			return [];
+		}
 	}
 
 	/**

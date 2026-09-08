@@ -646,6 +646,12 @@ function makeCardRenderCtx(ctx: ViewContext): CardRenderContext {
 		trendingEngine: ctx.trendingEngine,
 		// 「新」标记：近 30 天首次见插件，纯文字融入作者行
 		firstSeenMap: ctx.firstSeenMap,
+		// 评测台账：装过徽标 + 已写评测笔记高亮
+		journalTriedIds: ctx.journalTriedIds,
+		journalEntryIds: ctx.journalEntryIds,
+		// 一键更新：卡片「更新」按钮回调 + 更新中状态
+		updatingIds: ctx.updatingIds,
+		onUpdatePlugin: (pid) => { void ctx.updatePlugin(pid); },
 	};
 }
 

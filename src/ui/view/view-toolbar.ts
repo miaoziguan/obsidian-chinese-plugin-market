@@ -259,6 +259,26 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 叠层意象比箭头交换更精准（箭头更像切换排序方向等）。
 		setIcon(profileBtn, "layers");
 
+		// ── 我的足迹入口（常驻图标按钮 + 数量徽标；永远可点，0 条时引导去写评测） ──
+		const footprintBtn = headerRow.createEl("button", {
+			cls: "clickable-icon pt-header-footprint",
+			attr: { type: "button", "aria-label": ctx.t("journal.footprint") },
+		});
+		setIcon(footprintBtn, "list-ordered");
+		// 数量反映「已写评测笔记」条数（与足迹视图一致）；永远可点，不做置灰禁用
+		const reviewCount = ctx.journalEntryIds?.size ?? 0;
+		footprintBtn.setAttribute(
+			"title",
+			`${ctx.t("journal.footprint")} · 共 ${reviewCount} 条评测`,
+		);
+		if (reviewCount > 0) {
+			footprintBtn.createSpan({
+				cls: "pt-header-footprint-badge",
+				text: String(reviewCount),
+			});
+		}
+		footprintBtn.addEventListener("click", () => void ctx.plugin.openJournalView());
+
 		/** 判断某 profile 的启用集是否与当前实际启用集一致（用于标注「当前生效」） */
 		const isProfileActive = (p: { enabled: string[] }): boolean => {
 			const cur = ctx.enabledIds;
@@ -449,6 +469,17 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		};
 		checkUpdateBtn.addEventListener("click", onCheckUpdate);
 
+	// 一键更新全部可更新插件（桌面端；遍历 outdatedIds 顺序执行，每条静默后汇总）
+	const updateAllBtn = headerRow.createEl("button", {
+		cls: "pt-check-update pt-update-all",
+		attr: { "aria-label": ctx.t("action.updateAll"), title: ctx.t("action.updateAll"), type: "button" },
+	});
+	setIcon(updateAllBtn, "arrow-down-to-line");
+	updateAllBtn.addEventListener("click", () => {
+		ctx.track("action:updateAll");
+		void ctx.updateAll();
+	});
+
 		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 置于搜索行最右
 		const toggleBtn = headerRow.createEl("button", {
 			cls: "pt-toggle-filters pt-toggle-filters--text",
@@ -496,6 +527,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 					.setTitle(ctx.t("action.checkUpdate"))
 					.setIcon("download-cloud")
 					.onClick(() => onCheckUpdate())
+			);
+			menu.addItem((item) =>
+				item
+					.setTitle(ctx.t("action.updateAll"))
+					.setIcon("arrow-down-to-line")
+					.onClick(() => void ctx.updateAll())
 			);
 			menu.addItem((item) =>
 				item
@@ -890,84 +927,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.scheduleRender(true);
 	});
 
-	// ── 装过筛选（曾安装过，含已卸载；数据来自安装历史索引） ──
-	const triedRow = advancedInner.createDiv({ cls: "pt-facet-row" });
-	triedRow.createSpan({ cls: "pt-facet-label", text: "评测" });
-	const triedChips = triedRow.createDiv({ cls: "pt-facet-chips" });
-	const triedToggle = triedChips.createEl("button", { cls: "pt-filter pt-toggle-tried", text: "装过" });
-	const updateTriedToggle = () => {
-		const active = ctx.triedFilter === "tried";
-		triedToggle.setAttribute("aria-pressed", active ? "true" : "false");
-		triedToggle.textContent = "装过";
-	};
-	updateTriedToggle();
-	triedToggle.addEventListener("click", () => {
-		ctx.triedFilter = ctx.triedFilter === "tried" ? "all" : "tried";
-		updateTriedToggle();
-		ctx.track(ctx.triedFilter === "tried" ? "filter:tried" : "filter:tried_off");
-		ctx.scheduleRender(true);
-	});
-
-	// ── 已弃用筛选（用户评测 status=abandoned；集合由插件后台种子） ──
-	const abandonedRow = advancedInner.createDiv({ cls: "pt-facet-row" });
-	abandonedRow.createSpan({ cls: "pt-facet-label", text: "" });
-	const abandonedChips = abandonedRow.createDiv({ cls: "pt-facet-chips" });
-	const abandonedToggle = abandonedChips.createEl("button", { cls: "pt-filter pt-toggle-abandoned", text: "已弃用" });
-	const updateAbandonedToggle = () => {
-		const active = ctx.abandonedFilter === "abandoned";
-		abandonedToggle.setAttribute("aria-pressed", active ? "true" : "false");
-		abandonedToggle.textContent = "已弃用";
-	};
-	updateAbandonedToggle();
-	abandonedToggle.addEventListener("click", () => {
-		ctx.abandonedFilter = ctx.abandonedFilter === "abandoned" ? "all" : "abandoned";
-		updateAbandonedToggle();
-		ctx.track(ctx.abandonedFilter === "abandoned" ? "filter:abandoned" : "filter:abandoned_off");
-		ctx.scheduleRender(true);
-	});
-
-	// ── 踩坑洞察（全局统计：弃用率 + 踩坑 Top；数据来自插件后台扫描，就绪前显示占位） ──
-	const insightRow = advancedInner.createDiv({ cls: "pt-facet-row pt-insight-row" });
-	insightRow.createSpan({ cls: "pt-facet-label", text: "洞察" });
-	const insightBox = insightRow.createDiv({ cls: "pt-insight" });
-	const jStats = ctx.journalStats;
-	if (!jStats) {
-		insightBox.createSpan({ cls: "pt-insight-loading", text: "暂无评测数据" });
-	} else {
-		const dist = insightBox.createDiv({ cls: "pt-insight-dist" });
-		dist.textContent = `弃用 ${jStats.abandoned} · 在用 ${jStats.using} · 观望 ${jStats.watching}`;
-		if (jStats.total > 0) {
-			const rate = insightBox.createDiv({ cls: "pt-insight-rate" });
-			rate.textContent = `弃用率 ${Math.round(jStats.abandonRate * 100)}%`;
-		}
-		if (jStats.topVerdicts.length > 0) {
-			const top = insightBox.createDiv({ cls: "pt-insight-top" });
-			top.createSpan({ cls: "pt-insight-head", text: "踩过的坑：" });
-			jStats.topVerdicts.forEach((v, i) => {
-				if (i > 0) top.createSpan({ text: " · " });
-				const tag = top.createSpan({ cls: "pt-insight-tag", text: `${v.reason}×${v.count}` });
-				tag.setAttribute("role", "button");
-				tag.setAttribute("tabindex", "0");
-				const syncPressed = () =>
-					tag.setAttribute("aria-pressed", ctx.verdictFilter === v.reason ? "true" : "false");
-				syncPressed();
-				const toggle = () => {
-					ctx.verdictFilter = ctx.verdictFilter === v.reason ? "all" : v.reason;
-					syncPressed();
-					ctx.track(ctx.verdictFilter === "all" ? "filter:verdict_off" : `filter:verdict:${v.reason}`);
-					ctx.scheduleRender(true);
-				};
-				tag.addEventListener("click", toggle);
-				tag.addEventListener("keydown", (e: KeyboardEvent) => {
-					if (e.key === "Enter" || e.key === " ") {
-						e.preventDefault();
-						toggle();
-					}
-				});
-			});
-		}
-	}
-
 	// ── 新上线筛选（近 N 天首次见；null = 不过滤） ──
 	const newRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 	newRow.createSpan({ cls: "pt-facet-label", text: "上线" });
@@ -1052,12 +1011,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			// 重置系列筛选
 			ctx.seriesFilter = "all";
 			updateSeriesToggle();
-			// 重置装过 / 已弃用筛选
-			ctx.triedFilter = "all";
-			updateTriedToggle();
-			ctx.abandonedFilter = "all";
-			updateAbandonedToggle();
-			// 重置踩坑原因筛选（与装过 / 已弃用一致；toolbar 重建后 tag 高亮自动刷新）
+			// 重置踩坑原因筛选（保留兜底：即便 UI 移除 verdict tag，重置时仍置 all）
 			ctx.verdictFilter = "all";
 			// 重置新上线 + 近期更新筛选
 			ctx.newWithinDays = null;

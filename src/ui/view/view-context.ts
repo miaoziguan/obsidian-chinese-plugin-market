@@ -129,6 +129,8 @@ export interface ViewContext {
 	abandonedFilter: AbandonedFilter;
 	/** 曾安装过的插件 id 集合（含已卸载） */
 	journalTriedIds: Set<string>;
+	/** 已写评测笔记的插件 id 集合（供卡片「评测」图标高亮） */
+	journalEntryIds: Set<string>;
 	/** 用户评测为 abandoned 的插件 id 集合 */
 	journalAbandonedIds: Set<string>;
 	/** 全局评测统计（弃用率 / 踩坑 Top 等），可能为 null（后台扫描未完成） */
@@ -252,6 +254,12 @@ export interface ViewContext {
 	outdatedInfo: Map<string, { local: string; latest: string }>;
 	/** 正在一键安装中的插件 id 集合（安装中按钮显示「安装中…」并防重点） */
 	installingIds: Set<string>;
+	/** 正在一键更新的插件 id 集合（更新中按钮显示「更新中…」并防重点） */
+	updatingIds: Set<string>;
+	/** 更新单个已安装插件到官方最新版（桌面端） */
+	updatePlugin: (pluginId: string, silent?: boolean) => Promise<void>;
+	/** 批量更新所有可更新插件（桌面端） */
+	updateAll: () => Promise<void>;
 
 	// ── 智能信号 ──
 	smartSignals: Map<string, SignalId[]>;
@@ -344,6 +352,7 @@ export interface ViewContext {
 	focusCardByIdx: (idx: number) => void;
 	flashAction: (el: HTMLElement) => void;
 	openDetailDrawer: (pluginId: string, triggerCard?: HTMLElement | null) => void;
+	openReviewDrawer: (pluginId: string, triggerCard?: HTMLElement | null) => void;
 	computeSimilarFor: (info: PluginInfo) => SimilarCandidate[];
 	updateCompareTray: () => void;
 	openCompareModal: () => void;
@@ -452,6 +461,7 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		get abandonedFilter() { return view.abandonedFilter; },
 		set abandonedFilter(v) { view.abandonedFilter = v; },
 		get journalTriedIds() { return view.plugin.journalTriedIds; },
+		get journalEntryIds() { return view.plugin.journalEntryIds; },
 		get journalAbandonedIds() { return view.plugin.journalAbandonedIds; },
 		get journalStats() { return view.plugin.journalStats; },
 		get verdictFilter() { return view.verdictFilter; },
@@ -618,6 +628,7 @@ get authorFacetList() { return view.authorFacetList; },
 		get outdatedInfo() { return view.outdatedInfo; },
 		get installingIds() { return view.installingIds; },
 		set installingIds(v) { view.installingIds = v; },
+		get updatingIds() { return view.updatingIds; },
 
 		// ── 智能信号 ──
 		get smartSignals() { return view.smartSignals; },
@@ -690,6 +701,8 @@ get authorFacetList() { return view.authorFacetList; },
 		invalidateAndRender: view.invalidateAndRender.bind(view),
 		postRenderSync: view.postRenderSync.bind(view),
 		refreshCardState: view.refreshCardState.bind(view),
+		updatePlugin: (id, silent) => view.updatePlugin(id, silent),
+		updateAll: () => view.updateAll(),
 		fillVisibleWindow: view.fillVisibleWindow.bind(view),
 		updateWindow: view.updateWindow.bind(view),
 		get windowStart() { return view.windowStart; },
@@ -710,6 +723,7 @@ get authorFacetList() { return view.authorFacetList; },
 		focusCardByIdx: view.focusCardByIdx.bind(view),
 		flashAction: view.flashAction.bind(view),
 		openDetailDrawer: view.openDetailDrawer.bind(view),
+		openReviewDrawer: view.openReviewDrawer.bind(view),
 		computeSimilarFor: view.computeSimilarFor.bind(view),
 		updateCompareTray: view.updateCompareTray.bind(view),
 		openCompareModal: view.openCompareModal.bind(view),

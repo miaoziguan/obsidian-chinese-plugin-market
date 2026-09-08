@@ -46,10 +46,13 @@ export function renderJournalEditor(
 	host: JournalEditorHost,
 ): { dispose: () => void } {
 	const t = host.t;
-	const wrap = parent.createDiv({ cls: "pt-journal-editor" });
+	const wrap = parent.createDiv({ cls: "pt-journal-editor", attr: { id: "pt-journal-section" } });
 	wrap.createDiv({ cls: "pt-journal-title", text: t("journal.title") });
 
 	const state: JournalEntry = initial ?? { id: pluginId, name: pluginName, note: "" };
+	// 是否已实际编辑过：仅当用户动过状态/评分/弃用原因/备注才为 true，
+	// 用于 dispose 时决定是否落盘（纯「打开看一眼」不写笔记，避免误记为已评测）
+	let dirty = false;
 
 	// 状态三选一
 	const statusRow = wrap.createDiv({ cls: "pt-journal-row" });
@@ -129,6 +132,7 @@ export function renderJournalEditor(
 	// 防抖保存
 	let timer: number | undefined;
 	const commit = () => {
+		dirty = true;
 		if (timer) window.clearTimeout(timer);
 		timer = window.setTimeout(() => {
 			state.updated = Date.now();
@@ -143,10 +147,13 @@ export function renderJournalEditor(
 	return {
 		dispose: () => {
 			if (timer) window.clearTimeout(timer);
-			// 关闭时立即落盘一次，防抖窗口内的编辑不丢
-			state.note = noteArea.value;
-			state.updated = Date.now();
-			host.save(state);
+			// 仅当用户实际编辑过才落盘；纯「打开看一眼」不写笔记，
+			// 否则会被误记为「已评测」而点亮卡片评测图标（用户痛点）
+			if (dirty) {
+				state.note = noteArea.value;
+				state.updated = Date.now();
+				host.save(state);
+			}
 		},
 	};
 }

@@ -801,6 +801,104 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	font-weight: var(--pt-weight-semibold);
 }
 .pt-insight-loading, .pt-insight-empty { font-style: italic; opacity: 0.7; }
+
+/* 主工具栏「我的足迹」图标按钮（阶段5） */
+.pt-header-footprint { margin-left: 6px; flex: 0 0 auto; position: relative; }
+.pt-header-footprint[disabled] { opacity: 0.45; cursor: not-allowed; }
+.pt-header-footprint-badge {
+	position: absolute;
+	top: -3px;
+	right: -3px;
+	min-width: 14px;
+	height: 14px;
+	padding: 0 4px;
+	border-radius: 7px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: 10px;
+	line-height: 14px;
+	text-align: center;
+	pointer-events: none;
+	font-weight: 600;
+}
+
+/* 独立标签页「我的插件足迹」视图 */
+.pt-journal-view { padding: var(--pt-space-m, 12px) var(--pt-space-l, 20px); }
+.pt-journal-view-title {
+	font-size: var(--pt-text-lg, 18px);
+	font-weight: var(--pt-weight-bold, 700);
+	margin-bottom: var(--pt-space-m, 12px);
+}
+.pt-journal-view-body { overflow: auto; }
+/* 0 条评测引导 */
+.pt-journal-guide { padding: var(--pt-space-lg, 24px) 0; max-width: 560px; }
+.pt-journal-guide-title { font-size: var(--pt-text-lg, 18px); font-weight: var(--pt-weight-bold, 700); margin-bottom: var(--pt-space-s, 10px); }
+.pt-journal-guide-desc { color: var(--text-muted); line-height: 1.7; }
+.pt-journal-guide-note {
+	margin-top: var(--pt-space-m, 12px);
+	padding: var(--pt-space-s, 10px) var(--pt-space-m, 12px);
+	background: var(--background-secondary);
+	border-radius: 8px;
+	font-size: var(--pt-text-sm, 13px);
+	color: var(--text-muted);
+}
+
+/* 表格控制条 */
+.pt-journal-ctrl {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--pt-space-xs, 6px);
+	align-items: center;
+	margin-bottom: var(--pt-space-s, 10px);
+}
+.pt-journal-search {
+	flex: 1 1 180px;
+	min-width: 140px;
+	padding: 4px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+.pt-journal-status-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pt-journal-status.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+.pt-journal-verdict { padding: 3px 6px; border: 1px solid var(--background-modifier-border); border-radius: 6px; }
+.pt-journal-copy { padding: 3px 10px; border: 1px solid var(--background-modifier-border); border-radius: 6px; cursor: pointer; }
+.pt-journal-copy:hover { background: var(--background-modifier-hover); }
+
+/* 表格本体 */
+.pt-journal-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--pt-text-sm, 13px);
+}
+.pt-journal-th {
+	text-align: left;
+	cursor: pointer;
+	user-select: none;
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	white-space: nowrap;
+}
+.pt-journal-th:hover { color: var(--text-accent); }
+.pt-journal-tr td {
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	vertical-align: top;
+}
+.pt-journal-name { cursor: pointer; color: var(--text-accent); }
+.pt-journal-name:hover { text-decoration: underline; }
+.pt-journal-note-cell {
+	color: var(--text-muted);
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 	flex: 1 1 auto;
 	min-width: 0;
 }
@@ -2677,6 +2775,8 @@ button.pt-card-install-btn--installed {
 	padding-top: var(--pt-space-lg);
 	border-top: 1px solid var(--background-modifier-border);
 }
+/* 折叠态：点击头部「评测」按钮可切换显隐 */
+.pt-journal-editor.is-collapsed { display: none; }
 .pt-journal-title {
 	font-size: var(--pt-text-lg);
 	font-weight: var(--pt-weight-semibold);
@@ -4669,6 +4769,26 @@ button.pt-card-install-btn--installed {
 /* 卡片收藏按钮选中态（金色星标，呼应官方推荐）。用固定金色，绕开第三方主题覆盖 --pt-gold 导致星标变色/不显眼。 */
 .pt-card-favorite.is-fav-on {
 	color: #d99a1c;
+}
+/* 详情页「我的评测」按钮：已写评测则金色高亮（与卡片端一致） */
+.pt-detail-btn--review.is-review-on {
+	color: #d99a1c;
+}
+/* 卡片「评测」图标：已写评测则金色高亮（呼应收藏星标），让评测入口更易被发现 */
+.pt-card-review.is-review-on {
+	color: #d99a1c;
+}
+.pt-card-review.is-review-on svg {
+	fill: #d99a1c;
+	stroke: #d99a1c;
+}
+/* 详情抽屉「我的评测」区被卡片图标聚焦时的短暂高亮 */
+.pt-journal-editor.pt-journal-flash {
+	animation: pt-journal-flash 1.6s var(--pt-ease);
+}
+@keyframes pt-journal-flash {
+	0% { box-shadow: 0 0 0 2px color-mix(in srgb, #d99a1c 75%, transparent); }
+	100% { box-shadow: 0 0 0 2px transparent; }
 }
 
 /* 启用/禁用子弹开关：与左侧图标组（26px）严格上下对齐，
