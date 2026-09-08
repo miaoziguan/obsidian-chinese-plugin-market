@@ -9,6 +9,7 @@ import {
 	ItemView,
 	WorkspaceLeaf,
 	Platform,
+	Notice,
 } from "obsidian";
 import { toHTMLElement } from "@ui/dom/dom";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
@@ -37,6 +38,7 @@ import { InvertedIndex } from "@domain/recommend/similar";
 import { type AuthorGroup } from "@translation/lexicon/pinyin-init";
 
 import type ChinesePluginMarketPlugin from "@app/plugin";
+import { updatePluginCore } from "@app/plugin-updater";
 // ──────────────────────────────────────────
 // 常量
 // ──────────────────────────────────────────
@@ -423,6 +425,59 @@ export class ChinesePluginMarketView extends ItemView {
 		this.plugin.setRibbonUpdateBadge(this._ctx.outdatedIds?.size ?? 0);
 	};
 
+	/** 正在一键更新的插件 id 集合（防重点 + 驱动卡片按钮 loading 态） */
+	public updatingIds = new Set<string>();
+
+	/**
+	 * 更新单个已安装插件到官方最新版（桌面端）。
+	 * 维护 updatingIds 并在开始/结束各刷新一次卡片按钮态；内部 try/catch 兜底，不向调用方抛错。
+	 * @param pluginId 插件 id
+	 * @param silent   为 true 时不弹单个插件的结果 Notice（批量更新时由 updateAll 汇总）
+	 */
+	public updatePlugin = async (pluginId: string, silent = false): Promise<void> => {
+		if (this.updatingIds.has(pluginId)) return;
+		const info = this.plugins.find((p) => p.id === pluginId);
+		if (!info || !info.repo) {
+			if (!silent) new Notice(this.t("action.update.noRepo"));
+			return;
+		}
+		this.updatingIds.add(pluginId);
+		this._ctx.refreshCardState?.(pluginId);
+		try {
+			const mirror = this._ctx.mirrorConfig();
+			const man = await updatePluginCore(this.app, pluginId, info.repo, mirror);
+			if (!silent) new Notice(this.t("action.update.done", { name: man.name || pluginId, version: man.version ?? "" }), 6000);
+		} catch (e) {
+			new Notice(this.t("action.update.failed", { msg: e instanceof Error ? e.message : String(e) }), 8000);
+		} finally {
+			this.updatingIds.delete(pluginId);
+			this._ctx.refreshCardState?.(pluginId);
+		}
+		// 更新后重检该插件是否为最新，并刷新 ribbon 红点计数
+		await refreshOutdated(this._ctx);
+		this.plugin.setRibbonUpdateBadge(this._ctx.outdatedIds?.size ?? 0);
+	};
+
+	/** 批量更新所有可更新插件（桌面端；遍历 outdatedIds 顺序执行，每条静默后汇总） */
+	public updateAll = async (): Promise<void> => {
+		const ids = [...(this._ctx.outdatedIds ?? [])];
+		if (ids.length === 0) {
+			new Notice(this.t("action.update.none"));
+			return;
+		}
+		const total = ids.length;
+		let ok = 0;
+		let fail = 0;
+		for (const id of ids) {
+			if (this.disposed) break;
+			await this.updatePlugin(id, true);
+			if (this._ctx.outdatedIds?.has(id)) fail++;
+			else ok++;
+			new Notice(this.t("action.update.progress", { done: String(ok + fail), total: String(total) }));
+		}
+		new Notice(this.t("action.update.summary", { ok: String(ok), fail: String(fail) }), 6000);
+	};
+
 	async onOpen() {
 		// 标记所属 leaf（替代 :has 选择器），供 CSS 隐藏该 leaf 的 view-header
 		this.containerEl.closest?.(".workspace-leaf-content")?.addClass("pt-pt-view-leaf");
@@ -441,6 +496,10 @@ export class ChinesePluginMarketView extends ItemView {
 			get outdatedInfo() { return self.outdatedInfo; },
 			get installingIds() { return self.installingIds; },
 			get journalTriedIds() { return self.plugin.journalTriedIds; },
+			get journalEntryIds() { return self.plugin.journalEntryIds; },
+			get updatingIds() { return self.updatingIds; },
+			onUpdatePlugin: (pid: string) => { void self.updatePlugin(pid); },
+			onOpenReview: (pid: string) => self.openReviewDrawer(pid, self.cardById.get(pid) ?? null),
 			app: self.app,
 			// 卡片高度已固定（CSS contain + 锁高），描述展开不再改变布局，无需重绘
 			onDescToggle: () => {},
@@ -658,6 +717,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	 * 打开插件详情页（主视图内整页替换方案 B）。委托给模块函数处理创建/复用。
 	 */
 	public openDetailDrawer = (pluginId: string, triggerCard: HTMLElement | null) => _openDetailDrawer(this._ctx, pluginId, triggerCard);
+	/** 打开详情抽屉并聚焦「我的评测」编辑区（卡片「评测」图标触发） */
+	public openReviewDrawer = (pluginId: string, triggerCard: HTMLElement | null = null) => _openDetailDrawer(this._ctx, pluginId, triggerCard, true);
 
 	/** 进入详情页模式：隐藏列表（scrollViewport + featured），让详情抽屉整页铺满 */
 	public enterDetailMode = () => {

@@ -122,6 +122,12 @@ export interface DrawerHostPlugin {
 		uninstalled?: number | null;
 		installCount?: number;
 	} | undefined;
+	/** 曾安装过的插件 id 集合（含已卸载），供工具栏「我的足迹」计数 */
+	journalTriedIds: Set<string>;
+	/** 已写评测笔记的 id 集合（供详情页「我的评测」按钮高亮判定） */
+	journalEntryIds?: Set<string>;
+	/** 打开「我的插件足迹」独立视图 */
+	openJournalView: () => void | Promise<void>;
 }
 
 export interface DrawerOptions {
@@ -157,6 +163,8 @@ export interface DrawerOptions {
 	 * 避免打开点击帧被上千候选的相似度打分阻塞。
 	 */
 	deferSimilar?: boolean;
+	/** 打开后自动滚动并高亮「我的评测」编辑区（由卡片「评测」图标触发） */
+	focusJournal?: boolean;
 }
 
 export class PluginDetailDrawer {
@@ -200,6 +208,7 @@ export class PluginDetailDrawer {
 	private drawerEl: HTMLElement | null = null;
 	private backdropEl: HTMLElement | null = null;
 	private mode: "overlay" | "page" = "overlay";
+	private _focusJournal = false;
 
 	/** DOM 事件清理 */
 	private _boundKeydown: (e: KeyboardEvent) => void;
@@ -225,6 +234,7 @@ export class PluginDetailDrawer {
 		this.onCloseCb = opts.onClose;
 		this.mode = opts.mode ?? "overlay";
 		this._similarPending = opts.deferSimilar === true;
+		this._focusJournal = opts.focusJournal === true;
 
 		this._boundKeydown = this.onKeydown.bind(this);
 		this._boundBackdropClick = this.onBackdropClick.bind(this);
@@ -293,6 +303,53 @@ export class PluginDetailDrawer {
 			backdropEl?.remove();
 		};
 		requestIdle(teardown, 1000);
+	}
+
+	/** 滚动并高亮评测区（卡片「评测」图标在复用抽屉时调用；评测区异步渲染，故带重试） */
+	focusJournalArea() {
+		const tryFocus = (attempt = 0) => {
+			const j = this.drawerEl?.querySelector(".pt-journal-editor");
+			if (j) {
+				j.scrollIntoView({ block: "center", behavior: "smooth" });
+				j.addClass("pt-journal-flash");
+				window.setTimeout(() => j.removeClass("pt-journal-flash"), 1600);
+				return;
+			}
+			if (attempt < 20) window.setTimeout(() => tryFocus(attempt + 1), 50);
+		};
+		tryFocus();
+	}
+
+	/**
+	 * 切换「我的评测」编辑区显隐（头部「评测」按钮 / 卡片「评测」图标共用）。
+	 * - 默认折叠：首次打开详情抽屉时不显示评测区，避免空编辑区抢视线
+	 * - 头部「评测」按钮：toggle 当前态（再点折叠）
+	 * - 卡片「评测」图标：传 forceOpen=true 强制展开并滚动聚焦
+	 * 评测区异步渲染（需读盘），元素未就绪时安全 no-op
+	 */
+	toggleJournalArea(forceOpen?: boolean) {
+		const doToggle = (attempt = 0): void => {
+			const j = this.drawerEl?.querySelector(".pt-journal-editor") as HTMLElement | null;
+			const btn = this.drawerEl?.querySelector(".pt-detail-btn--review") as HTMLElement | null;
+			if (!j) {
+				// 评测区异步渲染（需读盘），元素未就绪时短暂重试，避免点击无反应
+				if (attempt < 20) window.setTimeout(() => doToggle(attempt + 1), 50);
+				return;
+			}
+			const isCollapsed = j.classList.contains("is-collapsed");
+			const willOpen = forceOpen === true ? true : forceOpen === false ? false : isCollapsed;
+			if (willOpen) {
+				j.removeClass("is-collapsed");
+				btn?.setAttribute("aria-expanded", "true");
+				j.scrollIntoView({ block: "center", behavior: "smooth" });
+				j.addClass("pt-journal-flash");
+				window.setTimeout(() => j.removeClass("pt-journal-flash"), 1600);
+			} else {
+				j.addClass("is-collapsed");
+				btn?.setAttribute("aria-expanded", "false");
+			}
+		};
+		doToggle();
 	}
 
 	/**
@@ -829,6 +886,25 @@ export class PluginDetailDrawer {
 			appendIconText(copyBtn, `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`, this.t("card.copy"));
 		};
 
+		// 我的评测：点击滚动并高亮抽屉内「我的评测」编辑区（已写评测则金色高亮）
+		const reviewBtn = actions.createEl("button", { cls: "pt-detail-btn pt-detail-btn--review" });
+		reviewBtn.setAttribute("aria-expanded", "false");
+		reviewBtn.setAttribute("aria-controls", "pt-journal-section");
+		const updateReviewBtn = () => {
+			reviewBtn.empty();
+			const hasReview = this.plugin.journalEntryIds?.has(p.id) ?? false;
+			const onColor = "#d99a1c";
+			appendIconText(
+				reviewBtn,
+				`<svg viewBox="0 0 24 24" width="14" height="14" fill="${hasReview ? onColor : "none"}" stroke="${hasReview ? onColor : "currentColor"}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/></svg>`,
+				this.t("card.review"),
+			);
+			reviewBtn.toggleClass("is-review-on", hasReview);
+		};
+		updateReviewBtn();
+		// 切换「我的评测」编辑区显隐（默认折叠，再次点击折叠）
+		reviewBtn.addEventListener("click", () => this.toggleJournalArea());
+
 		// ── README 标题行（移到 head-block：README 翻译/了解功能按钮随滚动常驻贴顶） ──
 		const readmeHeader = headBlock.createDiv({ cls: "pt-detail-section-head pt-detail-section-head--readme" });
 		readmeHeader.createSpan({ cls: "pt-detail-section-dot" });
@@ -1014,6 +1090,14 @@ export class PluginDetailDrawer {
 					facts: this.plugin.getInstallFacts(p.id),
 				});
 				this._journalDispose = editor.dispose;
+				// 已写评测则默认展开（让用户直接看到自己评测内容）；未评测默认折叠（避免空编辑区抢视线）
+				const hasReview = this.plugin.journalEntryIds?.has(p.id) ?? false;
+				const jEl = inner.querySelector(".pt-journal-editor");
+				if (jEl && !hasReview) jEl.classList.add("is-collapsed");
+				// 卡片「评测」图标触发：无论默认态强制展开并滚动聚焦
+				if (this._focusJournal) {
+					window.requestAnimationFrame(() => this.toggleJournalArea(true));
+				}
 			});
 			this._cleanupFns.push(() => this._journalDispose?.());
 		}

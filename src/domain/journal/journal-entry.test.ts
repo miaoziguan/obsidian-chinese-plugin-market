@@ -51,35 +51,39 @@ describe("评测笔记 frontmatter 往返", () => {
 
 	it("缺字段 / 坏内容不抛错", () => {
 		expect(parseJournalNote("没有 frontmatter 的纯文本")).toBeNull();
-		expect(parseJournalNote("---\nid: x\n---\n")).toMatchObject({ id: "x" });
+		// 仅有 id、无任何主观/事实内容的空笔记：按设计返回 null，
+		// 避免被错算成已评测而误点亮卡片「评测」图标（用户痛点）
+		expect(parseJournalNote("---\nid: x\n---\n")).toBeNull();
 		expect(parseJournalNote("---\nno-id: 1\n---\n")).toBeNull();
 		expect(parseJournalNote("")).toBeNull();
 	});
 
 	it("评分越界 / 小数 / 非数字视为未填，状态非法视为未填", () => {
-		const over = parseJournalNote("---\nid: x\nrating: 9\n---\n")!;
+		// 用 status: using 让笔记非空（否则纯空笔记按设计返回 null 而非对象）
+		const over = parseJournalNote("---\nid: x\nstatus: using\nrating: 9\n---\n")!;
 		expect(over.rating).toBeUndefined();
-		const frac = parseJournalNote("---\nid: x\nrating: 3.5\n---\n")!;
+		expect(over.status).toBe("using");
+		const frac = parseJournalNote("---\nid: x\nstatus: using\nrating: 3.5\n---\n")!;
 		expect(frac.rating).toBeUndefined();
-		const bad = parseJournalNote("---\nid: x\nrating: abc\n---\n")!;
+		const bad = parseJournalNote("---\nid: x\nstatus: using\nrating: abc\n---\n")!;
 		expect(bad.rating).toBeUndefined();
-		const st = parseJournalNote("---\nid: x\nstatus: 乱写\n---\n")!;
+		const st = parseJournalNote("---\nid: x\nstatus: 乱写\n---\n占位\n")!;
 		expect(st.status).toBeUndefined();
+		expect(st.note).toBe("占位");
 	});
 
-	it("弃用原因预设必须恰好是这 8 个（硬编码锁定）", () => {
+	it("弃用原因预设必须恰好是这 7 个（硬编码锁定）", () => {
 		// 不能用 VERDICT_PRESETS 自己断言自己——那样改错/漏项也会全绿
 		expect([...VERDICT_PRESETS]).toEqual([
 			"不好用",
 			"有 bug",
 			"有替代",
 			"太重",
-			"收费",
 			"不更新",
 			"冲突",
 			"用不上",
 		]);
-		expect(VERDICT_PRESETS).toHaveLength(8);
+		expect(VERDICT_PRESETS).toHaveLength(7);
 	});
 
 	it("全部预设值可完整往返", () => {
@@ -103,7 +107,8 @@ describe("评测笔记 frontmatter 往返", () => {
 	});
 
 	it("id / name 含 # 或 : 时不被 YAML 截断", () => {
-		const e: JournalEntry = { id: "my#plugin", name: "名: 称", note: "" };
+		// 加 status 让笔记非空（纯空笔记按设计返回 null，无法校验 id/name）
+		const e: JournalEntry = { id: "my#plugin", name: "名: 称", status: "using", note: "" };
 		const parsed = parseJournalNote(renderJournalNote(e))!;
 		expect(parsed.id).toBe("my#plugin");
 		expect(parsed.name).toBe("名: 称");
