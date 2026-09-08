@@ -711,7 +711,7 @@ export class PluginDetailDrawer {
 		if (this._history.length > 0) {
 			const backBtn = headLeft.createEl("button", {
 				cls: "pt-drawer-back",
-				text: `← ${this.t("detail.back")}`,
+				text: this.t("detail.back"),
 			});
 			backBtn.addEventListener("click", () => {
 				const prev = this._history.pop();
