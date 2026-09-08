@@ -36,7 +36,7 @@ import { applyProfileByIds, applyEnabledProfile } from "@data/platform/plugin-in
 import type { TrendSnapshot } from "@domain/recommend/trending";
 import { mergeInstallDiff, type InstallHistoryFile } from "@domain/journal/install-history";
 import { parseJournalNote, renderJournalNote, type JournalEntry } from "@domain/journal/journal-entry";
-import { computeJournalStats, type JournalStats } from "@domain/journal/journal-stats";
+import { computeJournalStats, buildVerdictIndex, type JournalStats } from "@domain/journal/journal-stats";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
 /** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
 type LoadDataRaw = NonNullable<Parameters<Translator["loadData"]>[0]>;
@@ -57,6 +57,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	journalAbandonedIds: Set<string> = new Set();
 	/** 全局评测统计（弃用率 / 踩坑 Top 等，onload 后台扫描聚合，供「踩坑洞察」面板） */
 	journalStats: JournalStats | null = null;
+	/** 弃用原因 → 插件 id 集合索引（来自评测笔记 verdict，供踩坑 Top 点击联动筛选） */
+	journalVerdictIds: Map<string, Set<string>> = new Map();
 
 	/**
 	 * 记录一次安装/卸载 diff 到历史索引（评测台账）。fire-and-forget：失败只 warn，
@@ -156,6 +158,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			}
 			this.journalAbandonedIds = ids;
 			this.journalStats = computeJournalStats(entries);
+			this.journalVerdictIds = buildVerdictIndex(entries);
 			// 注入已打开视图并触发重渲染（视图未创建时其 onOpen 会自然读到集合/统计）
 			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 				const view = leaf.view;

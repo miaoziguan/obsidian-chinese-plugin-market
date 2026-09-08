@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeJournalStats } from "./journal-stats";
+import { computeJournalStats, buildVerdictIndex } from "./journal-stats";
 import type { JournalEntry } from "./journal-entry";
 
 function entry(over: Partial<JournalEntry>): JournalEntry {
@@ -74,5 +74,17 @@ describe("computeJournalStats", () => {
 		]);
 		expect(s.installCountSum).toBe(6);
 		expect(s.ratedCount).toBe(2);
+	});
+
+	it("buildVerdictIndex：弃用原因 → 插件 id 集合", () => {
+		const idx = buildVerdictIndex([
+			entry({ id: "a", verdict: ["有 bug", "太重"] }),
+			entry({ id: "b", verdict: ["有 bug"] }),
+			entry({ id: "c", verdict: ["太重", "有 bug"] }),
+			entry({ id: "d" }), // 无 verdict
+		]);
+		expect([...(idx.get("有 bug") ?? [])].sort()).toEqual(["a", "b", "c"]);
+		expect([...(idx.get("太重") ?? [])].sort()).toEqual(["a", "c"]);
+		expect(idx.has("收费")).toBe(false);
 	});
 });

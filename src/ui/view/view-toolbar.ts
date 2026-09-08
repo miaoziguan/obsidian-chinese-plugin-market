@@ -945,7 +945,25 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			top.createSpan({ cls: "pt-insight-head", text: "踩过的坑：" });
 			jStats.topVerdicts.forEach((v, i) => {
 				if (i > 0) top.createSpan({ text: " · " });
-				top.createSpan({ cls: "pt-insight-tag", text: `${v.reason}×${v.count}` });
+				const tag = top.createSpan({ cls: "pt-insight-tag", text: `${v.reason}×${v.count}` });
+				tag.setAttribute("role", "button");
+				tag.setAttribute("tabindex", "0");
+				const syncPressed = () =>
+					tag.setAttribute("aria-pressed", ctx.verdictFilter === v.reason ? "true" : "false");
+				syncPressed();
+				const toggle = () => {
+					ctx.verdictFilter = ctx.verdictFilter === v.reason ? "all" : v.reason;
+					syncPressed();
+					ctx.track(ctx.verdictFilter === "all" ? "filter:verdict_off" : `filter:verdict:${v.reason}`);
+					ctx.scheduleRender(true);
+				};
+				tag.addEventListener("click", toggle);
+				tag.addEventListener("keydown", (e: KeyboardEvent) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						toggle();
+					}
+				});
 			});
 		}
 	}
@@ -1039,6 +1057,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			updateTriedToggle();
 			ctx.abandonedFilter = "all";
 			updateAbandonedToggle();
+			// 重置踩坑原因筛选（与装过 / 已弃用一致；toolbar 重建后 tag 高亮自动刷新）
+			ctx.verdictFilter = "all";
 			// 重置新上线 + 近期更新筛选
 			ctx.newWithinDays = null;
 			ctx.settings.newWithinDays = null;

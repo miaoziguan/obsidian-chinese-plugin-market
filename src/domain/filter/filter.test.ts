@@ -270,6 +270,20 @@ describe("matchesPlugin · 评测台账筛选（阶段4）", () => {
 		expect(matchesPlugin(P_GIT, "", opts)).toBe(true);
 		expect(matchesPlugin(P_CAL, "", opts)).toBe(true);
 	});
+	it("踩坑原因筛选：verdictFilter 仅保留该原因索引内的插件", () => {
+		const verdictIds = new Map<string, Set<string>>([
+			["有 bug", new Set(["obsidian-git"])],
+			["太重", new Set(["calendar", "obsidian-git"])],
+		]);
+		const onHeavy = baseMatchOpts({ verdictFilter: "太重", journalVerdictIds: verdictIds });
+		expect(matchesPlugin(P_GIT, "", onHeavy)).toBe(true); // obsidian-git 在「太重」
+		expect(matchesPlugin(P_CAL, "", onHeavy)).toBe(true); // calendar 在「太重」
+		const onBug = baseMatchOpts({ verdictFilter: "有 bug", journalVerdictIds: verdictIds });
+		expect(matchesPlugin(P_CAL, "", onBug)).toBe(false); // calendar 不在「有 bug」
+		expect(matchesPlugin(P_MIND, "", onBug)).toBe(false); // enhancing-mindmap 不在任何
+		const all = baseMatchOpts({ verdictFilter: "all", journalVerdictIds: verdictIds });
+		expect(matchesPlugin(P_MIND, "", all)).toBe(true); // "all" 不过滤
+	});
 });
 
 describe("filterAndSortPlugins", () => {

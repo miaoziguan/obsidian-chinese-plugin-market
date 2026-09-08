@@ -791,6 +791,14 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	color: var(--pt-accent);
 	font-size: var(--pt-text-2xs, 10px);
 	white-space: nowrap;
+	cursor: pointer;
+}
+.pt-insight-tag:hover { border-color: color-mix(in srgb, var(--pt-accent) 60%, transparent); }
+.pt-insight-tag[aria-pressed="true"] {
+	color: #fff;
+	background: var(--pt-accent);
+	border-color: var(--pt-accent);
+	font-weight: var(--pt-weight-semibold);
 }
 .pt-insight-loading, .pt-insight-empty { font-style: italic; opacity: 0.7; }
 	flex: 1 1 auto;
