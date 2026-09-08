@@ -266,7 +266,7 @@ export const STRINGS = {
 	"journal.status.watching": { zh: "观望" },
 	"journal.status.tried": { zh: "装过" },
 	"journal.openFail": { zh: "找不到主视图" },
-	"settings.review.folder.desc": { zh: "留空 = 默认藏进 .obsidian 私有目录；填 vault 相对路径可让笔记出现在文件树" },
+	"settings.review.folder.desc": { zh: "留空 = 默认藏进 Obsidian 私有配置目录；填 vault 相对路径可让笔记出现在文件树" },
 
 	// 一键了解功能（基于仓库 manifest 元数据，不读 README）
 	"detail.insight": { zh: "了解功能" },
@@ -606,7 +606,7 @@ export const STRINGS = {
 	"settings.tm.clearApproved": { zh: "清除已采纳" },
 	"settings.tm.clearDesc": { zh: "删除「翻译记忆库」文件夹下全部已采纳笔记及其索引" },
 	"settings.tm.folder": { zh: "记忆库存放路径" },
-	"settings.tm.folder.desc": { zh: "翻译记忆默认藏在 .obsidian 私有目录（不污染 vault、不被其他插件检索）。留空即用默认；也可填 vault 相对路径（如 01-附件/TM）把记忆归整到指定位置。" },
+	"settings.tm.folder.desc": { zh: "翻译记忆默认藏在 Obsidian 私有配置目录（不污染 vault、不被其他插件检索）。留空即用默认；也可填 vault 相对路径（如 01-附件/TM）把记忆归整到指定位置。" },
 	"settings.tm.apply": { zh: "应用并迁移记忆库" },
 	"settings.tm.apply.tip": { zh: "把旧位置的已采纳笔记迁移到新路径" },
 	"settings.tm.openFolder": { zh: "打开记忆库文件夹" },

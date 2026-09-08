@@ -6,7 +6,12 @@
  * 视图本身由 translator-view.ts 的 ChinesePluginMarketView 承载。
  */
 
-import { Plugin, Notice, Menu, TFile, Platform, normalizePath } from "obsidian";
+import { Plugin, Notice, Menu, TFile, Platform, normalizePath, type App } from "obsidian";
+
+/** Obsidian App 在 types 中未暴露、但运行时存在的辅助方法 */
+interface AppWithDefaultApp extends App {
+	openWithDefaultApp(path: string): void;
+}
 import { DirectInstallModal } from "@app/direct-install";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
@@ -592,8 +597,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 */
 	private registerTMVaultEvents(): void {
 		const effective = this.tmFolderEffective();
-		// .obsidian 私有目录的变更不广播 vault create/delete 事件，靠启动时全扫覆盖，无需注册
-		if (effective.startsWith(".obsidian/")) return;
+		// 配置目录（默认 .obsidian，用户可自定义到 vault.configDir）的变更不广播 vault create/delete 事件，靠启动时全扫覆盖，无需注册
+		const cfg = normalizePath(this.app.vault.configDir);
+		if (effective === cfg || effective.startsWith(cfg + "/")) return;
 		const tmPaths = [normalizePath(TM_FOLDER), normalizePath(effective)];
 		const isTMFile = (path: string) => {
 			const p = normalizePath(path);
@@ -729,7 +735,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const t = makeT();
 		const path = this.tmFolderEffective();
 		try {
-			(this.app as any).openWithDefaultApp(normalizePath(path));
+			(this.app as AppWithDefaultApp).openWithDefaultApp(normalizePath(path));
 		} catch {
 			new Notice(t("settings.tm.openFolder.failed", { path }));
 		}

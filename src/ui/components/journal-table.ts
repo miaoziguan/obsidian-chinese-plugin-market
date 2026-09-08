@@ -202,16 +202,18 @@ export function renderJournalTable(
 		});
 
 		const copyBtn = ctrl.createEl("button", { cls: "pt-journal-copy", text: t("journal.copy") });
-		copyBtn.addEventListener("click", async () => {
-			const md = journalRowsToMarkdown(filteredSorted(), t);
-			try {
-				await navigator.clipboard.writeText(md);
-				copyBtn.setText(t("journal.copyDone"));
-				window.setTimeout(() => copyBtn.setText(t("journal.copy")), 1500);
-			} catch {
-				copyBtn.setText(t("journal.copyFail"));
-				window.setTimeout(() => copyBtn.setText(t("journal.copy")), 1500);
-			}
+		copyBtn.addEventListener("click", () => {
+			void (async () => {
+				const md = journalRowsToMarkdown(filteredSorted(), t);
+				try {
+					await navigator.clipboard.writeText(md);
+					copyBtn.setText(t("journal.copyDone"));
+					window.setTimeout(() => copyBtn.setText(t("journal.copy")), 1500);
+				} catch {
+					copyBtn.setText(t("journal.copyFail"));
+					window.setTimeout(() => copyBtn.setText(t("journal.copy")), 1500);
+				}
+			})();
 		});
 
 		const body = wrap.createDiv({ cls: "pt-journal-body" });
