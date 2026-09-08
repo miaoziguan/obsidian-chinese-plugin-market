@@ -137,6 +137,7 @@ export function renderJournalTable(
 	let sortAsc = false;
 
 	const t = host.t;
+	const expanded = new Set<string>();
 	const wrap = parent.createDiv({ cls: "pt-journal-table-wrap" });
 
 	const cols: [JournalSortKey, I18nKey][] = [
@@ -252,7 +253,42 @@ export function renderJournalTable(
 				tr.createEl("td", { text: fmtDate(r.firstInstalled) });
 				tr.createEl("td", { text: fmtDate(r.lastActive) });
 				tr.createEl("td", { text: (r.verdict ?? []).join("、") || "—" });
-				tr.createEl("td", { cls: "pt-journal-note-cell", text: (r.note ?? "").slice(0, 60) || "—" });
+				const noteText = r.note ?? "";
+				const noteTd = tr.createEl("td", { cls: "pt-journal-note-cell", text: noteText || "—" });
+				// 方案1：hover 原生 tooltip 看全文（CSS 已做单行省略号）
+				if (noteText) noteTd.setAttribute("title", noteText);
+
+				// 方案2：点非名字单元格 → 原地展开/收起 inline 详情（点名字走 onOpen 跳详情）
+				tr.addEventListener("click", (e) => {
+					if ((e.target as HTMLElement).closest(".pt-journal-name")) return;
+					if (expanded.has(r.id)) expanded.delete(r.id);
+					else expanded.add(r.id);
+					drawBody();
+				});
+
+				if (expanded.has(r.id)) {
+					const dtr = table.createEl("tr", { cls: "pt-journal-detail-row" });
+					const dtd = dtr.createEl("td", {
+						cls: "pt-journal-detail",
+						attr: { colspan: String(cols.length + 2) },
+					});
+					const inner = dtd.createDiv({ cls: "pt-journal-detail-inner" });
+					if (r.verdict && r.verdict.length) {
+						inner.createEl("div", {
+							cls: "pt-journal-detail-verdict",
+							text: `${t("journal.col.verdict")}：${r.verdict.join("、")}`,
+						});
+					}
+					if (r.rating) {
+						inner.createEl("div", {
+							cls: "pt-journal-detail-rating",
+							text: `${t("journal.col.rating")}：${"★".repeat(r.rating)}`,
+						});
+					}
+					if (noteText) {
+						inner.createEl("div", { cls: "pt-journal-detail-note", text: noteText });
+					}
+				}
 			}
 		};
 

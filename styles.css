@@ -895,6 +895,22 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 .pt-journal-note-cell {
 	color: var(--text-muted);
 	max-width: 260px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.pt-journal-tr { cursor: pointer; }
+.pt-journal-detail-row td { padding: 0; border-bottom: 1px solid var(--background-modifier-border); }
+.pt-journal-detail {
+	padding: var(--pt-space-s, 10px) var(--pt-space-m, 12px);
+	background: var(--background-secondary);
+	font-size: var(--pt-text-sm, 13px);
+	color: var(--text-normal);
+	line-height: 1.6;
+}
+.pt-journal-detail-verdict,
+.pt-journal-detail-rating { margin-bottom: 4px; }
+.pt-journal-detail-note { white-space: pre-wrap; }
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
