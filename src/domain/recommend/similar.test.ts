@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeSimilar } from "@domain/recommend/similar";
+import { computeSimilar, InvertedIndex } from "@domain/recommend/similar";
 import { PluginTagService, type PluginTag } from "@domain/catalog/plugin-tags";
 
 describe("computeSimilar", () => {
@@ -147,5 +147,40 @@ describe("computeSimilar", () => {
 		const sim = computeSimilar("a", all2[0].description, all2, ts2, {}, 5);
 		expect(sim[0].id).toBe("g");
 		expect(sim[0].reason).toContain("笔记");
+	});
+});
+
+describe("computeSimilar + 倒排索引健壮性（回归）", () => {
+	const all = [
+		{ id: "a", name: "Kanban", description: "markdown kanban board" },
+		{ id: "b", name: "Todoist Sync", description: "sync with todoist" },
+		{ id: "c", name: "Task Board", description: "visual kanban task management" },
+	];
+	const tags: Record<string, PluginTag> = {
+		a: { category: "任务与项目", tags: ["看板", "任务"] },
+		c: { category: "任务与项目", tags: ["看板", "任务管理"] },
+	};
+	const ts = new PluginTagService();
+	ts.load(tags);
+
+	it("传未 build 的倒排索引时不返回空（空索引曾导致相似推荐全空）", () => {
+		const idx = new InvertedIndex(); // 未 build
+		expect(idx.isBuilt).toBe(false);
+		const sim = computeSimilar("a", all[0].description, all, ts, {}, 5, idx);
+		// 快速路径候选为空 → 降级全量扫描（用真实 tagService 数据算分）→ 非空
+		expect(sim.length).toBeGreaterThan(0);
+	});
+
+	it("build 后可走快速路径并返回相似结果", () => {
+		const idx = new InvertedIndex();
+		idx.build(
+			all.map((p) => {
+				const t = ts.getTag(p.id);
+				return { id: p.id, category: t?.category ?? "", tags: t?.tags ?? [] };
+			}),
+		);
+		expect(idx.isBuilt).toBe(true);
+		const sim = computeSimilar("a", all[0].description, all, ts, {}, 5, idx);
+		expect(sim.length).toBeGreaterThan(0);
 	});
 });

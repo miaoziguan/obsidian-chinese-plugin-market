@@ -132,7 +132,12 @@ export function recomputeSmartSignalsIfNeeded(ctx: ViewContext) {
 					const tag = tagService.getTag(p.id);
 					return tag ? { id: p.id, ...tag } : { id: p.id, category: "", tags: [] };
 				});
-				ctx.invertedIndex.build(tagEntries);
+				// 仅在确有真实标签数据时才 build；否则保留未 build 状态，
+				// 交由 computeSimilarFor 在标签真正就绪后懒 build，
+				// 避免「标签未加载时就 build 了空索引」导致相似推荐整体为空。
+				if (tagEntries.some((e) => e.category || (e.tags && e.tags.length))) {
+					ctx.invertedIndex.build(tagEntries);
+				}
 			}
 		}
 	}

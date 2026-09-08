@@ -54,6 +54,8 @@ export class InvertedIndex {
 	private byCategory = new Map<string, Set<string>>();
 	/** tag → 拥有该标签的插件 id 集合 */
 	private byTag = new Map<string, Set<string>>();
+	/** 是否已成功 build（含真实标签数据）。未 build 时 computeSimilar 降级全量扫描 */
+	private built = false;
 
 	/**
 	 * 从 PluginTag 数组构建倒排索引。
@@ -62,6 +64,7 @@ export class InvertedIndex {
 	build(tags: (PluginTag & { id: string })[]): void {
 		this.byCategory.clear();
 		this.byTag.clear();
+		this.built = true;
 
 		for (const entry of tags) {
 			// 类别
@@ -86,6 +89,11 @@ export class InvertedIndex {
 				}
 			}
 		}
+	}
+
+	/** 是否已成功 build（含真实标签数据）。computeSimilar 用它判断是否需要降级全量扫描。 */
+	get isBuilt(): boolean {
+		return this.built;
 	}
 
 	/**
@@ -359,13 +367,16 @@ export function computeSimilar(
 		// 快速路径：倒排索引定位候选集
 		const candidateIds = invertedIndex.getCandidates(sourceId, sourceTag);
 		if (candidateIds.size === 0) {
-			return [];
+			// 索引未覆盖该源（源无分类/标签，或索引未 build 到真实数据）→ 降级全量扫描，
+			// 靠描述相似度兜底，避免相似推荐整体为空。
+			candidates = allPlugins.filter((p) => p.id !== sourceId);
+		} else {
+			// 构建 id → 插件对象的快速映射
+			const idToPlugin = new Map(allPlugins.map((p) => [p.id, p]));
+			candidates = [...candidateIds]
+				.map((id) => idToPlugin.get(id))
+				.filter((p): p is NonNullable<typeof p> => p != null);
 		}
-		// 构建 id → 插件对象的快速映射
-		const idToPlugin = new Map(allPlugins.map((p) => [p.id, p]));
-		candidates = [...candidateIds]
-			.map((id) => idToPlugin.get(id))
-			.filter((p): p is NonNullable<typeof p> => p != null);
 	} else {
 		// 降级路径：全量扫描（向后兼容）
 		candidates = allPlugins.filter((p) => p.id !== sourceId);
