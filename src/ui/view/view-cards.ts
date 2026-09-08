@@ -75,6 +75,18 @@ export function computeSimilarFor(ctx: ViewContext, info: PluginInfo) : SimilarC
 		const all = ctx.plugins;
 		if (!tagService || !all.length) return [];
 
+		// 保底：索引未 build（view-render 可能在标签加载前跳过 build）→ 此刻懒 build 一次，
+		// 使用 tagService 当前已加载的标签数据。已 build 则跳过，避免重复开销。
+		const idx = ctx.invertedIndex;
+		if (idx && !idx.isBuilt) {
+			const entries = Object.entries(tagService.getAllTags()).map(([id, t]) => ({
+				id,
+				category: t.category,
+				tags: t.tags,
+			}));
+			idx.build(entries);
+		}
+
 		const translatedMap: Record<string, string> = {};
 		for (const p of all) {
 			const r = ctx.translatedResults[p.id];
