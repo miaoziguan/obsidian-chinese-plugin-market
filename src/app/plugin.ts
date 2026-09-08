@@ -470,12 +470,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			},
 		});
 
-		// 左侧栏图标：无 profile 时直接打开市场；有 profile 时弹菜单（打开 + 一键切换场景）
+		// 左侧栏图标：总是弹聚合菜单（打开市场 / 从直链安装 / 启用组合管理；
+		// 有 profile 时额外加「应用组合：xxx」一键切换项）。无 profile 用户也
+		// 能直达「启用组合管理」创建第一个组合，故不再按 profile 数量分流——
+		// 此前分流导致无 profile 用户看不到「从直链安装」「启用组合管理」入口。
 		this.ribbonEl = this.addRibbonIcon("languages", "插件搜索", (ev: MouseEvent) => {
-			if (this.settings.profiles.length === 0) {
-				void this.openTranslatorView();
-				return;
-			}
 			this.showRibbonMenu(ev);
 		});
 		// 命令：插件启用组合（P0：命令面板每条 profile 一条命令）
