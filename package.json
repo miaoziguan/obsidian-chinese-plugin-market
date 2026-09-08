@@ -37,8 +37,10 @@
     "@types/sql.js": "^1.4.11",
     "sql.js": "^1.14.1"
   },
-  "overrides": {
-    "adm-zip": "0.6.0",
-    "sharp": "^0.35.4"
+  "pnpm": {
+    "overrides": {
+      "adm-zip": "0.6.0",
+      "sharp": "^0.35.4"
+    }
   }
 }
