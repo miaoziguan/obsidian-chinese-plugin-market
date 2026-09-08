@@ -926,6 +926,30 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.scheduleRender(true);
 	});
 
+	// ── 踩坑洞察（全局统计：弃用率 + 踩坑 Top；数据来自插件后台扫描，就绪前显示占位） ──
+	const insightRow = advancedInner.createDiv({ cls: "pt-facet-row pt-insight-row" });
+	insightRow.createSpan({ cls: "pt-facet-label", text: "洞察" });
+	const insightBox = insightRow.createDiv({ cls: "pt-insight" });
+	const jStats = ctx.journalStats;
+	if (!jStats) {
+		insightBox.createSpan({ cls: "pt-insight-loading", text: "暂无评测数据" });
+	} else {
+		const dist = insightBox.createDiv({ cls: "pt-insight-dist" });
+		dist.textContent = `弃用 ${jStats.abandoned} · 在用 ${jStats.using} · 观望 ${jStats.watching}`;
+		if (jStats.total > 0) {
+			const rate = insightBox.createDiv({ cls: "pt-insight-rate" });
+			rate.textContent = `弃用率 ${Math.round(jStats.abandonRate * 100)}%`;
+		}
+		if (jStats.topVerdicts.length > 0) {
+			const top = insightBox.createDiv({ cls: "pt-insight-top" });
+			top.createSpan({ cls: "pt-insight-head", text: "踩过的坑：" });
+			jStats.topVerdicts.forEach((v, i) => {
+				if (i > 0) top.createSpan({ text: " · " });
+				top.createSpan({ cls: "pt-insight-tag", text: `${v.reason}×${v.count}` });
+			});
+		}
+	}
+
 	// ── 新上线筛选（近 N 天首次见；null = 不过滤） ──
 	const newRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 	newRow.createSpan({ cls: "pt-facet-label", text: "上线" });
