@@ -1012,11 +1012,11 @@ export class PluginDetailDrawer {
 				new Notice(this.t("detail.readme.noContent"));
 				return;
 			}
-			const p = navigator.clipboard?.writeText(text);
-			if (!p) {
+			if (!navigator.clipboard) {
 				new Notice(this.t("card.copy.fail"));
 				return;
 			}
+			const p = navigator.clipboard.writeText(text);
 			p.then(
 				() => {
 					setCopyReadmeState(true);

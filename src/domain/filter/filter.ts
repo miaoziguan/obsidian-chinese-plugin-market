@@ -133,7 +133,7 @@ export type TriedFilter = "all" | "tried";
 export type AbandonedFilter = "all" | "abandoned";
 
 /** 踩坑原因筛选（"all" 表示全部；具体原因字符串则仅该原因的插件） */
-export type VerdictFilter = "all" | string;
+export type VerdictFilter = string;
 
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。

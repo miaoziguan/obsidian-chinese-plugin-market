@@ -911,13 +911,6 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 .pt-journal-detail-verdict,
 .pt-journal-detail-rating { margin-bottom: 4px; }
 .pt-journal-detail-note { white-space: pre-wrap; }
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-	flex: 1 1 auto;
-	min-width: 0;
-}
 /* 分类过多时的「更多 ▾ / 收起 ▴」折叠按钮：轻量虚线胶囊，区别于实体分类 chip */
 .pt-facet-more {
 	font-size: var(--pt-text-sm);
