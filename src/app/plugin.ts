@@ -36,6 +36,7 @@ import { applyProfileByIds, applyEnabledProfile } from "@data/platform/plugin-in
 import type { TrendSnapshot } from "@domain/recommend/trending";
 import { mergeInstallDiff, type InstallHistoryFile } from "@domain/journal/install-history";
 import { parseJournalNote, renderJournalNote, type JournalEntry } from "@domain/journal/journal-entry";
+import { computeJournalStats, type JournalStats } from "@domain/journal/journal-stats";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
 /** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
 type LoadDataRaw = NonNullable<Parameters<Translator["loadData"]>[0]>;
@@ -54,6 +55,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	journalHistory: InstallHistoryFile | null = null;
 	/** 用户评测为 abandoned 的插件 id 集合（saveJournalEntry 增量维护 / onload 后台种子） */
 	journalAbandonedIds: Set<string> = new Set();
+	/** 全局评测统计（弃用率 / 踩坑 Top 等，onload 后台扫描聚合，供「踩坑洞察」面板） */
+	journalStats: JournalStats | null = null;
 
 	/**
 	 * 记录一次安装/卸载 diff 到历史索引（评测台账）。fire-and-forget：失败只 warn，
@@ -133,21 +136,27 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		} catch (err: unknown) {
 			logger.warn("[Chinese Plugin Market] 保存评测笔记失败：", err);
 		}
+		// 写盘成功后刷新全局统计（弃用率/踩坑 Top 面板随之更新；fire-and-forget）
+		void this.refreshJournalStats();
 	}
 
-	/** 后台种子「已弃用」集合：扫描评测笔记目录，解析 status=abandoned 填入集合后通知视图重渲染 */
-	private async ensureAbandonedIndex(): Promise<void> {
+	/** 后台刷新全局评测统计 + 已弃用集合：扫描笔记目录，聚合「踩坑洞察」数据后通知视图重渲染 */
+	private async refreshJournalStats(): Promise<void> {
 		try {
 			const dir = this.journalFolder();
 			const files = await this.noteStorage.listMarkdown(dir);
 			const ids = new Set<string>();
+			const entries: JournalEntry[] = [];
 			for (const path of files) {
 				const text = await this.noteStorage.readNote(path);
 				const entry = parseJournalNote(text);
-				if (entry && entry.status === "abandoned") ids.add(entry.id);
+				if (!entry) continue;
+				if (entry.status === "abandoned") ids.add(entry.id);
+				entries.push(entry);
 			}
 			this.journalAbandonedIds = ids;
-			// 注入已打开视图并触发重渲染（视图未创建时其 onOpen 会自然读到集合）
+			this.journalStats = computeJournalStats(entries);
+			// 注入已打开视图并触发重渲染（视图未创建时其 onOpen 会自然读到集合/统计）
 			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 				const view = leaf.view;
 				if (view instanceof ChinesePluginMarketView) {
@@ -155,7 +164,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				}
 			}
 		} catch {
-			// 目录不存在或无笔记：静默降级（集合保持空）
+			// 目录不存在或无笔记：静默降级（集合/统计保持空）
 		}
 	}
 
@@ -758,8 +767,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.loadBambooSeries().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载竹林系列清单失败：", e),
 		);
-		// 后台异步种子「已弃用」集合（扫描评测笔记，不阻塞视图启动）
-		void this.ensureAbandonedIndex();
+		// 后台异步刷新全局评测统计 + 已弃用集合（扫描评测笔记，不阻塞视图启动）
+		void this.refreshJournalStats();
 
 		// TM 就绪：通知已打开的视图用最终数据重渲染一次。
 		this.refreshOpenViews();

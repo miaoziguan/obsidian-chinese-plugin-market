@@ -22,6 +22,7 @@
 import type { PluginInfo, TranslateResult, AISearchResult, Translator } from "@domain/catalog/translator";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
 import type { SearchMode, SourceFilter, InstallFilter, FavoriteFilter, ChineseEcoFilter, SeriesFilter, TriedFilter, AbandonedFilter, FilterCache, EmptyState } from "@domain/filter/filter";
+import type { JournalStats } from "@domain/journal/journal-stats";
 import type { SortBy } from "@domain/filter/sort";
 import type { PluginStat } from "@domain/catalog/stats";
 import type { SimilarCandidate } from "@domain/recommend/similar";
@@ -130,6 +131,8 @@ export interface ViewContext {
 	journalTriedIds: Set<string>;
 	/** 用户评测为 abandoned 的插件 id 集合 */
 	journalAbandonedIds: Set<string>;
+	/** 全局评测统计（弃用率 / 踩坑 Top 等），可能为 null（后台扫描未完成） */
+	journalStats: JournalStats | null;
 	/** 新上线窗口天数：null 表示不过滤；合法值 7/30/90 */
 	newWithinDays: number | null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */
@@ -446,6 +449,7 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set abandonedFilter(v) { view.abandonedFilter = v; },
 		get journalTriedIds() { return view.plugin.journalTriedIds; },
 		get journalAbandonedIds() { return view.plugin.journalAbandonedIds; },
+		get journalStats() { return view.plugin.journalStats; },
 		get newWithinDays() { return view.newWithinDays; },
 		set newWithinDays(v) { view.newWithinDays = v; },
 		get updatedWithinDays() { return view.updatedWithinDays; },
