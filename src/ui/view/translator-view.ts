@@ -25,6 +25,7 @@ import {
 	type SeriesFilter,
 	type TriedFilter,
 	type AbandonedFilter,
+	type VerdictFilter,
 } from "@domain/filter/filter";
 import { makeT, type I18nKey } from "@shared/i18n";
 import { type CardRenderContext } from "@ui/components/card-render";
@@ -601,6 +602,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public triedFilter: TriedFilter = "all";
 	/** 已弃用筛选："abandoned" 仅用户评测 status=abandoned / "all" 全部 */
 	public abandonedFilter: AbandonedFilter = "all";
+	/** 踩坑原因筛选：具体原因字符串仅该原因的插件 / "all" 全部 */
+	public verdictFilter: VerdictFilter = "all";
 	/** 新上线窗口天数：null 不过滤，可选 7/30/90 */
 	public newWithinDays: number | null = null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件 */

@@ -61,3 +61,23 @@ export function computeJournalStats(entries: JournalEntry[]): JournalStats {
 		installCountSum,
 	};
 }
+
+/**
+ * 从评测条目构建「弃用原因 → 插件 id 集合」索引。
+ * 供踩坑 Top 点击联动筛选：点某个原因即筛出所有 verdict 含该原因的插件。
+ */
+export function buildVerdictIndex(entries: JournalEntry[]): Map<string, Set<string>> {
+	const map = new Map<string, Set<string>>();
+	for (const e of entries) {
+		for (const v of e.verdict ?? []) {
+			if (!v) continue;
+			let set = map.get(v);
+			if (!set) {
+				set = new Set();
+				map.set(v, set);
+			}
+			set.add(e.id);
+		}
+	}
+	return map;
+}

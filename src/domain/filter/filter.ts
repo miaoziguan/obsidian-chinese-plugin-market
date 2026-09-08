@@ -37,6 +37,8 @@ export class FilterCache {
 	/** 上一次的 triedFilter / abandonedFilter（缓存失效判断，避免切回「全部」复用已收窄子集） */
 	private _tried: TriedFilter = "all";
 	private _abandoned: AbandonedFilter = "all";
+	/** 上一次的 verdictFilter（踩坑原因筛选缓存失效判断） */
+	private _verdict: VerdictFilter = "all";
 
 	/** 将 FilterResult 的回写值同步到缓存 */
 	sync(result: FilterResult): void {
@@ -53,6 +55,7 @@ export class FilterCache {
 		this._mode = result.nextFilterMode ?? "keyword";
 		this._tried = result.nextFilterTried ?? "all";
 		this._abandoned = result.nextFilterAbandoned ?? "all";
+		this._verdict = result.nextFilterVerdict ?? "all";
 	}
 
 	/** 生成传给 filterAndSortPlugins 的快照字段 */
@@ -60,8 +63,8 @@ export class FilterCache {
 		| "lastFiltered" | "lastFilterQuery" | "lastFilterSource"
 		| "lastFilterAuthor" | "lastFilterInstall"
 		| "lastFilterRecommendedOnly" | "lastFilterCategories"
-		| "lastFilterFavorites" | "lastFilterNewWithinDays" | "lastFilterUpdatedWithinDays" | "lastFilterMode"
-		| "lastFilterTried" | "lastFilterAbandoned"> {
+		| "lastFilterFavorites" | "lastFilterNewWithinDays" | "lastFilterUpdatedWithinDays" 		| "lastFilterMode"
+		| "lastFilterTried" | "lastFilterAbandoned" | "lastFilterVerdict"> {
 		return {
 			lastFiltered: this._list,
 			lastFilterQuery: this._query,
@@ -76,6 +79,7 @@ export class FilterCache {
 			lastFilterMode: this._mode,
 			lastFilterTried: this._tried,
 			lastFilterAbandoned: this._abandoned,
+			lastFilterVerdict: this._verdict,
 		};
 	}
 
@@ -100,6 +104,7 @@ export class FilterCache {
 		this._mode = "keyword";
 		this._tried = "all";
 		this._abandoned = "all";
+		this._verdict = "all";
 	}
 }
 
@@ -126,6 +131,9 @@ export type TriedFilter = "all" | "tried";
 
 /** 已弃用筛选（"all" 表示全部；"abandoned" 仅用户评测 status=abandoned） */
 export type AbandonedFilter = "all" | "abandoned";
+
+/** 踩坑原因筛选（"all" 表示全部；具体原因字符串则仅该原因的插件） */
+export type VerdictFilter = "all" | string;
 
 /**
  * 构建单插件的小写化搜索串（名称 / ID / 描述 / 译名 / 译描 / 作者）。
@@ -182,6 +190,10 @@ export interface MatchOptions {
 	abandonedFilter?: AbandonedFilter;
 	/** 用户评测为 abandoned 的插件 id 集合 */
 	journalAbandonedIds?: Set<string>;
+	/** 踩坑原因筛选："all" 不过滤；具体原因字符串仅该原因的插件 */
+	verdictFilter?: VerdictFilter;
+	/** 弃用原因 → 插件 id 集合映射（来自评测笔记 verdict 索引） */
+	journalVerdictIds?: Map<string, Set<string>>;
 	/** 新上线窗口天数（number | null；null = 不过滤，7/30/90 生效） */
 	newWithinDays?: number | null;
 	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json（git history 解析） */
@@ -252,6 +264,8 @@ export function matchesPlugin(
 	if (opts.triedFilter === "tried" && !(opts.journalTriedIds?.has(p.id) ?? false)) return false;
 	// 已弃用筛选：仅保留用户评测 status=abandoned 的插件
 	if (opts.abandonedFilter === "abandoned" && !(opts.journalAbandonedIds?.has(p.id) ?? false)) return false;
+	// 踩坑原因筛选：仅保留该弃用原因的插件（"all"/undefined 不过滤）
+	if (opts.verdictFilter && opts.verdictFilter !== "all" && !(opts.journalVerdictIds?.get(opts.verdictFilter)?.has(p.id) ?? false)) return false;
 	// 仅看新上线：近 newWithinDays 天「首次进入官方市场」的插件才保留（null = 不过滤）。
 	// 时间源 = releaseDatesMap（插件真实上线日期，来自 obsidian-releases git history），
 	// 与用户是否见过无关，是稳定的插件维度。缺失/无记录则不命中。
@@ -342,6 +356,14 @@ export interface FilterParams {
 	nextFilterTried?: TriedFilter;
 	/** 回写的 abandonedFilter（供下次缓存失效判断） */
 	nextFilterAbandoned?: AbandonedFilter;
+	/** 踩坑原因筛选：undefined/"all" 不过滤；非 "all" 为具体原因 */
+	verdictFilter?: VerdictFilter;
+	/** 弃用原因 → 插件 id 集合映射 */
+	journalVerdictIds?: Map<string, Set<string>>;
+	/** 上一次的 verdictFilter（缓存失效判断） */
+	lastFilterVerdict?: VerdictFilter;
+	/** 回写的 verdictFilter（供下次缓存失效判断） */
+	nextFilterVerdict?: VerdictFilter;
 	/** 新上线窗口天数（number | null；null = 不过滤） */
 	newWithinDays?: number | null;
 	/** 插件 id → 首次进入官方市场的真实时间（ms）；来自 plugin-release-dates.json */
@@ -413,6 +435,8 @@ export interface FilterResult {
 	nextFilterTried?: TriedFilter;
 	/** 回写的 abandonedFilter */
 	nextFilterAbandoned?: AbandonedFilter;
+	/** 回写的 verdictFilter */
+	nextFilterVerdict?: VerdictFilter;
 	/** 非 AI 路径下是否应清空残留的 aiSearchResult（视图据此置 null） */
 	clearAiResult: boolean;
 }
@@ -438,6 +462,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		seriesFilter, bambooSeriesSet,
 		triedFilter, journalTriedIds,
 		abandonedFilter, journalAbandonedIds,
+		verdictFilter, journalVerdictIds,
 		selectedCategories, pluginTagMap,
 		hasHistoryTranslation,
 		releaseDatesMap,
@@ -445,6 +470,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		lastFilterUpdatedWithinDays = null,
 		lastFilterTried = "all",
 		lastFilterAbandoned = "all",
+		lastFilterVerdict = "all",
 	} = params;
 
 	const matchOpts: MatchOptions = {
@@ -455,6 +481,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		seriesFilter, bambooSeriesSet,
 		triedFilter, journalTriedIds,
 		abandonedFilter, journalAbandonedIds,
+		verdictFilter, journalVerdictIds,
 		selectedCategories, pluginTagMap,
 		releaseDatesMap, newWithinDays, updatedWithinDays,
 		hasHistoryTranslation,
@@ -473,6 +500,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 	let nextFilterCategories: string[] | undefined;
 	let nextFilterTried: TriedFilter | undefined;
 	let nextFilterAbandoned: AbandonedFilter | undefined;
+	let nextFilterVerdict: VerdictFilter | undefined;
 	let clearAiResult = false;
 
 	if ((searchMode === "ai" || searchMode === "local") && query) {
@@ -553,6 +581,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 			lastFilterFavorites === favoriteFilter &&
 			lastFilterTried === triedFilter &&
 			lastFilterAbandoned === abandonedFilter &&
+			lastFilterVerdict === verdictFilter &&
 			lastFilterNewWithinDays === (newWithinDays ?? null) &&
 			lastFilterUpdatedWithinDays === (updatedWithinDays ?? null) &&
 			sameCategories &&
@@ -618,6 +647,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		nextFilterCategories,
 		nextFilterTried,
 		nextFilterAbandoned,
+		nextFilterVerdict,
 		nextFilterMode: searchMode,
 		clearAiResult,
 	};
