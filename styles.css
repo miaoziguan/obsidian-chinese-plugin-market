@@ -3031,10 +3031,11 @@ button.pt-card-install-btn--installed {
  * 从 720px 降到 640px：Obsidian 默认主编辑区约 600-800px，640px 让更多实际场景命中双栏。 */
 @container (min-width: 640px) {
 	/* 双栏采用「只有正文列滚动」：scroll 停止滚动，滚动下放到 .pt-detail-main。
-	   这样右栏作为 grid 列天然静止，既不必用 sticky（会抖动），也不必用 absolute
+	   右栏作为 grid 列（rightRail）天然静止，内部 journal + similar 各自自然高度、
+	   整体由 rightRail 负责滚动，互不截断；既不必 sticky（会抖动），也不必 absolute
 	   （需手工计算 inner 居中偏移，脆弱且易与正文重叠）。 */
 	.pt-detail-page-scroll {
-		overflow: hidden;              /* 滚动交给 main 列 */
+		overflow: hidden;              /* 滚动交给 main 列 / 右栏各自 */
 		display: flex;                 /* 让 inner 撑满可用高度 */
 	}
 	.pt-detail-page-inner {
@@ -3042,13 +3043,8 @@ button.pt-card-install-btn--installed {
 		min-height: 0;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 280px;
-		/* main 跨两行撑满左列；右栏拆 journal(上) + rail(下)，高度自适应内容 */
-		grid-template-rows: minmax(0, 1fr) auto;
-		/* 头部固定块改 absolute 脱离 grid 流（drawer 直接子，详见 .pt-detail-head-block 注释），
-		   grid 只需承担 main + 右栏上下；head 占位由 scroll 的 padding-top 提供。 */
-		grid-template-areas:
-			"main journal"
-			"main rail";
+		grid-template-rows: 100%;      /* 单行：main 跨整列，rightRail 占右列 */
+		grid-template-areas: "main rail";
 		max-width: 1140px;
 		padding-left: var(--pt-space-xl);
 		padding-right: var(--pt-space-xl);
@@ -3059,39 +3055,36 @@ button.pt-card-install-btn--installed {
 		min-height: 0;
 		overflow-y: auto;              /* 正文列独立滚动 */
 	}
-	/* 我的评测槽：右栏上半，与右栏同宽；高度自适应内容但不超过右栏（让位给 similar）。
-	   没启用 journal 时该节点不存在，grid-area 解析为空、不影响布局。
-	   border-bottom 区分下面的相似推荐；与左列的视觉分隔由相似推荐的 border-left 统一负责，
-	   避免右栏两个子节点都画 border-left 显得重复。 */
+	/* 右栏容器：grid 列，随 grid 静止（scroll 已停止滚动）→ 天然常驻、零抖动。
+	   内部 journal + similar 各自自然高度，rightRail 整体滚动，避免任一部分被截断。 */
+	.pt-detail-right-rail {
+		grid-area: rail;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow-y: auto;             /* 右栏整体滚动 */
+		border-left: 1px solid var(--background-modifier-border);
+	}
+	/* 我的评测槽：右栏上半，自然高度（不设 max-height，避免截断）。
+	   border-bottom 区分下面的相似推荐。 */
 	.pt-detail-journal {
-		grid-area: journal;
+		flex: 0 0 auto;
 		min-width: 0;
-		max-height: 50%;
-		overflow-y: auto;
-		margin-left: var(--pt-space-xl);
-		margin-bottom: var(--pt-space-md);
 		padding: 16px 20px;
 		border-bottom: 1px solid var(--background-modifier-border);
 	}
-	/* 右栏下半：相似推荐。grid 列，随 grid 静止（scroll 已停止滚动）→ 天然常驻、零抖动。
-	   border-left 统一负责右栏与左列的视觉分隔。 */
+	/* 右栏下半：相似推荐。自然高度，跟随 rightRail 整体滚动。 */
 	.pt-detail-similar-rail {
-		grid-area: rail;
-		align-self: start;
-		max-height: 100%;
-		margin-left: var(--pt-space-xl);
-		margin-top: 0;
+		flex: 0 0 auto;
+		min-width: 0;
 		border-top: none;
-		border-left: 1px solid var(--background-modifier-border);
+		border-left: none;            /* 左列分隔由 rightRail 统一负责 */
 		padding: 24px 20px;
-		overflow-y: auto;
 	}
 	/* 右栏宽度有限：默认隐藏英文原名行（明细挂在译名 hover tooltip 上） */
 	.pt-detail-similar-rail .pt-detail-similar-original {
 		display: none;
 	}
-	/* 窄屏（无 @container 包裹）的旧 border-top 样式在宽屏不需——但因为宽屏有 border-left，
-	   类似写在 .pt-detail-similar 的非宽屏 border-top 仍然有效，不冲突。 */
 }
 
 /* Drawer 头部（仅承载标题/关闭按钮本身；外层由 .pt-detail-head-block 统一 sticky） */

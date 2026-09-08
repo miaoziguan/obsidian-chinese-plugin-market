@@ -1041,14 +1041,15 @@ export class PluginDetailDrawer {
 		this.readmeBodyEl = readmeBody;
 		void this.loadReadme(readmeBody);
 
-		// ── 相似推荐面板（宽屏右栏下半 / 窄屏底部区块） ──
-		// 顺序：先建「我的评测」slot，再建 similar；DOM 顺序保证窄屏下评测在相似推荐之上。
-		// 宽屏由 CSS grid 接管：slot 进右栏上半、similar 进右栏下半。
+		// ── 右栏（宽屏右列 / 窄屏底部块）：「我的评测」在上、「相似推荐」在下 ──
+		// 两者包进同一个 rightRail flex 容器，右栏整体负责滚动，避免任一部分被 max-height 截断。
+		// DOM 顺序：先建 journal slot（仅启用时），再建 similar → 评测始终在相似推荐之上。
+		const rightRail = inner.createDiv({ cls: "pt-detail-right-rail" });
 		let journalSlot: HTMLElement | null = null;
 		if (this.plugin.journalEnabled()) {
-			journalSlot = inner.createDiv({ cls: "pt-detail-journal" });
+			journalSlot = rightRail.createDiv({ cls: "pt-detail-journal" });
 		}
-		const similarWrap = inner.createDiv({ cls: "pt-detail-similar pt-detail-similar-rail" });
+		const similarWrap = rightRail.createDiv({ cls: "pt-detail-similar pt-detail-similar-rail" });
 		this.similarWrapEl = similarWrap;
 		const similarHeader = similarWrap.createDiv({ cls: "pt-detail-section-head" });
 		similarHeader.createSpan({ cls: "pt-detail-section-dot" });
