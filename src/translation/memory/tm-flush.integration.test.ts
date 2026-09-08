@@ -101,7 +101,7 @@ import ChinesePluginMarketPlugin from "@app/plugin";
 describe("TM 笔记落盘（集成）", () => {
 	it("已采纳条目（直接落库）标记脏，flushTMVault 写出笔记，且可被 scanVaultTM 回灌", async () => {
 		const vault = new FakeVault() as any;
-		const app = { vault } as any;
+		const app = { vault, configDir: ".obsidian" } as any;
 		const t = new Translator();
 		// 直接落库为 approved（无审核队列）
 		t.tmApproved["git"] = {
@@ -148,6 +148,8 @@ describe("TM 笔记落盘（集成）", () => {
 
 		const app = {
 			vault,
+			// 真实 Obsidian 的 vault.configDir 默认即 ".obsidian"，测试显式模拟以免 isAdapterPath 兜底误判
+			configDir: ".obsidian",
 			metadataCache: { getFileCache: () => null, resolved: true },
 		} as any;
 		const plugin = new ChinesePluginMarketPlugin({} as never, {} as never);
@@ -172,6 +174,8 @@ describe("TM 笔记落盘（集成）", () => {
 		const vault = new FakeVault() as any;
 		const app = {
 			vault,
+			// 真实 Obsidian 的 vault.configDir 默认即 ".obsidian"，测试显式模拟以免 isAdapterPath 兜底误判
+			configDir: ".obsidian",
 			metadataCache: { getFileCache: () => null, resolved: true },
 		} as any;
 		const plugin = new ChinesePluginMarketPlugin({} as never, {} as never);

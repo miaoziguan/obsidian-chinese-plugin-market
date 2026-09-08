@@ -58,7 +58,8 @@ export class ObsidianNoteStorage implements NoteStoragePort {
 
 	/** 是否落在配置目录（默认 .obsidian，可被用户自定义到 vault.configDir）：走底层 adapter，绕过 vault 文件树/事件/metadataCache */
 	private isAdapterPath(p: string): boolean {
-		const cfg = normalizePath(this.app.vault.configDir);
+		// vault.configDir 默认 ".obsidian"，也可被用户自定义；缺失时兜底 ".obsidian" 保持旧行为
+		const cfg = normalizePath(this.app.vault.configDir ?? ".obsidian");
 		const np = normalizePath(p);
 		return np === cfg || np.startsWith(cfg + "/");
 	}
