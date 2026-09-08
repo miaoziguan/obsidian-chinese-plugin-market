@@ -3025,8 +3025,9 @@ button.pt-card-install-btn--installed {
 	}
 }
 
-/* 宽屏（抽屉/pane ≥ 640px）：头部通栏 + 正文左栏 + 相似推荐右栏常驻
- * 双栏让「相似推荐」在阅读 README 时始终可见，不必滚到页面底部。
+/* 宽屏（抽屉/pane ≥ 640px）：头部通栏 + 正文左栏 + 右栏常驻
+ * 右栏从上到下：我的评测（journal）+ 相似推荐（similar）。
+ * 双栏让「评测 / 相似推荐」在阅读 README 时始终可见，不必滚到页面底部。
  * 从 720px 降到 640px：Obsidian 默认主编辑区约 600-800px，640px 让更多实际场景命中双栏。 */
 @container (min-width: 640px) {
 	/* 双栏采用「只有正文列滚动」：scroll 停止滚动，滚动下放到 .pt-detail-main。
@@ -3041,10 +3042,13 @@ button.pt-card-install-btn--installed {
 		min-height: 0;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 280px;
-		grid-template-rows: 100%;      /* 单行且行高受控，main 才能内部滚动 */
+		/* main 跨两行撑满左列；右栏拆 journal(上) + rail(下)，高度自适应内容 */
+		grid-template-rows: minmax(0, 1fr) auto;
 		/* 头部固定块改 absolute 脱离 grid 流（drawer 直接子，详见 .pt-detail-head-block 注释），
-		   grid 只需承担 main + rail 双栏；head 占位由 scroll 的 padding-top 提供。 */
-		grid-template-areas: "main rail";
+		   grid 只需承担 main + 右栏上下；head 占位由 scroll 的 padding-top 提供。 */
+		grid-template-areas:
+			"main journal"
+			"main rail";
 		max-width: 1140px;
 		padding-left: var(--pt-space-xl);
 		padding-right: var(--pt-space-xl);
@@ -3055,8 +3059,22 @@ button.pt-card-install-btn--installed {
 		min-height: 0;
 		overflow-y: auto;              /* 正文列独立滚动 */
 	}
-	/* 右栏：grid 列，随 grid 静止（scroll 已停止滚动）→ 天然常驻、零抖动。
-	   max-height: 100% + 自身滚动，推荐项较多时仍可完整浏览。 */
+	/* 我的评测槽：右栏上半，与右栏同宽；高度自适应内容但不超过右栏（让位给 similar）。
+	   没启用 journal 时该节点不存在，grid-area 解析为空、不影响布局。
+	   border-bottom 区分下面的相似推荐；与左列的视觉分隔由相似推荐的 border-left 统一负责，
+	   避免右栏两个子节点都画 border-left 显得重复。 */
+	.pt-detail-journal {
+		grid-area: journal;
+		min-width: 0;
+		max-height: 50%;
+		overflow-y: auto;
+		margin-left: var(--pt-space-xl);
+		margin-bottom: var(--pt-space-md);
+		padding: 16px 20px;
+		border-bottom: 1px solid var(--background-modifier-border);
+	}
+	/* 右栏下半：相似推荐。grid 列，随 grid 静止（scroll 已停止滚动）→ 天然常驻、零抖动。
+	   border-left 统一负责右栏与左列的视觉分隔。 */
 	.pt-detail-similar-rail {
 		grid-area: rail;
 		align-self: start;
@@ -3072,6 +3090,8 @@ button.pt-card-install-btn--installed {
 	.pt-detail-similar-rail .pt-detail-similar-original {
 		display: none;
 	}
+	/* 窄屏（无 @container 包裹）的旧 border-top 样式在宽屏不需——但因为宽屏有 border-left，
+	   类似写在 .pt-detail-similar 的非宽屏 border-top 仍然有效，不冲突。 */
 }
 
 /* Drawer 头部（仅承载标题/关闭按钮本身；外层由 .pt-detail-head-block 统一 sticky） */

@@ -1041,7 +1041,13 @@ export class PluginDetailDrawer {
 		this.readmeBodyEl = readmeBody;
 		void this.loadReadme(readmeBody);
 
-		// ── 相似推荐面板（宽屏右侧栏 / 窄屏底部区块） ──
+		// ── 相似推荐面板（宽屏右栏下半 / 窄屏底部区块） ──
+		// 顺序：先建「我的评测」slot，再建 similar；DOM 顺序保证窄屏下评测在相似推荐之上。
+		// 宽屏由 CSS grid 接管：slot 进右栏上半、similar 进右栏下半。
+		let journalSlot: HTMLElement | null = null;
+		if (this.plugin.journalEnabled()) {
+			journalSlot = inner.createDiv({ cls: "pt-detail-journal" });
+		}
 		const similarWrap = inner.createDiv({ cls: "pt-detail-similar pt-detail-similar-rail" });
 		this.similarWrapEl = similarWrap;
 		const similarHeader = similarWrap.createDiv({ cls: "pt-detail-section-head" });
@@ -1074,17 +1080,18 @@ export class PluginDetailDrawer {
 		this._cleanupFns.push(() => headRO.disconnect());
 
 		// 评测台账（P3）：抽屉内「我的评测」编辑区。
-		// 挂 inner 末尾；initial 需读盘（异步），故 .then 注入；抽屉可能在异步
-		// 期间重建，用 !this.drawerEl 二次守卫避免挂到旧 DOM。
-		if (this.plugin.journalEnabled()) {
+		// 挂到 journalSlot（DOM 顺序在 similar 之前，窄屏下评测显示在相似推荐之上）；
+		// 宽屏由 CSS grid 把 slot 放进右栏上半。initial 需读盘（异步），故 .then 注入；
+		// 抽屉可能在异步期间重建，用 !this.drawerEl 二次守卫避免挂到旧 DOM。
+		if (this.plugin.journalEnabled() && journalSlot) {
 			this._journalDispose?.(); // 重渲时先释放上一次编辑器（同步）
 			this._journalDispose = undefined;
 			void this.plugin.loadJournalEntry(p.id).then((initial) => {
-				if (!this.drawerEl) {
+				if (!this.drawerEl || !journalSlot) {
 					this._journalDispose = undefined;
 					return;
 				}
-				const editor = renderJournalEditor(inner, p.id, displayName, initial, {
+				const editor = renderJournalEditor(journalSlot, p.id, displayName, initial, {
 					t: this.t,
 					save: (e) => void this.plugin.saveJournalEntry(e),
 					facts: this.plugin.getInstallFacts(p.id),
@@ -1092,7 +1099,7 @@ export class PluginDetailDrawer {
 				this._journalDispose = editor.dispose;
 				// 已写评测则默认展开（让用户直接看到自己评测内容）；未评测默认折叠（避免空编辑区抢视线）
 				const hasReview = this.plugin.journalEntryIds?.has(p.id) ?? false;
-				const jEl = inner.querySelector(".pt-journal-editor");
+				const jEl = journalSlot.querySelector(".pt-journal-editor");
 				if (jEl && !hasReview) jEl.classList.add("is-collapsed");
 				// 卡片「评测」图标触发：无论默认态强制展开并滚动聚焦
 				if (this._focusJournal) {
