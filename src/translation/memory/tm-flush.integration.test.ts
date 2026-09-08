@@ -101,6 +101,7 @@ import ChinesePluginMarketPlugin from "@app/plugin";
 describe("TM 笔记落盘（集成）", () => {
 	it("已采纳条目（直接落库）标记脏，flushTMVault 写出笔记，且可被 scanVaultTM 回灌", async () => {
 		const vault = new FakeVault() as any;
+		vault.configDir = ".obsidian";
 		const app = { vault, configDir: ".obsidian" } as any;
 		const t = new Translator();
 		// 直接落库为 approved（无审核队列）
@@ -146,6 +147,7 @@ describe("TM 笔记落盘（集成）", () => {
 		vault.files.set(`${customFolder}/calendar.md`, f);
 		folder.children.push(f);
 
+		vault.configDir = ".obsidian";
 		const app = {
 			vault,
 			// 真实 Obsidian 的 vault.configDir 默认即 ".obsidian"，测试显式模拟以免 isAdapterPath 兜底误判
@@ -172,6 +174,7 @@ describe("TM 笔记落盘（集成）", () => {
 
 	it("默认路径藏进 .obsidian 时 scanVaultTM 仍能回灌，且 vault 可见文件树无污染", async () => {
 		const vault = new FakeVault() as any;
+		vault.configDir = ".obsidian";
 		const app = {
 			vault,
 			// 真实 Obsidian 的 vault.configDir 默认即 ".obsidian"，测试显式模拟以免 isAdapterPath 兜底误判
