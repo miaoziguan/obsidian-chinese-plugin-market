@@ -19,7 +19,7 @@ import {
 } from "@shared/utils";
 
 /** 测试辅助：延迟 ms 毫秒 */
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const delay = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 
 describe("cleanChineseSpaces", () => {
 	it("去除两个中文字符之间的空格", () => {
