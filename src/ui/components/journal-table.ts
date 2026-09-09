@@ -276,19 +276,19 @@ export function renderJournalTable(
 					});
 					const inner = dtd.createDiv({ cls: "pt-journal-detail-inner" });
 					if (r.verdict && r.verdict.length) {
-						inner.createEl("div", {
+						inner.createDiv({
 							cls: "pt-journal-detail-verdict",
 							text: `${t("journal.col.verdict")}：${r.verdict.join("、")}`,
 						});
 					}
 					if (r.rating) {
-						inner.createEl("div", {
+						inner.createDiv({
 							cls: "pt-journal-detail-rating",
 							text: `${t("journal.col.rating")}：${"★".repeat(r.rating)}`,
 						});
 					}
 					if (noteText) {
-						inner.createEl("div", { cls: "pt-journal-detail-note", text: noteText });
+						inner.createDiv({ cls: "pt-journal-detail-note", text: noteText });
 					}
 				}
 			}
