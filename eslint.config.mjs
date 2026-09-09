@@ -59,7 +59,18 @@ export default [
 		// 不启用那些规则；关闭「未使用禁用指令」报告，避免无关噪音。
 		linterOptions: { reportUnusedDisableDirectives: "off" },
 		rules: {
+			// 核心：禁止 document.createElement / createEl("div") 等，强制 Obsidian DOM 辅助方法
 			"obsidianmd/prefer-create-el": "error",
+			// 安全：禁止动态注入 <link>/<style> 元素（应用 styles.css）
+			"obsidianmd/no-forbidden-elements": "error",
+			// 兼容：禁止在 minAppVersion 以下的 Obsidian API（类型感知）
+			"obsidianmd/no-unsupported-api": "error",
+			// 安全：禁止整体赋值 element.style 等静态样式赋值
+			"obsidianmd/no-static-styles-assignment": "error",
+			// 规范：避免全局 this / 优先平台定时器 / 禁止示例残留代码
+			"obsidianmd/no-global-this": "warn",
+			"obsidianmd/prefer-window-timers": "warn",
+			"obsidianmd/no-sample-code": "error",
 		},
 	},
 	{

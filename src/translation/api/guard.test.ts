@@ -14,7 +14,7 @@ describe("withTimeout", () => {
 	});
 
 	it("超时后 reject TimeoutError", async () => {
-		const never = new Promise<number>((resolve) => setTimeout(() => resolve(1), 1000));
+		const never = new Promise<number>((resolve) => window.setTimeout(() => resolve(1), 1000));
 		await expect(withTimeout(never, 20, "测试")).rejects.toBeInstanceOf(TimeoutError);
 	});
 
