@@ -574,7 +574,9 @@ export const STRINGS = {
 		zh: "粘贴插件目录地址（如 https://example.com/myplugin/），一键安装未上架或测试版。仅支持 https；请确保来源可信，因为安装即运行代码。",
 	},
 	"directInstall.urlLabel": { zh: "插件地址" },
-	"directInstall.urlDesc": { zh: "目录 URL，或指向 manifest.json 的完整链接（自动取父目录）" },
+	"directInstall.urlDesc": {
+		zh: "支持：① 目录 URL ② 指向 manifest.json 的完整链接（自动取父目录）③ GitHub 仓库 URL（如 https://github.com/owner/repo，含 /tree/<branch>）",
+	},
 	"directInstall.install": { zh: "安装" },
 	"directInstall.installing": { zh: "安装中…" },
 	"directInstall.badUrl": { zh: "地址格式不对，要填完整的网址" },

@@ -31,19 +31,58 @@ interface Manifest {
  * 从目录直链安装：取三件套 → 写盘 → 加载并启用，返回它的 manifest。
  * 不做解压。抛错即代表安装失败（调用方负责 Notice）。
  */
-export async function installFromUrl(app: App, url: string): Promise<Manifest> {
-	let root: URL;
+/**
+ * 解析安装来源 URL 到三件套所在目录的 URL。
+ * 支持：
+ *   1) 裸目录 URL（https://example.com/myplugin/）
+ *   2) 指向 manifest.json 的完整链接（自动取父目录）
+ *   3) GitHub 仓库 URL（含 /tree/<branch>、/blob/<branch>/...、.git），自动重写到 raw.githubusercontent.com
+ */
+export function resolveInstallRoot(input: string): URL {
+	const trimmed = input.trim();
+	let u: URL;
 	try {
-		root = new URL(url.trim());
+		u = new URL(trimmed);
 	} catch {
 		throw new Error(t("directInstall.badUrl"));
 	}
 	// 装什么就等于执行什么，明文 http 会被同网段的人换掉；只给本机开发放行
-	const dev = root.protocol === "http:" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(root.hostname);
-	if (root.protocol !== "https:" && !dev) throw new Error(t("directInstall.needHttps"));
-	root.hash = "";
-	// 粘目录、粘 manifest.json 都行；query 保留（有的源站带签名参数）
-	root.pathname = root.pathname.replace(/\/manifest\.json$/i, "").replace(/\/+$/, "") + "/";
+	const dev = u.protocol === "http:" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname);
+	if (u.protocol !== "https:" && !dev) throw new Error(t("directInstall.needHttps"));
+	u.hash = "";
+
+	// GitHub：仓库/分支/blob 链接 → 重写到 raw.githubusercontent.com（默认分支用 HEAD）
+	if (u.hostname === "github.com") {
+		const parts = u.pathname.split("/").filter(Boolean);
+		if (parts.length < 2) throw new Error(t("directInstall.badUrl"));
+		const owner = parts[0];
+		let repo = parts[1];
+		if (repo.endsWith(".git")) repo = repo.slice(0, -4);
+		if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) {
+			throw new Error(t("directInstall.badUrl"));
+		}
+		let branch = "HEAD";
+		const sub = parts[2];
+		if (sub === "tree") {
+			const b = parts.slice(3).join("/");
+			if (b) branch = b;
+		} else if (sub === "blob" && parts[3]) {
+			branch = parts[3];
+		}
+		// branch 里出现 #/?/空白 会让 URL 解析错位，提前拒绝
+		if (/[#?\s]/.test(branch)) throw new Error(t("directInstall.badUrl"));
+		const raw = new URL(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/`);
+		raw.search = u.search; // 保留 query（签名参数等）
+		return raw;
+	}
+
+	// 其他：目录 URL 或 manifest.json 链接 → 标准化为目录
+	u.pathname = u.pathname.replace(/\/manifest\.json$/i, "").replace(/\/+$/, "") + "/";
+	return u;
+}
+
+export async function installFromUrl(app: App, url: string): Promise<Manifest> {
+	const root = resolveInstallRoot(url);
 
 	const fetchText = async (name: string): Promise<string | null> => {
 		const u = new URL(root);
