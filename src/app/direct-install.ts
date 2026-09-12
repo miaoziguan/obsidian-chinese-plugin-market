@@ -81,20 +81,59 @@ export function resolveInstallRoot(input: string): URL {
 	return u;
 }
 
+/** raw 根 URL（raw.githubusercontent.com/<owner>/<repo>/...）反解出 owner/repo */
+export function parseGithubRepoFromRaw(root: URL): { owner: string; repo: string } | null {
+	if (root.hostname !== "raw.githubusercontent.com") return null;
+	const parts = root.pathname.split("/").filter(Boolean);
+	if (parts.length < 2) return null;
+	const [owner, repo] = parts;
+	if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) return null;
+	return { owner, repo };
+}
+
+/**
+ * GitHub Release 资产候选（main.js / styles.css 是构建产物，按官方 sample-plugin
+ * 的 .gitignore 惯例只挂在 Release 上，源码树里没有）。先精确 tag（= manifest.version，
+ * 社区市场约定），再兼容 v 前缀 tag，最后 latest 兜底。
+ */
+export function githubReleaseAssetUrls(
+	ref: { owner: string; repo: string },
+	file: string,
+	version?: string
+): string[] {
+	const base = `https://github.com/${ref.owner}/${ref.repo}/releases`;
+	if (!version) return [`${base}/latest/download/${file}`];
+	const tag = encodeURIComponent(version);
+	return [
+		`${base}/download/${tag}/${file}`,
+		`${base}/download/v${tag}/${file}`,
+		`${base}/latest/download/${file}`,
+	];
+}
+
 export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 	const root = resolveInstallRoot(url);
+	const gh = parseGithubRepoFromRaw(root);
 
-	const fetchText = async (name: string): Promise<string | null> => {
-		const u = new URL(root);
-		u.pathname += name;
-		const r = await requestUrl({ url: u.href, throw: false });
-		if (r.status >= 200 && r.status < 300) return r.text;
-		// 只有「确实没有」才算可选文件缺失：500/403 当成缺失会误删已装好的旧样式
-		if (name === FILES[2] && (r.status === 404 || r.status === 410)) return null;
-		throw new Error(`${name} ${t("directInstall.fetchFail")} HTTP ${r.status}`);
+	// 依次尝试候选 URL：404/410 换下一个来源，其余状态码立即报错
+	const fetchText = async (name: string, fallbackUrls: string[] = [], optional = false): Promise<string | null> => {
+		const primary = new URL(root);
+		primary.pathname += name;
+		let lastStatus = 0;
+		for (const u of [primary.href, ...fallbackUrls]) {
+			const r = await requestUrl({ url: u, throw: false });
+			if (r.status >= 200 && r.status < 300) return r.text;
+			// 只有「确实没有」才换下一个来源：500/403 当成缺失会误删已装好的旧样式
+			if (r.status !== 404 && r.status !== 410) {
+				throw new Error(`${name} ${t("directInstall.fetchFail")} ${r.status}`);
+			}
+			lastStatus = r.status;
+		}
+		if (optional) return null;
+		throw new Error(`${name} ${t("directInstall.fetchFail")} ${lastStatus}`);
 	};
 
-	const manText = (await fetchText(FILES[0])) as string;
+	const manText = (await fetchText(FILES[0], gh ? githubReleaseAssetUrls(gh, FILES[0]) : [])) as string;
 	const man = JSON.parse(manText) as Manifest;
 	const id = man.id;
 	// id 会拼进写盘路径，且缺字段的 manifest 写进去会让插件加载不了
@@ -113,9 +152,10 @@ export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 		}
 	}
 
+	const rel = (file: string) => (gh ? githubReleaseAssetUrls(gh, file, man.version) : []);
 	const texts: (string | null)[] = [
 		manText,
-		...(await Promise.all([fetchText(FILES[1]), fetchText(FILES[2])])),
+		...(await Promise.all([fetchText(FILES[1], rel(FILES[1])), fetchText(FILES[2], rel(FILES[2]), true)])),
 	];
 	if (!(texts[1] as string).trim()) throw new Error(t("directInstall.emptyMain"));
 

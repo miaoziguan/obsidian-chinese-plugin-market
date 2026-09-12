@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { resolveInstallRoot } from "@app/direct-install";
+import {
+	resolveInstallRoot,
+	parseGithubRepoFromRaw,
+	githubReleaseAssetUrls,
+} from "@app/direct-install";
 
 describe("resolveInstallRoot", () => {
 	it("GitHub 仓库 URL（无尾斜杠）→ raw HEAD", () => {
@@ -73,5 +77,34 @@ describe("resolveInstallRoot", () => {
 	it("去掉 fragment", () => {
 		const r = resolveInstallRoot("https://example.com/p/#frag");
 		expect(r.hash).toBe("");
+	});
+});
+
+describe("parseGithubRepoFromRaw", () => {
+	it("raw 根 URL 反解 owner/repo", () => {
+		const u = new URL("https://raw.githubusercontent.com/owner/repo/HEAD/");
+		expect(parseGithubRepoFromRaw(u)).toEqual({ owner: "owner", repo: "repo" });
+	});
+	it("非 raw 域名返回 null", () => {
+		expect(parseGithubRepoFromRaw(new URL("https://example.com/o/r/"))).toBeNull();
+	});
+	it("owner/repo 含非法字符返回 null", () => {
+		expect(parseGithubRepoFromRaw(new URL("https://raw.githubusercontent.com/o a/r/"))).toBeNull();
+	});
+});
+
+describe("githubReleaseAssetUrls", () => {
+	it("带 version：精确 tag → v 前缀 tag → latest", () => {
+		const urls = githubReleaseAssetUrls({ owner: "o", repo: "r" }, "main.js", "1.2.3");
+		expect(urls).toEqual([
+			"https://github.com/o/r/releases/download/1.2.3/main.js",
+			"https://github.com/o/r/releases/download/v1.2.3/main.js",
+			"https://github.com/o/r/releases/latest/download/main.js",
+		]);
+	});
+	it("不带 version：仅 latest（manifest 回退用）", () => {
+		expect(githubReleaseAssetUrls({ owner: "o", repo: "r" }, "manifest.json")).toEqual([
+			"https://github.com/o/r/releases/latest/download/manifest.json",
+		]);
 	});
 });
