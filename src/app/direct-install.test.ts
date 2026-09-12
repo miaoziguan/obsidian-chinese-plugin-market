@@ -3,6 +3,7 @@ import {
 	resolveInstallRoot,
 	parseGithubRepoFromRaw,
 	githubReleaseAssetUrls,
+	pickExactNameMatch,
 } from "@app/direct-install";
 
 describe("resolveInstallRoot", () => {
@@ -106,5 +107,27 @@ describe("githubReleaseAssetUrls", () => {
 		expect(githubReleaseAssetUrls({ owner: "o", repo: "r" }, "manifest.json")).toEqual([
 			"https://github.com/o/r/releases/latest/download/manifest.json",
 		]);
+	});
+});
+
+describe("pickExactNameMatch", () => {
+	it("仓库名完全一致 → 返回 full_name（真实案例）", () => {
+		const items = [
+			{ full_name: "viniciussoaresbr/sticky-colorful-notes", name: "sticky-colorful-notes" },
+			{ full_name: "PandaNocturne/Obsidian-colorful-sticky-notes", name: "Obsidian-colorful-sticky-notes" },
+		];
+		expect(pickExactNameMatch(items, "Obsidian-colorful-sticky-notes")).toBe(
+			"PandaNocturne/Obsidian-colorful-sticky-notes"
+		);
+	});
+	it("大小写不同也匹配", () => {
+		expect(pickExactNameMatch([{ full_name: "o/R", name: "R" }], "r")).toBe("o/R");
+	});
+	it("没有完全同名 → null（宁缺毋滥，避免误导安装）", () => {
+		expect(pickExactNameMatch([{ full_name: "o/x", name: "x" }], "y")).toBeNull();
+	});
+	it("字段缺失或类型不对 → null", () => {
+		expect(pickExactNameMatch([{}], "y")).toBeNull();
+		expect(pickExactNameMatch([{ full_name: 1, name: "y" }], "y")).toBeNull();
 	});
 });
