@@ -15,6 +15,7 @@ interface AppWithDefaultApp extends App {
 import { DirectInstallModal } from "@app/direct-install";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
+import { SettingsTranslator } from "@translation/settings/settings-translator";
 import { type PluginStat } from "@domain/catalog/stats";
 import { PluginStorage, CREDENTIAL_KEYS, type PluginCredentials } from "@data/storage/plugin-storage";
 import { setHttpClient } from "@data/net/http-port";
@@ -51,6 +52,8 @@ type PluginTagMap = NonNullable<Parameters<Translator["setPluginTags"]>[0]>;
 export default class ChinesePluginMarketPlugin extends Plugin {
 	settings: ChinesePluginMarketSettings = getDefaultSettings();
 	translator: Translator = new Translator();
+	/** 设置页即时机翻钩子（按需创建，启用时挂载全局原型补丁） */
+	settingsTranslator: SettingsTranslator | null = null;
 	/** 落盘 stats 缓存（onload 时恢复，供视图首屏合并，产品改进 #1 #6） */
 	cachedStats: Map<string, PluginStat> | null = null;
 	/** 趋势采样历史（onload 时恢复，视图的 TrendingEngine 从此水合；跨会话才有真实增速） */
@@ -861,11 +864,30 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 	}
 
+	/** 懒创建设置页翻译器（仅创建实例，不立即挂载全局原型补丁） */
+	ensureSettingsTranslator(): void {
+		if (this.settingsTranslator) return;
+		this.settingsTranslator = new SettingsTranslator(this.app, this.translator, () => ({
+			enabled: this.settings.translateSettingsEnabled,
+			provider: this.settings.translateSettingsProvider,
+			blacklist: this.settings.translateSettingsBlacklist
+				.split(/[,\s]+/)
+				.map((s) => s.trim())
+				.filter(Boolean),
+		}));
+	}
+
 	onunload() {
+		// 卸载设置页翻译钩子并回写缓存（优先于落盘逻辑，确保缓存进入 data.json）
+		if (this.settingsTranslator) {
+			this.settingsTranslator.disable();
+			if (this.settings) this.settings.settingsTranslateCache = this.settingsTranslator.exportCache();
+		}
 		// 防抖窗口内的未落盘变更不能直接丢弃（曾只 clearTimeout，导致刚编辑的
 		// 词典 / TM 脏条目 / 埋点在禁用或更新插件时静默丢失）：
 		// 取消定时器后立即启动一次落盘（onunload 不能 await，fire-and-forget）。
-		const pendingSettings = this._saveSettingsDebounce.pending();
+		const persistCache = this.settingsTranslator != null;
+		const pendingSettings = this._saveSettingsDebounce.pending() || persistCache;
 		const pendingTranslator = this._saveTranslatorDataTimer != null;
 		if (this._saveTranslatorDataTimer) {
 			window.clearTimeout(this._saveTranslatorDataTimer);
@@ -1125,6 +1147,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 收藏筛选改为会话级（不持久化），字段已从 settings 移除：
 		// 旧版残留的 favoriteFilter（boolean 或枚举）随 Object.assign 丢弃，不再迁移
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		// 设置页即时机翻：用户开启则挂载钩子并载入缓存
+		if (this.settings.translateSettingsEnabled) {
+			this.ensureSettingsTranslator();
+			this.settingsTranslator!.loadCache(this.settings.settingsTranslateCache);
+			this.settingsTranslator!.enable();
+		}
 		// PERF-7：credentials 与 favorites 两个独立文件无依赖，并行读取缩短启动耗时。
 		const [creds, loadedFavorites] = await Promise.all([
 			this.storage.loadCredentials(),
