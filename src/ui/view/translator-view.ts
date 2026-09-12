@@ -119,6 +119,14 @@ export interface ChinesePluginMarketSettings {
 	tmFolder: string;
 	/** 评测台账笔记存放文件夹（vault 根相对路径）；留空 = 默认藏进 .obsidian 私有目录 */
 	reviewFolder: string;
+	/** 设置页即时机翻：是否启用（钩住 Setting 组件，翻译其他插件设置页文案） */
+	translateSettingsEnabled: boolean;
+	/** 设置页翻译通道：free=腾讯翻译·免费（零配置）；baidu=百度机器翻译（需配置） */
+	translateSettingsProvider: "free" | "baidu";
+	/** 不翻译的插件 ID（逗号/空白分隔），用于个别会回读自身 DOM 文案的插件 */
+	translateSettingsBlacklist: string;
+	/** 设置页翻译串缓存（跨会话持久，超额自动淘汰最旧） */
+	settingsTranslateCache: Record<string, string>;
 }
 
 /** 单个启用组合 Profile：命名 + 启用插件 id 列表 + 可选绑定工作区布局 */
@@ -177,6 +185,10 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	notifyInstalledUpdates: true,
 	nameDisplay: "translated",
 	profiles: [],
+	translateSettingsEnabled: false,
+	translateSettingsProvider: "free",
+	translateSettingsBlacklist: "",
+	settingsTranslateCache: {},
 };
 
 /**

@@ -723,6 +723,45 @@ export class TranslatorSettingTab extends PluginSettingTab {
 					},
 				],
 			},
+			{
+				type: "group",
+				heading: this.t("settings.translateSettings"),
+				desc: this.t("settings.translateSettings.desc"),
+				items: [
+					{
+						name: this.t("settings.translateSettings.enable"),
+						desc: this.t("settings.translateSettings.enable.desc"),
+						render: (setting) => this.renderTranslateSettingsEnable(setting),
+					},
+					{
+						name: this.t("settings.translateSettings.provider"),
+						desc: this.t("settings.translateSettings.provider.desc"),
+						control: {
+							type: "dropdown",
+							key: "translateSettingsProvider",
+							defaultValue: "free",
+							options: {
+								free: this.t("settings.translateSettings.provider.free"),
+								baidu: this.t("settings.translateSettings.provider.baidu"),
+							},
+						},
+					},
+					{
+						name: this.t("settings.translateSettings.blacklist"),
+						desc: this.t("settings.translateSettings.blacklist.desc"),
+						control: {
+							type: "text",
+							key: "translateSettingsBlacklist",
+							placeholder: "plugin-id-1, plugin-id-2",
+						},
+					},
+					{
+						name: this.t("settings.translateSettings.clearCache"),
+						desc: this.t("settings.translateSettings.clearCache.desc"),
+						render: (setting) => this.renderClearSettingsCache(setting),
+					},
+				],
+			},
 		];
 	}
 
@@ -756,6 +795,39 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			link.setAttr("target", "_blank");
 			link.setAttr("rel", "noopener noreferrer");
 		}
+	}
+
+	/** 设置页翻译：启用开关（实时生效，联动钩子挂载/卸载） */
+	private renderTranslateSettingsEnable(setting: Setting): void {
+		setting.addToggle((tc) =>
+			tc
+				.setValue(this.plugin.settings.translateSettingsEnabled)
+				.onChange(async (v) => {
+					this.plugin.settings.translateSettingsEnabled = v;
+					if (v) {
+						this.plugin.ensureSettingsTranslator();
+						this.plugin.settingsTranslator?.enable();
+					} else {
+						this.plugin.settingsTranslator?.disable();
+					}
+					await this.plugin.flushSaveSettings();
+				})
+		);
+	}
+
+	/** 设置页翻译：清空本地翻译缓存 */
+	private renderClearSettingsCache(setting: Setting): void {
+		setting.addButton((btn) =>
+			btn
+				.setButtonText(this.t("settings.translateSettings.clearCache.btn"))
+				.setTooltip(this.t("settings.translateSettings.clearCache.tip"))
+				.setDestructive()
+				.onClick(() => {
+					this.plugin.settingsTranslator?.clearCache();
+					this.plugin.settings.settingsTranslateCache = {};
+					new Notice(this.t("settings.translateSettings.cleared"));
+				})
+		);
 	}
 
 	/** 读取当前真正启用的插件 id 集合（来自 app.plugins.enabledPlugins，不依赖视图是否打开） */
