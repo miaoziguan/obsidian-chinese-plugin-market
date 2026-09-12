@@ -111,6 +111,73 @@ export function githubReleaseAssetUrls(
 	];
 }
 
+/** 候选链全部 404/410（「确实没有」）时抛出，供上层做 GitHub 诊断 */
+export class FetchMissingError extends Error {
+	constructor(
+		readonly file: string,
+		readonly status: number
+	) {
+		super(`${file} ${t("directInstall.fetchFail")} ${status}`);
+	}
+}
+
+/** 在搜索结果里找「仓库名完全一致」的项，作为拼写纠错建议；没有则 null */
+export function pickExactNameMatch(
+	items: { full_name?: unknown; name?: unknown }[],
+	repo: string
+): string | null {
+	const target = repo.toLowerCase();
+	for (const it of items) {
+		if (
+			typeof it.full_name === "string" &&
+			typeof it.name === "string" &&
+			it.name.toLowerCase() === target
+		) {
+			return it.full_name;
+		}
+	}
+	return null;
+}
+
+/** GitHub 源安装失败时的诊断：区分「仓库不存在（附拼写建议）/ 仓库存在但没有 manifest」 */
+async function diagnoseGithubRepo(
+	ref: { owner: string; repo: string },
+	original: FetchMissingError
+): Promise<Error> {
+	const full = `${ref.owner}/${ref.repo}`;
+	try {
+		const r = await requestUrl({ url: `https://api.github.com/repos/${full}`, throw: false });
+		if (r.status === 200) {
+			return new Error(t("directInstall.ghNoManifest", { repo: full }));
+		}
+		if (r.status === 404) {
+			// 仓库不存在：多半是用户名/仓库名拼错，搜索完全同名仓库给纠错建议
+			const sug = await searchGithubRepoName(ref.repo);
+			if (sug) return new Error(t("directInstall.ghSuggest", { repo: full, sug }));
+			return new Error(t("directInstall.ghNotFound", { repo: full }));
+		}
+		// 403（限流）等无法判断的状态：退回原始错误
+	} catch {
+		// 诊断请求本身失败：退回原始错误
+	}
+	return original;
+}
+
+async function searchGithubRepoName(repo: string): Promise<string | null> {
+	try {
+		const q = encodeURIComponent(`${repo} in:name`);
+		const r = await requestUrl({
+			url: `https://api.github.com/search/repositories?q=${q}&per_page=5`,
+			throw: false,
+		});
+		if (r.status !== 200) return null;
+		const items = (r.json as { items?: { full_name?: unknown; name?: unknown }[] })?.items ?? [];
+		return pickExactNameMatch(items, repo);
+	} catch {
+		return null;
+	}
+}
+
 export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 	const root = resolveInstallRoot(url);
 	const gh = parseGithubRepoFromRaw(root);
@@ -130,10 +197,17 @@ export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 			lastStatus = r.status;
 		}
 		if (optional) return null;
-		throw new Error(`${name} ${t("directInstall.fetchFail")} ${lastStatus}`);
+		throw new FetchMissingError(name, lastStatus);
 	};
 
-	const manText = (await fetchText(FILES[0], gh ? githubReleaseAssetUrls(gh, FILES[0]) : [])) as string;
+	let manText: string;
+	try {
+		manText = (await fetchText(FILES[0], gh ? githubReleaseAssetUrls(gh, FILES[0]) : [])) as string;
+	} catch (e) {
+		// GitHub 源 404 时做一次诊断，把「地址拼错 / 不是插件仓库」说清楚
+		if (e instanceof FetchMissingError && gh) throw await diagnoseGithubRepo(gh, e);
+		throw e;
+	}
 	const man = JSON.parse(manText) as Manifest;
 	const id = man.id;
 	// id 会拼进写盘路径，且缺字段的 manifest 写进去会让插件加载不了
@@ -153,9 +227,20 @@ export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 	}
 
 	const rel = (file: string) => (gh ? githubReleaseAssetUrls(gh, file, man.version) : []);
+	const fetchMain = async (): Promise<string> => {
+		try {
+			return (await fetchText(FILES[1], rel(FILES[1]))) as string;
+		} catch (e) {
+			// 源码树和 Release 都没有 main.js：多半是作者没发布构建产物
+			if (e instanceof FetchMissingError && gh) {
+				throw new Error(t("directInstall.ghNoMain", { repo: `${gh.owner}/${gh.repo}` }));
+			}
+			throw e;
+		}
+	};
 	const texts: (string | null)[] = [
 		manText,
-		...(await Promise.all([fetchText(FILES[1], rel(FILES[1])), fetchText(FILES[2], rel(FILES[2]), true)])),
+		...(await Promise.all([fetchMain(), fetchText(FILES[2], rel(FILES[2]), true)])),
 	];
 	if (!(texts[1] as string).trim()) throw new Error(t("directInstall.emptyMain"));
 
