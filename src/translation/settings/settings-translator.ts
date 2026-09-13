@@ -10,7 +10,8 @@
  * - 同步优先：命中本地串缓存 → 直接替换，零闪烁。
  * - 异步兜底：缓存未命中 → 调 translator.translateTextSegment（免费通道优先，百度兜底）→
  *   拿到后就地更新元素，并写回缓存（跨会话持久）。首次打开会有「原文→译文」短暂闪烁。
- * - HTML 安全：`setDesc` 可能含 <a>/<b> 等标签，只翻文本节点、保留结构。
+ * - HTML 安全：`setDesc` 可能含 <a>/<b> 等标签，只翻译文本节点、保留结构；改写走 DOM
+ *   文本节点 nodeValue 原地更新，绝不赋值 element.innerHTML / outerHTML（避免 XSS 与注入风险）。
  * - 安全开关：默认关；按插件 ID 黑名单（个别会回读自身 DOM 文案的插件）；已是中文的串（含 CJK）跳过，
  *   这也顺带避免翻译我们自己的中文设置页。
  */
@@ -52,9 +53,10 @@ interface PatchOriginals {
 
 /** 缓存上限：超出后按插入顺序淘汰最旧，避免无限增长 */
 const CACHE_CAP = 3000;
-/** 单实例全局守卫：防止 Hot Reload 重复打补丁 */
+/** 原型原始方法备份（用于卸载时恢复）；仅 install 一次时填充 */
 let originals: PatchOriginals | null = null;
-let activeInstance: SettingsTranslator | null = null;
+/** 当前已挂载补丁的实例的卸载钩子；避免跨实例重复打补丁（不持有 this 引用） */
+let activeDisable: (() => void) | null = null;
 
 export class SettingsTranslator {
 	private translator: Translator;
@@ -93,10 +95,11 @@ export class SettingsTranslator {
 
 	enable(): void {
 		if (this.patched) return;
-		if (activeInstance && activeInstance !== this) activeInstance.disable();
+		// 卸载上一任持有者（理论上只有单实例，热重载兜底）
+		activeDisable?.();
 		this.install();
 		this.patched = true;
-		activeInstance = this;
+		activeDisable = () => this.restore();
 	}
 
 	disable(): void {
@@ -104,7 +107,7 @@ export class SettingsTranslator {
 		this.restore();
 		this.pending.clear();
 		this.patched = false;
-		activeInstance = null;
+		activeDisable = null;
 	}
 
 	private evict(): void {
@@ -168,36 +171,46 @@ export class SettingsTranslator {
 	}
 
 	/**
-	 * HTML 安全翻译：只翻译文本节点，保留标签结构（setDesc 常含 <a>/<b> 等）。
-	 * 纯文本（无标签）走普通串翻译路径。
+	 * HTML 安全翻译（DOM 内联版）：遍历 descEl 的文本节点，只翻译英文文本、
+	 * 保留标签与结构，逐节点原地改写 nodeValue（不触碰 innerHTML / outerHTML）。
+	 * 逐节点过 shouldSkip（含中文/未启用/黑名单插件跳过），避免重复翻译与 XSS 风险。
 	 */
-	async translateHtml(html: string): Promise<string | null> {
-		if (this.shouldSkip(html)) return null;
-		if (!html.includes("<")) {
-			return this.translateText(html);
+	async translateDescEl(el: HTMLElement): Promise<void> {
+		const nodes: Text[] = [];
+		const collect = (node: Node): void => {
+			node.childNodes.forEach((child) => {
+				if (child.nodeType === Node.TEXT_NODE) {
+					const v = child.nodeValue;
+					if (v !== null && v.trim() !== "") nodes.push(child as Text);
+				} else {
+					collect(child);
+				}
+			});
+		};
+		collect(el);
+		if (nodes.length === 0) return;
+		const candidates = nodes.map((n) => ({ node: n, text: n.nodeValue as string }));
+		const toTranslate = candidates.filter((c) => !this.shouldSkip(c.text));
+		if (toTranslate.length === 0) return;
+		const uniq = Array.from(new Set(toTranslate.map((c) => c.text)));
+		const results = await Promise.all(uniq.map((u) => this.translateText(u)));
+		const map = new Map(uniq.map((u, i) => [u, results[i]]));
+		for (const c of toTranslate) {
+			const tr = map.get(c.text);
+			if (tr) c.node.nodeValue = tr;
 		}
-		// 按标签切分：偶数索引为文本段（待译），奇数索引为标签（原样保留）。
-		// 不使用 DOM 创建，避免触发偏好规则，且对 jsdom/运行时零依赖。
-		const parts = html.split(/(<[^>]*>)/g);
-		const uniq = Array.from(
-			new Set(parts.filter((p, i) => i % 2 === 0 && p.trim() !== "" && !isCjkText(p)))
-		);
-		if (uniq.length === 0) return html;
-		const results = await Promise.all(uniq.map((t) => this.translateText(t)));
-		const map = new Map(uniq.map((t, i) => [t, results[i]]));
-		for (let i = 0; i < parts.length; i++) {
-			if (i % 2 !== 0) continue;
-			const text = parts[i];
-			if (text.trim() === "" || isCjkText(text)) continue;
-			const tr = map.get(text);
-			if (tr) parts[i] = tr;
-		}
-		return parts.join("");
 	}
 
 	private install(): void {
-		const self = this;
+		// 绑定实例方法，避免闭包内使用 self = this（no-this-alias）。
+		// 注意 .bind() 在 lib 类型里返回 any，需显式标注类型，否则 .then 回调参数退化为隐式 any。
+		const translateText: (text: string) => Promise<string | null> = this.translateText.bind(this);
+		const translateDescEl: (el: HTMLElement) => Promise<void> = this.translateDescEl.bind(this);
+		const shouldSkip: (text: string) => boolean = this.shouldSkip.bind(this);
 		if (!originals) {
+			// 保存原型原始方法以便卸载时恢复。此处有意持有方法引用，
+			// 调用时通过 .apply(this, ...) 正确绑定组件实例的 this。
+			/* eslint-disable @typescript-eslint/unbound-method */
 			originals = {
 				setName: Setting.prototype.setName as unknown as PatchOriginals["setName"],
 				setDesc: Setting.prototype.setDesc as unknown as PatchOriginals["setDesc"],
@@ -206,6 +219,7 @@ export class SettingsTranslator {
 				addOptions: DropdownComponent.prototype.addOptions as unknown as PatchOriginals["addOptions"],
 				setPlaceholder: TextComponent.prototype.setPlaceholder as unknown as PatchOriginals["setPlaceholder"],
 			};
+			/* eslint-enable @typescript-eslint/unbound-method */
 		}
 		const o = originals;
 
@@ -215,10 +229,10 @@ export class SettingsTranslator {
 			...rest: unknown[]
 		) {
 			const ret = o.setName.apply(this, [name, ...rest]);
-			if (typeof name !== "string" || self.shouldSkip(name)) return ret;
+			if (typeof name !== "string" || shouldSkip(name)) return ret;
 			const el = this.nameEl;
 			if (el) {
-				void self.translateText(name).then((t) => {
+				void translateText(name).then((t) => {
 					if (t && el.textContent === name) el.textContent = t;
 				});
 			}
@@ -231,13 +245,9 @@ export class SettingsTranslator {
 			...rest: unknown[]
 		) {
 			const ret = o.setDesc.apply(this, [desc, ...rest]);
-			if (typeof desc !== "string" || self.shouldSkip(desc)) return ret;
+			if (typeof desc !== "string" || shouldSkip(desc)) return ret;
 			const el = this.descEl;
-			if (el) {
-				void self.translateHtml(desc).then((html) => {
-					if (html && el.innerHTML === desc) el.innerHTML = html;
-				});
-			}
+			if (el) void translateDescEl(el);
 			return ret;
 		};
 
@@ -247,10 +257,10 @@ export class SettingsTranslator {
 			...rest: unknown[]
 		) {
 			const ret = o.setButtonText.apply(this, [text, ...rest]);
-			if (self.shouldSkip(text)) return ret;
+			if (shouldSkip(text)) return ret;
 			const el = this.buttonEl;
 			if (el) {
-				void self.translateText(text).then((t) => {
+				void translateText(text).then((t) => {
 					if (t && el.textContent === text) el.textContent = t;
 				});
 			}
@@ -264,10 +274,10 @@ export class SettingsTranslator {
 			...rest: unknown[]
 		) {
 			const ret = o.addOption.apply(this, [value, display, ...rest]);
-			if (self.shouldSkip(display)) return ret;
+			if (shouldSkip(display)) return ret;
 			const sel = this.selectEl;
 			if (sel) {
-				void self.translateText(display).then((t) => {
+				void translateText(display).then((t) => {
 					if (!t) return;
 					const opt = Array.from(sel.options).find((op) => op.value === value && op.text === display);
 					if (opt) opt.text = t;
@@ -286,8 +296,8 @@ export class SettingsTranslator {
 			if (sel) {
 				void Promise.all(
 					Object.entries(options).map(async ([value, display]) => {
-						if (self.shouldSkip(display)) return;
-						const t = await self.translateText(display);
+						if (shouldSkip(display)) return;
+						const t = await translateText(display);
 						if (!t) return;
 						const opt = Array.from(sel.options).find((op) => op.value === value && op.text === display);
 						if (opt) opt.text = t;
@@ -303,10 +313,10 @@ export class SettingsTranslator {
 			...rest: unknown[]
 		) {
 			const ret = o.setPlaceholder.apply(this, [text, ...rest]);
-			if (self.shouldSkip(text)) return ret;
+			if (shouldSkip(text)) return ret;
 			const el = this.inputEl;
 			if (el) {
-				void self.translateText(text).then((t) => {
+				void translateText(text).then((t) => {
 					if (t && el.placeholder === text) el.placeholder = t;
 				});
 			}
