@@ -210,7 +210,7 @@ export class SettingsTranslator {
 		if (!originals) {
 			// 保存原型原始方法以便卸载时恢复。此处有意持有方法引用，
 			// 调用时通过 .apply(this, ...) 正确绑定组件实例的 this。
-			/* eslint-disable @typescript-eslint/unbound-method */
+			/* eslint-disable @typescript-eslint/unbound-method -- 需保存原型的未绑定方法引用以便卸载时恢复，此处取方法引用属必要 */
 			originals = {
 				setName: Setting.prototype.setName as unknown as PatchOriginals["setName"],
 				setDesc: Setting.prototype.setDesc as unknown as PatchOriginals["setDesc"],
@@ -219,7 +219,7 @@ export class SettingsTranslator {
 				addOptions: DropdownComponent.prototype.addOptions as unknown as PatchOriginals["addOptions"],
 				setPlaceholder: TextComponent.prototype.setPlaceholder as unknown as PatchOriginals["setPlaceholder"],
 			};
-			/* eslint-enable @typescript-eslint/unbound-method */
+			/* eslint-enable @typescript-eslint/unbound-method -- 仅上述对象字面量需关闭 unbound-method 检查，恢复默认 */
 		}
 		const o = originals;
 
