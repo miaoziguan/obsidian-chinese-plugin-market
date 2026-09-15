@@ -27,7 +27,7 @@ import {
 	ObsidianNoteStorage,
 	obsidianPlatformCapability,
 } from "@app/obsidian-adapters";
-import { makeT } from "@shared/i18n";
+import { makeT, pickLang } from "@shared/i18n";
 import { setScrollDebug } from "@ui/view/view-render";
 import { TranslatorSettingTab } from "@app/settings-tab";
 import { debounce, mapWithConcurrency, contentHash, isAISearchUsable } from "@shared/utils";
@@ -77,6 +77,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	journalVerdictIds: Map<string, Set<string>> = new Map();
 	/** 设置页增强控制器（增强原生「设置 → 社区插件」页）；未启用或不支持时为 null */
 	settingsIntegration: SettingsIntegrationController | null = null;
+	/** 已注册的「切换插件」命令 id（插件增删后整体刷新） */
+	private pluginToggleCommandIds: string[] = [];
 
 	/**
 	 * 记录一次安装/卸载 diff 到历史索引（评测台账）。fire-and-forget：失败只 warn，
@@ -107,6 +109,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 记录安装历史失败：", e);
 		}
+		// 插件增删后同步「切换插件」命令列表（仅在有安装/卸载 diff 时触发，频率极低）
+		this.refreshPluginToggleCommands();
 	}
 
 	/** 评测台账是否启用（默认开启；预留开关位供后续设置页接入） */
@@ -485,6 +489,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			},
 		});
 
+		// 命令：打开已装插件管理（增强后的原生「设置 → 社区插件」页）
+		this.addCommand({
+			id: "open-plugin-manager",
+			name: t("manage.openCmd"),
+			callback: () => this.openCommunityPluginsSettings(),
+		});
+
 		// 左侧栏图标：总是弹聚合菜单（打开市场 / 从直链安装 / 启用组合管理；
 		// 有 profile 时额外加「应用组合：xxx」一键切换项）。无 profile 用户也
 		// 能直达「启用组合管理」创建第一个组合，故不再按 profile 数量分流——
@@ -599,7 +610,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 已装插件管理：增强原生「设置 → 社区插件」页。
 		// 等布局就绪再启动，避免与 Obsidian 启动期的设置面板初始化竞争；
 		// 卸载时 register 自动停止（恢复 patch、移除注入）。
-		this.app.workspace.onLayoutReady(() => this.startSettingsIntegration());
+		this.app.workspace.onLayoutReady(() => {
+			this.startSettingsIntegration();
+			// 为每个已安装插件注册「切换插件」命令（插件增删后由 recordInstallDiff 刷新）
+			this.refreshPluginToggleCommands();
+		});
 		this.register(() => {
 			this.settingsIntegration?.stop();
 			this.settingsIntegration = null;
@@ -1366,6 +1381,74 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				return Object.keys(asAppInternals(plugin.app).plugins?.manifests ?? {});
 			},
 		};
+	}
+
+	/** 打开原生「设置 → 社区插件」页（已装插件管理的命令入口） */
+	openCommunityPluginsSettings(): void {
+		try {
+			const setting = asAppInternals(this.app).setting;
+			setting?.open?.();
+			setting?.openTabById?.("community-plugins");
+		} catch (error) {
+			logger.warn("[Chinese Plugin Market] 打开社区插件设置页失败：", error);
+		}
+	}
+
+	/**
+	 * 为每个已安装插件注册「切换插件：<名称>」命令。
+	 * 始终排除自身——把自己禁用掉会导致市场直接消失，需要手动恢复。
+	 */
+	refreshPluginToggleCommands(): void {
+		try {
+			for (const id of this.pluginToggleCommandIds) this.removeCommand(id);
+			this.pluginToggleCommandIds = [];
+
+			const manifests = asAppInternals(this.app).plugins?.manifests ?? {};
+			for (const [pluginId, manifest] of Object.entries(manifests)) {
+				if (pluginId === this.manifest.id) continue;
+				const rawName = manifest.name;
+				const name = typeof rawName === "string" && rawName ? rawName : pluginId;
+				const commandId = `toggle-plugin-${pluginId}`;
+				this.addCommand({
+					id: commandId,
+					name: pickLang("manage.togglePlugin", { name }),
+					callback: () => void this.toggleInstalledPlugin(pluginId, name),
+				});
+				this.pluginToggleCommandIds.push(commandId);
+			}
+		} catch (error) {
+			logger.warn("[Chinese Plugin Market] 注册插件切换命令失败：", error);
+		}
+	}
+
+	/**
+	 * 切换单个插件的启用状态。
+	 *
+	 * 复用 applyProfileByIds 而不是另写一套：它内部走 enable/disablePluginAndSave，
+	 * 双写 community-plugins.json 与运行时启用集，与卡片上的启用按钮口径一致
+	 * （此前「重启后禁用失效」正是只改内存不写盘导致的）。
+	 */
+	async toggleInstalledPlugin(pluginId: string, name: string): Promise<void> {
+		try {
+			const plugins = asAppInternals(this.app).plugins;
+			if (!plugins) return;
+			const ep = plugins.enabledPlugins as unknown as Set<string> | string[] | undefined;
+			const current = new Set(ep ?? []);
+			const turningOn = !current.has(pluginId);
+			const next = new Set(current);
+			if (turningOn) next.add(pluginId);
+			else next.delete(pluginId);
+
+			await applyProfileByIds(this.app, current, next, this.manifest.id);
+			new Notice(
+				turningOn
+					? pickLang("manage.toggled.on", { name })
+					: pickLang("manage.toggled.off", { name })
+			);
+		} catch (error) {
+			logger.warn("[Chinese Plugin Market] 切换插件启用状态失败：", error);
+			new Notice(pickLang("manage.toggle.fail", { name }));
+		}
 	}
 
 	private async loadTranslatorData(allData?: Record<string, unknown>) {

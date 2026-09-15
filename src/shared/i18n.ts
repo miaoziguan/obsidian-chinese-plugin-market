@@ -790,6 +790,11 @@ export const STRINGS = {
 	"manage.note.ph": { zh: "输入备注" },
 	"manage.note.empty": { zh: "点击添加备注" },
 	"manage.group.set": { zh: "分组" },
+	"manage.openCmd": { zh: "打开插件管理（已安装）" },
+	"manage.togglePlugin": { zh: "切换插件：{name}" },
+	"manage.toggled.on": { zh: "已启用「{name}」" },
+	"manage.toggled.off": { zh: "已禁用「{name}」" },
+	"manage.toggle.fail": { zh: "切换插件失败：{name}" },
 
 	// 设置面板：已装插件管理
 	"settings.manage": { zh: "已装插件管理" },
