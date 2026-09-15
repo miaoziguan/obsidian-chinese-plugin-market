@@ -11,7 +11,9 @@
  *    setCssProps（符合插件规范，且测试环境由 test/setup.ts 补齐，可单测）。
  */
 
+import { Menu, Notice } from "obsidian";
 import { pickLang } from "@shared/i18n";
+import { logger } from "@shared/logger";
 import { GROUP_ALL, GROUP_OTHER, type ManageRow } from "@domain/manage/types";
 import { listGroups } from "@domain/manage/group";
 import { getMeta } from "@domain/manage/plugin-meta";
@@ -44,8 +46,6 @@ export class PluginListEnhancer {
 	private rootEl: HTMLElement | null = null;
 	private listGroupEl: HTMLElement | null = null;
 	private filterBar: ManageFilterBar | null = null;
-	private groupMenuEl: HTMLElement | null = null;
-	private onOutsidePointerDown: ((event: Event) => void) | null = null;
 
 	constructor(
 		private readonly store: ManageStorePort,
@@ -75,7 +75,6 @@ export class PluginListEnhancer {
 
 	/** 移除全部注入内容，恢复原生页面 */
 	cleanup(): void {
-		this.closeGroupMenu();
 		const root = this.rootEl;
 		if (root) {
 			root.querySelectorAll<HTMLElement>(`[${OWNED_ATTR}]`).forEach((el) => el.remove());
@@ -199,10 +198,10 @@ export class PluginListEnhancer {
 		button.type = "button";
 		button.setAttribute(OWNED_ATTR, ROW_OWNER);
 		button.setAttribute("data-role", GROUP_BTN_ROLE);
-		button.addEventListener("click", (event) => {
+		button.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
 			event.stopPropagation();
-			this.openGroupMenu(button, rowEl, id, currentGroup);
+			this.openGroupMenu(event, rowEl, id, currentGroup);
 		});
 		// 放在首个原生按钮之后（通常是「更新」），没有则置顶
 		const firstNativeButton = Array.from(controlEl.children).find(
@@ -284,56 +283,44 @@ export class PluginListEnhancer {
 		return (clone.textContent ?? "").trim();
 	}
 
-	// ── 分组菜单（自绘：不依赖 Obsidian Menu，且可测） ──
+	// ── 分组菜单 ──
 
+	/**
+	 * 用 Obsidian 官方 Menu，而不是自绘浮层。
+	 *
+	 * 自绘方案需要自己处理定位、层级与「点击外部关闭」，而这三点在设置面板
+	 * 这种高层级弹层里极易出错（菜单被遮在面板下方、或定位计算失效），
+	 * 且这类问题无法在 jsdom 单测中暴露——实测才看得见。
+	 * 官方 Menu 由 Obsidian 统一处理上述行为，视觉也与原生日历/右键菜单一致。
+	 * 失败只 warn，绝不抛给原生事件链。
+	 */
 	private openGroupMenu(
-		anchor: HTMLElement,
+		event: MouseEvent,
 		rowEl: HTMLElement,
 		id: string,
 		currentGroup: string
 	): void {
-		this.closeGroupMenu();
-		const menu = createDiv({ cls: "cpm-group-menu" });
-		menu.setAttribute(OWNED_ATTR, ROW_OWNER);
-
-		for (const { key, name } of listGroups(this.store.settings.pluginGroups)) {
-			if (key === GROUP_ALL) continue;
-			const item = createDiv({ cls: "cpm-group-menu-item", text: name });
-			if (key === currentGroup) item.classList.add("is-selected");
-			item.addEventListener("click", (event) => {
-				event.preventDefault();
-				event.stopPropagation();
-				this.store.saveMeta(id, { group: key });
-				this.closeGroupMenu();
-				this.removeRowEnhancement(rowEl);
-				this.enhanceRow(rowEl);
-				this.applyFilters();
-			});
-			menu.appendChild(item);
+		try {
+			const menu = new Menu();
+			for (const { key, name } of listGroups(this.store.settings.pluginGroups)) {
+				if (key === GROUP_ALL) continue;
+				menu.addItem((item) =>
+					item
+						.setTitle(name)
+						.setChecked(key === currentGroup)
+						.onClick(() => {
+							this.store.saveMeta(id, { group: key });
+							this.removeRowEnhancement(rowEl);
+							this.enhanceRow(rowEl);
+							this.applyFilters();
+						})
+				);
+			}
+			menu.showAtMouseEvent(event);
+		} catch (error) {
+			// 可见提示：避免「点了没反应」这种无法归因的静默失败
+			logger.warn("[Chinese Plugin Market] 打开分组菜单失败：", error);
+			new Notice("打开分组菜单失败，详情见控制台日志");
 		}
-
-		document.body.appendChild(menu);
-		const rect = anchor.getBoundingClientRect();
-		menu.setCssProps({
-			position: "fixed",
-			top: `${rect.bottom + 4}px`,
-			left: `${rect.left}px`,
-		});
-		this.groupMenuEl = menu;
-
-		this.onOutsidePointerDown = (event: Event) => {
-			if (menu.contains(event.target as Node)) return;
-			this.closeGroupMenu();
-		};
-		document.addEventListener("pointerdown", this.onOutsidePointerDown, true);
-	}
-
-	private closeGroupMenu(): void {
-		if (this.onOutsidePointerDown) {
-			document.removeEventListener("pointerdown", this.onOutsidePointerDown, true);
-			this.onOutsidePointerDown = null;
-		}
-		this.groupMenuEl?.remove();
-		this.groupMenuEl = null;
 	}
 }

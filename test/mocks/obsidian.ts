@@ -22,6 +22,56 @@ export class Component {
 	load() {}
 	unload() {}
 }
+
+/**
+ * Menu 的最小可用实现。
+ * 只补齐源码用到的 addItem / showAtMouseEvent，并保留 items 与 lastShown
+ * 供测试断言菜单项内容与「菜单确实被弹出」。
+ */
+type MenuItemApi = {
+	setTitle(title: string): MenuItemApi;
+	setChecked(checked: boolean): MenuItemApi;
+	onClick(cb: () => void): MenuItemApi;
+};
+
+export interface MenuItemSnapshot {
+	title: string;
+	checked: boolean;
+	cb: (() => void) | null;
+}
+
+export class Menu {
+	/** 最近一次被弹出的菜单（测试断言用） */
+	static lastShown: Menu | null = null;
+	readonly items: MenuItemSnapshot[] = [];
+
+	addItem(cb: (item: MenuItemApi) => void): Menu {
+		const entry: MenuItemSnapshot = { title: "", checked: false, cb: null };
+		const api: MenuItemApi = {
+			setTitle: (title: string) => {
+				entry.title = title;
+				return api;
+			},
+			setChecked: (checked: boolean) => {
+				entry.checked = checked;
+				return api;
+			},
+			onClick: (fn: () => void) => {
+				entry.cb = fn;
+				return api;
+			},
+		};
+		cb(api);
+		this.items.push(entry);
+		return this;
+	}
+
+	showAtMouseEvent(): void {
+		Menu.lastShown = this;
+	}
+
+	close(): void {}
+}
 export const MarkdownRenderer = {
 	async render() {},
 };

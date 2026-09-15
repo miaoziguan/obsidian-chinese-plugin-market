@@ -6000,29 +6000,6 @@ button.pt-card-install-btn--installed {
 	padding: 2px 6px;
 }
 
-/* 自绘分组选择菜单（位置由 JS 计算后写入） */
-.cpm-group-menu {
-	z-index: var(--layer-popover, 50);
-	min-width: 140px;
-	padding: 4px;
-	border-radius: var(--radius-s, 6px);
-	background: var(--background-primary);
-	border: 1px solid var(--background-modifier-border);
-	box-shadow: var(--shadow-s);
-}
-.cpm-group-menu-item {
-	padding: 4px 8px;
-	border-radius: var(--radius-s, 4px);
-	cursor: pointer;
-	font-size: var(--font-ui-small, 13px);
-}
-.cpm-group-menu-item:hover {
-	background: var(--background-modifier-hover);
-}
-.cpm-group-menu-item.is-selected {
-	color: var(--text-accent);
-}
-
 /*
  * 未命中筛选的行隐藏而非删除：原生页面随时可能重绘重建 DOM，
  * 删除后 enhancer 无法再识别该行；隐藏则由 enhancer 每次重新计算可见性。

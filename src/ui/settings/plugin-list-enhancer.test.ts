@@ -1,4 +1,7 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
+// 直接引用 mock 模块而非 "obsidian" 别名：tsc 按真实 obsidian 类型检查，
+// 那里没有 mock 提供的 lastShown / items 等测试辅助字段。
+import { Menu } from "../../../test/mocks/obsidian";
 import { PluginListEnhancer } from "./plugin-list-enhancer";
 import type { ManageStorePort } from "./manage-store";
 import { addGroup, createDefaultManageSettings } from "@domain/manage/group";
@@ -65,6 +68,10 @@ function createStore(initial?: Partial<ManageSettings>): ManageStorePort {
 function rows(root: HTMLElement): HTMLElement[] {
 	return Array.from(root.querySelectorAll<HTMLElement>(".setting-items > .setting-item"));
 }
+
+beforeEach(() => {
+	Menu.lastShown = null;
+});
 
 afterEach(() => {
 	document.body.innerHTML = "";
@@ -149,6 +156,34 @@ describe("PluginListEnhancer", () => {
 		store.saveMeta("alpha", { group: "1" });
 		enhancer.refreshRows();
 		expect(rows(root)[0].querySelector(".cpm-group-badge")?.textContent).toBe("写作");
+	});
+
+	it("点击分组按钮弹出菜单，选中后写回元数据并刷新徽标", () => {
+		const groups = addGroup(createDefaultManageSettings().pluginGroups, "写作")!.groups;
+		const store = createStore({ pluginGroups: groups });
+		const root = buildDom();
+		const enhancer = new PluginListEnhancer(store, { onManageGroups: () => {} });
+		enhancer.enhance(root);
+
+		const button = rows(root)[0].querySelector<HTMLButtonElement>(".cpm-group-btn")!;
+		button.click();
+
+		const menu = Menu.lastShown;
+		expect(menu).not.toBeNull();
+		// 「全部」是筛选概念，不应作为可分配的分组出现
+		expect(menu!.items.map((i) => i.title)).toEqual(["写作", "其他"]);
+
+		menu!.items.find((i) => i.title === "写作")!.cb!();
+		expect(store.settings.pluginMeta.alpha.group).toBe("1");
+		expect(rows(root)[0].querySelector(".cpm-group-badge")?.textContent).toBe("写作");
+	});
+
+	it("分组按钮点击失败时不影响页面（异常被吞掉）", () => {
+		const root = buildDom();
+		const enhancer = new PluginListEnhancer(createStore(), { onManageGroups: () => {} });
+		enhancer.enhance(root);
+		const button = rows(root)[0].querySelector<HTMLButtonElement>(".cpm-group-btn")!;
+		expect(() => button.click()).not.toThrow();
 	});
 
 	it("cleanup 后不留任何注入痕迹", () => {
