@@ -28,6 +28,11 @@ export function renderInlineNoteEditor(
 	let value = options.value ?? "";
 	let editing = false;
 
+	// 备注区内的交互不应冒泡到原生设置行（否则点击/拖拽备注可能触发该行的默认行为）
+	for (const eventName of ["mousedown", "pointerdown", "click"]) {
+		host.addEventListener(eventName, (event) => event.stopPropagation());
+	}
+
 	const paint = (): void => {
 		host.textContent = "";
 		if (editing) {
@@ -50,7 +55,9 @@ export function renderInlineNoteEditor(
 				paint();
 			};
 			input.addEventListener("keydown", (event: KeyboardEvent) => {
-				if (event.key === "Enter" && !event.shiftKey) {
+				// isComposing：中文/日文输入法用 Enter 确认候选词，
+				// 若不排除会被误当成「提交备注」，导致打字打到一半就退出编辑。
+				if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
 					event.preventDefault();
 					commit(true);
 				} else if (event.key === "Escape") {
