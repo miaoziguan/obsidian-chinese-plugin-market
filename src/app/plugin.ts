@@ -45,6 +45,11 @@ import { parseJournalNote, renderJournalNote, type JournalEntry } from "@domain/
 import { computeJournalStats, buildVerdictIndex, type JournalStats } from "@domain/journal/journal-stats";
 import { JournalView, JOURNAL_VIEW_TYPE } from "@ui/view/journal-view";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
+import { SettingsIntegrationController } from "@app/settings-integration/settings-integration-controller";
+import type { ManageStorePort } from "@ui/settings/manage-store";
+import { normalizeManageSettings } from "@domain/manage/group";
+import { setMeta } from "@domain/manage/plugin-meta";
+import { asAppInternals } from "@data/platform/obsidian-internals";
 /** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
 type LoadDataRaw = NonNullable<Parameters<Translator["loadData"]>[0]>;
 /** Translator.setPluginTags 的入参结构 */
@@ -70,6 +75,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	journalStats: JournalStats | null = null;
 	/** 弃用原因 → 插件 id 集合索引（来自评测笔记 verdict，供踩坑 Top 点击联动筛选） */
 	journalVerdictIds: Map<string, Set<string>> = new Map();
+	/** 设置页增强控制器（增强原生「设置 → 社区插件」页）；未启用或不支持时为 null */
+	settingsIntegration: SettingsIntegrationController | null = null;
 
 	/**
 	 * 记录一次安装/卸载 diff 到历史索引（评测台账）。fire-and-forget：失败只 warn，
@@ -588,6 +595,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 		// 设置面板
 		this.addSettingTab(new TranslatorSettingTab(this.app, this));
+
+		// 已装插件管理：增强原生「设置 → 社区插件」页。
+		// 等布局就绪再启动，避免与 Obsidian 启动期的设置面板初始化竞争；
+		// 卸载时 register 自动停止（恢复 patch、移除注入）。
+		this.app.workspace.onLayoutReady(() => this.startSettingsIntegration());
+		this.register(() => {
+			this.settingsIntegration?.stop();
+			this.settingsIntegration = null;
+		});
 	}
 
 	/**
@@ -1147,6 +1163,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 收藏筛选改为会话级（不持久化），字段已从 settings 移除：
 		// 旧版残留的 favoriteFilter（boolean 或枚举）随 Object.assign 丢弃，不再迁移
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		// 已装插件管理：旧数据缺字段/子字段不全时统一规范化，
+		// 同时切断对 DEFAULT_SETTINGS.manage 的浅合并共享引用（否则改动会污染默认常量）。
+		this.settings.manage = normalizeManageSettings(this.settings.manage);
 		// 设置页即时机翻：用户开启则挂载钩子并载入缓存
 		if (this.settings.translateSettingsEnabled) {
 			this.ensureSettingsTranslator();
@@ -1271,6 +1290,82 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	async flushSaveSettings() {
 		this._saveSettingsDebounce.cancel();
 		await this._saveSettingsImmediate();
+	}
+
+	// ──────────────────────────────────────────
+	// 已装插件管理（增强原生「设置 → 社区插件」页）
+	// ──────────────────────────────────────────
+
+	/**
+	 * 启动设置页增强。全程容错：私有 API 缺失或抛错都只 warn 并放弃增强，
+	 * 绝不因本功能影响原生设置页与插件主体。
+	 */
+	startSettingsIntegration(): void {
+		try {
+			if (this.settingsIntegration) return;
+			if (!this.settings.manage.enabled) return;
+			if (!asAppInternals(this.app).setting) return;
+			this.settingsIntegration = new SettingsIntegrationController(
+				this.app,
+				this.createManageStore(),
+				{ openPluginSettings: () => this.openPluginSettingsTab() },
+			);
+			this.settingsIntegration.start();
+		} catch (error) {
+			logger.warn("[Chinese Plugin Market] 启动设置页增强失败（原生设置页不受影响）：", error);
+		}
+	}
+
+	/** 开关切换或分组数据变更后重装配（设置面板调用） */
+	refreshSettingsIntegration(): void {
+		this.settingsIntegration?.stop();
+		this.settingsIntegration = null;
+		this.startSettingsIntegration();
+	}
+
+	/** 打开本插件设置页（增强栏「管理分组」的落点） */
+	openPluginSettingsTab(): void {
+		try {
+			const setting = asAppInternals(this.app).setting;
+			setting?.open?.();
+			setting?.openTabById?.(this.manifest.id);
+		} catch (error) {
+			logger.warn("[Chinese Plugin Market] 打开插件设置页失败：", error);
+		}
+	}
+
+	/**
+	 * 管理模块的数据端口实现：注入给 ui 层，使其无需反向依赖 app 层。
+	 * 落盘统一走 flushSaveSettings（防抖取消 + 立即写），与全局设置保存口径一致。
+	 */
+	private createManageStore(): ManageStorePort {
+		const plugin = this;
+		return {
+			get settings() {
+				return plugin.settings.manage;
+			},
+			saveGroups(groups, colors) {
+				plugin.settings.manage.pluginGroups = groups;
+				plugin.settings.manage.pluginGroupColors = colors;
+				void plugin.flushSaveSettings();
+				plugin.settingsIntegration?.requestRefresh();
+			},
+			saveMeta(id, patch) {
+				plugin.settings.manage.pluginMeta = setMeta(
+					plugin.settings.manage.pluginMeta,
+					id,
+					patch,
+				);
+				void plugin.flushSaveSettings();
+			},
+			replaceMeta(meta) {
+				plugin.settings.manage.pluginMeta = meta;
+				void plugin.flushSaveSettings();
+			},
+			installedIds() {
+				return Object.keys(asAppInternals(plugin.app).plugins?.manifests ?? {});
+			},
+		};
 	}
 
 	private async loadTranslatorData(allData?: Record<string, unknown>) {

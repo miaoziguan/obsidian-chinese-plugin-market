@@ -55,10 +55,36 @@ export interface AppPlugins {
 	disablePluginAndSave?: (arg: PluginManifestLike | string) => Promise<void>;
 }
 
+/** 设置面板单个 Tab 的最小可读形状 */
+export interface AppSettingTabLike {
+	id?: string;
+	name?: string;
+	containerEl?: HTMLElement;
+}
+
 /** 设置面板（app.setting）的最小可读形状 */
 export interface AppSetting {
 	openTabById?: (pluginId: string) => unknown;
 	open?: () => unknown;
+	/** 已注册的设置页 Tab 列表 */
+	settingTabs?: AppSettingTabLike[];
+	/** 当前激活的 Tab */
+	activeTab?: AppSettingTabLike | null;
+	/** 所有 Tab 内容的容器（MutationObserver 的观察根） */
+	tabContentContainer?: HTMLElement;
+	/** 页面栈（外观页下钻后非空） */
+	pageStack?: unknown[];
+	/** 取当前下钻页面的根元素 */
+	getCurrentPageEl?: () => HTMLElement | null;
+	/** 重绘当前页 */
+	refreshCurrentPage?: () => void;
+	/** 生命周期方法（增强设置页时会被包裹） */
+	onOpen?: () => unknown;
+	onClose?: () => unknown;
+	openTab?: (tab: unknown) => unknown;
+	closeActiveTab?: () => unknown;
+	openPage?: (page: unknown) => unknown;
+	closePage?: () => unknown;
 }
 
 /** App 的内部扩展形状（叠加在官方 App 之上） */

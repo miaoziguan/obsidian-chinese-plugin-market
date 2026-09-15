@@ -36,6 +36,8 @@ import { type ListState } from "@ui/dom/list-state";
 import { TrendingEngine } from "@domain/recommend/trending";
 import { InvertedIndex } from "@domain/recommend/similar";
 import { type AuthorGroup } from "@translation/lexicon/pinyin-init";
+import { createDefaultManageSettings } from "@domain/manage/group";
+import type { ManageSettings } from "@domain/manage/types";
 
 import type ChinesePluginMarketPlugin from "@app/plugin";
 import { updatePluginCore } from "@app/plugin-updater";
@@ -127,6 +129,8 @@ export interface ChinesePluginMarketSettings {
 	translateSettingsBlacklist: string;
 	/** 设置页翻译串缓存（跨会话持久，超额自动淘汰最旧） */
 	settingsTranslateCache: Record<string, string>;
+	/** 已装插件管理（增强原生「设置 → 社区插件」页：分组 / 备注 / 筛选） */
+	manage: ManageSettings;
 }
 
 /** 单个启用组合 Profile：命名 + 启用插件 id 列表 + 可选绑定工作区布局 */
@@ -189,6 +193,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	translateSettingsProvider: "free",
 	translateSettingsBlacklist: "",
 	settingsTranslateCache: {},
+	manage: createDefaultManageSettings(),
 };
 
 /**
@@ -206,9 +211,10 @@ export function getDefaultSettings(): ChinesePluginMarketSettings {
 	} catch {
 		isMobile = false;
 	}
-	return isMobile
-		? { ...DEFAULT_SETTINGS, embeddingSource: "keyword" }
-		: { ...DEFAULT_SETTINGS };
+	// manage 是可变对象，必须每次新建：加载设置走的是 Object.assign 浅合并，
+	// 若直接沿用 DEFAULT_SETTINGS.manage，任何改动都会污染进程内的默认常量。
+	const base = { ...DEFAULT_SETTINGS, manage: createDefaultManageSettings() };
+	return isMobile ? { ...base, embeddingSource: "keyword" } : base;
 }
 
 // ──────────────────────────────────────────

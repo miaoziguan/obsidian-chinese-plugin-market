@@ -780,6 +780,32 @@ export const STRINGS = {
 			"filter.active.favorites": { zh: "已收藏" },
 	"filter.active.category": { zh: "分类：{value}" },
 	"filter.active.clear": { zh: "清除该筛选" },
+
+	// 已装插件管理（增强原生「设置 → 社区插件」页）
+	"manage.filter.keyword.ph": { zh: "搜索名称 / 备注" },
+	"manage.filter.manageGroups": { zh: "管理分组" },
+	"manage.filter.status.all": { zh: "全部状态" },
+	"manage.filter.status.enabled": { zh: "已启用" },
+	"manage.filter.status.disabled": { zh: "未启用" },
+	"manage.note.ph": { zh: "输入备注" },
+	"manage.note.empty": { zh: "点击添加备注" },
+	"manage.group.set": { zh: "分组" },
+
+	// 设置面板：已装插件管理
+	"settings.manage": { zh: "已装插件管理" },
+	"settings.manage.desc": { zh: "在 Obsidian 原生「设置 → 社区插件」页为已安装插件加分组、备注与筛选。" },
+	"settings.manage.enable": { zh: "启用设置页增强" },
+	"settings.manage.enable.desc": { zh: "在原生「社区插件」页显示分组标签、备注与筛选栏。关闭后原生页面完全恢复原样。" },
+	"settings.manage.groups": { zh: "插件分组" },
+	"settings.manage.groups.desc": { zh: "分组用于在原生社区插件页对已安装插件分类，不影响插件的启用状态。" },
+	"settings.manage.group.add": { zh: "添加分组" },
+	"settings.manage.group.name.ph": { zh: "分组名称" },
+	"settings.manage.group.delete": { zh: "删除" },
+	"settings.manage.group.builtin": { zh: "内置分组" },
+	"settings.manage.group.nameRequired": { zh: "请输入分组名称" },
+	"settings.manage.group.exists": { zh: "分组「{name}」已存在" },
+	"settings.manage.group.added": { zh: "已添加分组「{name}」" },
+	"settings.manage.group.deleted": { zh: "已删除分组「{name}」，其中插件已移到「其他」" },
 } as const;
 
 export type I18nKey = keyof typeof STRINGS;

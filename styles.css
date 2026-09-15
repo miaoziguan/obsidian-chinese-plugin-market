@@ -5935,3 +5935,112 @@ button.pt-card-install-btn--installed {
 	width: 100%;
 	text-align: left;
 }
+
+/* ──────────────────────────────────────────
+   已装插件管理：增强原生「设置 → 社区插件」页
+   注入元素统一带 data-cpm-owned，卸载时整块移除。
+   ────────────────────────────────────────── */
+
+/* 筛选栏：注入到原生「已安装插件」标题栏的控件区 */
+.cpm-filter-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.cpm-filter-keyword {
+	width: 140px;
+}
+.cpm-filter-group {
+	max-width: 150px;
+}
+.cpm-filter-status,
+.cpm-filter-manage {
+	font-size: var(--font-ui-smaller, 12px);
+	padding: 2px 8px;
+}
+.cpm-filter-status[data-status="enabled"] {
+	color: var(--text-success, var(--color-green));
+}
+.cpm-filter-status[data-status="disabled"] {
+	color: var(--text-muted);
+}
+
+/* 分组徽标：贴在插件名末尾，颜色由 --cpm-group-color 驱动 */
+.cpm-group-badge {
+	margin-left: 6px;
+	padding: 1px 6px;
+	border-radius: 8px;
+	font-size: var(--font-ui-smaller, 11px);
+	line-height: 1.4;
+	white-space: nowrap;
+	vertical-align: middle;
+	color: var(--text-on-accent, #fff);
+	background: var(--cpm-group-color, var(--interactive-accent));
+}
+
+/* 备注：空态弱化提示可点击 */
+.cpm-note-field {
+	cursor: text;
+}
+.cpm-note-empty {
+	opacity: 0.55;
+	font-style: italic;
+}
+.cpm-note-input {
+	width: 100%;
+	min-height: 24px;
+	resize: vertical;
+	font: inherit;
+}
+
+/* 分组按钮 */
+.cpm-group-btn {
+	font-size: var(--font-ui-smaller, 12px);
+	padding: 2px 6px;
+}
+
+/* 自绘分组选择菜单（位置由 JS 计算后写入） */
+.cpm-group-menu {
+	z-index: var(--layer-popover, 50);
+	min-width: 140px;
+	padding: 4px;
+	border-radius: var(--radius-s, 6px);
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: var(--shadow-s);
+}
+.cpm-group-menu-item {
+	padding: 4px 8px;
+	border-radius: var(--radius-s, 4px);
+	cursor: pointer;
+	font-size: var(--font-ui-small, 13px);
+}
+.cpm-group-menu-item:hover {
+	background: var(--background-modifier-hover);
+}
+.cpm-group-menu-item.is-selected {
+	color: var(--text-accent);
+}
+
+/*
+ * 未命中筛选的行隐藏而非删除：原生页面随时可能重绘重建 DOM，
+ * 删除后 enhancer 无法再识别该行；隐藏则由 enhancer 每次重新计算可见性。
+ */
+.cpm-filtered-out {
+	display: none !important;
+}
+
+/* 设置面板：分组管理行 */
+.pt-manage-tag {
+	margin-left: 8px;
+	font-size: var(--font-ui-smaller, 12px);
+	color: var(--text-muted);
+}
+.pt-manage-color {
+	width: 28px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	background: transparent;
+}

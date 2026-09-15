@@ -17,6 +17,15 @@ import { VIEW_TYPE } from "@shared/constants";
 import { logger } from "@shared/logger";
 import type { ChinesePluginMarketView } from "@ui/view/translator-view";
 import { CONTRIBUTORS, contributorGitHubUrl } from "@shared/contributors";
+import {
+	addGroup,
+	isBuiltinGroup,
+	listGroups,
+	removeGroup,
+	renameGroup,
+	reassignMetaGroup,
+} from "@domain/manage/group";
+import { GROUP_OTHER } from "@domain/manage/types";
 
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
@@ -725,6 +734,23 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			},
 			{
 				type: "group",
+				heading: this.t("settings.manage"),
+				desc: this.t("settings.manage.desc"),
+				items: [
+					{
+						name: this.t("settings.manage.enable"),
+						desc: this.t("settings.manage.enable.desc"),
+						render: (setting) => this.renderManageEnable(setting),
+					},
+					{
+						name: this.t("settings.manage.groups"),
+						desc: this.t("settings.manage.groups.desc"),
+						render: (setting) => this.renderManageGroups(setting),
+					},
+				],
+			},
+			{
+				type: "group",
 				heading: this.t("settings.translateSettings"),
 				desc: this.t("settings.translateSettings.desc"),
 				items: [
@@ -795,6 +821,124 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			link.setAttr("target", "_blank");
 			link.setAttr("rel", "noopener noreferrer");
 		}
+	}
+
+	/** 已装插件管理：总开关（联动设置页增强的启动 / 停止） */
+	private renderManageEnable(setting: Setting): void {
+		setting.addToggle((tc) =>
+			tc
+				.setValue(this.plugin.settings.manage.enabled)
+				.onChange(async (v) => {
+					this.plugin.settings.manage.enabled = v;
+					await this.plugin.flushSaveSettings();
+					this.plugin.refreshSettingsIntegration();
+				})
+		);
+	}
+
+	/** 已装插件管理：分组列表（重命名 / 颜色 / 删除 / 新增） */
+	private renderManageGroups(setting: Setting): void {
+		setting.settingEl.addClass("pt-setting-full-width");
+		if (setting.infoEl) setting.infoEl.addClass("pt-setting-info-hidden");
+		setting.controlEl.addClass("pt-setting-control-full");
+
+		for (const { key, name } of listGroups(this.plugin.settings.manage.pluginGroups)) {
+			const row = setting.controlEl.createDiv({ cls: "pt-profile-row" });
+			if (isBuiltinGroup(key)) {
+				row.createSpan({ text: name, cls: "pt-profile-name" });
+				row.createSpan({
+					text: this.t("settings.manage.group.builtin"),
+					cls: "pt-manage-tag",
+				});
+				continue;
+			}
+
+			const nameInput = row.createEl("input", { cls: "pt-profile-input" });
+			nameInput.type = "text";
+			nameInput.value = name;
+			nameInput.addEventListener("change", () => {
+				const next = renameGroup(
+					this.plugin.settings.manage.pluginGroups,
+					key,
+					nameInput.value
+				);
+				if (!next) {
+					new Notice(
+						this.t("settings.manage.group.exists", { name: nameInput.value.trim() })
+					);
+					nameInput.value = name;
+					return;
+				}
+				this.plugin.settings.manage.pluginGroups = next;
+				void this.plugin.flushSaveSettings();
+				this.plugin.refreshSettingsIntegration();
+				this.update();
+			});
+
+			const colorInput = row.createEl("input", { cls: "pt-manage-color" });
+			colorInput.type = "color";
+			colorInput.value = this.plugin.settings.manage.pluginGroupColors[key] ?? "#8b9bb4";
+			colorInput.addEventListener("change", () => {
+				this.plugin.settings.manage.pluginGroupColors = {
+					...this.plugin.settings.manage.pluginGroupColors,
+					[key]: colorInput.value,
+				};
+				void this.plugin.flushSaveSettings();
+				this.plugin.refreshSettingsIntegration();
+			});
+
+			row
+				.createEl("button", {
+					text: this.t("settings.manage.group.delete"),
+					cls: "pt-profile-del",
+				})
+				.addEventListener("click", () => {
+					const nextGroups = removeGroup(this.plugin.settings.manage.pluginGroups, key);
+					if (!nextGroups) return;
+					const nextColors = { ...this.plugin.settings.manage.pluginGroupColors };
+					delete nextColors[key];
+					this.plugin.settings.manage.pluginGroups = nextGroups;
+					this.plugin.settings.manage.pluginGroupColors = nextColors;
+					// 成员自动归入「其他」，避免留下指向已删除分组的悬空数据
+					this.plugin.settings.manage.pluginMeta = reassignMetaGroup(
+						this.plugin.settings.manage.pluginMeta,
+						key,
+						GROUP_OTHER
+					);
+					void this.plugin.flushSaveSettings();
+					this.plugin.refreshSettingsIntegration();
+					new Notice(this.t("settings.manage.group.deleted", { name }));
+					this.update();
+				});
+		}
+
+		const addRow = setting.controlEl.createDiv({ cls: "pt-profile-save-row" });
+		const newName = addRow.createEl("input", {
+			cls: "pt-profile-input",
+			placeholder: this.t("settings.manage.group.name.ph"),
+		});
+		addRow
+			.createEl("button", {
+				text: this.t("settings.manage.group.add"),
+				cls: "pt-profile-save",
+			})
+			.addEventListener("click", () => {
+				const value = newName.value.trim();
+				if (!value) {
+					new Notice(this.t("settings.manage.group.nameRequired"));
+					return;
+				}
+				const result = addGroup(this.plugin.settings.manage.pluginGroups, value);
+				if (!result) {
+					new Notice(this.t("settings.manage.group.exists", { name: value }));
+					return;
+				}
+				this.plugin.settings.manage.pluginGroups = result.groups;
+				void this.plugin.flushSaveSettings();
+				this.plugin.refreshSettingsIntegration();
+				new Notice(this.t("settings.manage.group.added", { name: value }));
+				this.update();
+			});
 	}
 
 	/** 设置页翻译：启用开关（实时生效，联动钩子挂载/卸载） */
