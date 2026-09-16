@@ -782,7 +782,7 @@ export const STRINGS = {
 	"filter.active.clear": { zh: "清除该筛选" },
 
 	// 已装插件管理（增强原生「设置 → 社区插件」页）
-	"manage.filter.keyword.ph": { zh: "搜索名称 / 备注" },
+	"manage.filter.keyword.ph": { zh: "搜索名称/备注，输入 ??? 找未填备注" },
 	"manage.filter.manageGroups": { zh: "管理分组" },
 	"manage.filter.status.all": { zh: "全部状态" },
 	"manage.filter.status.enabled": { zh: "已启用" },
@@ -811,6 +811,9 @@ export const STRINGS = {
 	"settings.manage.group.exists": { zh: "分组「{name}」已存在" },
 	"settings.manage.group.added": { zh: "已添加分组「{name}」" },
 	"settings.manage.group.deleted": { zh: "已删除分组「{name}」，其中插件已移到「其他」" },
+	"settings.manage.group.count": { zh: "{count} 个插件" },
+	"settings.manage.group.resetColor": { zh: "重置颜色" },
+	"settings.manage.group.empty": { zh: "还没有分组，添加你的第一个分组吧" },
 } as const;
 
 export type I18nKey = keyof typeof STRINGS;

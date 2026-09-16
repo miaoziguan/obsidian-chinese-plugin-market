@@ -6000,6 +6000,23 @@ button.pt-card-install-btn--installed {
 	font: inherit;
 }
 
+/* 设置面板分组列表：成员计数（分组使用计数） */
+.pt-profile-count {
+	font-size: var(--font-ui-smaller, 12px);
+	color: var(--text-muted);
+	margin-left: 6px;
+}
+/* 无自定义分组时的空态引导 */
+.pt-manage-empty {
+	font-size: var(--font-ui-smaller, 12px);
+	color: var(--text-muted);
+	padding: 2px 0 8px;
+}
+/* 分组行内的图标按钮（重置颜色 / 删除）间距 */
+.pt-profile-row .extra-button {
+	margin-left: 4px;
+}
+
 /* 分组按钮 */
 .cpm-group-btn {
 	font-size: var(--font-ui-smaller, 12px);

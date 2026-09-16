@@ -174,3 +174,20 @@ export function getGroupColor(
 ): string {
 	return colors[key] ?? "";
 }
+
+/**
+ * 统计每个分组的成员数（基于插件元数据）。
+ * GROUP_ALL 计总数；其余按 entry.group 累加。供设置面板分组列表展示「N 个插件」。
+ * 删除分组时成员已归位「其他」，故不会出现指向已删分组的悬空计数。
+ */
+export function countMembersByGroup(
+	meta: Record<string, PluginMetaEntry>,
+): Record<string, number> {
+	const counts: Record<string, number> = { [GROUP_ALL]: 0 };
+	for (const entry of Object.values(meta)) {
+		const key = entry.group || GROUP_OTHER;
+		counts[key] = (counts[key] ?? 0) + 1;
+		counts[GROUP_ALL] += 1;
+	}
+	return counts;
+}

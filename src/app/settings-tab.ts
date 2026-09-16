@@ -20,6 +20,7 @@ import type { ChinesePluginMarketView } from "@ui/view/translator-view";
 import { CONTRIBUTORS, contributorGitHubUrl } from "@shared/contributors";
 import {
 	addGroup,
+	countMembersByGroup,
 	isBuiltinGroup,
 	listGroups,
 	removeGroup,
@@ -843,13 +844,28 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		if (setting.infoEl) setting.infoEl.addClass("pt-setting-info-hidden");
 		setting.controlEl.addClass("pt-setting-control-full");
 
-		for (const { key, name } of listGroups(this.plugin.settings.manage.pluginGroups)) {
+		const meta = this.plugin.settings.manage.pluginMeta;
+		const counts = countMembersByGroup(meta);
+		const allGroups = listGroups(this.plugin.settings.manage.pluginGroups);
+		// 空态：没有任何自定义分组时，引导用户创建第一个
+		if (allGroups.filter((g) => !isBuiltinGroup(g.key)).length === 0) {
+			setting.controlEl.createDiv({
+				cls: "pt-manage-empty",
+				text: this.t("settings.manage.group.empty"),
+			});
+		}
+
+		for (const { key, name } of allGroups) {
 			const row = setting.controlEl.createDiv({ cls: "pt-profile-row" });
 			if (isBuiltinGroup(key)) {
 				row.createSpan({ text: name, cls: "pt-profile-name" });
 				row.createSpan({
 					text: this.t("settings.manage.group.builtin"),
 					cls: "pt-manage-tag",
+				});
+				row.createSpan({
+					text: this.t("settings.manage.group.count", { count: String(counts[key] ?? 0) }),
+					cls: "pt-profile-count",
 				});
 				continue;
 			}
@@ -886,6 +902,28 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				};
 				void this.plugin.flushSaveSettings();
 				this.plugin.refreshSettingsIntegration();
+			});
+
+			// 仅在有自定义色时显示「重置颜色」，回落默认色
+			if (key in this.plugin.settings.manage.pluginGroupColors) {
+				const resetBtn = new ExtraButtonComponent(row);
+				resetBtn
+					.setIcon("rotate-ccw")
+					.setTooltip(this.t("settings.manage.group.resetColor"))
+					.onClick(() => {
+						const nextColors = { ...this.plugin.settings.manage.pluginGroupColors };
+						delete nextColors[key];
+						this.plugin.settings.manage.pluginGroupColors = nextColors;
+						void this.plugin.flushSaveSettings();
+						this.plugin.refreshSettingsIntegration();
+						this.update();
+					});
+			}
+
+			// 分组使用计数
+			row.createSpan({
+				text: this.t("settings.manage.group.count", { count: String(counts[key] ?? 0) }),
+				cls: "pt-profile-count",
 			});
 
 			const delBtn = new ExtraButtonComponent(row);

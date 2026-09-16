@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	addGroup,
+	countMembersByGroup,
 	createDefaultManageSettings,
 	isBuiltinGroup,
 	listGroups,
@@ -132,5 +133,26 @@ describe("reassignMetaGroup", () => {
 	it("无成员时返回原引用（便于调用方跳过写盘）", () => {
 		const meta = { b: { group: "2", remark: "y" } };
 		expect(reassignMetaGroup(meta, "1", GROUP_OTHER)).toBe(meta);
+	});
+});
+
+describe("countMembersByGroup", () => {
+	it("GROUP_ALL 计总数，其余按 group 累加", () => {
+		const meta = {
+			a: { group: "1", remark: "" },
+			b: { group: "1", remark: "" },
+			c: { group: "2", remark: "" },
+			d: { group: GROUP_OTHER, remark: "" },
+		};
+		const counts = countMembersByGroup(meta);
+		expect(counts[GROUP_ALL]).toBe(4);
+		expect(counts["1"]).toBe(2);
+		expect(counts["2"]).toBe(1);
+		expect(counts[GROUP_OTHER]).toBe(1);
+	});
+
+	it("空元数据仅全部为 0", () => {
+		const counts = countMembersByGroup({});
+		expect(counts[GROUP_ALL]).toBe(0);
 	});
 });
