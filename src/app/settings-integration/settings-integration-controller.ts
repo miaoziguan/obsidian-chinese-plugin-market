@@ -11,17 +11,26 @@
  * 2. 精确恢复：记录每个方法 patch 前是否 own property，卸载时该删的删、
  *    该还原的还原，否则热重载后 wrapper 层层叠加。
  * 3. 全程容错：任何私有 API 取不到就静默放弃增强，绝不影响原生设置页。
+ *
+ * 同时增强两个原生页：
+ * - 社区插件页（community-plugins）→ 插件分组 / 备注 / 筛选
+ * - 外观页（appearance）→ CSS 片段分组 / 备注 / 筛选
  */
 
 import type { App } from "obsidian";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { PluginListEnhancer } from "@ui/settings/plugin-list-enhancer";
+import { SnippetListEnhancer } from "@ui/settings/snippet-list-enhancer";
 import type { ManageStorePort } from "@ui/settings/manage-store";
+import type { CssStorePort } from "@ui/settings/snippet-manage-store";
+import type { GroupManageType } from "@ui/settings/group-manage-store";
 import { pruneOrphanedMeta } from "@domain/manage/plugin-meta";
 import { logger } from "@shared/logger";
 
 /** 原生「社区插件」设置页的 Tab id */
 const COMMUNITY_PLUGINS_TAB_ID = "community-plugins";
+/** 原生「外观」设置页的 Tab id（CSS 片段在此） */
+const APPEARANCE_TAB_ID = "appearance";
 /** 本插件注入元素的归属标记（防自激用） */
 const OWNED_ELEMENT_SELECTOR = "[data-cpm-owned]";
 /** 筛选隐藏用的 class（其变化不应触发重建） */
@@ -48,25 +57,36 @@ interface PatchedMethod {
 }
 
 export interface SettingsIntegrationHost {
-	/** 打开本插件设置面板（用于「管理分组」按钮定位） */
+	/** 打开本插件设置面板（兼容旧式落点） */
 	openPluginSettings: () => void;
+	/** 弹窗管理分组（插件 / CSS 片段，对齐参考插件的模态框交互） */
+	openManageGroups: (type: GroupManageType) => void;
+	/** 请求重命名 CSS 片段（由宿主弹窗并调用 store.renameSnippet） */
+	requestRenameSnippet: (baseName: string) => void;
 }
 
 export class SettingsIntegrationController {
 	private readonly enhancer: PluginListEnhancer;
+	private readonly cssEnhancer: SnippetListEnhancer;
 	private setting: ReturnType<typeof asAppInternals>["setting"] = undefined;
 	private observer: MutationObserver | null = null;
 	private frameId: number | null = null;
 	private patchedMethods: PatchedMethod[] = [];
 	private cleanupSignature = "";
+	private cssCleanupSignature = "";
 
 	constructor(
 		private readonly app: App,
 		private readonly store: ManageStorePort,
+		private readonly cssStore: CssStorePort,
 		private readonly host: SettingsIntegrationHost,
 	) {
 		this.enhancer = new PluginListEnhancer(store, {
-			onManageGroups: () => this.host.openPluginSettings(),
+			onManageGroups: () => this.host.openManageGroups("plugin"),
+		});
+		this.cssEnhancer = new SnippetListEnhancer(cssStore, {
+			onManageGroups: () => this.host.openManageGroups("css"),
+			requestRenameSnippet: (baseName) => this.host.requestRenameSnippet(baseName),
 		});
 	}
 
@@ -87,13 +107,16 @@ export class SettingsIntegrationController {
 		this.cancelScheduledReconcile();
 		this.restoreLifecycleMethods();
 		this.enhancer.cleanup();
+		this.cssEnhancer.cleanup();
 		this.cleanupSignature = "";
+		this.cssCleanupSignature = "";
 		this.setting = undefined;
 	}
 
 	/** 分组数据被外部修改后，请求重画（设置面板改分组时用） */
 	requestRefresh(): void {
 		this.enhancer.refreshRows();
+		this.cssEnhancer.refreshRows();
 	}
 
 	// ── 重建 ──
@@ -102,23 +125,34 @@ export class SettingsIntegrationController {
 		const setting = this.setting;
 		if (!setting || !setting.tabContentContainer?.isConnected) {
 			this.enhancer.cleanup();
+			this.cssEnhancer.cleanup();
 			return;
 		}
 
 		if (!this.store.settings.enabled) {
 			this.enhancer.cleanup();
+			this.cssEnhancer.cleanup();
 			return;
 		}
 
 		this.scheduleOrphanedCleanup();
 
 		const activeTab = setting.activeTab;
+		const rootEl = activeTab?.containerEl ?? setting.tabContentContainer;
+		if (!rootEl) return;
+
 		if (activeTab?.id === COMMUNITY_PLUGINS_TAB_ID) {
-			const rootEl = activeTab.containerEl ?? setting.tabContentContainer;
-			if (rootEl) this.enhancer.enhance(rootEl);
+			this.enhancer.enhance(rootEl);
+			this.cssEnhancer.cleanup();
+			return;
+		}
+		if (activeTab?.id === APPEARANCE_TAB_ID) {
+			this.cssEnhancer.enhance(rootEl);
+			this.enhancer.cleanup();
 			return;
 		}
 		this.enhancer.cleanup();
+		this.cssEnhancer.cleanup();
 	}
 
 	private scheduleReconcile(): void {
@@ -155,10 +189,6 @@ export class SettingsIntegrationController {
 		});
 	}
 
-	/**
-	 * 判断一次 DOM 变更是否需要重建。
-	 * 过滤两类自激源：本插件注入元素内部的变化、筛选 class 的增删。
-	 */
 	private shouldReconcileMutation(mutation: MutationRecord): boolean {
 		const targetEl =
 			mutation.target.nodeType === Node.ELEMENT_NODE
@@ -172,14 +202,13 @@ export class SettingsIntegrationController {
 
 		if (mutation.type === "childList") {
 			const removed = Array.from(mutation.removedNodes).filter(
-				(node) => node.nodeType === Node.ELEMENT_NODE
+				(node) => node.nodeType === Node.ELEMENT_NODE,
 			) as Element[];
 			if (removed.some((el) => el.matches(OWNED_ELEMENT_SELECTOR))) return true;
 
 			const added = Array.from(mutation.addedNodes).filter(
-				(node) => node.nodeType === Node.ELEMENT_NODE
+				(node) => node.nodeType === Node.ELEMENT_NODE,
 			) as Element[];
-			// 新增节点全部属于我们自己的注入 → 忽略
 			if (added.length > 0 && added.every((el) => el.closest(OWNED_ELEMENT_SELECTOR))) {
 				return false;
 			}
@@ -240,24 +269,34 @@ export class SettingsIntegrationController {
 
 	// ── 孤儿元数据清理 ──
 
-	/** 已安装插件集合变化时才清理，避免每次重建都写盘 */
+	/** 已安装插件 / CSS 片段集合变化时才清理，避免每次重建都写盘 */
 	private scheduleOrphanedCleanup(): void {
-		let ids: string[];
+		// 插件元数据
 		try {
-			ids = this.store.installedIds();
-		} catch {
-			return;
-		}
-		const signature = [...ids].sort().join("|");
-		if (signature === this.cleanupSignature) return;
-		this.cleanupSignature = signature;
-
-		try {
-			const next = pruneOrphanedMeta(this.store.settings.pluginMeta, ids);
-			if (next !== this.store.settings.pluginMeta) this.store.replaceMeta(next);
+			const ids = this.store.installedIds();
+			const signature = [...ids].sort().join("|");
+			if (signature !== this.cleanupSignature) {
+				this.cleanupSignature = signature;
+				const next = pruneOrphanedMeta(this.store.settings.pluginMeta, ids);
+				if (next !== this.store.settings.pluginMeta) this.store.replaceMeta(next);
+			}
 		} catch (error) {
 			this.cleanupSignature = "";
 			logger.warn("[Chinese Plugin Market] 清理失效的插件管理元数据失败:", error);
+		}
+
+		// CSS 片段元数据
+		try {
+			const cssIds = this.cssStore.listSnippets().map((s) => s.baseName);
+			const cssSignature = [...cssIds].sort().join("|");
+			if (cssSignature !== this.cssCleanupSignature) {
+				this.cssCleanupSignature = cssSignature;
+				const next = pruneOrphanedMeta(this.store.settings.cssMeta, cssIds);
+				if (next !== this.store.settings.cssMeta) this.cssStore.replaceCssMeta(next);
+			}
+		} catch (error) {
+			this.cssCleanupSignature = "";
+			logger.warn("[Chinese Plugin Market] 清理失效的 CSS 片段元数据失败:", error);
 		}
 	}
 }

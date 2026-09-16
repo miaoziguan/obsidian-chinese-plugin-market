@@ -46,6 +46,8 @@ export class PluginListEnhancer {
 	private rootEl: HTMLElement | null = null;
 	private listGroupEl: HTMLElement | null = null;
 	private filterBar: ManageFilterBar | null = null;
+	/** 被本增强器隐藏的原生搜索框，cleanup 时恢复显示 */
+	private hiddenNativeSearch: HTMLElement | null = null;
 
 	constructor(
 		private readonly store: ManageStorePort,
@@ -84,6 +86,11 @@ export class PluginListEnhancer {
 			root
 				.querySelectorAll<HTMLElement>(`[${ENHANCED_ATTR}]`)
 				.forEach((el) => el.removeAttribute(ENHANCED_ATTR));
+		}
+		// 恢复被隐藏的原生搜索框
+		if (this.hiddenNativeSearch) {
+			this.hiddenNativeSearch.style.display = "";
+			this.hiddenNativeSearch = null;
 		}
 		this.rootEl = null;
 		this.listGroupEl = null;
@@ -134,6 +141,14 @@ export class PluginListEnhancer {
 			this.filterBar.restore(this.store.settings.filterState);
 		}
 		this.filterBar.mount(headerControlEl);
+
+		// 隐藏原生搜索框（我们的工具栏已含搜索 / 分组 / 状态筛选，避免重复）；
+		// 每次 ensure 都确保隐藏，防止 Obsidian 重绘后原生搜索复现
+		const nativeSearch = listGroupEl.querySelector<HTMLElement>(".setting-group-search");
+		if (nativeSearch && nativeSearch.style.display !== "none") {
+			nativeSearch.style.display = "none";
+			this.hiddenNativeSearch = nativeSearch;
+		}
 	}
 
 	// ── 单行增强 ──

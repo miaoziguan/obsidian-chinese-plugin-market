@@ -94,3 +94,12 @@ if (typeof g.document !== "undefined" && typeof g.createEl !== "function") {
 	};
 	g.createFragment = () => g.document!.createDocumentFragment();
 }
+
+// Obsidian 全局 setIcon（源码以全局函数形式调用，不经 import），测试环境补齐
+if (typeof g.document !== "undefined" && typeof g.setIcon !== "function") {
+	g.setIcon = (el: HTMLElement, icon: string) => {
+		el.dataset.icon = icon;
+		el.classList.add(`cpm-icon-${icon}`);
+		return el;
+	};
+}

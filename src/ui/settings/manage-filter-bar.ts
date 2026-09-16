@@ -98,9 +98,9 @@ export class ManageFilterBar {
 		this.groupDropdown.setValue(target);
 	}
 
-	/** 更新「N 个插件」计数（已装插件总数） */
-	setCount(total: number): void {
-		this.countEl.textContent = total > 0 ? `${total} 个插件` : "";
+	/** 更新计数（已装插件 / CSS 片段总数） */
+	setCount(total: number, suffix = "个插件"): void {
+		this.countEl.textContent = total > 0 ? `${total} ${suffix}` : "";
 	}
 
 	/** 恢复筛选现场（搜索词 / 分组 / 状态），由宿主在重建筛选栏时调用 */

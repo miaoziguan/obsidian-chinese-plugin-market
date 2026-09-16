@@ -2,7 +2,6 @@ import {
 	PluginSettingTab,
 	Setting,
 	Notice,
-	ExtraButtonComponent,
 	requestUrl,
 	Platform,
 	type App,
@@ -18,16 +17,7 @@ import { VIEW_TYPE } from "@shared/constants";
 import { logger } from "@shared/logger";
 import type { ChinesePluginMarketView } from "@ui/view/translator-view";
 import { CONTRIBUTORS, contributorGitHubUrl } from "@shared/contributors";
-import {
-	addGroup,
-	countMembersByGroup,
-	isBuiltinGroup,
-	listGroups,
-	removeGroup,
-	renameGroup,
-	reassignMetaGroup,
-} from "@domain/manage/group";
-import { GROUP_OTHER } from "@domain/manage/types";
+import { CssSnippetSettingsList } from "@ui/settings/css-snippet-settings-list";
 
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
@@ -749,7 +739,17 @@ export class TranslatorSettingTab extends PluginSettingTab {
 						desc: this.t("settings.manage.groups.desc"),
 						render: (setting) => this.renderManageGroups(setting),
 					},
-				],
+					{
+						name: this.t("settings.manage.css.groups"),
+						desc: this.t("settings.manage.css.groups.desc"),
+						render: (setting) => this.renderCssGroups(setting),
+					},
+					{
+						name: this.t("settings.manage.css.list"),
+						desc: this.t("settings.manage.css.list.desc"),
+						render: (setting) => this.renderCssSnippetList(setting),
+					},
+					],
 			},
 			{
 				type: "group",
@@ -838,144 +838,38 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		);
 	}
 
-	/** 已装插件管理：分组列表（重命名 / 颜色 / 删除 / 新增） */
+	/** 已装插件管理：分组入口（弹窗管理，对齐参考插件的模态框交互） */
 	private renderManageGroups(setting: Setting): void {
+		setting.addButton((btn) =>
+			btn
+				.setButtonText(this.t("manage.groups.open"))
+				.setCta()
+				.onClick(() => this.plugin.openManageGroups("plugin"))
+		);
+	}
+
+	/** 插件设置页内的 CSS 片段列表（分组 / 备注 / 启用 / 重命名 / 打开 / 空态） */
+	private renderCssSnippetList(setting: Setting): void {
 		setting.settingEl.addClass("pt-setting-full-width");
 		if (setting.infoEl) setting.infoEl.addClass("pt-setting-info-hidden");
 		setting.controlEl.addClass("pt-setting-control-full");
+		setting.controlEl.empty();
 
-		const meta = this.plugin.settings.manage.pluginMeta;
-		const counts = countMembersByGroup(meta);
-		const allGroups = listGroups(this.plugin.settings.manage.pluginGroups);
-		// 空态：没有任何自定义分组时，引导用户创建第一个
-		if (allGroups.filter((g) => !isBuiltinGroup(g.key)).length === 0) {
-			setting.controlEl.createDiv({
-				cls: "pt-manage-empty",
-				text: this.t("settings.manage.group.empty"),
-			});
-		}
-
-		for (const { key, name } of allGroups) {
-			const row = setting.controlEl.createDiv({ cls: "pt-profile-row" });
-			if (isBuiltinGroup(key)) {
-				row.createSpan({ text: name, cls: "pt-profile-name" });
-				row.createSpan({
-					text: this.t("settings.manage.group.builtin"),
-					cls: "pt-manage-tag",
-				});
-				row.createSpan({
-					text: this.t("settings.manage.group.count", { count: String(counts[key] ?? 0) }),
-					cls: "pt-profile-count",
-				});
-				continue;
-			}
-
-			const nameInput = row.createEl("input", { cls: "pt-profile-input" });
-			nameInput.type = "text";
-			nameInput.value = name;
-			nameInput.addEventListener("change", () => {
-				const next = renameGroup(
-					this.plugin.settings.manage.pluginGroups,
-					key,
-					nameInput.value
-				);
-				if (!next) {
-					new Notice(
-						this.t("settings.manage.group.exists", { name: nameInput.value.trim() })
-					);
-					nameInput.value = name;
-					return;
-				}
-				this.plugin.settings.manage.pluginGroups = next;
-				void this.plugin.flushSaveSettings();
-				this.plugin.refreshSettingsIntegration();
-				this.update();
-			});
-
-			const colorInput = row.createEl("input", { cls: "pt-manage-color" });
-			colorInput.type = "color";
-			colorInput.value = this.plugin.settings.manage.pluginGroupColors[key] ?? "#8b9bb4";
-			colorInput.addEventListener("change", () => {
-				this.plugin.settings.manage.pluginGroupColors = {
-					...this.plugin.settings.manage.pluginGroupColors,
-					[key]: colorInput.value,
-				};
-				void this.plugin.flushSaveSettings();
-				this.plugin.refreshSettingsIntegration();
-			});
-
-			// 仅在有自定义色时显示「重置颜色」，回落默认色
-			if (key in this.plugin.settings.manage.pluginGroupColors) {
-				const resetBtn = new ExtraButtonComponent(row);
-				resetBtn
-					.setIcon("rotate-ccw")
-					.setTooltip(this.t("settings.manage.group.resetColor"))
-					.onClick(() => {
-						const nextColors = { ...this.plugin.settings.manage.pluginGroupColors };
-						delete nextColors[key];
-						this.plugin.settings.manage.pluginGroupColors = nextColors;
-						void this.plugin.flushSaveSettings();
-						this.plugin.refreshSettingsIntegration();
-						this.update();
-					});
-			}
-
-			// 分组使用计数
-			row.createSpan({
-				text: this.t("settings.manage.group.count", { count: String(counts[key] ?? 0) }),
-				cls: "pt-profile-count",
-			});
-
-			const delBtn = new ExtraButtonComponent(row);
-			delBtn
-				.setIcon("trash")
-				.setTooltip(this.t("settings.manage.group.delete"))
-				.onClick(() => {
-					const nextGroups = removeGroup(this.plugin.settings.manage.pluginGroups, key);
-					if (!nextGroups) return;
-					const nextColors = { ...this.plugin.settings.manage.pluginGroupColors };
-					delete nextColors[key];
-					this.plugin.settings.manage.pluginGroups = nextGroups;
-					this.plugin.settings.manage.pluginGroupColors = nextColors;
-					// 成员自动归入「其他」，避免留下指向已删除分组的悬空数据
-					this.plugin.settings.manage.pluginMeta = reassignMetaGroup(
-						this.plugin.settings.manage.pluginMeta,
-						key,
-						GROUP_OTHER
-					);
-					void this.plugin.flushSaveSettings();
-					this.plugin.refreshSettingsIntegration();
-					new Notice(this.t("settings.manage.group.deleted", { name }));
-					this.update();
-				});
-		}
-
-		const addRow = setting.controlEl.createDiv({ cls: "pt-profile-save-row" });
-		const newName = addRow.createEl("input", {
-			cls: "pt-profile-input",
-			placeholder: this.t("settings.manage.group.name.ph"),
+		const list = new CssSnippetSettingsList(this.app, this.plugin.createCssStore(), {
+			openPluginSettings: () => this.plugin.openPluginSettingsTab(),
+			openManageGroups: () => this.plugin.openManageGroups("css"),
 		});
-		const addBtn = new ExtraButtonComponent(addRow);
-		addBtn
-			.setIcon("plus")
-			.setTooltip(this.t("settings.manage.group.add"))
-			.onClick(() => {
-				const value = newName.value.trim();
-				if (!value) {
-					new Notice(this.t("settings.manage.group.nameRequired"));
-					return;
-				}
-				const result = addGroup(this.plugin.settings.manage.pluginGroups, value);
-				if (!result) {
-					new Notice(this.t("settings.manage.group.exists", { name: value }));
-					return;
-				}
-				this.plugin.settings.manage.pluginGroups = result.groups;
-				void this.plugin.flushSaveSettings();
-				this.plugin.refreshSettingsIntegration();
-				new Notice(this.t("settings.manage.group.added", { name: value }));
-				this.update();
-			});
+		list.render(setting.controlEl);
+	}
+
+	/** CSS 片段分组入口（弹窗管理，对齐参考插件的模态框交互） */
+	private renderCssGroups(setting: Setting): void {
+		setting.addButton((btn) =>
+			btn
+				.setButtonText(this.t("manage.groups.open"))
+				.setCta()
+				.onClick(() => this.plugin.openManageGroups("css"))
+		);
 	}
 
 	/** 设置页翻译：启用开关（实时生效，联动钩子挂载/卸载） */

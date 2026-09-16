@@ -782,7 +782,7 @@ export const STRINGS = {
 	"filter.active.clear": { zh: "清除该筛选" },
 
 	// 已装插件管理（增强原生「设置 → 社区插件」页）
-	"manage.filter.keyword.ph": { zh: "搜索名称/备注，输入 ??? 找未填备注" },
+	"manage.filter.keyword.ph": { zh: "搜索名称或备注" },
 	"manage.filter.manageGroups": { zh: "管理分组" },
 	"manage.filter.status.all": { zh: "全部状态" },
 	"manage.filter.status.enabled": { zh: "已启用" },
@@ -813,7 +813,31 @@ export const STRINGS = {
 	"settings.manage.group.deleted": { zh: "已删除分组「{name}」，其中插件已移到「其他」" },
 	"settings.manage.group.count": { zh: "{count} 个插件" },
 	"settings.manage.group.resetColor": { zh: "重置颜色" },
+	"settings.manage.group.rename": { zh: "重命名" },
+	"manage.group.count.plugin": { zh: "{count} 个插件" },
+	"manage.group.count.css": { zh: "{count} 个样式" },
 	"settings.manage.group.empty": { zh: "还没有分组，添加你的第一个分组吧" },
+	"settings.manage.css.groups": { zh: "CSS 片段分组" },
+	"settings.manage.css.groups.desc": { zh: "为 CSS 代码片段分组，不影响其启用状态。" },
+	"settings.manage.css.empty": { zh: "还没有分组，添加你的第一个分组吧" },
+	"settings.manage.css.list": { zh: "CSS 片段管理" },
+	"settings.manage.css.list.desc": { zh: "在本插件设置页直接管理 vault 的 CSS 片段（分组、备注、启用、重命名、打开文件）。" },
+	"manage.toggleCss": { zh: "切换 CSS 片段：{name}" },
+	"manage.file.open": { zh: "在文件管理器中打开" },
+	"manage.file.rename": { zh: "重命名片段" },
+	"manage.file.rename.fail": { zh: "重命名失败，详情见控制台日志" },
+	"manage.file.open.fail": { zh: "打开文件失败，详情见控制台日志" },
+	"manage.css.empty.list": {
+		zh: "暂无 CSS 片段，在 vault 的 .obsidian/snippets/ 新建 .css 文件后，即可在此分组、备注与筛选。",
+	},
+	"manage.groups.plugin.title": { zh: "管理插件分组" },
+	"manage.groups.css.title": { zh: "管理 CSS 片段分组" },
+	"manage.groups.open.fail": { zh: "打开分组管理弹窗失败，详情见控制台日志" },
+	"manage.group.listEmpty": { zh: "请先添加分组后再进行管理" },
+	"manage.group.total": { zh: "当前共有 {count} 个分组" },
+	"manage.group.added": { zh: "已添加分组「{name}」" },
+	"manage.group.renamed": { zh: "已重命名分组为「{name}」" },
+	"manage.groups.open": { zh: "管理分组" },
 } as const;
 
 export type I18nKey = keyof typeof STRINGS;

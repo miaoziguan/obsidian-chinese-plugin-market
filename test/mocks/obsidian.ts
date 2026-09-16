@@ -15,8 +15,36 @@ export class ItemView {}
 export class Notice {}
 export class Plugin {}
 export class PluginSettingTab {}
-export class Setting {}
-export class Modal {}
+export class Setting {
+	constructor(_containerEl?: HTMLElement) {}
+	setName(_name: string): this { return this; }
+	setDesc(_desc: string): this { return this; }
+	setClass(_cls: string): this { return this; }
+	addText(cb: (t: TextComponent) => unknown): this {
+		cb(new TextComponent());
+		return this;
+	}
+	addButton(cb: (b: ButtonComponent) => unknown): this {
+		cb(new ButtonComponent());
+		return this;
+	}
+	addColor(cb: (c: ColorComponent) => unknown): this {
+		cb(new ColorComponent());
+		return this;
+	}
+}
+export class Modal {
+	app: unknown;
+	contentEl: HTMLElement;
+	constructor(app?: unknown) {
+		this.app = app;
+		this.contentEl = document.createElement("div");
+	}
+	open(): void { this.onOpen(); }
+	close(): void { this.onClose(); }
+	onOpen(): void {}
+	onClose(): void {}
+}
 export class TFile {}
 export class Component {
 	load() {}
@@ -31,12 +59,14 @@ export class Component {
 type MenuItemApi = {
 	setTitle(title: string): MenuItemApi;
 	setChecked(checked: boolean): MenuItemApi;
+	setIcon(icon: string): MenuItemApi;
 	onClick(cb: () => void): MenuItemApi;
 };
 
 export interface MenuItemSnapshot {
 	title: string;
 	checked: boolean;
+	icon?: string;
 	cb: (() => void) | null;
 }
 
@@ -44,6 +74,10 @@ export class Menu {
 	/** 最近一次被弹出的菜单（测试断言用） */
 	static lastShown: Menu | null = null;
 	readonly items: MenuItemSnapshot[] = [];
+
+	addSeparator(): Menu {
+		return this;
+	}
 
 	addItem(cb: (item: MenuItemApi) => void): Menu {
 		const entry: MenuItemSnapshot = { title: "", checked: false, cb: null };
@@ -54,6 +88,10 @@ export class Menu {
 			},
 			setChecked: (checked: boolean) => {
 				entry.checked = checked;
+				return api;
+			},
+			setIcon: (icon: string) => {
+				entry.icon = icon;
 				return api;
 			},
 			onClick: (fn: () => void) => {
@@ -108,6 +146,30 @@ export class DropdownComponent {
 	}
 }
 
+/** ToggleComponent：底层 .checkbox-container，支持取值 / 变更回调 */
+export class ToggleComponent {
+	toggleEl: HTMLElement;
+	private value = false;
+	constructor(containerEl?: HTMLElement) {
+		this.toggleEl = document.createElement("div");
+		this.toggleEl.className = "checkbox-container";
+		if (containerEl) containerEl.appendChild(this.toggleEl);
+	}
+	setValue(value: boolean): this {
+		this.value = value;
+		this.toggleEl.classList.toggle("is-enabled", value);
+		return this;
+	}
+	onChange(cb: (value: boolean) => unknown): this {
+		this.toggleEl.addEventListener("click", () => {
+			this.value = !this.value;
+			this.setValue(this.value);
+			void cb(this.value);
+		});
+		return this;
+	}
+}
+
 /** ExtraButtonComponent：底层 <button class="extra-button">，支持图标 / 提示 / 点击 */
 export class ExtraButtonComponent {
 	extraSettingsEl: HTMLButtonElement;
@@ -135,6 +197,65 @@ export class ExtraButtonComponent {
 	}
 }
 
+/** TextComponent：底层 <input type=text>，支持取值 / 占位 / 输入回调 */
+export class TextComponent {
+	inputEl: HTMLInputElement;
+	private value = "";
+	constructor(containerEl?: HTMLElement) {
+		this.inputEl = document.createElement("input");
+		this.inputEl.type = "text";
+		if (containerEl) containerEl.appendChild(this.inputEl);
+	}
+	setValue(value: string): this { this.value = value; this.inputEl.value = value; return this; }
+	getValue(): string { return this.value || this.inputEl.value; }
+	setPlaceholder(text: string): this { this.inputEl.placeholder = text; return this; }
+	onChange(cb: (value: string) => unknown): this {
+		this.inputEl.addEventListener("input", () => {
+			this.value = this.inputEl.value;
+			void cb(this.value);
+		});
+		return this;
+	}
+}
+
+/** ButtonComponent：底层 <button>，支持文案 / CTA / 图标 / 点击 */
+export class ButtonComponent {
+	buttonEl: HTMLButtonElement;
+	constructor(containerEl?: HTMLElement) {
+		this.buttonEl = document.createElement("button");
+		if (containerEl) containerEl.appendChild(this.buttonEl);
+	}
+	setButtonText(text: string): this { this.buttonEl.textContent = text; return this; }
+	setCta(): this { return this; }
+	setWarning(): this { return this; }
+	setIcon(name: string): this { this.buttonEl.dataset.icon = name; return this; }
+	setTooltip(tip: string): this { this.buttonEl.setAttribute("aria-label", tip); return this; }
+	onClick(cb: () => unknown): this {
+		this.buttonEl.addEventListener("click", () => void cb());
+		return this;
+	}
+}
+
+/** ColorComponent：底层 <input type=color>，支持取值 / 变更回调 */
+export class ColorComponent {
+	inputEl: HTMLInputElement;
+	private value = "";
+	constructor(containerEl?: HTMLElement) {
+		this.inputEl = document.createElement("input");
+		this.inputEl.type = "color";
+		if (containerEl) containerEl.appendChild(this.inputEl);
+	}
+	setValue(value: string): this { this.value = value; this.inputEl.value = value; return this; }
+	getValue(): string { return this.value || this.inputEl.value; }
+	onChange(cb: (value: string) => unknown): this {
+		this.inputEl.addEventListener("input", () => {
+			this.value = this.inputEl.value;
+			void cb(this.value);
+		});
+		return this;
+	}
+}
+
 export const MarkdownRenderer = {
 	async render() {},
 };
@@ -145,3 +266,24 @@ export function normalizePath(p: string): string {
 }
 export type App = unknown;
 export type WorkspaceLeaf = unknown;
+
+/** setIcon 的最小实现（源码以 `import { setIcon } from "obsidian"` 引用） */
+export function setIcon(el: HTMLElement, icon: string): HTMLElement {
+	el.dataset.icon = icon;
+	el.classList.add(`cpm-icon-${icon}`);
+	return el;
+}
+
+/** 全局 DOM 构造函数的导出版（源码以 `import { createEl } from "obsidian"` 引用） */
+export function createEl(tag: string, o?: { cls?: string; text?: string }): HTMLElement {
+	const el = document.createElement(tag);
+	if (o?.cls) el.className = o.cls;
+	if (o?.text) el.textContent = o.text;
+	return el;
+}
+export function createDiv(o?: { cls?: string; text?: string }): HTMLElement {
+	return createEl("div", o);
+}
+export function createSpan(o?: { cls?: string; text?: string }): HTMLElement {
+	return createEl("span", o);
+}

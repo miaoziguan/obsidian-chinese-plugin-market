@@ -5945,11 +5945,11 @@ button.pt-card-install-btn--installed {
 .cpm-filter-bar {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	flex-wrap: wrap;
 }
 .cpm-filter-keyword {
-	width: 140px;
+	width: 160px;
 }
 /* 分组 / 状态两个原生下拉（视觉随 Obsidian 主题） */
 .cpm-filter-group,
@@ -5968,6 +5968,29 @@ button.pt-card-install-btn--installed {
 .extra-button.cpm-icon-trash,
 .extra-button.cpm-icon-plus {
 	margin-left: 4px;
+}
+
+/* CSS 片段页工具栏：放在标题 .setting-item-info 内，与标题文字左对齐 */
+.cpm-filter-bar.cpm-css-toolbar {
+	margin-top: 10px;
+	margin-bottom: 6px;
+	padding: 0;
+}
+
+/* 已安装插件页工具栏：放在标题行右侧 control 里，与原生图标并成一行 */
+.setting-item-control .cpm-filter-bar {
+	flex-wrap: nowrap;
+	gap: 6px;
+	margin-left: 8px;
+}
+.setting-item-control .cpm-filter-keyword {
+	width: 120px;
+	min-width: 80px;
+	flex-shrink: 1;
+}
+.setting-item-control .cpm-filter-group,
+.setting-item-control .cpm-filter-status {
+	flex-shrink: 0;
 }
 
 /* 分组徽标：贴在插件名末尾，颜色由 --cpm-group-color 驱动 */
@@ -5998,6 +6021,70 @@ button.pt-card-install-btn--installed {
 	resize: none;
 	overflow-y: auto;
 	font: inherit;
+}
+
+/* CSS 片段空状态提示（无 .css 文件时显示） */
+.cpm-css-empty-state {
+	margin: 12px 0 16px;
+	padding: 10px 14px;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-s, 6px);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+	line-height: 1.6;
+}
+
+/* 插件设置页内的 CSS 片段管理列表 */
+.cpm-css-settings-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 8px;
+}
+.cpm-css-settings-row {
+	align-items: flex-start;
+}
+.cpm-css-settings-row .cpm-note-field {
+	margin-top: 4px;
+}
+
+/* 分组管理模态框（GroupManagementModal） */
+.cpm-group-modal-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 12px;
+}
+.cpm-group-composer {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	margin-bottom: 4px;
+}
+.cpm-group-composer .text-input {
+	min-width: 200px;
+}
+.cpm-group-row {
+	align-items: center;
+}
+.cpm-group-row .setting-item-name {
+	font-size: var(--font-ui-small, 13px);
+}
+.cpm-group-row .setting-item-control {
+	gap: 6px;
+}
+.cpm-group-usage {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.cpm-group-empty,
+.cpm-group-count-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+	line-height: 1.6;
+}
+.cpm-group-count-hint {
+	margin-bottom: 2px;
 }
 
 /* 设置面板分组列表：成员计数（分组使用计数） */
