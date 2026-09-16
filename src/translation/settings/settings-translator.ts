@@ -14,6 +14,13 @@
  *   文本节点 nodeValue 原地更新，绝不赋值 element.innerHTML / outerHTML（避免 XSS 与注入风险）。
  * - 安全开关：默认关；按插件 ID 黑名单（个别会回读自身 DOM 文案的插件）；已是中文的串（含 CJK）跳过，
  *   这也顺带避免翻译我们自己的中文设置页。
+ *
+ * 两条通道（缺一不可）：
+ * - 组件通道（本文件）：钩 Obsidian 原生 Setting / Button / Dropdown / Text 组件原型方法，
+ *   覆盖用 `new Setting()` 搭出来的传统设置页。
+ * - DOM 通道（settings-dom-translator.ts）：直接扫描设置面板 DOM 的英文文本节点。
+ *   覆盖 React / Vue 自绘设置页（如 Copilot 全程 `render(<SettingsMainV2 />)`，
+ *   不碰原生 Setting 组件，组件通道一个字符串都拦不到）。
  */
 
 import {
@@ -24,10 +31,14 @@ import {
 	type App,
 } from "obsidian";
 import type { Translator } from "@domain/catalog/translator";
+import { asAppInternals } from "@data/platform/obsidian-internals";
+import { SettingsDomTranslator } from "./settings-dom-translator";
 import { logger } from "@shared/logger";
 
 /** 命中中文（含 CJK 统一表意/扩展A/全角）则视为已翻译，跳过 */
 const CJK_RE = /[㐀-䶿一-鿿＀-￯]/;
+/** 本插件自身 ID：不翻译自己的设置页（页内 API / Provider 等术语译后更难懂） */
+const SELF_PLUGIN_ID = "chinese-plugin-market";
 
 export function isCjkText(text: string): boolean {
 	return CJK_RE.test(text);
@@ -65,11 +76,18 @@ export class SettingsTranslator {
 	private cache = new Map<string, string>();
 	private pending = new Map<string, Promise<string | null>>();
 	private patched = false;
+	/** DOM 扫描通道（覆盖 React / Vue 自绘设置页） */
+	private readonly dom: SettingsDomTranslator;
 
 	constructor(app: App, translator: Translator, getConfig: () => SettingsTranslateConfig) {
 		this.app = app;
 		this.translator = translator;
 		this.getConfig = getConfig;
+		this.dom = new SettingsDomTranslator({
+			shouldSkip: (text) => !this.domEligible() || this.shouldSkip(text),
+			translate: (text) => this.translateText(text),
+			getRoot: () => this.domRoot(),
+		});
 	}
 
 	loadCache(map: Record<string, string> | undefined): void {
@@ -87,6 +105,7 @@ export class SettingsTranslator {
 	clearCache(): void {
 		this.cache.clear();
 		this.pending.clear();
+		this.dom.reset();
 	}
 
 	isPatched(): boolean {
@@ -98,12 +117,14 @@ export class SettingsTranslator {
 		// 卸载上一任持有者（理论上只有单实例，热重载兜底）
 		activeDisable?.();
 		this.install();
+		this.dom.start();
 		this.patched = true;
 		activeDisable = () => this.restore();
 	}
 
 	disable(): void {
 		if (!this.patched) return;
+		this.dom.stop();
 		this.restore();
 		this.pending.clear();
 		this.patched = false;
@@ -121,13 +142,34 @@ export class SettingsTranslator {
 	/** 读取当前打开的设置页所属插件 ID（用于黑名单过滤；取不到则不做黑名单） */
 	private currentPluginId(): string | undefined {
 		try {
-			const setting = (this.app as unknown as {
-				setting?: { activeTab?: { plugin?: { manifest?: { id?: string } } } };
-			}).setting;
-			return setting?.activeTab?.plugin?.manifest?.id;
+			return asAppInternals(this.app).setting?.activeTab?.plugin?.manifest?.id;
 		} catch {
 			return undefined;
 		}
+	}
+
+	/** DOM 通道扫描根：当前 Tab 的内容容器（比整块 tabContentContainer 更精准） */
+	private domRoot(): HTMLElement | null {
+		try {
+			const setting = asAppInternals(this.app).setting;
+			if (!setting) return null;
+			return setting.activeTab?.containerEl ?? setting.tabContentContainer ?? null;
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * DOM 通道是否放行：只翻第三方插件设置页。
+	 * 原生核心页（社区插件 / 外观等）刻意不扫 —— 那里的英文多为插件 ID、作者名、
+	 * 片段文件名，翻了反而干扰识别；且部分已由本插件的增强栏单独译过。
+	 */
+	private domEligible(): boolean {
+		const cfg = this.getConfig();
+		if (!cfg.enabled) return false;
+		const pid = this.currentPluginId();
+		if (!pid || pid === SELF_PLUGIN_ID) return false;
+		return !cfg.blacklist.includes(pid);
 	}
 
 	private shouldSkip(text: string): boolean {

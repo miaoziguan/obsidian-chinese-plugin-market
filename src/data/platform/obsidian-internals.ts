@@ -60,6 +60,8 @@ export interface AppSettingTabLike {
 	id?: string;
 	name?: string;
 	containerEl?: HTMLElement;
+	/** 第三方插件设置页才有：本体插件实例 → manifest（核心设置页无此字段） */
+	plugin?: { manifest?: PluginManifestLike };
 }
 
 /** 设置面板（app.setting）的最小可读形状 */
@@ -100,6 +102,8 @@ export interface AppCustomCss {
 		name: string,
 		type: "theme" | "snippet",
 	) => void;
+	/** 切换并保存当前主题（目录名）；优先于 setCssEnabled(..., "theme") */
+	setTheme?: (name: string) => void;
 }
 
 /** App 的内部扩展形状（叠加在官方 App 之上） */

@@ -898,6 +898,10 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			const name = row.createDiv({ cls: "pt-beta-name" });
 			name.createSpan({ text: e.name || e.id });
 			name.createSpan({
+				cls: "pt-beta-kind",
+				text: e.kind === "theme" ? this.t("beta.kind.theme") : this.t("beta.kind.plugin"),
+			});
+			name.createSpan({
 				text: ` v${e.installedVersion}${e.frozen ? " · " + this.t("beta.frozen") : ""}`,
 				cls: "pt-beta-ver",
 			});
@@ -938,6 +942,9 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			openManageGroups: () => this.plugin.openManageGroups("css"),
 		});
 		list.render(setting.controlEl);
+		// 片段名单来自异步扫描（配置目录不进 vault 文件树），首帧可能还没加载到，
+		// 扫完再整体重绘一次，避免「有片段却显示暂无」。
+		void this.plugin.reloadCssSnippets().then(() => list.refresh());
 	}
 
 	/** CSS 片段分组入口（弹窗管理，对齐参考插件的模态框交互） */

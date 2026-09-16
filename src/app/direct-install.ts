@@ -27,22 +27,56 @@ export interface Manifest {
 	minAppVersion?: string;
 }
 
+/** 安装来源解析结果 */
+export interface SourceSpec {
+	/** 三件套所在目录 URL（raw.githubusercontent 或普通目录） */
+	root: URL;
+	/** GitHub 仓库引用；非 GitHub 源为 null */
+	gh: { owner: string; repo: string } | null;
+	/** true = 三件套优先从 GitHub Release 资产取（源码树里没有构建产物） */
+	release: boolean;
+	/** 钉住的 release tag（来自 /releases/tag/<tag> 或 /releases/download/<tag>/...） */
+	releaseTag?: string;
+}
+
+function rawRoot(gh: { owner: string; repo: string }, ref: string): URL {
+	return new URL(`https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${ref}/`);
+}
+
 /**
  * 从目录直链安装：取三件套 → 写盘 → 加载并启用，返回它的 manifest。
  * 不做解压。抛错即代表安装失败（调用方负责 Notice）。
  */
 /**
- * 解析安装来源 URL 到三件套所在目录的 URL。
+ * 解析安装来源（P1：支持钉选分支 / 标签 / commit，以及从 Release 安装）。
  * 支持：
- *   1) 裸目录 URL（https://example.com/myplugin/）
- *   2) 指向 manifest.json 的完整链接（自动取父目录）
- *   3) GitHub 仓库 URL（含 /tree/<branch>、/blob/<branch>/...、.git），自动重写到 raw.githubusercontent.com
+ *   1) 裸目录 URL / 指向 manifest.json 的完整链接 → 目录
+ *   2) GitHub 简写：owner/repo、owner/repo@<branch|tag|commit>、owner/repo@release|latest
+ *   3) GitHub 网页 URL：仓库、/tree/<branch>、/blob/<branch>/...、.git
+ *   4) GitHub Release 链接：/releases、/releases/latest、/releases/tag/<tag>、/releases/download/<tag>/x
+ *   5) raw.githubusercontent.com 直链（跟踪表里的 rootUrl 即此形态）
+ * @ 后的 ref 可为分支名（含 /）、标签或 commit SHA；release/latest 表示改从 Release 资产安装。
  */
-export function resolveInstallRoot(input: string): URL {
+export function parseSourceSpec(input: string): SourceSpec {
 	const trimmed = input.trim();
+	// 便利：粘贴 github.com/owner/repo（无 scheme）自动补 https
+	const withScheme = /^(github\.com|raw\.githubusercontent\.com)\//i.test(trimmed)
+		? `https://${trimmed}`
+		: trimmed;
+	// GitHub 简写 owner/repo[@ref]。owner 限定 [\w-]+（GitHub 用户名不含点），
+	// 以免把 "example.com/myplugin" 这类无 scheme 的网址误判成仓库简写。
+	const short = /^([\w-]+)\/([\w.-]+?)(?:\.git)?(?:@([\w./-]+))?$/.exec(withScheme);
+	if (short) {
+		const gh = { owner: short[1], repo: short[2] };
+		const ref = short[3];
+		if (ref === "release" || ref === "latest") {
+			return { root: rawRoot(gh, "HEAD"), gh, release: true };
+		}
+		return { root: rawRoot(gh, ref || "HEAD"), gh, release: false };
+	}
 	let u: URL;
 	try {
-		u = new URL(trimmed);
+		u = new URL(withScheme);
 	} catch {
 		throw new Error(t("directInstall.badUrl"));
 	}
@@ -61,6 +95,18 @@ export function resolveInstallRoot(input: string): URL {
 		if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) {
 			throw new Error(t("directInstall.badUrl"));
 		}
+		const gh = { owner, repo };
+		// Release 链接：构建产物只挂在 Release 上，源码树里没有
+		if (parts[2] === "releases") {
+			const sub = parts[3];
+			if ((sub === "tag" || sub === "download") && parts[4]) {
+				const tag = parts[4];
+				if (/[#?\s]/.test(tag)) throw new Error(t("directInstall.badUrl"));
+				return { root: rawRoot(gh, tag), gh, release: true, releaseTag: tag };
+			}
+			// /releases 或 /releases/latest
+			return { root: rawRoot(gh, "HEAD"), gh, release: true };
+		}
 		let branch = "HEAD";
 		const sub = parts[2];
 		if (sub === "tree") {
@@ -71,14 +117,24 @@ export function resolveInstallRoot(input: string): URL {
 		}
 		// branch 里出现 #/?/空白 会让 URL 解析错位，提前拒绝
 		if (/[#?\s]/.test(branch)) throw new Error(t("directInstall.badUrl"));
-		const raw = new URL(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/`);
+		const raw = rawRoot(gh, branch);
 		raw.search = u.search; // 保留 query（签名参数等）
-		return raw;
+		return { root: raw, gh, release: false };
+	}
+
+	// raw.githubusercontent.com：跟踪表里的 rootUrl 即此形态，反解出 owner/repo 以启用 Release 回退
+	if (u.hostname === "raw.githubusercontent.com") {
+		return { root: u, gh: parseGithubRepoFromRaw(u), release: false };
 	}
 
 	// 其他：目录 URL 或 manifest.json 链接 → 标准化为目录
 	u.pathname = u.pathname.replace(/\/manifest\.json$/i, "").replace(/\/+$/, "") + "/";
-	return u;
+	return { root: u, gh: null, release: false };
+}
+
+/** 解析安装来源到三件套所在目录的 URL（parseSourceSpec 的简版，保留给旧调用方与测试） */
+export function resolveInstallRoot(input: string): URL {
+	return parseSourceSpec(input).root;
 }
 
 /** raw 根 URL（raw.githubusercontent.com/<owner>/<repo>/...）反解出 owner/repo */
@@ -179,19 +235,16 @@ async function searchGithubRepoName(repo: string): Promise<string | null> {
 }
 
 /**
- * 从 root 拉取单个文件文本；404/410 时换下一个候选来源（fallbackUrls），
- * 其余状态码立即报错。optional=true 且全部缺失时返回 null（用于 styles.css 这类可缺文件）。
+ * 依次尝试候选 URL 取文件文本；404/410 时换下一个来源，其余状态码立即报错。
+ * optional=true 且全部缺失时返回 null（用于 styles.css / 主题 manifest 这类可缺文件）。
  */
-export async function fetchFileText(
-	root: URL,
+export async function fetchFromUrls(
+	urls: string[],
 	name: string,
-	fallbackUrls: string[] = [],
 	optional = false,
 ): Promise<string | null> {
-	const primary = new URL(root);
-	primary.pathname += name;
 	let lastStatus = 0;
-	for (const u of [primary.href, ...fallbackUrls]) {
+	for (const u of urls) {
 		const r = await requestUrl({ url: u, throw: false });
 		if (r.status >= 200 && r.status < 300) return r.text;
 		// 只有「确实没有」才换下一个来源：500/403 当成缺失会误删已装好的旧样式
@@ -204,35 +257,64 @@ export async function fetchFileText(
 	throw new FetchMissingError(name, lastStatus);
 }
 
-/** 直链 Beta 插件跟踪表的一项：记录来源，使装上的插件可被回头更新（P0） */
+/** 从 root 目录拉取单个文件（可附带候选来源） */
+export async function fetchFileText(
+	root: URL,
+	name: string,
+	fallbackUrls: string[] = [],
+	optional = false,
+): Promise<string | null> {
+	const primary = new URL(root);
+	primary.pathname += name;
+	return fetchFromUrls([primary.href, ...fallbackUrls], name, optional);
+}
+
+/** 直链安装的目标类型：插件写 plugins/，主题写 themes/ */
+export type BetaKind = "plugin" | "theme";
+
+/** 直链 Beta 跟踪表的一项：记录来源，使装上的插件/主题可被回头更新（P0 + 主题 P1） */
 export interface BetaPluginEntry {
-	/** 插件 id（= manifest.id，写盘目录名） */
+	/** 插件 id（= manifest.id，写盘目录名）／主题的目录名 */
 	id: string;
 	/** 显示名（安装时的 manifest.name，仅展示用） */
 	name: string;
-	/** 已解析的安装根 URL（raw.githubusercontent 或目录直链，已编码分支/标签） */
+	/** 已解析的安装根 URL（raw.githubusercontent 或目录直链，已编码分支/标签/commit） */
 	rootUrl: string;
 	/** 安装/上次更新时的版本号（用于判断是否有新版本） */
 	installedVersion: string;
 	/** 冻结：启动自动更新与「全部更新」时跳过 */
 	frozen: boolean;
+	/** 类型；缺省按 plugin 兼容旧数据 */
+	kind?: BetaKind;
+	/** 是否从 GitHub Release 资产安装（否则从源码树 raw 拉取） */
+	release?: boolean;
 }
 
 /**
  * 把三件套写盘并启用（installFromUrl / updateBetaPlugin 共用）。
- * gh 不为 null 时，main.js / styles.css 额外尝试 GitHub Release 资产（精确 tag → v 前缀 → latest）。
+ * - 普通模式：先取源码树（root），取不到再回退 GitHub Release 资产（精确 tag → v 前缀 → latest）
+ * - release 模式（spec.release）：只从 Release 资产取（源码树里没有构建产物）
  */
 export async function installFiles(
 	app: App,
-	root: URL,
-	gh: { owner: string; repo: string } | null,
+	spec: SourceSpec,
 	manText: string,
 	man: Manifest,
 ): Promise<Manifest> {
-	const rel = (file: string) => (gh ? githubReleaseAssetUrls(gh, file, man.version) : []);
+	const { gh } = spec;
+	const rel = (file: string) =>
+		gh ? githubReleaseAssetUrls(gh, file, spec.releaseTag ?? man.version) : [];
+	const rootUrl = (name: string): string => {
+		const p = new URL(spec.root);
+		p.pathname += name;
+		return p.href;
+	};
+	// release 模式跳过源码树，直接取 Release 资产；否则源码树优先、Release 兜底
+	const mainUrls = spec.release ? rel(FILES[1]) : [rootUrl(FILES[1]), ...rel(FILES[1])];
+	const styleUrls = spec.release ? rel(FILES[2]) : [rootUrl(FILES[2]), ...rel(FILES[2])];
 	const fetchMain = async (): Promise<string> => {
 		try {
-			return (await fetchFileText(root, FILES[1], rel(FILES[1]))) as string;
+			return (await fetchFromUrls(mainUrls, FILES[1])) as string;
 		} catch (e) {
 			// 源码树和 Release 都没有 main.js：多半是作者没发布构建产物
 			if (e instanceof FetchMissingError && gh) {
@@ -244,7 +326,7 @@ export async function installFiles(
 	const texts: (string | null)[] = [
 		manText,
 		await fetchMain(),
-		await fetchFileText(root, FILES[2], rel(FILES[2]), true),
+		await fetchFromUrls(styleUrls, FILES[2], true),
 	];
 	if (!(texts[1] as string).trim()) throw new Error(t("directInstall.emptyMain"));
 
@@ -297,13 +379,24 @@ function assertValidManifest(man: Manifest): void {
 	}
 }
 
-/** 拉取并校验 root 处的 manifest（GitHub 源 404 时给诊断） */
-async function fetchManifest(root: URL, gh: { owner: string; repo: string } | null): Promise<Manifest> {
+/** 拉取并校验 manifest（源码树优先，Release 兜底；GitHub 源 404 时给诊断） */
+async function fetchManifest(spec: SourceSpec): Promise<Manifest> {
 	let manText: string;
 	try {
-		manText = (await fetchFileText(root, FILES[0])) as string;
+		if (spec.release && spec.gh) {
+			manText = (await fetchFromUrls(
+				githubReleaseAssetUrls(spec.gh, FILES[0], spec.releaseTag),
+				FILES[0],
+			)) as string;
+		} else {
+			manText = (await fetchFileText(
+				spec.root,
+				FILES[0],
+				spec.gh ? githubReleaseAssetUrls(spec.gh, FILES[0], spec.releaseTag) : [],
+			)) as string;
+		}
 	} catch (e) {
-		if (e instanceof FetchMissingError && gh) throw await diagnoseGithubRepo(gh, e);
+		if (e instanceof FetchMissingError && spec.gh) throw await diagnoseGithubRepo(spec.gh, e);
 		throw e;
 	}
 	const man = JSON.parse(manText) as Manifest;
@@ -312,10 +405,150 @@ async function fetchManifest(root: URL, gh: { owner: string; repo: string } | nu
 }
 
 export async function installFromUrl(app: App, url: string): Promise<Manifest> {
-	const root = resolveInstallRoot(url);
-	const gh = parseGithubRepoFromRaw(root);
-	const man = await fetchManifest(root, gh);
-	return installFiles(app, root, gh, JSON.stringify(man), man);
+	const spec = parseSourceSpec(url);
+	const man = await fetchManifest(spec);
+	return installFiles(app, spec, JSON.stringify(man), man);
+}
+
+// ──────────────────────────────────────────
+// 主题（P1）：写 themes/<name>/theme.css 并启用
+// ──────────────────────────────────────────
+
+/** 主题的必需文件；manifest.json 可选（很多主题仓库没有） */
+const THEME_CSS = "theme.css";
+
+/** 主题安装结果（复用 Manifest 形状，便于跟踪表统一处理） */
+export interface ThemeInfo {
+	/** 主题目录名（写盘路径） */
+	id: string;
+	/** 显示名 */
+	name: string;
+	/** 版本；主题没有 manifest.json 时为空串（此时更新按「无法判断」处理，直接重拉） */
+	version: string;
+}
+
+/** 主题目录名合法性：会拼进写盘路径，禁止路径穿越与隐藏目录 */
+function assertValidThemeName(name: string): void {
+	if (!name || name.includes("/") || name.includes("\\") || name.startsWith(".")) {
+		throw new Error(t("badThemeName"));
+	}
+}
+
+/** 主题目录名：优先 manifest.name，其次仓库名 */
+function deriveThemeName(spec: SourceSpec, man: Manifest | null): string {
+	const fromManifest = man?.name?.trim();
+	if (fromManifest) return fromManifest;
+	const fromRepo = spec.gh?.repo;
+	if (fromRepo) return fromRepo;
+	// 非 GitHub 源：取目录最后一段
+	const seg = spec.root.pathname.split("/").filter(Boolean).pop();
+	return seg ?? "";
+}
+
+/** 从来源拉 theme.css（release 模式取 Release 资产，否则源码树优先） */
+async function fetchThemeCss(spec: SourceSpec): Promise<string> {
+	const rel = spec.gh ? githubReleaseAssetUrls(spec.gh, THEME_CSS, spec.releaseTag) : [];
+	const p = new URL(spec.root);
+	p.pathname += THEME_CSS;
+	const urls = spec.release ? rel : [p.href, ...rel];
+	try {
+		return (await fetchFromUrls(urls, THEME_CSS)) as string;
+	} catch (e) {
+		if (e instanceof FetchMissingError && spec.gh) {
+			throw new Error(t("directInstall.ghNoTheme", { repo: `${spec.gh.owner}/${spec.gh.repo}` }));
+		}
+		throw e;
+	}
+}
+
+/** 写主题目录并启用（theme.css 必写；manifest.json 有则写，用于记录版本） */
+async function writeThemeFiles(
+	app: App,
+	name: string,
+	css: string,
+	manText: string | null,
+): Promise<void> {
+	const ad = app.vault.adapter;
+	const dir = `${app.vault.configDir}/themes/${name}`;
+	if (!(await ad.exists(dir))) await ad.mkdir(dir);
+	await ad.write(`${dir}/${THEME_CSS}`, css);
+	if (manText != null) await ad.write(`${dir}/${FILES[0]}`, manText);
+	const cssApi = asAppInternals(app).customCss;
+	// 主题启用：优先 setTheme（内部 API），缺失时退回 setCssEnabled(..., "theme")
+	if (cssApi?.setTheme) cssApi.setTheme(name);
+	else cssApi?.setCssEnabled?.(true, name, "theme");
+}
+
+/** 从直链安装主题，返回主题信息（目录名 / 显示名 / 版本） */
+export async function installThemeFromUrl(app: App, url: string): Promise<ThemeInfo> {
+	const spec = parseSourceSpec(url);
+	// manifest 可选：主题仓库常常没有
+	let manText: string | null = null;
+	let man: Manifest | null = null;
+	try {
+		manText = await fetchFromUrls(
+			spec.release && spec.gh
+				? githubReleaseAssetUrls(spec.gh, FILES[0], spec.releaseTag)
+				: [((): string => { const p = new URL(spec.root); p.pathname += FILES[0]; return p.href; })()],
+			FILES[0],
+			true,
+		);
+	} catch {
+		manText = null;
+	}
+	if (manText) {
+		try {
+			man = JSON.parse(manText) as Manifest;
+		} catch {
+			man = null; // manifest 坏了就当没有，主题照样能装（只按内容更新）
+			manText = null;
+		}
+	}
+	const name = deriveThemeName(spec, man);
+	assertValidThemeName(name);
+	const css = await fetchThemeCss(spec);
+	if (!css.trim()) throw new Error(t("directInstall.emptyMain"));
+	await writeThemeFiles(app, name, css, manText);
+	return { id: name, name: man?.name?.trim() || name, version: man?.version ?? "" };
+}
+
+/** 按跟踪表来源更新主题：无法判断版本（无 manifest）时直接重拉 theme.css */
+export async function updateBetaTheme(
+	app: App,
+	entry: BetaPluginEntry,
+): Promise<{ updated: boolean; manifest: Manifest }> {
+	const spec = parseSourceSpec(entry.rootUrl);
+	if (entry.release) spec.release = true;
+	let manText: string | null = null;
+	let man: Manifest | null = null;
+	try {
+		manText = await fetchFromUrls(
+			spec.release && spec.gh
+				? githubReleaseAssetUrls(spec.gh, FILES[0], spec.releaseTag)
+				: [((): string => { const p = new URL(spec.root); p.pathname += FILES[0]; return p.href; })()],
+			FILES[0],
+			true,
+		);
+	} catch {
+		manText = null;
+	}
+	if (manText) {
+		try {
+			man = JSON.parse(manText) as Manifest;
+		} catch {
+			man = null;
+			manText = null;
+		}
+	}
+	const version = man?.version ?? "";
+	// 双方都有版本且一致 → 已最新；否则（含无 manifest 无法判断的情况）重拉
+	if (version && entry.installedVersion && version === entry.installedVersion) {
+		return { updated: false, manifest: { id: entry.id, name: entry.name, version } };
+	}
+	const css = await fetchThemeCss(spec);
+	if (!css.trim()) throw new Error(t("directInstall.emptyMain"));
+	await writeThemeFiles(app, entry.id, css, manText);
+	return { updated: true, manifest: { id: entry.id, name: entry.name, version } };
 }
 
 /**
@@ -328,31 +561,40 @@ export async function updateBetaPlugin(
 	app: App,
 	entry: BetaPluginEntry,
 ): Promise<{ updated: boolean; manifest: Manifest }> {
-	const root = new URL(entry.rootUrl);
-	const gh = parseGithubRepoFromRaw(root);
-	const man = await fetchManifest(root, gh);
+	const spec = parseSourceSpec(entry.rootUrl);
+	if (entry.release) spec.release = true;
+	const man = await fetchManifest(spec);
 	if (man.id !== entry.id) {
 		throw new Error(t("beta.idMismatch", { id: man.id, entry: entry.id }));
 	}
 	if (man.version === entry.installedVersion) {
 		return { updated: false, manifest: man };
 	}
-	const m = await installFiles(app, root, gh, JSON.stringify(man), man);
+	const m = await installFiles(app, spec, JSON.stringify(man), man);
 	return { updated: true, manifest: m };
 }
 
-/** 直链安装模态框：输入目录 URL → 一键安装 */
+/** 安装成功后回传给上层的信息（用于记入直链 Beta 跟踪表） */
+export interface InstalledInfo {
+	id: string;
+	name: string;
+	version: string;
+	rootUrl: string;
+	kind: BetaKind;
+	release: boolean;
+}
+
+/** 直链安装模态框：输入来源 → 一键安装插件或主题 */
 export class DirectInstallModal extends Modal {
 	private url = "";
 	private busy = false;
-	/** 安装成功后回调（传入 id/name/version/rootUrl），供上层记入直链 Beta 跟踪表 */
-	private onInstalled?: (id: string, name: string, version: string, rootUrl: string) => void;
+	private kind: BetaKind;
+	/** 安装成功后回调，供上层记入直链 Beta 跟踪表 */
+	private onInstalled?: (info: InstalledInfo) => void;
 
-	constructor(
-		app: App,
-		onInstalled?: (id: string, name: string, version: string, rootUrl: string) => void,
-	) {
+	constructor(app: App, kind: BetaKind = "plugin", onInstalled?: (info: InstalledInfo) => void) {
 		super(app);
+		this.kind = kind;
 		this.onInstalled = onInstalled;
 	}
 
@@ -360,18 +602,19 @@ export class DirectInstallModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("pt-direct-install-modal");
+		const isTheme = this.kind === "theme";
 
-		contentEl.createEl("h3", { text: t("directInstall.title") });
+		contentEl.createEl("h3", { text: isTheme ? t("beta.title.theme") : t("directInstall.title") });
 		contentEl.createEl("p", {
 			cls: "pt-direct-install-desc",
-			text: t("directInstall.desc"),
+			text: isTheme ? t("beta.desc.theme") : t("directInstall.desc"),
 		});
 
 		new Setting(contentEl)
 			.setName(t("directInstall.urlLabel"))
-			.setDesc(t("directInstall.urlDesc"))
+			.setDesc(isTheme ? t("beta.desc.theme") : t("directInstall.urlDesc"))
 			.addText((text) => {
-				text.setPlaceholder("https://example.com/myplugin/")
+				text.setPlaceholder("owner/repo")
 					.setValue(this.url)
 					.onChange((v) => (this.url = v));
 				text.inputEl.setCssStyles({ width: "100%" });
@@ -391,16 +634,31 @@ export class DirectInstallModal extends Modal {
 		btn.setButtonText(t("directInstall.installing"));
 		btn.setDisabled(true);
 		try {
-			const m = await installFromUrl(this.app, this.url);
-			// 记入跟踪表，使该插件可被回头更新（rootUrl 编码了分支/标签）
-			if (this.onInstalled) {
-				try {
-					this.onInstalled(m.id, m.name ?? m.id, m.version, resolveInstallRoot(this.url).href);
-				} catch {
-					// 记录失败不应影响「已安装」的结果提示
-				}
+			// 先解析来源：rootUrl/release 既要用于安装，也要原样记进跟踪表
+			const spec = parseSourceSpec(this.url);
+			if (this.kind === "theme") {
+				const info = await installThemeFromUrl(this.app, this.url);
+				this.record({
+					id: info.id,
+					name: info.name,
+					version: info.version,
+					rootUrl: spec.root.href,
+					kind: "theme",
+					release: spec.release,
+				});
+				new Notice(t("beta.installed.theme", { name: info.name }), 6000);
+			} else {
+				const m = await installFromUrl(this.app, this.url);
+				this.record({
+					id: m.id,
+					name: m.name ?? m.id,
+					version: m.version,
+					rootUrl: spec.root.href,
+					kind: "plugin",
+					release: spec.release,
+				});
+				new Notice(t("directInstall.done", { name: m.name || m.id, v: m.version }), 6000);
 			}
-			new Notice(t("directInstall.done", { name: m.name || m.id, v: m.version }), 6000);
 			this.close();
 		} catch (e) {
 			new Notice(t("directInstall.failed", { msg: e instanceof Error ? e.message : String(e) }), 8000);
@@ -408,6 +666,16 @@ export class DirectInstallModal extends Modal {
 			this.busy = false;
 			btn.setButtonText(label);
 			btn.setDisabled(false);
+		}
+	}
+
+	/** 记入跟踪表；记录失败不应影响「已安装」的结果提示 */
+	private record(info: InstalledInfo): void {
+		if (!this.onInstalled) return;
+		try {
+			this.onInstalled(info);
+		} catch {
+			// 忽略：跟踪表只是便于后续更新，不是安装成功的必要条件
 		}
 	}
 

@@ -16,8 +16,9 @@ import { GROUP_ALL, GROUP_OTHER, type ManageRow } from "@domain/manage/types";
 import { listGroups } from "@domain/manage/group";
 import { getMeta } from "@domain/manage/plugin-meta";
 import { countByGroup, matchesFilter, type ManageFilterState } from "@domain/manage/manage-filter";
-import { renderInlineNoteEditor } from "./inline-note-editor";
 import { ManageFilterBar } from "./manage-filter-bar";
+import { renderInlineNoteEditor } from "./inline-note-editor";
+import { renderCssSnippetRow } from "./css-snippet-row";
 import type { CssStorePort } from "./snippet-manage-store";
 import type { SnippetInfo } from "@data/platform/snippet";
 
@@ -57,15 +58,28 @@ export class SnippetListEnhancer {
 		}
 
 		this.snippets = this.store.listSnippets();
-		const known = new Set(this.snippets.map((s) => s.baseName));
-
 		// 即便没有任何 CSS 片段也渲染工具栏与空状态，便于发现与管理
+		this.renderInPlace(rootEl);
+	}
+
+	/** 分组数据 / 片段清单变化后重画全部行（含自渲染行） */
+	refreshRows(): void {
+		if (!this.rootEl) return;
+		this.snippets = this.store.listSnippets();
+		this.renderInPlace(this.rootEl);
+	}
+
+	private renderInPlace(rootEl: HTMLElement): void {
+		const known = new Set(this.snippets.map((s) => s.baseName));
 		const section = this.findSnippetSection(rootEl);
 		const anchor = section ?? rootEl;
 		this.ensureToolbar(anchor);
 		const rows = this.getRows(rootEl, known);
 		for (const { rowEl, baseName } of rows) this.enhanceRow(rowEl, baseName);
-		this.applyFilters(rows.map((r) => r.rowEl));
+		// Obsidian 1.10+ 把片段收拢成「已启用 N 个 ›」的汇总行，当前页不再逐行列出片段。
+		// 此时自渲染一份行列表，让「原生 N 个」与「本插件列出 N 个」始终对得上。
+		const ownRows = this.ensureOwnRows(anchor, rows);
+		this.applyFilters([...rows.map((r) => r.rowEl), ...ownRows]);
 		this.renderEmptyState(anchor, known.size === 0);
 	}
 
@@ -83,19 +97,6 @@ export class SnippetListEnhancer {
 		}
 		this.rootEl = null;
 		this.filterBar = null;
-	}
-
-	/** 分组数据变化后重画全部行 */
-	refreshRows(): void {
-		if (!this.rootEl) return;
-		this.snippets = this.store.listSnippets();
-		const known = new Set(this.snippets.map((s) => s.baseName));
-		const rows = this.getRows(this.rootEl, known);
-		for (const { rowEl, baseName } of rows) {
-			this.removeRowEnhancement(rowEl);
-			this.enhanceRow(rowEl, baseName);
-		}
-		this.applyFilters(rows.map((r) => r.rowEl));
 	}
 
 	// ── 行定位 ──
@@ -116,6 +117,85 @@ export class SnippetListEnhancer {
 			result.push({ rowEl: el, baseName });
 		}
 		return result;
+	}
+
+	// ── 自渲染片段列表（原生未逐行列出片段时兜底） ──
+
+	/**
+	 * 原生页没有逐片段行时，按数据源自行渲染一份行列表。
+	 *
+	 * 与「插件设置页内的 CSS 片段列表」共用同一套行渲染器（css-snippet-row），
+	 * 保证两处行为一致；行结构与设置页一致，筛选 / 计数 / 分组逻辑无需分支。
+	 */
+	private ensureOwnRows(
+		anchorEl: HTMLElement,
+		nativeRows: Array<{ rowEl: HTMLElement }>,
+	): HTMLElement[] {
+		const root = this.rootEl;
+		if (!root) return [];
+		const existing = root.querySelector<HTMLElement>('[data-cpm-owned="css-rows"]');
+		// 原生已逐行列出片段（或 vault 里确实没有片段）→ 不重复渲染
+		if (
+			nativeRows.length > 0 ||
+			this.snippets.length === 0 ||
+			this.hasUnrecognizedSnippetRows(anchorEl)
+		) {
+			existing?.remove();
+			return [];
+		}
+
+		const listEl = existing ?? createDiv({ cls: "cpm-css-settings-list" });
+		listEl.setAttribute(OWNED_ATTR, "css-rows");
+		listEl.innerHTML = "";
+
+		const rows: HTMLElement[] = [];
+		for (const snippet of this.snippets) {
+			const rowEl = createDiv({ cls: "cpm-css-settings-row setting-item" });
+			rowEl.dataset.cpmSnippet = snippet.baseName;
+			// 标记为已增强：避免 getRows 把自渲染行当成原生行二次注入
+			rowEl.setAttribute(ENHANCED_ATTR, "true");
+			listEl.appendChild(rowEl);
+			this.renderOwnRow(rowEl, snippet);
+			rows.push(rowEl);
+		}
+
+		const emptyEl = root.querySelector<HTMLElement>('[data-cpm-owned="css-empty"]');
+		if (emptyEl) emptyEl.before(listEl);
+		else if (anchorEl === root) root.appendChild(listEl);
+		else anchorEl.parentElement?.insertBefore(listEl, anchorEl.nextSibling);
+		return rows;
+	}
+
+	/**
+	 * 结构兜底：原生在本区块附近确实列出了「名字带 .css」的行，但没能被 getRows 识别
+	 * （例如新版改了行结构），此时不要再自渲染，否则会变成原生行 + 自渲染行重复两份。
+	 */
+	private hasUnrecognizedSnippetRows(anchorEl: HTMLElement): boolean {
+		const scope = anchorEl.parentElement ?? anchorEl;
+		for (const el of Array.from(scope.querySelectorAll<HTMLElement>(ROW_SELECTOR))) {
+			if (el === anchorEl || el.hasAttribute(OWNED_ATTR)) continue;
+			const name = el.querySelector<HTMLElement>(".setting-item-name")?.textContent?.trim() ?? "";
+			if (/\.css$/i.test(name)) return true;
+		}
+		return false;
+	}
+
+	private renderOwnRow(rowEl: HTMLElement, baseNameOrSnippet: string | SnippetInfo): void {
+		const snippet =
+			typeof baseNameOrSnippet === "string"
+				? this.snippets.find((s) => s.baseName === baseNameOrSnippet)
+				: baseNameOrSnippet;
+		if (!snippet) {
+			rowEl.remove();
+			return;
+		}
+		rowEl.innerHTML = "";
+		renderCssSnippetRow(rowEl, snippet, {
+			store: this.store,
+			onRowChange: (el, base) => this.renderOwnRow(el, base),
+			onFilterChange: () => this.applyFilters(),
+			requestRename: (base) => this.host.requestRenameSnippet(base),
+		});
 	}
 
 	// ── 工具栏 ──

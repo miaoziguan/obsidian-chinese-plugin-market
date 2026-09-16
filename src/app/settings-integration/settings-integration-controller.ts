@@ -74,6 +74,10 @@ export class SettingsIntegrationController {
 	private patchedMethods: PatchedMethod[] = [];
 	private cleanupSignature = "";
 	private cssCleanupSignature = "";
+	/** 上次命中的 Tab id：用于识别「重新进入外观页」，触发片段名单重扫 */
+	private lastTabId: string | null = null;
+	/** 已对该外观页根元素扫过一次片段（防止 reconcile 自激无限重扫） */
+	private scannedRootEl: HTMLElement | null = null;
 
 	constructor(
 		private readonly app: App,
@@ -141,18 +145,45 @@ export class SettingsIntegrationController {
 		const rootEl = activeTab?.containerEl ?? setting.tabContentContainer;
 		if (!rootEl) return;
 
-		if (activeTab?.id === COMMUNITY_PLUGINS_TAB_ID) {
+		const tabId = activeTab?.id ?? null;
+		if (tabId !== this.lastTabId) {
+			this.lastTabId = tabId;
+			// 切走再切回属于新的一次打开，允许重新扫描片段名单
+			this.scannedRootEl = null;
+		}
+
+		if (tabId === COMMUNITY_PLUGINS_TAB_ID) {
 			this.enhancer.enhance(rootEl);
 			this.cssEnhancer.cleanup();
 			return;
 		}
-		if (activeTab?.id === APPEARANCE_TAB_ID) {
+		if (tabId === APPEARANCE_TAB_ID) {
 			this.cssEnhancer.enhance(rootEl);
 			this.enhancer.cleanup();
+			this.ensureSnippetsScanned(rootEl);
 			return;
 		}
 		this.enhancer.cleanup();
 		this.cssEnhancer.cleanup();
+	}
+
+	/**
+	 * 首次渲染外观页时异步重扫片段名单，扫完再排一次 reconcile。
+	 *
+	 * 片段文件在配置目录里，只能异步枚举；先渲染旧快照（可能为空）再刷新，
+	 * 避免「原生显示 N 个、本插件显示 0 个」。每个 Tab 切换周期只扫一次，
+	 * 防止 reconcile 自激。
+	 */
+	private ensureSnippetsScanned(rootEl: HTMLElement): void {
+		if (this.scannedRootEl === rootEl) return;
+		this.scannedRootEl = rootEl;
+		void this.cssStore
+			.refreshSnippets()
+			.catch((error) => {
+				this.scannedRootEl = null;
+				logger.warn("[Chinese Plugin Market] 重扫 CSS 片段失败:", error);
+			})
+			.finally(() => this.scheduleReconcile());
 	}
 
 	private scheduleReconcile(): void {

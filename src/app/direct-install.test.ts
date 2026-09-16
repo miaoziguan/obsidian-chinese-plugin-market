@@ -1,10 +1,87 @@
 import { describe, it, expect } from "vitest";
 import {
 	resolveInstallRoot,
+	parseSourceSpec,
 	parseGithubRepoFromRaw,
 	githubReleaseAssetUrls,
 	pickExactNameMatch,
 } from "@app/direct-install";
+
+describe("parseSourceSpec — 钉选分支/标签/commit（P1）", () => {
+	it("简写 owner/repo → raw HEAD，非 release", () => {
+		const s = parseSourceSpec("owner/repo");
+		expect(s.root.origin + s.root.pathname).toBe(
+			"https://raw.githubusercontent.com/owner/repo/HEAD/",
+		);
+		expect(s.gh).toEqual({ owner: "owner", repo: "repo" });
+		expect(s.release).toBe(false);
+	});
+
+	it("owner/repo@分支 → raw 该分支", () => {
+		expect(parseSourceSpec("owner/repo@dev").root.pathname).toBe("/owner/repo/dev/");
+	});
+
+	it("owner/repo@标签（含点号）→ raw 该标签", () => {
+		expect(parseSourceSpec("owner/repo@1.2.3").root.pathname).toBe("/owner/repo/1.2.3/");
+	});
+
+	it("owner/repo@commit（短 SHA）→ raw 该 commit", () => {
+		expect(parseSourceSpec("owner/repo@abc1234").root.pathname).toBe("/owner/repo/abc1234/");
+	});
+
+	it("分支名含斜杠也支持", () => {
+		expect(parseSourceSpec("owner/repo@feature/x").root.pathname).toBe(
+			"/owner/repo/feature/x/",
+		);
+	});
+
+	it("owner/repo@release → release 模式", () => {
+		const s = parseSourceSpec("owner/repo@release");
+		expect(s.release).toBe(true);
+		expect(s.releaseTag).toBeUndefined();
+	});
+
+	it("owner/repo@latest → release 模式", () => {
+		expect(parseSourceSpec("owner/repo@latest").release).toBe(true);
+	});
+
+	it("GitHub /releases/tag/<tag> → release 模式且钉住 tag", () => {
+		const s = parseSourceSpec("https://github.com/owner/repo/releases/tag/1.2.3");
+		expect(s.release).toBe(true);
+		expect(s.releaseTag).toBe("1.2.3");
+	});
+
+	it("GitHub /releases → release 模式（latest）", () => {
+		expect(parseSourceSpec("https://github.com/owner/repo/releases").release).toBe(true);
+	});
+
+	it("github.com/owner/repo（无 scheme）自动补 https", () => {
+		expect(parseSourceSpec("github.com/owner/repo").root.pathname).toBe(
+			"/owner/repo/HEAD/",
+		);
+	});
+
+	it("raw.githubusercontent 直链 → 保留 root 并反解 gh", () => {
+		const s = parseSourceSpec("https://raw.githubusercontent.com/owner/repo/HEAD/");
+		expect(s.root.pathname).toBe("/owner/repo/HEAD/");
+		expect(s.gh).toEqual({ owner: "owner", repo: "repo" });
+	});
+
+	it("非 GitHub 目录 → gh=null、非 release", () => {
+		const s = parseSourceSpec("https://example.com/myplugin/");
+		expect(s.gh).toBeNull();
+		expect(s.release).toBe(false);
+	});
+
+	it("带 .git 的简写也能识别", () => {
+		expect(parseSourceSpec("owner/repo.git").root.pathname).toBe("/owner/repo/HEAD/");
+	});
+
+	it("无 scheme 的普通网址不误判为仓库简写", () => {
+		// example.com 含点，不匹配 owner 的 [\w-]+，应当报地址错误而非生成错误 raw 链接
+		expect(() => parseSourceSpec("example.com/myplugin")).toThrow();
+	});
+});
 
 describe("resolveInstallRoot", () => {
 	it("GitHub 仓库 URL（无尾斜杠）→ raw HEAD", () => {

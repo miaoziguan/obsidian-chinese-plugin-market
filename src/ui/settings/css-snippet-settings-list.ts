@@ -7,14 +7,8 @@
  * 包括 vault 里没有任何 .css 文件的空状态。
  */
 
-import {
-	Menu,
-	Notice,
-	ToggleComponent,
-	ExtraButtonComponent,
-} from "obsidian";
 import { pickLang } from "@shared/i18n";
-import { GROUP_ALL, GROUP_OTHER, type ManageRow } from "@domain/manage/types";
+import { type ManageRow } from "@domain/manage/types";
 import { listGroups } from "@domain/manage/group";
 import { getMeta } from "@domain/manage/plugin-meta";
 import {
@@ -23,7 +17,7 @@ import {
 	type ManageFilterState,
 } from "@domain/manage/manage-filter";
 import { ManageFilterBar } from "./manage-filter-bar";
-import { renderInlineNoteEditor } from "./inline-note-editor";
+import { renderCssSnippetRow, type CssSnippetRowContext } from "./css-snippet-row";
 import { SnippetRenameModal } from "./snippet-rename-modal";
 import type { CssStorePort } from "./snippet-manage-store";
 import type { App } from "obsidian";
@@ -63,9 +57,9 @@ export class CssSnippetSettingsList {
 		this.applyFilters();
 	}
 
-	/** 数据变化后整体刷新 */
+	/** 数据变化后整体刷新（容器已随设置页重绘而离线时跳过） */
 	refresh(): void {
-		if (!this.rootEl) return;
+		if (!this.rootEl?.isConnected) return;
 		this.render(this.rootEl);
 	}
 
@@ -97,72 +91,17 @@ export class CssSnippetSettingsList {
 	}
 
 	private renderRow(snippet: SnippetInfo, rowEl: HTMLElement): void {
-		const meta = getMeta(this.store.settings.cssMeta, snippet.baseName);
-		const groupName = this.store.settings.cssGroups[meta.group];
-
-		const infoEl = createDiv({ cls: "setting-item-info" });
-		rowEl.appendChild(infoEl);
-		const nameEl = createDiv({ cls: "setting-item-name" });
-		infoEl.appendChild(nameEl);
-		nameEl.appendChild(createSpan({ text: snippet.name }));
-		if (this.shouldShowBadge(meta.group, Boolean(groupName))) {
-			const badge = createSpan({
-				cls: "cpm-group-badge",
-				text: groupName,
-			});
-			nameEl.appendChild(badge);
-			const color = this.store.settings.cssGroupColors[meta.group];
-			if (color) badge.setCssProps({ "--cpm-group-color": color });
-		}
-
-		const noteHost = createDiv({
-			cls: "setting-item-description cpm-note-field",
-		});
-		infoEl.appendChild(noteHost);
-		renderInlineNoteEditor(noteHost, {
-			value: meta.remark,
-			placeholder: pickLang("manage.note.ph"),
-			emptyText: pickLang("manage.note.empty"),
-			onSave: (value) => {
-				this.store.saveCssMeta(snippet.baseName, { remark: value });
-				this.applyFilters();
-			},
-		});
-
-		const controlEl = createDiv({ cls: "setting-item-control" });
-		rowEl.appendChild(controlEl);
-
-		const toggle = new ToggleComponent(controlEl);
-		toggle.setValue(snippet.enabled);
-		toggle.onChange((enabled) => {
-			void this.store.setSnippetEnabled(snippet.baseName, enabled);
-		});
-
-		const groupBtn = createEl("button", {
-			cls: "cpm-group-btn",
-			text: pickLang("manage.group.set"),
-		});
-		groupBtn.type = "button";
-		groupBtn.addEventListener("click", (event: MouseEvent) => {
-			event.preventDefault();
-			event.stopPropagation();
-			this.openGroupMenu(event, snippet.baseName, meta.group, rowEl);
-		});
-		controlEl.appendChild(groupBtn);
-
-		new ExtraButtonComponent(controlEl)
-			.setIcon("folder-open")
-			.setTooltip(pickLang("manage.file.open"))
-			.onClick(() => this.store.openSnippet(snippet.path));
-
-		new ExtraButtonComponent(controlEl)
-			.setIcon("pencil")
-			.setTooltip(pickLang("manage.file.rename"))
-			.onClick(() => this.requestRename(snippet.baseName));
+		renderCssSnippetRow(rowEl, snippet, this.rowContext());
 	}
 
-	private shouldShowBadge(groupKey: string, hasName: boolean): boolean {
-		return hasName && groupKey !== GROUP_ALL && groupKey !== GROUP_OTHER;
+	/** 行渲染器上下文：挂在一次渲染会话上，响应变化时委托回本组件 */
+	private rowContext(): CssSnippetRowContext {
+		return {
+			store: this.store,
+			onRowChange: (rowEl, baseName) => this.refreshRow(rowEl, baseName),
+			onFilterChange: () => this.applyFilters(),
+			requestRename: (baseName) => this.requestRename(baseName),
+		};
 	}
 
 	// ── 筛选 ──
@@ -216,41 +155,7 @@ export class CssSnippetSettingsList {
 		});
 	}
 
-	// ── 分组菜单 ──
-
-	private openGroupMenu(
-		event: MouseEvent,
-		baseName: string,
-		currentGroup: string,
-		rowEl: HTMLElement,
-	): void {
-		try {
-			const menu = new Menu();
-			for (const { key, name } of listGroups(this.store.settings.cssGroups)) {
-				if (key === GROUP_ALL) continue;
-				menu.addItem((item) =>
-					item
-						.setTitle(name)
-						.setChecked(key === currentGroup)
-						.onClick(() => {
-							this.store.saveCssMeta(baseName, { group: key });
-							this.refreshRow(rowEl, baseName);
-							this.applyFilters();
-						}),
-				);
-			}
-			menu.addSeparator();
-			menu.addItem((item) =>
-				item
-					.setTitle(pickLang("manage.file.rename"))
-					.setIcon("pencil")
-					.onClick(() => this.requestRename(baseName)),
-			);
-			menu.showAtMouseEvent(event);
-		} catch (error) {
-			new Notice("打开分组菜单失败，详情见控制台日志");
-		}
-	}
+	// ── 刷新单行 ──
 
 	private refreshRow(rowEl: HTMLElement, baseName: string): void {
 		const snippets = this.store.listSnippets();

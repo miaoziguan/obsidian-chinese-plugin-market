@@ -15,8 +15,8 @@ interface AppWithDefaultApp extends App {
 
 /** 模块级 i18n 帮助函数（各方法内也可局部 const t = makeT()） */
 const t = makeT();
-import { DirectInstallModal, updateBetaPlugin, type BetaPluginEntry } from "@app/direct-install";
-import { updateAllBetaPlugins } from "@app/beta-updater";
+import { DirectInstallModal, type BetaPluginEntry, type InstalledInfo } from "@app/direct-install";
+import { updateAllBetaPlugins, updateBetaEntry } from "@app/beta-updater";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
 import { SettingsTranslator } from "@translation/settings/settings-translator";
@@ -59,6 +59,7 @@ import { setMeta } from "@domain/manage/plugin-meta";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import {
 	listSnippets,
+	refreshSnippets,
 	setSnippetEnabled,
 	renameSnippet,
 	openSnippetInDefaultApp,
@@ -633,9 +634,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			this.startSettingsIntegration();
 			// 为每个已安装插件注册「切换插件」命令（插件增删后由 recordInstallDiff 刷新）
 			this.refreshPluginToggleCommands();
-			// 为每个 CSS 片段注册「切换片段」命令
-			this.refreshSnippetToggleCommands();
-		});
+			// CSS 片段名单异步预扫（配置目录不进 vault 文件树），再注册「切换片段」命令
+			void this.reloadCssSnippets();
+			});
 		this.register(() => {
 			this.settingsIntegration?.stop();
 			this.settingsIntegration = null;
@@ -1159,8 +1160,18 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				.setTitle(t("directInstall.menu"))
 				.setIcon("download")
 				.onClick(() =>
-					new DirectInstallModal(this.app, (id, name, version, rootUrl) =>
-						this.recordBetaInstall(id, name, version, rootUrl),
+					new DirectInstallModal(this.app, "plugin", (info: InstalledInfo) =>
+						this.recordBetaInstall(info),
+					).open(),
+				)
+		);
+		menu.addItem((item) =>
+			item
+				.setTitle(t("beta.title.theme"))
+				.setIcon("palette")
+				.onClick(() =>
+					new DirectInstallModal(this.app, "theme", (info: InstalledInfo) =>
+						this.recordBetaInstall(info),
 					).open(),
 				)
 		);
@@ -1423,16 +1434,18 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	// 直链 Beta 插件跟踪 + 更新闭环（P0）
 	// ──────────────────────────────────────────
 
-	/** 一次成功直链安装后记录来源，使该插件可被回头更新（按 id 幂等 upsert，冻结态保留） */
-	recordBetaInstall(id: string, name: string, version: string, rootUrl: string): void {
+	/** 一次成功直链安装后记录来源，使该插件/主题可被回头更新（按 id 幂等 upsert，冻结态保留） */
+	recordBetaInstall(info: InstalledInfo): void {
 		const list = this.settings.betaPlugins.slice();
-		const idx = list.findIndex((e) => e.id === id);
+		const idx = list.findIndex((e) => e.id === info.id && (e.kind ?? "plugin") === info.kind);
 		const entry: BetaPluginEntry = {
-			id,
-			name: name || id,
-			rootUrl,
-			installedVersion: version,
+			id: info.id,
+			name: info.name || info.id,
+			rootUrl: info.rootUrl,
+			installedVersion: info.version,
 			frozen: idx >= 0 ? list[idx].frozen : false,
+			kind: info.kind,
+			release: info.release,
 		};
 		if (idx >= 0) list[idx] = entry;
 		else list.push(entry);
@@ -1466,7 +1479,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			return;
 		}
 		try {
-			const r = await updateBetaPlugin(this.app, entry);
+			const r = await updateBetaEntry(this.app, entry);
 			if (r.updated) {
 				const next = { ...entry, installedVersion: r.manifest.version };
 				this.settings.betaPlugins = this.settings.betaPlugins.map((e) => (e.id === id ? next : e));
@@ -1584,6 +1597,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				plugin.settings.manage.cssFilterState = state;
 				void plugin.flushSaveSettings();
 			},
+			async refreshSnippets() {
+				await refreshSnippets(plugin.app);
+				// 文件名集合可能变了，命令名也要跟上
+				plugin.refreshSnippetToggleCommands();
+			},
 			listSnippets() {
 				return listSnippets(plugin.app);
 			},
@@ -1662,6 +1680,22 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		} catch (error) {
 			logger.warn("[Chinese Plugin Market] 注册插件切换命令失败：", error);
 		}
+	}
+
+	/**
+	 * 重扫 CSS 片段目录并刷新命令与已打开的设置页。
+	 *
+	 * 片段文件在配置目录里（不进 vault 文件树，也没有 create/delete 事件），
+	 * 只能靠显式异步扫描；所有入口（启动、进入外观页、打开插件设置页）都走这里。
+	 */
+	async reloadCssSnippets(): Promise<void> {
+		try {
+			await refreshSnippets(this.app);
+		} catch (error) {
+			logger.warn("[Chinese Plugin Market] 扫描 CSS 片段目录失败:", error);
+		}
+		this.refreshSnippetToggleCommands();
+		this.settingsIntegration?.requestRefresh();
 	}
 
 	/**

@@ -6174,6 +6174,14 @@ button.pt-card-install-btn--installed {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller, 12px);
 }
+.pt-beta-kind {
+	padding: 0 6px;
+	border-radius: 4px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 11px);
+	flex-shrink: 0;
+}
 .pt-beta-actions {
 	display: flex;
 	gap: 6px;

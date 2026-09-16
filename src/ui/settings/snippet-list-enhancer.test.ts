@@ -66,6 +66,7 @@ function createStore(opts: {
 			settings.cssMeta = setMeta(settings.cssMeta, id, patch);
 		},
 		saveCssFilterState() {},
+		refreshSnippets: async () => {},
 		listSnippets: () => snippets,
 		setSnippetEnabled: async () => {},
 		renameSnippet: async () => {},
@@ -224,6 +225,38 @@ describe("SnippetListEnhancer", () => {
 		expect(empty!.textContent).toContain("暂无 CSS 片段");
 		// 无片段时不应有任何行增强
 		expect(root.querySelector(".cpm-group-btn")).toBeNull();
+	});
+
+	it("原生页只给「已启用 N 个」汇总行（不再逐行列出）时，自渲染片段行且计数一致", () => {
+		// 1.10+ 形态：外观页只剩下标题 + 右侧「已启用 N 个 ›」，没有逐片段的 .setting-item
+		const root = document.createElement("div");
+		root.innerHTML = `
+			<div class="setting-item">
+				<div class="setting-item-info">
+					<div class="setting-item-name">CSS 代码片段</div>
+					<div class="setting-item-description">管理用于调整应用外观的 CSS 文件集合。</div>
+				</div>
+				<div class="setting-item-control">已启用 1 个</div>
+			</div>
+		`;
+		document.body.appendChild(root);
+		const enhancer = new SnippetListEnhancer(createStore(), {
+			onManageGroups: () => {},
+			requestRenameSnippet: () => {},
+		});
+		enhancer.enhance(root);
+
+		const ownList = root.querySelector<HTMLElement>('[data-cpm-owned="css-rows"]')!;
+		expect(ownList.querySelectorAll(".cpm-css-settings-row").length).toBe(2);
+		// 每行都带全套控件（备注 / 分组按钮 / 打开）
+		for (const row of Array.from(ownList.querySelectorAll<HTMLElement>(".cpm-css-settings-row"))) {
+			expect(row.querySelector(".cpm-note-field")).not.toBeNull();
+			expect(row.querySelector(".cpm-group-btn")).not.toBeNull();
+			expect(row.querySelector(".cpm-open-btn")).not.toBeNull();
+		}
+		// 有数据源却显示空态 = 数据对不上，必须不成立
+		expect(root.querySelector(".cpm-css-empty-state")).toBeNull();
+		expect(root.querySelector(".cpm-filter-count")?.textContent).toBe("2 个片段");
 	});
 
 	it("工具栏锚定到「CSS 代码片段」区块标题之后", () => {

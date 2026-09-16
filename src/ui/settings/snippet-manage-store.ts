@@ -29,6 +29,13 @@ export interface CssStorePort {
 	saveCssMeta(id: string, patch: Partial<PluginMetaEntry>): void;
 	/** 保存 CSS 筛选状态（恢复现场） */
 	saveCssFilterState(state: ManageFilterPersist): void;
+	/**
+	 * 重扫 snippets 目录并刷新 listSnippets 的快照。
+	 *
+	 * 配置目录不进 vault 文件树，枚举只能异步走 adapter，因此需要显式触发：
+	 * 进入外观页、打开插件设置页、重命名片段等关键节点都调它。
+	 */
+	refreshSnippets(): Promise<void>;
 	/** 列出全部 CSS 片段（含启用状态），用于精确识别外观页行 */
 	listSnippets(): SnippetInfo[];
 	/** 切换片段启用状态 */

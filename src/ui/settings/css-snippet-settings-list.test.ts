@@ -38,6 +38,7 @@ function createStore(opts: {
 			settings.cssMeta = setMeta(settings.cssMeta, id, patch);
 		},
 		saveCssFilterState() {},
+		refreshSnippets: async () => {},
 		listSnippets: () => snippets,
 		setSnippetEnabled: async () => {},
 		renameSnippet: async () => {},

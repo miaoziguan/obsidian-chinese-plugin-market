@@ -469,9 +469,9 @@ export const STRINGS = {
 	"settings.prefs.nameDisplay.translated": { zh: "中文译名优先" },
 	"settings.prefs.nameDisplay.original": { zh: "原标题优先" },
 	"settings.translateSettings": { zh: "设置页翻译" },
-	"settings.translateSettings.desc": { zh: "即时机翻其他插件的设置页文案（名称、描述、控件标签/占位符/下拉选项）。基于本插件翻译引擎，无需维护词典。" },
+	"settings.translateSettings.desc": { zh: "即时机翻其他插件的设置页文案（名称、描述、按钮、下拉选项、占位符）。原生组件与 React 自绘的设置页都支持，基于本插件翻译引擎，无需维护词典。" },
 	"settings.translateSettings.enable": { zh: "启用设置页翻译" },
-	"settings.translateSettings.enable.desc": { zh: "打开任意插件设置页时，自动翻译其英文文案为中文。关闭后重新打开设置页即恢复原文。" },
+	"settings.translateSettings.enable.desc": { zh: "打开任意插件设置页时，自动翻译其英文文案为中文（含 Copilot 等 React 自绘设置页）。关闭后重新打开设置页即恢复原文。" },
 	"settings.translateSettings.provider": { zh: "翻译通道" },
 	"settings.translateSettings.provider.desc": { zh: "免费通道零配置；百度需先在「翻译引擎」中配置 APP ID 与密钥。" },
 	"settings.translateSettings.provider.free": { zh: "腾讯翻译·免费（零配置）" },
@@ -590,7 +590,7 @@ export const STRINGS = {
 	},
 	"directInstall.urlLabel": { zh: "插件地址" },
 	"directInstall.urlDesc": {
-		zh: "支持：① 目录 URL ② 指向 manifest.json 的完整链接（自动取父目录）③ GitHub 仓库 URL（如 https://github.com/owner/repo，含 /tree/<branch>）",
+		zh: "支持：① 目录 URL ② 指向 manifest.json 的完整链接（自动取父目录）③ GitHub 仓库 URL（如 https://github.com/owner/repo，含 /tree/<branch>）④ GitHub 简写 owner/repo，可用 @分支 / @标签 / @commit 钉版本，@release 从 Release 安装",
 	},
 	"directInstall.install": { zh: "安装" },
 	"directInstall.installing": { zh: "安装中…" },
@@ -634,6 +634,17 @@ export const STRINGS = {
 	},
 	"beta.mobileBlocked": { zh: "移动端无法更新直链插件（系统禁止写入插件目录）" },
 	"beta.notTracked": { zh: "{name} 不是通过直链安装的，无法自动更新" },
+	"beta.kind.theme": { zh: "主题" },
+	"beta.kind.plugin": { zh: "插件" },
+	"beta.title.theme": { zh: "从直链安装主题" },
+	"beta.desc.theme": {
+		zh: "填写主题仓库地址即可安装。也可用 owner/repo@分支、@标签、@commit 钉版本，或 @release 从 Release 安装。",
+	},
+	"beta.installed.theme": { zh: "已安装主题 {name}" },
+	"badThemeName": { zh: "主题名不合法（不能含 / 或以 . 开头）" },
+	"directInstall.ghNoTheme": {
+		zh: "仓库 {repo} 里找不到 theme.css（这可能不是主题仓库）",
+	},
 
 	// 个人 AI 固化资产
 	"settings.aidict": { zh: "个人 AI 固化资产" },

@@ -7,7 +7,12 @@
  */
 
 import { type App, Platform, Notice } from "obsidian";
-import { updateBetaPlugin, type BetaPluginEntry } from "@app/direct-install";
+import {
+	updateBetaPlugin,
+	updateBetaTheme,
+	type BetaKind,
+	type BetaPluginEntry,
+} from "@app/direct-install";
 import { makeT } from "@shared/i18n";
 
 export type { BetaPluginEntry } from "@app/direct-install";
@@ -20,8 +25,20 @@ export function buildBetaEntry(
 	name: string,
 	version: string,
 	rootUrl: string,
+	kind: BetaKind = "plugin",
+	release = false,
 ): BetaPluginEntry {
-	return { id, name: name || id, rootUrl, installedVersion: version, frozen: false };
+	return { id, name: name || id, rootUrl, installedVersion: version, frozen: false, kind, release };
+}
+
+/** 按类型更新单项（插件走三件套，主题走 theme.css） */
+export async function updateBetaEntry(
+	app: App,
+	entry: BetaPluginEntry,
+): Promise<{ updated: boolean; manifest: { version: string } }> {
+	return entry.kind === "theme"
+		? updateBetaTheme(app, entry)
+		: updateBetaPlugin(app, entry);
 }
 
 export interface BetaUpdateItemResult {
@@ -72,7 +89,7 @@ export async function updateAllBetaPlugins(
 			continue;
 		}
 		try {
-			const r = await updateBetaPlugin(app, e);
+			const r = await updateBetaEntry(app, e);
 			if (r.updated) {
 				res.updated++;
 				res.results.push({ id: e.id, name: e.name, updated: true, version: r.manifest.version });

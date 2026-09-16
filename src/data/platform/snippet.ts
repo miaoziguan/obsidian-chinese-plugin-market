@@ -10,8 +10,18 @@ import type { App, TFile } from "obsidian";
 import { asAppInternals } from "./obsidian-internals";
 import { logger } from "@shared/logger";
 
-/** snippets 目录（相对 vault 根） */
-export const SNIPPET_DIR = ".obsidian/snippets";
+/** 默认配置目录名（vault.configDir 通常即 .obsidian，用户可自定义） */
+const DEFAULT_CONFIG_DIR = ".obsidian";
+
+/**
+ * snippets 目录（vault 相对路径），跟随用户自定义的配置目录。
+ *
+ * 不能写死 `.obsidian`：用户可用自定义 configDir，写死会导致整份名单为空。
+ */
+export function snippetDir(app: App): string {
+	const cfg = app.vault?.configDir || DEFAULT_CONFIG_DIR;
+	return `${cfg.replace(/\/+$/, "")}/snippets`;
+}
 
 export interface SnippetInfo {
 	/** 文件名（含 .css 后缀） */
@@ -26,24 +36,75 @@ export interface SnippetInfo {
 
 const SNIPPET_TYPE = "snippet" as const;
 
-/** 列出全部 CSS 片段文件，并标记启用状态（按基名排序） */
+/**
+ * 片段清单缓存（按 app 隔离，避免插件重载 / 多 vault 串味）。
+ *
+ * 为什么必须缓存：枚举 snippets 只能异步走 `vault.adapter.list`，而 UI 渲染是同步的；
+ * 由调用方在合适的时机调 refreshSnippets 预扫，listSnippets 同步读镜像。
+ */
+const snippetCache = new WeakMap<App, SnippetInfo[]>();
+
+/**
+ * 同步读取片段清单镜像（UI 渲染用）。
+ *
+ * 尚未异步扫描过（或扫描失败）时返回空数组——此时为空是「还没加载」，
+ * 而不是「vault 里没有片段」，UI 层据此区分加载态与真空态。
+ */
 export function listSnippets(app: App): SnippetInfo[] {
+	return snippetCache.get(app) ?? [];
+}
+
+/**
+ * 异步重扫 snippets 目录并刷新缓存（多入口共用：启动 / 进入外观页 / 打开设置页 / 重命名后）。
+ *
+ * 为什么不能用 `app.vault.getFiles()`：配置目录（默认 .obsidian，可被用户改名）
+ * **根本不在 vault 文件树里** —— 它既不广播 create/delete 事件，也不会出现在
+ * getFiles() 的结果中。此前用它枚举片段，结果恒为空，于是出现「原生外观页显示
+ * 已启用 N 个片段、本插件显示 0 个并提示暂无片段」的错位。
+ * Obsidian 自身加载片段同样是 `adapter.list(<configDir>/snippets)`。
+ */
+export async function refreshSnippets(app: App): Promise<SnippetInfo[]> {
+	const dir = snippetDir(app);
 	const enabled = new Set(asAppInternals(app).customCss?.snippets ?? []);
-	const files = app.vault.getFiles().filter(
-		(f): f is TFile =>
-			f.path.startsWith(`${SNIPPET_DIR}/`) && f.path.endsWith(".css"),
-	);
-	return files
-		.map((f) => {
-			const baseName = f.name.replace(/\.css$/i, "");
-			return {
-				name: f.name,
-				baseName,
-				enabled: enabled.has(baseName),
-				path: f.path,
-			};
-		})
-		.sort((a, b) => a.baseName.localeCompare(b.baseName));
+	const byBase = new Map<string, string>();
+
+	for (const fileName of await listSnippetFileNames(app, dir)) {
+		byBase.set(fileName.replace(/\.css$/i, ""), fileName);
+	}
+	// 兜底：即便目录扫描失败（adapter 不可用 / 目录被占用），也至少把 customCss
+	// 里处于启用状态的片段呈现出来，避免再次出现「原生有、本插件 0 个」的错位。
+	for (const baseName of enabled) {
+		if (!byBase.has(baseName)) byBase.set(baseName, `${baseName}.css`);
+	}
+
+	const list = Array.from(byBase, ([baseName, fileName]) => ({
+		name: fileName,
+		baseName,
+		enabled: enabled.has(baseName),
+		path: `${dir}/${fileName}`,
+	})).sort((a, b) => a.baseName.localeCompare(b.baseName));
+
+	snippetCache.set(app, list);
+	return list;
+}
+
+/** 读取 snippets 目录下的 .css 文件名；adapter.list 不可用时退回 vault 文件树 */
+async function listSnippetFileNames(app: App, dir: string): Promise<string[]> {
+	try {
+		const listing = await app.vault.adapter.list(dir);
+		return (listing?.files ?? [])
+			.map((p) => p.split("/").pop() ?? "")
+			.filter((name) => name.toLowerCase().endsWith(".css"));
+	} catch (error) {
+		logger.warn("[Chinese Plugin Market] 扫描 CSS 片段目录失败，退回 vault 文件树:", error);
+		return app.vault
+			.getFiles()
+			.filter(
+				(f): f is TFile =>
+					f.path.startsWith(`${dir}/`) && f.path.toLowerCase().endsWith(".css"),
+			)
+			.map((f) => f.name);
+	}
 }
 
 /** 某个片段是否启用 */
@@ -85,12 +146,12 @@ export async function writeSnippet(
 	baseName: string,
 	content: string,
 ): Promise<void> {
-	await app.vault.adapter.write(`${SNIPPET_DIR}/${baseName}.css`, content);
+	await app.vault.adapter.write(`${snippetDir(app)}/${baseName}.css`, content);
 }
 
 /** 删除片段文件（不存在则静默） */
 export async function deleteSnippet(app: App, baseName: string): Promise<void> {
-	const path = `${SNIPPET_DIR}/${baseName}.css`;
+	const path = `${snippetDir(app)}/${baseName}.css`;
 	if (await app.vault.adapter.exists(path)) {
 		await app.vault.adapter.remove(path);
 	}
@@ -105,13 +166,20 @@ export async function renameSnippet(
 	oldBase: string,
 	newBase: string,
 ): Promise<void> {
-	const content = await readSnippetContent(app, `${SNIPPET_DIR}/${oldBase}.css`);
+	const dir = snippetDir(app);
+	const content = await readSnippetContent(app, `${dir}/${oldBase}.css`);
 	await writeSnippet(app, newBase, content);
 	await deleteSnippet(app, oldBase);
 	const wasEnabled = isSnippetEnabled(app, oldBase);
 	if (wasEnabled) {
 		await setSnippetEnabled(app, newBase, true);
 		await setSnippetEnabled(app, oldBase, false);
+	}
+	// 文件名变了，重新对齐缓存清单供立即渲染（否则列表还是旧名）
+	try {
+		await refreshSnippets(app);
+	} catch (error) {
+		logger.warn("[Chinese Plugin Market] 重命名后刷新 CSS 片段清单失败:", error);
 	}
 }
 
