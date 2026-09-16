@@ -72,6 +72,8 @@ export interface EmbeddingProviderSpec {
 	/** 本地模式：模型名与 wasm 路径（local backend 用） */
 	localModel?: string;
 	localWasmPaths?: string;
+	/** 本地模式：HF 模型下载镜像源（transformers.js env.remoteHost）；空 = 默认镜像 hf-mirror.com。 */
+	localRemoteHost?: string;
 }
 
 /**
@@ -99,7 +101,8 @@ export function createEmbeddingProvider(spec: EmbeddingProviderSpec): EmbeddingP
 			return new LocalEmbeddingProvider(
 				undefined,
 				spec.localModel,
-				spec.localWasmPaths
+				spec.localWasmPaths,
+				spec.localRemoteHost
 			);
 		}
 		default:
@@ -209,14 +212,18 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
 	 * @param backend 本地推理后端；不传则构造默认的 WorkerLocalBackend。
 	 * @param model   本地模型名（透传给 backend）。
 	 * @param wasmPaths onnx wasm 路径（透传给 backend，WASM 回退路径用）。
+	 * @param remoteHost HF 模型下载镜像源（transformers.js env.remoteHost）；
+	 *                   空 = 默认镜像 hf-mirror.com（国内直连 HF ~20KB/s，镜像 ~540KB/s）。
+	 *                   归一化见 normalizeRemoteHost。
 	 */
 	constructor(
 		backend?: LocalModelBackend,
 		model = DEFAULT_LOCAL_MODEL,
-		wasmPaths?: string
+		wasmPaths?: string,
+		remoteHost?: string
 	) {
-		// 默认用共享实例（同 model 单例）：复用同一 worker，模型只加载一次，避免每次搜索冷启动
-		this.backend = backend ?? WorkerLocalBackend.getShared({ model, wasmPaths });
+		// 默认用共享实例（同 model+镜像源 单例）：复用同一 worker，模型只加载一次，避免每次搜索冷启动
+		this.backend = backend ?? WorkerLocalBackend.getShared({ model, wasmPaths, remoteHost: normalizeRemoteHost(remoteHost) });
 	}
 
 	async embed(texts: string[]): Promise<number[][]> {
@@ -237,10 +244,56 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
 }
 
 /**
- * 默认本地模型：bge-small-zh-v1.5（面向中文语义，vault-curate 同款）。
- * 相比 all-MiniLM-L6-v2 对中文的同义词/口语/专业术语召回更准；体积略大（~110MB）。
+ * 默认本地模型：multilingual-e5-small（intfloat 权重的 transformers.js 转换版）。
+ *
+ * 选型理由（2026-09 搜不准根因修复）：本插件向量索引的主体是英文原文
+ * （name/description 来自 community-plugins.json），而用户 query 是中文 ——
+ * 需要中英「跨语言」对齐能力。旧默认 bge-small-zh-v1.5 是中文单语模型，
+ * 英文 token 近似 OOV，中文 query ↔ 英文文档的余弦接近随机，向量召回路失效。
+ * multilingual-e5-small（XLM-R small 底座，118M 参数，384 维）多语预训练，
+ * 中英互检显著更好。体积：q8 量化 ~118MB（WASM 路径）/ fp32 ~470MB（WebGPU
+ * 路径），首次使用自动下载——比 bge-small-zh 的 23MB 大，是本方案的已知代价。
+ *
+ * 为什么是 Xenova/ 而不是官方 intfloat/multilingual-e5-small：官方仓库的 ONNX
+ * 命名（model_O4 / model_qint8_avx512_vnni）不符合 transformers.js 的 q8 文件
+ * 命名约定（model_int8/model_quantized/model_uint8），dtype=q8 会解析失败；
+ * Xenova 转换版是同一权重、含标准量化文件命名。
+ *
+ * ⚠️ e5 系列训练时带指令前缀（查询 "query: " / 文档 "passage: "），推理必须
+ * 同构注入，见 wantsE5Prefix 与 buildVectorIndex / vectorRecallScores。
  */
-export const DEFAULT_LOCAL_MODEL = "Xenova/bge-small-zh-v1.5";
+export const DEFAULT_LOCAL_MODEL = "Xenova/multilingual-e5-small";
+
+/**
+ * 是否为 e5 系列模型（multilingual-e5-small/base/large 等，含 Xenova/intfloat/
+ * onnx-community 各种 repo 前缀）。e5 在对比学习训练时对查询/文档分别注入
+ * "query: " / "passage: " 指令前缀，推理不带前缀会显著劣化（官方 README 要求）。
+ * 按模型名识别（大小写不敏感），bge / MiniLM / text-embedding-3 等零影响。
+ */
+export function wantsE5Prefix(model: string): boolean {
+	return /(^|[^a-z0-9])e5-/i.test(model.trim());
+}
+
+/**
+ * 默认模型下载镜像源：hf-mirror.com。
+ * 产品决定（2026-09-16）：本插件面向中文用户，HF 官方直连国内实测 ~20KB/s
+ * （118MB e5 q8 需 ~2h，必撞 worker 240s 加载超时），hf-mirror 实测 ~540KB/s。
+ * 故默认走镜像；海外/自托管需要 HF 官方时显式填 https://huggingface.co/。
+ */
+export const DEFAULT_REMOTE_HOST = "https://hf-mirror.com/";
+
+/**
+ * 归一化用户填写的 HF 镜像源为 transformers.js env.remoteHost 可用形态：
+ * - 空/纯空白 → DEFAULT_REMOTE_HOST（默认镜像；要官方源需显式填 URL）；
+ * - 缺协议自动补 https://（用户常只填 hf-mirror.com）；
+ * - 补尾部斜杠（remoteHost 与路径模板直接拼接，缺斜杠会拼出坏 URL）。
+ */
+export function normalizeRemoteHost(raw?: string): string {
+	const s = (raw ?? "").trim();
+	if (!s) return DEFAULT_REMOTE_HOST;
+	const withProto = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+	return withProto.endsWith("/") ? withProto : `${withProto}/`;
+}
 
 /** 当前环境是否暴露 WebGPU（仅影响本地 embedding 是否走 GPU 加速；不可用则回退 WASM） */
 export function isWebGPUAvailable(): boolean {
@@ -277,9 +330,21 @@ export interface VectorIndex {
 	 * 仅存内存（不进 SQLite），冷启动后首次搜索回填一次即可。
 	 */
 	fieldsHash?: string;
+	/**
+	 * 最近一次构建的增量统计（动态索引可见性，2026-09-16）：embedded=本次真实
+	 * embed 的条目数（新增+内容/译文变化），reused=复用旧向量的条目数。
+	 * 仅存内存；设置页据此显示「增量维护：新 embed N / 复用 M」vs「全量构建」。
+	 */
+	buildStats?: { embedded: number; reused: number };
+	/**
+	 * 动态全量构建中标记（2026-09-16）：true = 这是一个「部分索引」，正在后台
+	 * 边 embed 边发布。搜索侧遇 partial 索引**直接用、不触发重建**（索引在生长），
+	 * 构建完成发布完整索引后该标记消失。
+	 */
+	partial?: boolean;
 }
 
-/** 构建索引的单条插件输入：基础字段 + 可选分类维度（用法 A）。 */
+/** 构建索引的单条插件输入：基础字段 + 可选分类维度（用法 A）+ 可选中文译文（双语索引）。 */
 export interface IndexPlugin {
 	id: string;
 	name: string;
@@ -288,6 +353,10 @@ export interface IndexPlugin {
 	category?: string;
 	/** 功能/场景标签（弱信号，尾随）。无则不注入。 */
 	tags?: string[];
+	/** 中文译名（双语索引：中文 query 的对齐面）。无译文则不注入。 */
+	nameZh?: string;
+	/** 中文译描（双语索引）。无译文则不注入。 */
+	descZh?: string;
 }
 
 /**
@@ -308,7 +377,13 @@ export async function buildVectorIndex(
 	plugins: IndexPlugin[],
 	model: string,
 	prevIndex?: VectorIndex | null,
-	categorySchemaVersion?: string
+	categorySchemaVersion?: string,
+	opts?: {
+		/** 动态全量构建：每 embed 完一片即回调（id→向量），供调用方实时发布部分索引。 */
+		onPartial?: (updates: Map<string, number[] | Float32Array>) => void;
+		/** 分片大小（默认 256）。 */
+		chunk?: number;
+	}
 ): Promise<VectorIndex> {
 	// 稳态快速短路：先对「原始字段」算轻量指纹（不做 t2s / 文本拼装 / perIdHash），
 	// 与 prevIndex.fieldsHash 一致即代表最终文本必然不变，直接复用整个索引（PERF-2）。
@@ -321,6 +396,7 @@ export async function buildVectorIndex(
 		prevIndex.categorySchemaVersion === categorySchemaVersion &&
 		prevIndex.ids.length === plugins.length
 	) {
+		prevIndex.buildStats = { embedded: 0, reused: plugins.length };
 		return prevIndex;
 	}
 
@@ -329,6 +405,10 @@ export async function buildVectorIndex(
 		if (p.category && p.category.trim()) {
 			parts.push(`分类：${p.category.trim()}`);
 		}
+		// 双语索引（2026-09-16）：中文译文前置——query 是中文，中文段是主对齐面；
+		// 英文原文保留在后（英文 query / 无译文插件仍可用）。512 预算内中文优先。
+		if (p.nameZh && p.nameZh.trim()) parts.push(p.nameZh.trim());
+		if (p.descZh && p.descZh.trim()) parts.push(p.descZh.trim());
 		parts.push(p.name);
 		parts.push(p.description);
 		const tagStr = (p.tags ?? [])
@@ -339,8 +419,14 @@ export async function buildVectorIndex(
 		}
 		return parts.join("\n").slice(0, 512);
 	});
-	// 繁→简统一到 bge-small-zh 最擅长的简体空间（借鉴 vault-curate：只转 embed 输入）
-	const texts = rawTexts.map((t) => t2sForEmbed(t));
+	// 繁→简统一简体空间（借鉴 vault-curate：只转 embed 输入）。对多语模型（e5）
+	// 仍是净收益：繁/简异形归一到同一 token 序列，索引与 query 两侧保持一致。
+	const normalized = rawTexts.map((t) => t2sForEmbed(t));
+	// e5 系列注入 "passage: " 文档侧指令前缀（与查询侧 "query: " 成对，见
+	// vectorRecallScores）。前缀参与 hash/perIdHash：切换模型自然触发全量重建。
+	const texts = wantsE5Prefix(model)
+		? normalized.map((t) => `passage: ${t}`)
+		: normalized;
 	const hash = contentHash(texts);
 	// 每条文本的内容指纹（增量更新依据）
 	const perIdHash: Record<string, string> = {};
@@ -356,6 +442,7 @@ export async function buildVectorIndex(
 	) {
 		// 补齐 perIdHash（旧索引可能没有）
 		if (!prevIndex.perIdHash) prevIndex.perIdHash = perIdHash;
+		prevIndex.buildStats = { embedded: 0, reused: plugins.length };
 		return prevIndex;
 	}
 
@@ -387,11 +474,19 @@ export async function buildVectorIndex(
 	}
 
 	if (needEmbed.length > 0) {
-		const embedTexts = needEmbed.map((i) => texts[i]);
-		const newVecs = await provider.embed(embedTexts);
-		for (let k = 0; k < needEmbed.length; k++) {
-			// 归一化后包成 Float32Array，统一索引载体，召回时免去 Array.from 二次转换
-			vectors[needEmbed[k]] = Float32Array.from(normalizeVector(newVecs[k]));
+		// 分片 embed + onPartial 实时回调：调用方（plugin）据此把部分索引发布进活索引，
+		// 构建期间搜索即可用已就绪部分（动态全量构建，2026-09-16）。
+		const CHUNK = opts?.chunk ?? 256;
+		for (let s = 0; s < needEmbed.length; s += CHUNK) {
+			const slice = needEmbed.slice(s, s + CHUNK);
+			const newVecs = await provider.embed(slice.map((i) => texts[i]));
+			const updates = new Map<string, number[] | Float32Array>();
+			for (let k = 0; k < slice.length; k++) {
+				const v = Float32Array.from(normalizeVector(newVecs[k]));
+				vectors[slice[k]] = v;
+				updates.set(plugins[slice[k]].id, v);
+			}
+			opts?.onPartial?.(updates);
 		}
 	}
 
@@ -403,13 +498,15 @@ export async function buildVectorIndex(
 		categorySchemaVersion,
 		perIdHash,
 		fieldsHash,
+		buildStats: { embedded: needEmbed.length, reused: plugins.length - needEmbed.length },
 	};
 }
 
 /**
- * 对原始字段算轻量指纹（id+name+description+category+tags 顺序拼接 + djb2）。
+ * 对原始字段算轻量指纹（id+name+description+category+tags+中文译文 顺序拼接 + djb2）。
  * 不做 t2s / 文本拼装 / truncate —— 仅用于「内容是否变化」的粗判，命中即跳过
  * 后续全库重算。与 contentHash 语义独立（后者基于 t2s 后文本，用于增量比对）。
+ * 含中文译文：译文更新（机翻→AI 翻→人工采纳）会改变指纹 → 触发该条增量重 embed（动态索引）。
  */
 function computeFieldsHash(plugins: IndexPlugin[]): string {
 	let h = 5381;
@@ -422,6 +519,8 @@ function computeFieldsHash(plugins: IndexPlugin[]): string {
 		mix(p.name);
 		mix(p.description);
 		mix(p.category ?? "");
+		mix(p.nameZh ?? "");
+		mix(p.descZh ?? "");
 		for (const t of p.tags ?? []) mix(t);
 		h = ((h << 5) + h + 0x1e) | 0; // 插件分隔符
 	}
@@ -443,12 +542,13 @@ export async function vectorRecall(
 	return m ? Array.from(m.keys()) : [];
 }
 
-/** query embedding LRU 缓存（PERF-9）：key = provider名+模型+query，命中则跳过重复 embed。 */
+/** query embedding LRU 缓存（PERF-9）：key = provider名+模型+query，命中则跳过重复 embed。
+ *  模型进 key：同会话内切换模型（如 bge→e5）不会命中旧模型的过期向量。 */
 const QUERY_VEC_CACHE = new Map<string, number[]>();
 const QUERY_VEC_CACHE_MAX = 64;
 
-function getCachedQueryVec(provider: EmbeddingProvider, query: string): number[] | undefined {
-	const key = `${provider.name}|${query}`;
+function getCachedQueryVec(provider: EmbeddingProvider, model: string, query: string): number[] | undefined {
+	const key = `${provider.name}|${model}|${query}`;
 	const hit = QUERY_VEC_CACHE.get(key);
 	if (hit) {
 		// LRU：命中后移到末尾（最近使用）
@@ -458,8 +558,8 @@ function getCachedQueryVec(provider: EmbeddingProvider, query: string): number[]
 	return hit;
 }
 
-function setCachedQueryVec(provider: EmbeddingProvider, query: string, vec: number[]): void {
-	const key = `${provider.name}|${query}`;
+function setCachedQueryVec(provider: EmbeddingProvider, model: string, query: string, vec: number[]): void {
+	const key = `${provider.name}|${model}|${query}`;
 	if (QUERY_VEC_CACHE.has(key)) QUERY_VEC_CACHE.delete(key);
 	QUERY_VEC_CACHE.set(key, vec);
 	// 超出容量：淘汰最久未用（Map 迭代序 = 插入序，首个即最旧）
@@ -486,13 +586,16 @@ export async function vectorRecallScores(
 	minScore = -1
 ): Promise<Map<string, number> | null> {
 	if (!index.vectors.length) return null;
-	// query 同样转简体（与索引同空间）。PERF-9：命中缓存则跳过重复 embed（省一次 API 往返/推理）。
+	// query 同样转简体（与索引同空间）；e5 系列再注入 "query: " 指令前缀
+	// （与索引侧 "passage: " 成对，见 buildVectorIndex）。
+	// PERF-9：命中缓存则跳过重复 embed（省一次 API 往返/推理）。
 	const t2sQuery = t2sForEmbed(query);
-	let queryVec = getCachedQueryVec(provider, t2sQuery);
+	const embedQuery = wantsE5Prefix(index.model) ? `query: ${t2sQuery}` : t2sQuery;
+	let queryVec = getCachedQueryVec(provider, index.model, embedQuery);
 	if (!queryVec) {
-		const [vec] = await provider.embed([t2sQuery]);
+		const [vec] = await provider.embed([embedQuery]);
 		queryVec = vec;
-		if (queryVec && queryVec.length > 0) setCachedQueryVec(provider, t2sQuery, queryVec);
+		if (queryVec && queryVec.length > 0) setCachedQueryVec(provider, index.model, embedQuery, queryVec);
 	}
 	if (!queryVec || queryVec.length === 0) return null;
 	const top = topKBySimilarity(queryVec, index.vectors, k, minScore);

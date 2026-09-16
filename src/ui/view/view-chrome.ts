@@ -194,6 +194,7 @@ export function applyAIConfig(ctx: ViewContext) {
 				model: s.embeddingModel,
 				localModel: s.embeddingLocalModel,
 				localWasmPaths: s.embeddingLocalWasmPaths,
+				localRemoteHost: s.embeddingRemoteHost,
 			},
 		});
 	} else {

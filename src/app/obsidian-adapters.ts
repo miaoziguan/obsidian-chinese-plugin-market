@@ -22,7 +22,7 @@ export class ObsidianHttpClient implements HttpClient {
 			body: opts.body,
 			throw: false,
 		});
-		return { status: resp.status, json: resp.json, text: resp.text, headers: resp.headers };
+		return { status: resp.status, json: resp.json, text: resp.text, headers: resp.headers, arrayBuffer: resp.arrayBuffer };
 	}
 }
 

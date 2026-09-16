@@ -383,7 +383,12 @@ export const STRINGS = {
 	},
 	"settings.embedding.localModel": { zh: "本地模型名" },
 	"settings.embedding.localModel.desc": {
-		zh: "本地语义用的 transformers.js 模型 ID，插件已内置默认模型 Xenova/bge-small-zh-v1.5（中文语义，量化后约 23MB，首次自动下载）。一般无需修改；仅当你想换成其它本地模型（如 bge-base、all-MiniLM 等）时再填。",
+		zh: "本地语义用的 transformers.js 模型 ID，默认 Xenova/multilingual-e5-small（中英跨语言，量化后约 118MB，首次自动下载；查询/文档会自动注入 e5 指令前缀）。一般无需修改；仅当你想换成其它本地模型（如 bge-m3、bge-small-zh-v1.5 等）时再填。注意 intfloat/multilingual-e5-small 官方仓库缺少 transformers.js 约定的量化文件命名，本地模式请填 Xenova/ 转换版。",
+
+	},
+	"settings.embedding.remoteHost": { zh: "模型下载源（默认镜像）" },
+	"settings.embedding.remoteHost.desc": {
+		zh: "本地模型权重的下载源。留空默认走 hf-mirror.com 镜像（国内实测约 540KB/s；HuggingFace 官方直连仅约 20KB/s，118MB 模型要约 2 小时且会触发加载超时）。海外或自托管可显式填 https://huggingface.co/ 等完整地址。修改后下次加载模型生效；浏览器按 URL 缓存，切换源后模型会重新下载。",
 
 	},
 	"settings.embedding.wasm": { zh: "ONNX Runtime WASM 路径（高级，可选）" },
@@ -714,6 +719,10 @@ export const STRINGS = {
 	"notice.ai.done": { zh: "AI 已按" },
 	"notice.ai.analyzing": { zh: "AI 正在分析..." },
 	"notice.ai.analyzing.hint": { zh: "正在根据您的描述进行语义匹配，请稍候" },
+	"notice.local.analyzing": { zh: "本地语义检索中..." },
+	"notice.local.analyzing.hint": {
+		zh: "首次使用需下载模型并构建向量索引（约数分钟），实时进度见设置页「模型就绪」行与搜索框进度条",
+	},
 	"notice.translated": { zh: "个结果" },
 	"notice.saved": { zh: "已保存自定义翻译：" },
 	"notice.mirror.switched": {

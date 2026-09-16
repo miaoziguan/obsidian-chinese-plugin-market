@@ -62,14 +62,20 @@ describe("Plugin 持久化契约（P0 回归）", () => {
 		expect(saveData).toHaveBeenCalledTimes(1);
 	});
 
-	it("本地模型旧默认值迁移：all-MiniLM-L6-v2 → bge-small-zh", async () => {
+	it("本地模型旧默认值迁移：all-MiniLM-L6-v2 / bge-small-zh-v1.5 → multilingual-e5-small", async () => {
 		const { plugin } = makePlugin();
-		// 模拟旧版 data.json 里持久化的旧默认模型名
+		// 模拟旧版 data.json 里持久化的旧默认模型名（第一代默认）
 		const allData: Record<string, unknown> = {
 			embeddingLocalModel: "Xenova/all-MiniLM-L6-v2",
 		};
 		await (plugin as any).loadSettings(allData);
-		expect(plugin.settings.embeddingLocalModel).toBe("Xenova/bge-small-zh-v1.5");
+		expect(plugin.settings.embeddingLocalModel).toBe("Xenova/multilingual-e5-small");
+		// 第二代默认（bge-small-zh，中文单语，跨语言召回失效）同样迁移
+		const allData3: Record<string, unknown> = {
+			embeddingLocalModel: "Xenova/bge-small-zh-v1.5",
+		};
+		await (plugin as any).loadSettings(allData3);
+		expect(plugin.settings.embeddingLocalModel).toBe("Xenova/multilingual-e5-small");
 		// 用户主动改的其它模型名应保留
 		const allData2: Record<string, unknown> = {
 			embeddingLocalModel: "Xenova/custom-model",

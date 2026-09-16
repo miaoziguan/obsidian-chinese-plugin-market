@@ -1,9 +1,9 @@
 /**
  * 简体转换（借鉴 vault-curate 的 preproc.ts）：embed 前把繁体转简体。
  *
- * 为什么：bge-small-zh 主要在简体中文上训练，把 embedding 输入转成简体，
- * 能把向量拉进模型最擅长的 token 空间，显著提升语义准确度（vault-curate 实测
- * 无关结果排名降 3-4 倍）。
+ * 为什么：中文 embedding 模型（bge-small-zh / multilingual-e5 等）对简体中文的
+ * 覆盖与一致性最好，把 embedding 输入转成简体，能把向量拉进模型最擅长的 token
+ * 空间，显著提升语义准确度（vault-curate 实测无关结果排名降 3-4 倍）。
  *
  * 纪律：只转换【embedding 输入】（索引侧文本 + 搜索 query），绝不转换存储/展示
  * 文本。仅当文本含 CJK 时才做（避免纯 ASCII 的额外开销）。

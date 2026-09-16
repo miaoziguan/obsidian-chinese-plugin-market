@@ -70,7 +70,7 @@ interface Bm25Index {
  * （连续输入触发多次 AI 搜索时避免对 6000 条反复分词，省数百 ms）。
  */
 function buildBm25Index(
-	allPlugins: { id: string; name: string; description: string }[]
+	allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[]
 ): Bm25Index {
 	const docTokensById = new Map<string, string[]>();
 	const df = new Map<string, number>();
@@ -170,7 +170,7 @@ export class AISearcher {
 	 * 全量分词与 df 统计结果，连续输入触发多次 AI 搜索时省去重复的全库分词开销。
 	 */
 	getBm25Index(
-		allPlugins: { id: string; name: string; description: string }[]
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[]
 	): Bm25Index {
 		const sig =
 			allPlugins.length + ":" +
@@ -190,7 +190,7 @@ export class AISearcher {
 	 */
 	async search(
 		query: string,
-		allPlugins: { id: string; name: string; description: string }[],
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[],
 		showReason = false,
 		onPhase?: (phase: string, detail: string) => void,
 		filterCategories?: string[],
@@ -295,7 +295,7 @@ export class AISearcher {
 	 */
 	async localSearch(
 		query: string,
-		allPlugins: { id: string; name: string; description: string }[],
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[],
 		filterCategories?: string[],
 	): Promise<AISearchResult> {
 		if (!allPlugins.length) throw new Error("无插件数据，请先加载列表");
@@ -388,7 +388,7 @@ export class AISearcher {
 	 */
 	private async vectorRecallScores(
 		query: string,
-		allPlugins: { id: string; name: string; description: string }[],
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[],
 		embCfg: NonNullable<AISearchConfig["embedding"]>,
 		onPhase?: (phase: string, detail: string) => void,
 		filterCategories?: string[],
@@ -400,6 +400,7 @@ export class AISearcher {
 			model: embCfg.model,
 			localModel: embCfg.localModel,
 			localWasmPaths: embCfg.localWasmPaths,
+			localRemoteHost: embCfg.localRemoteHost,
 		});
 
 		// 索引的 model key：本地模式用 localModel（bge），API 模式用 model。
@@ -411,14 +412,23 @@ export class AISearcher {
 
 		const indexPlugins = allPlugins.map((p) => {
 			const tag = this.pluginTags[p.id];
-			return { id: p.id, name: p.name, description: p.description, category: tag?.category, tags: tag?.tags };
+			return {
+				id: p.id,
+				name: p.name,
+				description: p.description,
+				category: tag?.category,
+				tags: tag?.tags,
+				nameZh: p.nameZh,
+				descZh: p.descZh,
+			};
 		});
 
 		const needBuild =
 			!this.vectorIndex ||
 			this.vectorIndex.model !== indexModel ||
-			this.vectorIndex.ids.length !== allPlugins.length ||
-			this.vectorIndex.categorySchemaVersion !== this.tagService.getSchemaVersion();
+			this.vectorIndex.categorySchemaVersion !== this.tagService.getSchemaVersion() ||
+			// partial = 后台动态构建中的部分索引：直接用（它在生长），不触发重建抢 embed
+			(!this.vectorIndex.partial && this.vectorIndex.ids.length !== allPlugins.length);
 
 		// 探针：打印 needBuild 各判定分支，便于定位「每次搜索都重建」的根因
 		logger.debug(
@@ -467,7 +477,7 @@ export class AISearcher {
 
 	private async recallAllBatches(
 		query: string,
-		allPlugins: { id: string; name: string; description: string }[],
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[],
 		onPhase?: (phase: string, detail: string) => void,
 	): Promise<AISearchCandidate[]> {
 		const totalBatches = Math.ceil(allPlugins.length / BATCH_SIZE);

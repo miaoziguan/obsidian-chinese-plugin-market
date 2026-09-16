@@ -22,7 +22,7 @@ import { Translator, type PluginInfo, type TranslateResult, type DictEntry } fro
 import { SettingsTranslator } from "@translation/settings/settings-translator";
 import { type PluginStat } from "@domain/catalog/stats";
 import { PluginStorage, CREDENTIAL_KEYS, type PluginCredentials } from "@data/storage/plugin-storage";
-import { setHttpClient } from "@data/net/http-port";
+import { setHttpClient, getHttpClient } from "@data/net/http-port";
 import { setPlatformCapability } from "@translation/platform/macos-shortcuts";
 import type { NoteStoragePort } from "@translation/memory/note-port";
 import {
@@ -35,8 +35,8 @@ import { makeT, pickLang } from "@shared/i18n";
 import { setScrollDebug } from "@ui/view/view-render";
 import { TranslatorSettingTab } from "@app/settings-tab";
 import { debounce, mapWithConcurrency, contentHash, isAISearchUsable } from "@shared/utils";
-import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
-import { setWorkerSourceLoader, setModelProgressReporter } from "@semantic/workers/worker-backend";
+import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, normalizeRemoteHost, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
+import { setWorkerSourceLoader, setModelProgressReporter, setWorkerFetchBridge, isWorkerFetchBridgeInstalled, reportModelProgress } from "@semantic/workers/worker-backend";
 import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings, type PluginProfile } from "@ui/view/translator-view";
 import { refreshOutdated } from "@ui/view/view-data";
 import { VIEW_TYPE } from "@shared/constants";
@@ -388,6 +388,136 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 独立文件（不再构建期内联进 main.js），首次本地语义搜索时才付出读取成本。
 		const workerBundlePath = `.obsidian/plugins/${this.manifest.id}/embedding-worker.bundle.js`;
 		setWorkerSourceLoader(() => this.app.vault.adapter.read(workerBundlePath));
+		// 模型下载桥接：worker 内跨域 fetch 受浏览器 CORS 约束（hf-mirror 等镜像在
+		// app:// origin 下 CORS 失败 → 本地语义静默降级关键词路）。委托主线程用
+		// requestUrl（Electron net 层，无 CORS 约束）代发，字节回传 worker 组装 Response。
+		// 大文件走 Range 分块（8MB/块）：requestUrl 整包对百 MB 级响应无进度、有挂死/
+		// 上限风险（2026-09-16 实测 118MB 整包长时间不到齐）；分块后每块即时上报真实
+		// 百分比，单块失败整单报错由 worker 回退原生 fetch 兜底。
+		setWorkerFetchBridge(async (url, method) => {
+			if (method === "HEAD") {
+				const r = await getHttpClient().request({ url, method });
+				return { status: r.status, buffer: null, headers: r.headers };
+			}
+			const CHUNK = 8 * 1024 * 1024;
+			const CHUNK_TIMEOUT_MS = 90_000;
+			const PROBE_TIMEOUT_MS = 10_000;
+			const OFFICIAL = "https://huggingface.co/";
+			const rewriteHost = (u: string, host: string) => u.replace(/^https?:\/\/[^/]+\//, host);
+			// 单块超时：任何一块挂死 90s 即整单报错 → worker 回退原生 fetch（官方源，
+			// 有真实流式进度 + 看门狗续表），杜绝「无声挂死」状态（2026-09-16 用户反馈卡死）。
+			const withTimeout = <T,>(p: Promise<T>, label: string, ms = CHUNK_TIMEOUT_MS): Promise<T> =>
+				new Promise<T>((resolve, reject) => {
+					const t = window.setTimeout(() => reject(new Error(`${label} 超时（${ms / 1000}s）`)), ms);
+					p.then(
+						(v) => {
+							window.clearTimeout(t);
+							resolve(v);
+						},
+						(e) => {
+							window.clearTimeout(t);
+							reject(e);
+						}
+					);
+				});
+			// ── 源可用性探测（10 分钟缓存）──
+			// 2026-09-16 实测：hf-mirror 与官方会**同时**被网络层封锁（http=000 / TLS reset），
+			// 而无探测时每个文件要对死源白等 90s/块才切换。探测=对候选源发 HEAD（10s 超时），
+			// 选第一个活着的；全死则立即显式报错（设置页红字），不再无谓消耗。
+			const candidates = [...new Set([normalizeRemoteHost(this.settings.embeddingRemoteHost) ?? OFFICIAL, OFFICIAL])];
+			const now = Date.now();
+			const cacheValid =
+				this.bridgeSourceCache &&
+				now - this.bridgeSourceCache.at < 10 * 60_000 &&
+				candidates.includes(this.bridgeSourceCache.host);
+			if (!cacheValid) {
+				let chosen: string | null = null;
+				for (const h of candidates) {
+					try {
+						await withTimeout(
+							getHttpClient().request({ url: rewriteHost(url, h), method: "HEAD" }),
+							`源探测(${h})`,
+							PROBE_TIMEOUT_MS
+						);
+						chosen = h;
+						break;
+					} catch {
+						logger.warn(`[Chinese Plugin Market] 源探测不可达：${h}`);
+					}
+				}
+				if (!chosen) {
+					return {
+						status: 0,
+						buffer: null,
+						error: `所有下载源均不可达（${candidates.join(" / ")}），请稍后重试或在设置中更换镜像`,
+					};
+				}
+				this.bridgeSourceCache = { host: chosen, at: now };
+			}
+			// 文件粒度重置进度：避免上一个文件的 100% 被误读为当前文件进度
+			reportModelProgress({ status: "downloading", loaded: 0, total: 0 });
+			const short = url.slice(url.lastIndexOf("/") + 1) || url;
+			// 下载中某块失败 → 切另一候选源续传（同文件 Range 偏移通用；只切不回）。
+			let base = rewriteHost(url, this.bridgeSourceCache!.host);
+			const fetchChunk = async (range: string, label: string) => {
+				const once = (u: string, tag: string) =>
+					withTimeout(getHttpClient().request({ url: u, method: "GET", headers: { Range: range } }), tag).then((r) => {
+						if (r.status !== 206 && r.status !== 200) throw new Error(`HTTP ${r.status}`);
+						return r;
+					});
+				try {
+					return await once(base, label);
+				} catch (e: unknown) {
+					const curHost = new URL(base).origin + "/";
+					const other = candidates.find((c) => c !== curHost);
+					if (!other) throw e;
+					logger.warn(
+						`[Chinese Plugin Market] 桥接 ${short}：${label} 失败（${(e as Error)?.message ?? e}），切 ${other} 续传后续块`
+					);
+					base = rewriteHost(url, other);
+					this.bridgeSourceCache = { host: other, at: Date.now() };
+					return await once(base, `${label}@${other}`);
+				}
+			};
+			const first = await fetchChunk(`bytes=0-${CHUNK - 1}`, `首块`);
+			// 服务端不支持 Range（非 206 但 200）：整包已回，直接用
+			if (first.status !== 206) {
+				logger.debug(`[Chinese Plugin Market] 桥接 ${short}：不支持 Range（HTTP ${first.status}），整包返回`);
+				return { status: first.status, buffer: first.arrayBuffer ?? null, headers: first.headers };
+			}
+			const rangeHdr = first.headers["content-range"] ?? first.headers["Content-Range"] ?? "";
+			const totalMatch = /\/(\d+)$/.exec(rangeHdr);
+			const total = totalMatch ? Number(totalMatch[1]) : 0;
+			const parts: Uint8Array[] = [];
+			let loaded = 0;
+			const push = (buf: ArrayBuffer | undefined) => {
+				if (!buf) return;
+				parts.push(new Uint8Array(buf));
+				loaded += buf.byteLength;
+				reportModelProgress({ status: "downloading", loaded, total: total || loaded });
+			};
+			push(first.arrayBuffer);
+			let offset = loaded;
+			let chunkNo = 1;
+			while (total > 0 && offset < total) {
+				const end = Math.min(offset + CHUNK, total) - 1;
+				const r = await fetchChunk(`bytes=${offset}-${end}`, `块${chunkNo}`);
+				push(r.arrayBuffer);
+				logger.debug(
+					`[Chinese Plugin Market] 桥接 ${short}：块${chunkNo} 完成 ${loaded}/${total}（${new URL(base).host}）`
+				);
+				offset = end + 1;
+				chunkNo++;
+			}
+			const merged = new Uint8Array(loaded);
+			let at = 0;
+			for (const p of parts) {
+				merged.set(p, at);
+				at += p.byteLength;
+			}
+			reportModelProgress({ status: "downloading", loaded, total: total || loaded });
+			return { status: 200, buffer: merged.buffer, headers: first.headers };
+		});
 		// 本地模型下载进度上报：首次本地语义搜索/设置页预建触发 worker 下载量化模型时，
 		// 把进度归约写入 localModelState，供搜索视图轮询展示与设置页同款的进度条 + 百分比。
 		setModelProgressReporter((p) => {
@@ -1277,14 +1407,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		if (dataHadTranslatorFields) {
 			await this._saveSettingsImmediate();
 		}
-		// 本地模型名迁移：旧默认值（all-MiniLM-L6-v2，面向通用中英）已升级为
-		// bge-small-zh（面向中文，vault-curate 同款）。用户 data.json 可能仍存旧默认值，
-		// 自动迁移到新默认；仅当用户主动改成了其它模型名时才保留。
-		if (
-			typeof this.settings.embeddingLocalModel === "string" &&
-			this.settings.embeddingLocalModel.trim().toLowerCase().includes("all-minilm-l6-v2")
-		) {
-			this.settings.embeddingLocalModel = DEFAULT_LOCAL_MODEL;
+		// 本地模型名迁移：历史默认值（all-MiniLM-L6-v2 → bge-small-zh-v1.5 →
+		// multilingual-e5-small）逐代升级。当前默认换 e5-small 的原因：索引主体是
+		// 英文原文而 query 是中文，bge-small-zh 为中文单语模型，跨语言召回接近随机。
+		// 用户 data.json 可能仍存旧默认值，自动迁移到新默认；用户主动改成的其它模型名保留。
+		if (typeof this.settings.embeddingLocalModel === "string") {
+			const lm = this.settings.embeddingLocalModel.trim().toLowerCase();
+			if (lm.includes("all-minilm-l6-v2") || lm.includes("bge-small-zh-v1.5")) {
+				this.settings.embeddingLocalModel = DEFAULT_LOCAL_MODEL;
+			}
 		}
 		// embeddingSource 默认值迁移：旧默认是 "keyword"（无本地向量），新默认是
 		// "local"（vault-curate 同款，默认走本地 bge 向量）。已有用户存了 "keyword" 时
@@ -1846,6 +1977,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					model: this.settings.embeddingModel,
 					localModel: this.settings.embeddingLocalModel,
 					localWasmPaths: this.settings.embeddingLocalWasmPaths,
+					localRemoteHost: this.settings.embeddingRemoteHost,
 				},
 			});
 		}
@@ -2592,7 +2724,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 *   sqliteReady: SQLite 向量库是否已成功初始化
 	 *   transformReady: 本地 embedding 运行时（@huggingface/transformers）是否可加载
 	 */
-	async getLocalVectorStatus(): Promise<{ sqlWasm: boolean; sqliteReady: boolean; transformReady: boolean }> {
+	async getLocalVectorStatus(): Promise<{
+		sqlWasm: boolean;
+		sqliteReady: boolean;
+		transformReady: boolean;
+		bridgeInstalled: boolean;
+		remoteHost: string;
+		download: { status: string; loaded?: number; total?: number; error?: string };
+	}> {
 		const adapter = this.app.vault.adapter;
 		let sqlWasm = false;
 		try {
@@ -2603,11 +2742,22 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const store = await this.ensureVectorStore();
 		// transformers 已打包进 main.js（A 阶段），本地 embedding 能力恒定可用；
 		// transformReady 反映「本地模型是否已成功预热」（localWarmupDone 且未失败）
-		return { sqlWasm, sqliteReady: !!store, transformReady: this.localWarmupDone };
+		return {
+			sqlWasm,
+			sqliteReady: !!store,
+			transformReady: this.localWarmupDone,
+			// 下载通道可见性（用户要求「在某个位置显示是否安装」）：桥接未装配时
+			// worker 直连会受浏览器 CORS 约束（镜像源必死），此处明示便于自检。
+			bridgeInstalled: isWorkerFetchBridgeInstalled(),
+			remoteHost: normalizeRemoteHost(this.settings.embeddingRemoteHost) ?? "",
+			download: { ...this.localModelState },
+		};
 	}
 
 	/** 本地 embedding worker 是否已预热（避免重复预热）。 */
 	private localWarmupDone = false;
+	/** 下载桥接的源可用性缓存（10 分钟 TTL）：避免对死源反复白等探针/分块超时。 */
+	private bridgeSourceCache: { host: string; at: number } | null = null;
 
 	/**
 	 * 预热本地 embedding worker（对齐 vault-curate 的 warmup）：
@@ -2621,7 +2771,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		void (async () => {
 			try {
 				// getShared 复用：与搜索共用同一 worker，预热后搜索直接命中
-				const provider = new LocalEmbeddingProvider(undefined, model, this.settings.embeddingLocalWasmPaths || undefined);
+				const provider = new LocalEmbeddingProvider(undefined, model, this.settings.embeddingLocalWasmPaths || undefined, this.settings.embeddingRemoteHost || undefined);
 				await provider.warmup();
 				logger.debug("[Chinese Plugin Market] 本地 embedding 已预热（worker + 模型就绪）");
 			} catch (e: unknown) {
@@ -2646,6 +2796,21 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		return [];
 	}
 
+	/** 动态向量索引：列表更新 / 译文入库后防抖 30s 触发后台增量重建。
+	 *  增量语义由 buildVectorIndex 保证（perIdHash 指纹：只 embed 新增/内容或译文变化的条目，
+	 *  其余复用旧向量）；no-op 时 fieldsHash 快路零 embed、UI 无感。仅 local 模式生效。 */
+	private indexRefreshTimer: number | null = null;
+	scheduleIndexRefresh(reason: string): void {
+		if (this.settings.embeddingSource !== "local") return;
+		if (this.indexRefreshTimer !== null) window.clearTimeout(this.indexRefreshTimer);
+		this.indexRefreshTimer = window.setTimeout(() => {
+			this.indexRefreshTimer = null;
+			if (this.localIndexState.status === "building") return; // 不叠构建
+			logger.debug(`[Chinese Plugin Market] 向量索引增量维护触发（${reason}）`);
+			void this.buildLocalIndex(false);
+		}, 30_000);
+	}
+
 	/**
 	 * 后台预建本地向量索引（A+B：设置页手动 / 数据就绪后自动共用）。
 	 *
@@ -2667,12 +2832,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			logger.warn("[Chinese Plugin Market] 预建本地索引：暂无插件数据（需先打开插件市场视图加载列表）。");
 			return;
 		}
-		if (!force && this.translator.getVectorIndex()?.ids.length === plugins.length) return; // 幂等
+		// 幂等改由 buildVectorIndex 的 fieldsHash 快路保证（内容未变零 embed）；
+		// 旧的「条数相同即 return」会挡住「条数同但内容/译文变化」的增量重建，移除（动态索引）。
 
 		const total = plugins.length;
 		let doneCount = 0; // 真实已 embed 计数（增量构建时为增量条目数，分母对齐 total）
 		const model = this.settings.embeddingLocalModel || DEFAULT_LOCAL_MODEL;
-		this.localIndexState = { status: "building", progress: 0, total };
 		const done = (s: "done" | "error", error?: string) => {
 			this.localIndexState = {
 				status: s,
@@ -2685,7 +2850,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 		const run = async (): Promise<void> => {
 		try {
-			const base = new LocalEmbeddingProvider(undefined, model, this.settings.embeddingLocalWasmPaths || undefined);
+			const base = new LocalEmbeddingProvider(undefined, model, this.settings.embeddingLocalWasmPaths || undefined, this.settings.embeddingRemoteHost || undefined);
 			// 时间片渐进构建（对齐 vault-curate 的 buildBM25Sliced）：每批 embed 后
 			// yield 一次主线程，让 UI 能重绘并实时显示进度，避免一次性大任务冻结界面。
 			const BATCH = 32;
@@ -2693,6 +2858,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			const provider: EmbeddingProvider = {
 				name: "local-progress",
 				embed: async (texts) => {
+					// 懒进状态：no-op 增量维护（fieldsHash 命中、零 embed）不该让 UI 闪「构建中」
+					if (this.localIndexState.status !== "building") {
+						this.localIndexState = { status: "building", progress: 0, total };
+					}
 					const out: number[][] = [];
 					for (let i = 0; i < texts.length; i += BATCH) {
 						const chunk = texts.slice(i, i + BATCH);
@@ -2711,17 +2880,75 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 			const indexPlugins: IndexPlugin[] = plugins.map((p) => {
 				const tag = this.translator.getAllPluginTags()[p.id];
-				return { id: p.id, name: p.name, description: p.description, category: tag?.category, tags: tag?.tags };
+				// 双语索引：中文译文进索引文本（中文 query 主对齐面）；译文更新经指纹触发增量重 embed
+				const tr = this.translator.cache[p.id];
+				const hasTr = tr && tr.source !== "original";
+				return {
+					id: p.id,
+					name: p.name,
+					description: p.description,
+					category: tag?.category,
+					tags: tag?.tags,
+					nameZh: hasTr ? tr.translatedName : undefined,
+					descZh: hasTr ? tr.translatedDesc : undefined,
+				};
 			});
 			// categorySchemaVersion 必须与 vectorRecallScores 的 needBuild 判断一致
 			// （用 tagService.getSchemaVersion()），否则每次搜索都因版本不匹配而全量重建索引 → 慢。
 			const schemaVer = this.translator.getCategorySchemaVersion();
 			// 把当前索引作为 prevIndex 传入，启用增量 embed（只 embed 新增/内容变化的 id，
 			// 未变的复用旧向量），与 saveVectorIndex 的增量写盘配合，避免每次全量重建。
-			const index = await buildVectorIndex(provider, indexPlugins, model, this.translator.getVectorIndex(), schemaVer);
+			// 动态全量构建：可复用旧向量种子 + 每 embed 一片实时发布部分索引（partial），
+			// 搜索侧遇 partial 直接用不重建 → 构建期间搜索即可用、索引可见地生长。
+			// force（设置页手动重建）= 丢弃旧索引全量重 embed；否则增量（perIdHash 复用未变条目）。
+			const prevIdx = force ? null : this.translator.getVectorIndex();
+			const prevVecById = new Map<string, number[] | Float32Array>();
+			if (prevIdx && prevIdx.model === model) {
+				prevIdx.ids.forEach((id, i) => prevVecById.set(id, prevIdx.vectors[i]));
+			}
+			const partialIds: string[] = [];
+			const partialVecs: (number[] | Float32Array)[] = [];
+			for (const p of indexPlugins) {
+				const v = prevVecById.get(p.id);
+				if (v) {
+					partialIds.push(p.id);
+					partialVecs.push(v);
+				}
+			}
+			const publish = () => {
+				this.translator.setVectorIndex({
+					ids: partialIds,
+					vectors: partialVecs,
+					hash: "",
+					model,
+					categorySchemaVersion: schemaVer,
+					partial: true,
+				});
+			};
+			publish();
+			const index = await buildVectorIndex(provider, indexPlugins, model, prevIdx, schemaVer, {
+				chunk: 128,
+				onPartial: (updates) => {
+					for (const [id, v] of updates) {
+						partialIds.push(id);
+						partialVecs.push(v);
+					}
+					publish();
+				},
+			});
 			this.translator.setVectorIndex(index);
 			await this.saveVectorIndex();
 			done("done");
+			// 增量/全量可见性：构建完在状态行/通知里明示本次 embed 了多少、复用了多少
+			const stt = index.buildStats;
+			if (stt) {
+				this.localIndexState.message =
+					stt.embedded === 0
+						? `no-op：内容未变，零 embed`
+						: stt.reused === 0
+							? `全量构建 ${total} 条`
+							: `增量维护：新 embed ${stt.embedded} / 复用 ${stt.reused}`;
+			}
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			logger.warn("[Chinese Plugin Market] 预建本地向量索引失败：", e);
