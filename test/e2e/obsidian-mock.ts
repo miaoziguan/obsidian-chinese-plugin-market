@@ -342,6 +342,16 @@ export class Plugin {
 		this.views.push({ type, factory });
 	}
 	registerEvent(): void {}
+	/** 注册卸载回调（Obsidian 的 Component.register） */
+	register(_cb: () => void): void {}
+	registerInterval(id: number): number {
+		return id;
+	}
+	registerDomEvent(): void {}
+	registerEditorExtension(): void {}
+	registerMarkdownPostProcessor(): void {}
+	registerHoverLinkSource(): void {}
+	registerObsidianProtocolHandler(): void {}
 	async loadData(): Promise<Record<string, unknown>> {
 		return this._data;
 	}
@@ -399,6 +409,9 @@ export function makeApp() {
 				setViewStateAsync: async (): Promise<void> => {},
 				detach: (): void => {},
 			}),
+			getRightLeaf: () => null,
+			getLeftLeaf: () => null,
+			changeLayout: async (): Promise<void> => {},
 			setActiveLeaf: (): void => {},
 			onLayoutReady: (cb: () => void): void => cb(), // 同步执行布局就绪回调
 			on: () => ({ unload: (): void => {} }),
@@ -407,11 +420,22 @@ export function makeApp() {
 		},
 		vault: {
 			adapter: makeAdapter(),
+			configDir: ".obsidian",
 			getName: () => "vault",
 			getAbstractFileByPath: () => null,
+			getFiles: () => [],
 			read: async (): Promise<string> => "",
+			cachedRead: async (): Promise<string> => "",
+			create: async () => ({}),
+			createFolder: async (): Promise<void> => {},
+			modify: async (): Promise<void> => {},
+			delete: async (): Promise<void> => {},
+			trash: async (): Promise<void> => {},
 			on: () => ({ unload: (): void => {} }),
 			off: (): void => {},
+		},
+		fileManager: {
+			trashFile: async (): Promise<void> => {},
 		},
 	};
 }
