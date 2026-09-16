@@ -58,6 +58,7 @@ function createStore(initial?: Partial<ManageSettings>): ManageStorePort {
 		saveMeta(id, patch) {
 			settings.pluginMeta = setMeta(settings.pluginMeta, id, patch);
 		},
+		saveFilterState() {},
 		replaceMeta(meta) {
 			settings.pluginMeta = meta;
 		},

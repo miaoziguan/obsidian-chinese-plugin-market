@@ -17,7 +17,7 @@ import { logger } from "@shared/logger";
 import { GROUP_ALL, GROUP_OTHER, type ManageRow } from "@domain/manage/types";
 import { listGroups } from "@domain/manage/group";
 import { getMeta } from "@domain/manage/plugin-meta";
-import { countByGroup, matchesFilter } from "@domain/manage/manage-filter";
+import { countByGroup, matchesFilter, type ManageFilterState } from "@domain/manage/manage-filter";
 import { renderInlineNoteEditor } from "./inline-note-editor";
 import { ManageFilterBar } from "./manage-filter-bar";
 import type { ManageStorePort } from "./manage-store";
@@ -130,6 +130,8 @@ export class PluginListEnhancer {
 				onChange: () => this.applyFilters(),
 				onManageGroups: () => this.host.onManageGroups(),
 			});
+			// 恢复现场：重建筛选栏时套用上次保存的搜索词 / 分组 / 状态
+			this.filterBar.restore(this.store.settings.filterState);
 		}
 		this.filterBar.mount(headerControlEl);
 	}
@@ -259,6 +261,16 @@ export class PluginListEnhancer {
 			countByGroup(collected, state)
 		);
 		this.filterBar.setCount(collected.length);
+		this.persistFilter(state);
+	}
+
+	/** 筛选状态变化即落盘（flushSaveSettings 内部防抖，不阻塞输入） */
+	private persistFilter(state: ManageFilterState): void {
+		this.store.saveFilterState({
+			keyword: state.keyword,
+			group: state.group,
+			status: state.status,
+		});
 	}
 
 	/** 从行 DOM 抽取可计算的数据（剔除本插件注入元素，避免徽标污染名称） */

@@ -29,10 +29,19 @@ export interface ManageSettings {
 	pluginGroupColors: Record<string, string>;
 	/** 插件 id → 管理元数据 */
 	pluginMeta: Record<string, PluginMetaEntry>;
+	/** 筛选状态（搜索词 / 分组 / 启用状态），关闭设置页后恢复现场 */
+	filterState: ManageFilterPersist;
 }
 
 /** 启用状态筛选 */
 export type ManageFilterStatus = "all" | "enabled" | "disabled";
+
+/** 筛选状态的持久化形状（关闭设置页后恢复现场用） */
+export interface ManageFilterPersist {
+	keyword: string;
+	group: string;
+	status: ManageFilterStatus;
+}
 
 /** 列表中的一行：由 ui 层从 DOM 抽取后交给 domain 计算 */
 export interface ManageRow {

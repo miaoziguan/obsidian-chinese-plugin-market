@@ -24,6 +24,7 @@ export class ManageFilterBar {
 	private readonly statusDropdown: DropdownComponent;
 	private readonly countEl: HTMLElement;
 	private status: ManageFilterStatus = "all";
+	private initialGroup = GROUP_ALL;
 	private mountedTo: HTMLElement | null = null;
 
 	constructor(private readonly options: FilterBarOptions) {
@@ -93,11 +94,25 @@ export class ManageFilterBar {
 			this.groupDropdown.addOption(key, `${name}（${count}）`);
 		}
 		const stillExists = groups.some((g) => g.key === previous);
-		this.groupDropdown.setValue(stillExists ? previous : GROUP_ALL);
+		const target = stillExists ? previous : this.initialGroup;
+		this.groupDropdown.setValue(target);
 	}
 
 	/** 更新「N 个插件」计数（已装插件总数） */
 	setCount(total: number): void {
 		this.countEl.textContent = total > 0 ? `${total} 个插件` : "";
+	}
+
+	/** 恢复筛选现场（搜索词 / 分组 / 状态），由宿主在重建筛选栏时调用 */
+	restore(state: ManageFilterState): void {
+		this.keywordInput.value = state.keyword ?? "";
+		this.status = state.status ?? "all";
+		this.statusDropdown.setValue(this.status);
+		this.initialGroup = state.group ?? GROUP_ALL;
+		// dropdown 若已填充选项（重建前已挂载），立即套用恢复的分组；
+		// 否则留给首次 updateGroups 在填充选项后按 initialGroup 选中
+		if (this.groupDropdown.selectEl.querySelector(`option[value="${this.initialGroup}"]`)) {
+			this.groupDropdown.setValue(this.initialGroup);
+		}
 	}
 }

@@ -1377,6 +1377,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				plugin.settings.manage.pluginMeta = meta;
 				void plugin.flushSaveSettings();
 			},
+			saveFilterState(state) {
+				plugin.settings.manage.filterState = state;
+				void plugin.flushSaveSettings();
+			},
 			installedIds() {
 				return Object.keys(asAppInternals(plugin.app).plugins?.manifests ?? {});
 			},

@@ -69,4 +69,27 @@ describe("ManageFilterBar", () => {
 		fb.setCount(0);
 		expect(fb.containerEl.querySelector(".cpm-filter-count")?.textContent).toBe("");
 	});
+
+	it("restore 恢复搜索词与状态，分组在下次 updateGroups 生效", () => {
+		const fb = mount();
+		fb.updateGroups(
+			[
+				{ key: GROUP_ALL, name: "全部" },
+				{ key: "1", name: "写作" },
+			],
+			{},
+		);
+		fb.restore({ keyword: "hello", group: "1", status: "enabled" });
+		expect(fb.getState().keyword).toBe("hello");
+		expect(fb.getState().status).toBe("enabled");
+		// 分组需等下拉重新填充选项后才生效
+		fb.updateGroups(
+			[
+				{ key: GROUP_ALL, name: "全部" },
+				{ key: "1", name: "写作" },
+			],
+			{},
+		);
+		expect(fb.getState().group).toBe("1");
+	});
 });

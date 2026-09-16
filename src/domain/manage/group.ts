@@ -7,6 +7,7 @@
 import {
 	GROUP_ALL,
 	GROUP_OTHER,
+	type ManageFilterPersist,
 	type ManageSettings,
 	type PluginMetaEntry,
 } from "./types";
@@ -27,6 +28,7 @@ export function createDefaultManageSettings(): ManageSettings {
 		pluginGroups: { ...BUILTIN_GROUP_NAMES },
 		pluginGroupColors: {},
 		pluginMeta: {},
+		filterState: { keyword: "", group: GROUP_ALL, status: "all" },
 	};
 }
 
@@ -71,11 +73,25 @@ export function normalizeManageSettings(raw: unknown): ManageSettings {
 		};
 	}
 
+	const rawFilter = isRecord(source.filterState) ? source.filterState : {};
+	const filterState: ManageFilterPersist = {
+		keyword: typeof rawFilter.keyword === "string" ? rawFilter.keyword : "",
+		group:
+			typeof rawFilter.group === "string" && rawFilter.group in groups
+				? rawFilter.group
+				: GROUP_ALL,
+		status:
+			rawFilter.status === "enabled" || rawFilter.status === "disabled"
+				? rawFilter.status
+				: "all",
+	};
+
 	return {
 		enabled: typeof source.enabled === "boolean" ? source.enabled : true,
 		pluginGroups: groups,
 		pluginGroupColors: colors,
 		pluginMeta: meta,
+		filterState,
 	};
 }
 

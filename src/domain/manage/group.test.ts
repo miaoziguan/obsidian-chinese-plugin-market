@@ -136,6 +136,29 @@ describe("reassignMetaGroup", () => {
 	});
 });
 
+describe("filterState 默认与规范化", () => {
+	it("默认搜索词空、分组全部、状态全部", () => {
+		const s = createDefaultManageSettings();
+		expect(s.filterState).toEqual({ keyword: "", group: GROUP_ALL, status: "all" });
+	});
+
+	it("规范化剔除脏字段并兜底", () => {
+		const s = normalizeManageSettings({
+			pluginGroups: { "1": "写作" },
+			filterState: { keyword: 123 as unknown as string, group: "404", status: "weird" },
+		});
+		expect(s.filterState).toEqual({ keyword: "", group: GROUP_ALL, status: "all" });
+	});
+
+	it("规范化保留有效筛选状态", () => {
+		const s = normalizeManageSettings({
+			pluginGroups: { "1": "写作" },
+			filterState: { keyword: "k", group: "1", status: "enabled" },
+		});
+		expect(s.filterState).toEqual({ keyword: "k", group: "1", status: "enabled" });
+	});
+});
+
 describe("countMembersByGroup", () => {
 	it("GROUP_ALL 计总数，其余按 group 累加", () => {
 		const meta = {

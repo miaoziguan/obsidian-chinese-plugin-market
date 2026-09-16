@@ -5,7 +5,7 @@
  * 落盘由实现方自行 fire-and-forget，接口保持同步，简化调用方。
  */
 
-import type { ManageSettings, PluginMetaEntry } from "@domain/manage/types";
+import type { ManageFilterPersist, ManageSettings, PluginMetaEntry } from "@domain/manage/types";
 
 export interface ManageStorePort {
 	/** 当前管理设置快照（只读） */
@@ -19,6 +19,8 @@ export interface ManageStorePort {
 	saveMeta(id: string, patch: Partial<PluginMetaEntry>): void;
 	/** 整体替换元数据（孤儿清理用） */
 	replaceMeta(meta: Record<string, PluginMetaEntry>): void;
+	/** 保存筛选状态（搜索词 / 分组 / 状态），恢复现场用 */
+	saveFilterState(state: ManageFilterPersist): void;
 	/** 当前已安装插件 id 列表（孤儿清理用） */
 	installedIds(): string[];
 }
