@@ -38,6 +38,7 @@ import { InvertedIndex } from "@domain/recommend/similar";
 import { type AuthorGroup } from "@translation/lexicon/pinyin-init";
 import { createDefaultManageSettings } from "@domain/manage/group";
 import type { ManageSettings } from "@domain/manage/types";
+import type { BetaPluginEntry } from "@app/beta-updater";
 
 import type ChinesePluginMarketPlugin from "@app/plugin";
 import { updatePluginCore } from "@app/plugin-updater";
@@ -131,6 +132,10 @@ export interface ChinesePluginMarketSettings {
 	settingsTranslateCache: Record<string, string>;
 	/** 已装插件管理（增强原生「设置 → 社区插件」页：分组 / 备注 / 筛选） */
 	manage: ManageSettings;
+	/** 直链 Beta 插件跟踪表：记录「从直链装上的插件」来源，支持回头更新（P0） */
+	betaPlugins: BetaPluginEntry[];
+	/** 启动时自动检查并更新未冻结的 Beta 插件（仅桌面端） */
+	betaAutoUpdate: boolean;
 }
 
 /** 单个启用组合 Profile：命名 + 启用插件 id 列表 + 可选绑定工作区布局 */
@@ -194,6 +199,8 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	translateSettingsBlacklist: "",
 	settingsTranslateCache: {},
 	manage: createDefaultManageSettings(),
+	betaPlugins: [],
+	betaAutoUpdate: false,
 };
 
 /**

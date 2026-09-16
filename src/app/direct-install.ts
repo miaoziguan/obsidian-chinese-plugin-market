@@ -20,7 +20,7 @@ const t = makeT();
 /** 一个插件的三件套，顺序固定；styles.css 允许缺失 */
 const FILES = ["manifest.json", "main.js", "styles.css"] as const;
 
-interface Manifest {
+export interface Manifest {
 	id: string;
 	name?: string;
 	version: string;
@@ -178,58 +178,61 @@ async function searchGithubRepoName(repo: string): Promise<string | null> {
 	}
 }
 
-export async function installFromUrl(app: App, url: string): Promise<Manifest> {
-	const root = resolveInstallRoot(url);
-	const gh = parseGithubRepoFromRaw(root);
-
-	// 依次尝试候选 URL：404/410 换下一个来源，其余状态码立即报错
-	const fetchText = async (name: string, fallbackUrls: string[] = [], optional = false): Promise<string | null> => {
-		const primary = new URL(root);
-		primary.pathname += name;
-		let lastStatus = 0;
-		for (const u of [primary.href, ...fallbackUrls]) {
-			const r = await requestUrl({ url: u, throw: false });
-			if (r.status >= 200 && r.status < 300) return r.text;
-			// 只有「确实没有」才换下一个来源：500/403 当成缺失会误删已装好的旧样式
-			if (r.status !== 404 && r.status !== 410) {
-				throw new Error(`${name} ${t("directInstall.fetchFail")} ${r.status}`);
-			}
-			lastStatus = r.status;
+/**
+ * 从 root 拉取单个文件文本；404/410 时换下一个候选来源（fallbackUrls），
+ * 其余状态码立即报错。optional=true 且全部缺失时返回 null（用于 styles.css 这类可缺文件）。
+ */
+export async function fetchFileText(
+	root: URL,
+	name: string,
+	fallbackUrls: string[] = [],
+	optional = false,
+): Promise<string | null> {
+	const primary = new URL(root);
+	primary.pathname += name;
+	let lastStatus = 0;
+	for (const u of [primary.href, ...fallbackUrls]) {
+		const r = await requestUrl({ url: u, throw: false });
+		if (r.status >= 200 && r.status < 300) return r.text;
+		// 只有「确实没有」才换下一个来源：500/403 当成缺失会误删已装好的旧样式
+		if (r.status !== 404 && r.status !== 410) {
+			throw new Error(`${name} ${t("directInstall.fetchFail")} ${r.status}`);
 		}
-		if (optional) return null;
-		throw new FetchMissingError(name, lastStatus);
-	};
+		lastStatus = r.status;
+	}
+	if (optional) return null;
+	throw new FetchMissingError(name, lastStatus);
+}
 
-	let manText: string;
-	try {
-		manText = (await fetchText(FILES[0], gh ? githubReleaseAssetUrls(gh, FILES[0]) : [])) as string;
-	} catch (e) {
-		// GitHub 源 404 时做一次诊断，把「地址拼错 / 不是插件仓库」说清楚
-		if (e instanceof FetchMissingError && gh) throw await diagnoseGithubRepo(gh, e);
-		throw e;
-	}
-	const man = JSON.parse(manText) as Manifest;
-	const id = man.id;
-	// id 会拼进写盘路径，且缺字段的 manifest 写进去会让插件加载不了
-	if (
-		typeof id !== "string" ||
-		!/^[\w.-]+$/.test(id) ||
-		id.startsWith(".") ||
-		typeof man.version !== "string"
-	) {
-		throw new Error(t("directInstall.badManifest"));
-	}
-	// 写盘不可逆，先确认这版跑得起来，别把能用的版本覆盖成装不上的
-	if (man.minAppVersion) {
-		if (!requireApiVersion(man.minAppVersion)) {
-			throw new Error(t("directInstall.minApp", { v: man.minAppVersion }));
-		}
-	}
+/** 直链 Beta 插件跟踪表的一项：记录来源，使装上的插件可被回头更新（P0） */
+export interface BetaPluginEntry {
+	/** 插件 id（= manifest.id，写盘目录名） */
+	id: string;
+	/** 显示名（安装时的 manifest.name，仅展示用） */
+	name: string;
+	/** 已解析的安装根 URL（raw.githubusercontent 或目录直链，已编码分支/标签） */
+	rootUrl: string;
+	/** 安装/上次更新时的版本号（用于判断是否有新版本） */
+	installedVersion: string;
+	/** 冻结：启动自动更新与「全部更新」时跳过 */
+	frozen: boolean;
+}
 
+/**
+ * 把三件套写盘并启用（installFromUrl / updateBetaPlugin 共用）。
+ * gh 不为 null 时，main.js / styles.css 额外尝试 GitHub Release 资产（精确 tag → v 前缀 → latest）。
+ */
+export async function installFiles(
+	app: App,
+	root: URL,
+	gh: { owner: string; repo: string } | null,
+	manText: string,
+	man: Manifest,
+): Promise<Manifest> {
 	const rel = (file: string) => (gh ? githubReleaseAssetUrls(gh, file, man.version) : []);
 	const fetchMain = async (): Promise<string> => {
 		try {
-			return (await fetchText(FILES[1], rel(FILES[1]))) as string;
+			return (await fetchFileText(root, FILES[1], rel(FILES[1]))) as string;
 		} catch (e) {
 			// 源码树和 Release 都没有 main.js：多半是作者没发布构建产物
 			if (e instanceof FetchMissingError && gh) {
@@ -240,11 +243,13 @@ export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 	};
 	const texts: (string | null)[] = [
 		manText,
-		...(await Promise.all([fetchMain(), fetchText(FILES[2], rel(FILES[2]), true)])),
+		await fetchMain(),
+		await fetchFileText(root, FILES[2], rel(FILES[2]), true),
 	];
 	if (!(texts[1] as string).trim()) throw new Error(t("directInstall.emptyMain"));
 
 	const ad = app.vault.adapter;
+	const id = man.id;
 	const dir = app.vault.configDir + "/plugins/" + id;
 	if (!(await ad.exists(dir))) await ad.mkdir(dir);
 	for (let i = 0; i < FILES.length; i++) {
@@ -276,13 +281,79 @@ export async function installFromUrl(app: App, url: string): Promise<Manifest> {
 	return man;
 }
 
+/** 校验 manifest 的 id / version 合法性（安装与更新共用） */
+function assertValidManifest(man: Manifest): void {
+	const id = man.id;
+	if (
+		typeof id !== "string" ||
+		!/^[\w.-]+$/.test(id) ||
+		id.startsWith(".") ||
+		typeof man.version !== "string"
+	) {
+		throw new Error(t("directInstall.badManifest"));
+	}
+	if (man.minAppVersion && !requireApiVersion(man.minAppVersion)) {
+		throw new Error(t("directInstall.minApp", { v: man.minAppVersion }));
+	}
+}
+
+/** 拉取并校验 root 处的 manifest（GitHub 源 404 时给诊断） */
+async function fetchManifest(root: URL, gh: { owner: string; repo: string } | null): Promise<Manifest> {
+	let manText: string;
+	try {
+		manText = (await fetchFileText(root, FILES[0])) as string;
+	} catch (e) {
+		if (e instanceof FetchMissingError && gh) throw await diagnoseGithubRepo(gh, e);
+		throw e;
+	}
+	const man = JSON.parse(manText) as Manifest;
+	assertValidManifest(man);
+	return man;
+}
+
+export async function installFromUrl(app: App, url: string): Promise<Manifest> {
+	const root = resolveInstallRoot(url);
+	const gh = parseGithubRepoFromRaw(root);
+	const man = await fetchManifest(root, gh);
+	return installFiles(app, root, gh, JSON.stringify(man), man);
+}
+
+/**
+ * 按跟踪表里的来源更新一个直链 Beta 插件。
+ * - 远程 id 与记录不一致 → 抛错（防覆盖错插件）
+ * - 版本相同 → 视为已最新，不写盘、不重载（updated=false）
+ * - 版本不同 → 重新拉三件套写盘启用
+ */
+export async function updateBetaPlugin(
+	app: App,
+	entry: BetaPluginEntry,
+): Promise<{ updated: boolean; manifest: Manifest }> {
+	const root = new URL(entry.rootUrl);
+	const gh = parseGithubRepoFromRaw(root);
+	const man = await fetchManifest(root, gh);
+	if (man.id !== entry.id) {
+		throw new Error(t("beta.idMismatch", { id: man.id, entry: entry.id }));
+	}
+	if (man.version === entry.installedVersion) {
+		return { updated: false, manifest: man };
+	}
+	const m = await installFiles(app, root, gh, JSON.stringify(man), man);
+	return { updated: true, manifest: m };
+}
+
 /** 直链安装模态框：输入目录 URL → 一键安装 */
 export class DirectInstallModal extends Modal {
 	private url = "";
 	private busy = false;
+	/** 安装成功后回调（传入 id/name/version/rootUrl），供上层记入直链 Beta 跟踪表 */
+	private onInstalled?: (id: string, name: string, version: string, rootUrl: string) => void;
 
-	constructor(app: App) {
+	constructor(
+		app: App,
+		onInstalled?: (id: string, name: string, version: string, rootUrl: string) => void,
+	) {
 		super(app);
+		this.onInstalled = onInstalled;
 	}
 
 	onOpen(): void {
@@ -321,6 +392,14 @@ export class DirectInstallModal extends Modal {
 		btn.setDisabled(true);
 		try {
 			const m = await installFromUrl(this.app, this.url);
+			// 记入跟踪表，使该插件可被回头更新（rootUrl 编码了分支/标签）
+			if (this.onInstalled) {
+				try {
+					this.onInstalled(m.id, m.name ?? m.id, m.version, resolveInstallRoot(this.url).href);
+				} catch {
+					// 记录失败不应影响「已安装」的结果提示
+				}
+			}
 			new Notice(t("directInstall.done", { name: m.name || m.id, v: m.version }), 6000);
 			this.close();
 		} catch (e) {

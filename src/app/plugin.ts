@@ -12,7 +12,11 @@ import { Plugin, Notice, Menu, TFile, Platform, normalizePath, type App } from "
 interface AppWithDefaultApp extends App {
 	openWithDefaultApp(path: string): void;
 }
-import { DirectInstallModal } from "@app/direct-install";
+
+/** 模块级 i18n 帮助函数（各方法内也可局部 const t = makeT()） */
+const t = makeT();
+import { DirectInstallModal, updateBetaPlugin, type BetaPluginEntry } from "@app/direct-install";
+import { updateAllBetaPlugins } from "@app/beta-updater";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
 import { SettingsTranslator } from "@translation/settings/settings-translator";
@@ -469,6 +473,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			void this.initDeferredLoad().catch((e) =>
 				logger.error("[Chinese Plugin Market] 延迟初始化失败：", e),
 			);
+			// 启动自动更新直链 Beta 插件（静默，仅在有变化时汇总；移动端跳过）
+			if (this.settings.betaAutoUpdate) this.runBetaAutoUpdate();
 		});
 
 		// 注册视图
@@ -1152,7 +1158,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			item
 				.setTitle(t("directInstall.menu"))
 				.setIcon("download")
-				.onClick(() => new DirectInstallModal(this.app).open())
+				.onClick(() =>
+					new DirectInstallModal(this.app, (id, name, version, rootUrl) =>
+						this.recordBetaInstall(id, name, version, rootUrl),
+					).open(),
+				)
 		);
 		menu.addSeparator();
 		menu.addItem((item) =>
@@ -1196,6 +1206,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 已装插件管理：旧数据缺字段/子字段不全时统一规范化，
 		// 同时切断对 DEFAULT_SETTINGS.manage 的浅合并共享引用（否则改动会污染默认常量）。
 		this.settings.manage = normalizeManageSettings(this.settings.manage);
+		// 直链 Beta 跟踪表：旧数据缺字段/类型不对时兜底为空数组，避免遍历报错
+		if (!Array.isArray(this.settings.betaPlugins)) this.settings.betaPlugins = [];
 		// 设置页即时机翻：用户开启则挂载钩子并载入缓存
 		if (this.settings.translateSettingsEnabled) {
 			this.ensureSettingsTranslator();
@@ -1405,6 +1417,107 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			logger.warn("[Chinese Plugin Market] 打开分组管理弹窗失败：", error);
 			new Notice(pickLang("manage.groups.open.fail"));
 		}
+	}
+
+	// ──────────────────────────────────────────
+	// 直链 Beta 插件跟踪 + 更新闭环（P0）
+	// ──────────────────────────────────────────
+
+	/** 一次成功直链安装后记录来源，使该插件可被回头更新（按 id 幂等 upsert，冻结态保留） */
+	recordBetaInstall(id: string, name: string, version: string, rootUrl: string): void {
+		const list = this.settings.betaPlugins.slice();
+		const idx = list.findIndex((e) => e.id === id);
+		const entry: BetaPluginEntry = {
+			id,
+			name: name || id,
+			rootUrl,
+			installedVersion: version,
+			frozen: idx >= 0 ? list[idx].frozen : false,
+		};
+		if (idx >= 0) list[idx] = entry;
+		else list.push(entry);
+		this.settings.betaPlugins = list;
+		void this.flushSaveSettings();
+	}
+
+	/** 从跟踪表移除（仅移除记录，不卸载插件本身） */
+	removeBetaPlugin(id: string): void {
+		this.settings.betaPlugins = this.settings.betaPlugins.filter((e) => e.id !== id);
+		void this.flushSaveSettings();
+	}
+
+	/** 切换冻结态（冻结后不参与启动自动更新与「全部更新」） */
+	setBetaFrozen(id: string, frozen: boolean): void {
+		this.settings.betaPlugins = this.settings.betaPlugins.map((e) =>
+			e.id === id ? { ...e, frozen } : e,
+		);
+		void this.flushSaveSettings();
+	}
+
+	/** 更新单个直链 Beta 插件，并回写已装版本号 */
+	async updateBetaPluginById(id: string): Promise<void> {
+		const entry = this.settings.betaPlugins.find((e) => e.id === id);
+		if (!entry) {
+			new Notice(t("beta.notTracked", { name: id }));
+			return;
+		}
+		if (Platform.isMobile) {
+			new Notice(t("beta.mobileBlocked"));
+			return;
+		}
+		try {
+			const r = await updateBetaPlugin(this.app, entry);
+			if (r.updated) {
+				const next = { ...entry, installedVersion: r.manifest.version };
+				this.settings.betaPlugins = this.settings.betaPlugins.map((e) => (e.id === id ? next : e));
+				void this.flushSaveSettings();
+				new Notice(t("beta.updated", { name: entry.name || id, version: r.manifest.version }), 5000);
+			} else {
+				new Notice(t("beta.uptodate", { name: entry.name || id, version: r.manifest.version }), 5000);
+			}
+		} catch (err) {
+			new Notice(t("beta.failed", { msg: err instanceof Error ? err.message : String(err) }), 8000);
+		}
+	}
+
+	/** 全部更新（设置页按钮）：逐条更新未冻结项并回写版本号 */
+	async updateAllBetaPlugins(): Promise<void> {
+		const res = await updateAllBetaPlugins(this.app, this.settings.betaPlugins, { silent: false });
+		const byId = new Map(this.settings.betaPlugins.map((e) => [e.id, { ...e }]));
+		for (const r of res.results) {
+			if (r.updated && r.version) {
+				const e = byId.get(r.id);
+				if (e) e.installedVersion = r.version;
+			}
+		}
+		this.settings.betaPlugins = [...byId.values()];
+		void this.flushSaveSettings();
+	}
+
+	/** 启动自动更新（onload 调用，静默跑，仅在有变化时给一条汇总） */
+	private runBetaAutoUpdate(): void {
+		if (Platform.isMobile) return;
+		const entries = this.settings.betaPlugins.filter((e) => !e.frozen);
+		if (entries.length === 0) return;
+		void updateAllBetaPlugins(this.app, entries, { silent: true })
+			.then((res) => {
+				if (res.updated > 0 || res.failed > 0) {
+					new Notice(
+						t("beta.updateAllDone", { total: String(res.total), updated: String(res.updated) }),
+						6000,
+					);
+				}
+				const byId = new Map(this.settings.betaPlugins.map((e) => [e.id, { ...e }]));
+				for (const r of res.results) {
+					if (r.updated && r.version) {
+						const e = byId.get(r.id);
+						if (e) e.installedVersion = r.version;
+					}
+				}
+				this.settings.betaPlugins = [...byId.values()];
+				void this.flushSaveSettings();
+			})
+			.catch(() => {});
 	}
 
 	/**

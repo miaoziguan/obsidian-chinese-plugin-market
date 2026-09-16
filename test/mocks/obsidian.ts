@@ -10,6 +10,9 @@ export async function requestUrl(): Promise<never> {
 	);
 }
 
+/** 平台能力（测试环境默认桌面端，移动端逻辑由单测按需覆盖） */
+export const Platform = { isMobile: false, isDesktop: true, isIosApp: false, isAndroidApp: false };
+
 // 下列为源码类型引用可能需要的占位（按需扩充）
 export class ItemView {}
 export class Notice {}

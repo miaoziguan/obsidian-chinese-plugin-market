@@ -6131,3 +6131,54 @@ button.pt-card-install-btn--installed {
 	border: 1px solid var(--background-modifier-border);
 	background: transparent;
 }
+
+/* 设置面板：直链 Beta 插件管理列表 */
+.pt-beta-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+}
+.pt-beta-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.pt-beta-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 2px;
+}
+.pt-beta-count {
+	font-weight: var(--font-semibold, 600);
+}
+.pt-beta-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 4px 0;
+	border-top: 1px solid var(--background-modifier-border);
+}
+.pt-beta-name {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.pt-beta-ver {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.pt-beta-actions {
+	display: flex;
+	gap: 6px;
+	flex-shrink: 0;
+}
+.pt-beta-actions button {
+	margin: 0;
+}

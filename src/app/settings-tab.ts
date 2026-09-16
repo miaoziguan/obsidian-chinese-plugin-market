@@ -172,12 +172,29 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				desc: this.t("settings.thanks.desc"),
 				items: [
 					{
+						// 左侧 label 留空：group 标题已经是「鸣谢」，无需重复显示				{
 						// 左侧 label 留空：group 标题已经是「鸣谢」，无需重复显示
 						name: "",
 						render: (setting) => this.renderThanks(setting),
-					},
-				],
-			},
+						},
+						],
+						},
+						{
+						type: "group",
+						heading: this.t("beta.title"),
+						desc: this.t("beta.desc"),
+						items: [
+						{
+						name: this.t("beta.autoUpdate"),
+						desc: this.t("beta.autoUpdateDesc"),
+						control: { type: "toggle", key: "betaAutoUpdate", defaultValue: false },
+						},
+						{
+						name: "",
+						render: (setting) => this.renderBetaPlugins(setting),
+						},
+						],
+						},
 			{
 				type: "group",
 				heading: this.t("settings.prefs"),
@@ -846,6 +863,67 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				.setCta()
 				.onClick(() => this.plugin.openManageGroups("plugin"))
 		);
+	}
+
+	/** 直链 Beta 插件管理：列出跟踪表，支持单条更新 / 冻结 / 移除 + 全部更新 */
+	private renderBetaPlugins(setting: Setting): void {
+		setting.settingEl.addClass("pt-setting-full-width");
+		if (setting.infoEl) setting.infoEl.addClass("pt-setting-info-hidden");
+		setting.controlEl.addClass("pt-setting-control-full");
+		setting.controlEl.empty();
+		const list = setting.controlEl.createDiv({ cls: "pt-beta-list" });
+		this.buildBetaList(list);
+	}
+
+	private buildBetaList(list: HTMLElement): void {
+		list.empty();
+		const entries = this.plugin.settings.betaPlugins;
+		if (entries.length === 0) {
+			list.createDiv({ cls: "pt-beta-empty", text: this.t("beta.empty") });
+			return;
+		}
+		const header = list.createDiv({ cls: "pt-beta-header" });
+		header.createSpan({ text: this.t("beta.title"), cls: "pt-beta-count" });
+		const allBtn = header.createEl("button", {
+			cls: "mod-cta",
+			text: this.t("beta.updateAll"),
+		});
+		allBtn.addEventListener("click", () => {
+			allBtn.disabled = true;
+			allBtn.textContent = this.t("beta.updating");
+			void this.plugin.updateAllBetaPlugins().then(() => this.buildBetaList(list));
+		});
+		for (const e of entries) {
+			const row = list.createDiv({ cls: "pt-beta-row" });
+			const name = row.createDiv({ cls: "pt-beta-name" });
+			name.createSpan({ text: e.name || e.id });
+			name.createSpan({
+				text: ` v${e.installedVersion}${e.frozen ? " · " + this.t("beta.frozen") : ""}`,
+				cls: "pt-beta-ver",
+			});
+			const actions = row.createDiv({ cls: "pt-beta-actions" });
+			const upBtn = actions.createEl("button", { text: this.t("beta.update") });
+			upBtn.addEventListener("click", () => {
+				upBtn.disabled = true;
+				upBtn.textContent = this.t("beta.updating");
+				void this.plugin.updateBetaPluginById(e.id).then(() => this.buildBetaList(list));
+			});
+			const freezeBtn = actions.createEl("button", {
+				text: e.frozen ? this.t("beta.unfreeze") : this.t("beta.freeze"),
+			});
+			freezeBtn.addEventListener("click", () => {
+				this.plugin.setBetaFrozen(e.id, !e.frozen);
+				this.buildBetaList(list);
+			});
+			const rmBtn = actions.createEl("button", {
+				text: this.t("beta.remove"),
+				cls: "mod-warning",
+			});
+			rmBtn.addEventListener("click", () => {
+				this.plugin.removeBetaPlugin(e.id);
+				this.buildBetaList(list);
+			});
+		}
 	}
 
 	/** 插件设置页内的 CSS 片段列表（分组 / 备注 / 启用 / 重命名 / 打开 / 空态） */

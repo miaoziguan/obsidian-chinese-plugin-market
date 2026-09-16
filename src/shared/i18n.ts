@@ -610,6 +610,31 @@ export const STRINGS = {
 	"directInstall.failed": { zh: "安装失败：{msg}" },
 	"directInstall.menu": { zh: "从直链安装插件" },
 
+	// 直链 Beta 插件管理（P0：tracked 列表 + 更新闭环 + 启动更新）
+	"beta.title": { zh: "直链安装的插件（Beta）" },
+	"beta.desc": {
+		zh: "这里列出通过「从直链安装插件」装上的插件，可一键检查并拉取 GitHub 上的更新；也可在每次启动时自动更新。",
+	},
+	"beta.autoUpdate": { zh: "启动时自动检查更新" },
+	"beta.autoUpdateDesc": { zh: "打开 Obsidian 时，自动更新下方列表中未冻结的插件（仅桌面端，移动端禁止写入插件目录）。" },
+	"beta.empty": { zh: "还没有通过直链安装的插件。用命令面板「从直链安装插件」装上第一个吧。" },
+	"beta.update": { zh: "更新" },
+	"beta.updating": { zh: "更新中…" },
+	"beta.updateAll": { zh: "全部更新" },
+	"beta.updateAllDone": { zh: "已检查 {total} 个 Beta 插件，更新了 {updated} 个" },
+	"beta.frozen": { zh: "已冻结（不自动更新）" },
+	"beta.freeze": { zh: "冻结" },
+	"beta.unfreeze": { zh: "取消冻结" },
+	"beta.remove": { zh: "移除" },
+	"beta.uptodate": { zh: "{name} 已是最新（v{version}）" },
+	"beta.updated": { zh: "已更新 {name} → v{version}" },
+	"beta.failed": { zh: "更新失败：{msg}" },
+	"beta.idMismatch": {
+		zh: "远程 manifest 的 id（{id}）与本机记录（{entry}）不一致，已跳过以防覆盖错插件",
+	},
+	"beta.mobileBlocked": { zh: "移动端无法更新直链插件（系统禁止写入插件目录）" },
+	"beta.notTracked": { zh: "{name} 不是通过直链安装的，无法自动更新" },
+
 	// 个人 AI 固化资产
 	"settings.aidict": { zh: "个人 AI 固化资产" },
 	"settings.aidict.desc": { zh: "已固化的 AI 译文（共 " },
