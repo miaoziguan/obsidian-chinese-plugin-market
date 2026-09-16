@@ -87,10 +87,26 @@ export interface AppSetting {
 	closePage?: () => unknown;
 }
 
+/** 自定义 CSS（主题 / 片段）运行时控制（app.customCss） */
+export interface AppCustomCss {
+	/** 已启用的主题 / 片段名（无 .css 后缀） */
+	snippets?: string[];
+	/**
+	 * 切换启用状态。Obsidian 1.x 统一签名 (enabled, name, type)；
+	 * type 取 "theme" | "snippet"。旧版可能仅接受 (enabled, name)。
+	 */
+	setCssEnabled?: (
+		enabled: boolean,
+		name: string,
+		type: "theme" | "snippet",
+	) => void;
+}
+
 /** App 的内部扩展形状（叠加在官方 App 之上） */
 export interface AppInternals {
 	plugins?: AppPlugins;
 	setting?: AppSetting;
+	customCss?: AppCustomCss;
 }
 
 /** 将官方 App 断言为带内部字段的形状（替代 `as any`） */

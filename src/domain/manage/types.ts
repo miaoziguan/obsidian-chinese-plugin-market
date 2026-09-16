@@ -31,6 +31,13 @@ export interface ManageSettings {
 	pluginMeta: Record<string, PluginMetaEntry>;
 	/** 筛选状态（搜索词 / 分组 / 启用状态），关闭设置页后恢复现场 */
 	filterState: ManageFilterPersist;
+	/** CSS 片段分组表（名称 + 颜色），与插件分组体系独立 */
+	cssGroups: Record<string, string>;
+	cssGroupColors: Record<string, string>;
+	/** CSS 片段文件名（去 .css 后缀）→ 管理元数据（分组 / 备注） */
+	cssMeta: Record<string, PluginMetaEntry>;
+	/** CSS 片段筛选状态（恢复现场） */
+	cssFilterState: ManageFilterPersist;
 }
 
 /** 启用状态筛选 */

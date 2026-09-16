@@ -29,6 +29,10 @@ export function createDefaultManageSettings(): ManageSettings {
 		pluginGroupColors: {},
 		pluginMeta: {},
 		filterState: { keyword: "", group: GROUP_ALL, status: "all" },
+		cssGroups: { ...BUILTIN_GROUP_NAMES },
+		cssGroupColors: {},
+		cssMeta: {},
+		cssFilterState: { keyword: "", group: GROUP_ALL, status: "all" },
 	};
 }
 
@@ -37,18 +41,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * 规范化管理设置：补齐缺失字段、剔除脏数据。
- *
- * 老用户升级时 data.json 只有旧字段，Object.assign 浅合并会让 manage 直接
- * 引用 DEFAULT_SETTINGS 的对象（共享引用导致改动污染默认值）；且旧版数据的
- * 子字段可能缺失。这里统一兜底，保证后续读写永远拿到完整形状。
+ * 规范化一组（分组表 + 颜色 + 元数据），插件与 CSS 片段共用。
+ * 补齐缺失字段、剔除脏数据，保证后续读写永远拿到完整形状。
  */
-export function normalizeManageSettings(raw: unknown): ManageSettings {
-	const source = isRecord(raw) ? raw : {};
-
+function normalizeSection(
+	rawGroups: unknown,
+	rawColors: unknown,
+	rawMeta: unknown,
+): {
+	groups: Record<string, string>;
+	colors: Record<string, string>;
+	meta: Record<string, PluginMetaEntry>;
+} {
 	const groups: Record<string, string> = { ...BUILTIN_GROUP_NAMES };
-	const rawGroups = isRecord(source.pluginGroups) ? source.pluginGroups : {};
-	for (const [key, value] of Object.entries(rawGroups)) {
+	const rg = isRecord(rawGroups) ? rawGroups : {};
+	for (const [key, value] of Object.entries(rg)) {
 		if (typeof value === "string" && value.trim()) groups[key] = value;
 	}
 	for (const key of BUILTIN_ORDER) {
@@ -56,14 +63,14 @@ export function normalizeManageSettings(raw: unknown): ManageSettings {
 	}
 
 	const colors: Record<string, string> = {};
-	const rawColors = isRecord(source.pluginGroupColors) ? source.pluginGroupColors : {};
-	for (const [key, value] of Object.entries(rawColors)) {
+	const rc = isRecord(rawColors) ? rawColors : {};
+	for (const [key, value] of Object.entries(rc)) {
 		if (typeof value === "string" && value.trim() && key in groups) colors[key] = value;
 	}
 
 	const meta: Record<string, PluginMetaEntry> = {};
-	const rawMeta = isRecord(source.pluginMeta) ? source.pluginMeta : {};
-	for (const [id, entry] of Object.entries(rawMeta)) {
+	const rm = isRecord(rawMeta) ? rawMeta : {};
+	for (const [id, entry] of Object.entries(rm)) {
 		if (!isRecord(entry)) continue;
 		const group =
 			typeof entry.group === "string" && entry.group in groups ? entry.group : GROUP_OTHER;
@@ -72,26 +79,47 @@ export function normalizeManageSettings(raw: unknown): ManageSettings {
 			remark: typeof entry.remark === "string" ? entry.remark : "",
 		};
 	}
+	return { groups, colors, meta };
+}
 
-	const rawFilter = isRecord(source.filterState) ? source.filterState : {};
-	const filterState: ManageFilterPersist = {
-		keyword: typeof rawFilter.keyword === "string" ? rawFilter.keyword : "",
-		group:
-			typeof rawFilter.group === "string" && rawFilter.group in groups
-				? rawFilter.group
-				: GROUP_ALL,
+/** 规范化筛选状态（恢复现场） */
+function normalizeFilter(raw: unknown, validGroups: Record<string, string>): ManageFilterPersist {
+	const r = isRecord(raw) ? raw : {};
+	return {
+		keyword: typeof r.keyword === "string" ? r.keyword : "",
+		group: typeof r.group === "string" && r.group in validGroups ? r.group : GROUP_ALL,
 		status:
-			rawFilter.status === "enabled" || rawFilter.status === "disabled"
-				? rawFilter.status
-				: "all",
+			r.status === "enabled" || r.status === "disabled" ? r.status : "all",
 	};
+}
+
+/**
+ * 规范化管理设置：补齐缺失字段、剔除脏数据。
+ *
+ * 老用户升级时 data.json 只有旧字段，Object.assign 浅合并会让 manage 直接
+ * 引用 DEFAULT_SETTINGS 的对象（共享引用导致改动污染默认值）；且旧版数据的
+ * 子字段可能缺失。插件与 CSS 片段各用一组 normalizeSection，保证两者独立且完整。
+ */
+export function normalizeManageSettings(raw: unknown): ManageSettings {
+	const source = isRecord(raw) ? raw : {};
+
+	const plugin = normalizeSection(
+		source.pluginGroups,
+		source.pluginGroupColors,
+		source.pluginMeta,
+	);
+	const css = normalizeSection(source.cssGroups, source.cssGroupColors, source.cssMeta);
 
 	return {
 		enabled: typeof source.enabled === "boolean" ? source.enabled : true,
-		pluginGroups: groups,
-		pluginGroupColors: colors,
-		pluginMeta: meta,
-		filterState,
+		pluginGroups: plugin.groups,
+		pluginGroupColors: plugin.colors,
+		pluginMeta: plugin.meta,
+		filterState: normalizeFilter(source.filterState, plugin.groups),
+		cssGroups: css.groups,
+		cssGroupColors: css.colors,
+		cssMeta: css.meta,
+		cssFilterState: normalizeFilter(source.cssFilterState, css.groups),
 	};
 }
 

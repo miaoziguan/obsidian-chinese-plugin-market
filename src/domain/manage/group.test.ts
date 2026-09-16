@@ -159,6 +159,33 @@ describe("filterState 默认与规范化", () => {
 	});
 });
 
+describe("CSS 片段字段默认与规范化", () => {
+	it("默认含独立 css 分组 / 元数据 / 筛选状态", () => {
+		const s = createDefaultManageSettings();
+		expect(s.cssGroups).toEqual({ [GROUP_ALL]: "全部", [GROUP_OTHER]: "其他" });
+		expect(s.cssGroupColors).toEqual({});
+		expect(s.cssMeta).toEqual({});
+		expect(s.cssFilterState).toEqual({ keyword: "", group: GROUP_ALL, status: "all" });
+	});
+
+	it("规范化补 css 字段并独立兜底", () => {
+		const s = normalizeManageSettings({
+			cssGroups: { "1": "暗色" },
+			cssMeta: { foo: { group: "1", remark: "x" } },
+			cssFilterState: { keyword: "k", group: "1", status: "disabled" },
+		});
+		expect(s.cssGroups["1"]).toBe("暗色");
+		expect(s.cssMeta.foo.group).toBe("1");
+		expect(s.cssMeta.foo.remark).toBe("x");
+		expect(s.cssFilterState).toEqual({ keyword: "k", group: "1", status: "disabled" });
+	});
+
+	it("css 悬空分组引用回落其他", () => {
+		const s = normalizeManageSettings({ cssMeta: { foo: { group: "999", remark: "" } } });
+		expect(s.cssMeta.foo.group).toBe(GROUP_OTHER);
+	});
+});
+
 describe("countMembersByGroup", () => {
 	it("GROUP_ALL 计总数，其余按 group 累加", () => {
 		const meta = {
