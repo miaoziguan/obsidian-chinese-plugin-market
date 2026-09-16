@@ -1,10 +1,11 @@
 /**
- * 注入到原生「已安装插件」标题栏的筛选栏：搜索框 + 分组下拉 + 启用状态切换。
+ * 注入到原生「已安装插件」标题栏的筛选栏：搜索框 + 分组下拉 + 状态下拉 + 计数 + 管理按钮。
  *
- * 元素创建统一走 Obsidian 的全局 createEl / createDiv，符合插件规范
- * （obsidianmd/prefer-create-el），且测试环境已由 test/setup.ts 补齐。
+ * 全部使用 Obsidian 原生组件（DropdownComponent / ExtraButtonComponent）与全局
+ * createEl，既符合插件规范（obsidianmd/prefer-create-el），也在 jsdom 测试里有 mock 兜底。
  */
 
+import { DropdownComponent, ExtraButtonComponent } from "obsidian";
 import { pickLang } from "@shared/i18n";
 import { GROUP_ALL, type ManageFilterStatus } from "@domain/manage/types";
 import type { ManageFilterState } from "@domain/manage/manage-filter";
@@ -12,17 +13,16 @@ import type { ManageFilterState } from "@domain/manage/manage-filter";
 export interface FilterBarOptions {
 	/** 筛选条件变化（不含「管理分组」按钮） */
 	onChange: () => void;
-	/** 点击「管理分组」 */
+	/** 点击管理分组 */
 	onManageGroups: () => void;
 }
-
-const STATUS_CYCLE: ManageFilterStatus[] = ["all", "enabled", "disabled"];
 
 export class ManageFilterBar {
 	readonly containerEl: HTMLElement;
 	private readonly keywordInput: HTMLInputElement;
-	private readonly groupSelect: HTMLSelectElement;
-	private readonly statusButton: HTMLButtonElement;
+	private readonly groupDropdown: DropdownComponent;
+	private readonly statusDropdown: DropdownComponent;
+	private readonly countEl: HTMLElement;
 	private status: ManageFilterStatus = "all";
 	private mountedTo: HTMLElement | null = null;
 
@@ -34,32 +34,36 @@ export class ManageFilterBar {
 		this.keywordInput.type = "search";
 		this.keywordInput.placeholder = pickLang("manage.filter.keyword.ph");
 		this.keywordInput.addEventListener("input", () => this.options.onChange());
+		this.containerEl.appendChild(this.keywordInput);
 
-		this.groupSelect = createEl("select", { cls: "cpm-filter-group" });
-		this.groupSelect.addEventListener("change", () => this.options.onChange());
+		// 分组下拉：原生 DropdownComponent，视觉与原生设置项一致
+		this.groupDropdown = new DropdownComponent(this.containerEl);
+		this.groupDropdown.selectEl.addClass("cpm-filter-group");
+		this.groupDropdown.onChange(() => this.options.onChange());
 
-		this.statusButton = createEl("button", { cls: "cpm-filter-status" });
-		this.statusButton.type = "button";
-		this.statusButton.addEventListener("click", () => {
-			const next =
-				STATUS_CYCLE[(STATUS_CYCLE.indexOf(this.status) + 1) % STATUS_CYCLE.length];
-			this.status = next;
-			this.paintStatus();
+		// 状态筛选：同样是原生下拉（参考实现形态），而非自绘循环按钮
+		this.statusDropdown = new DropdownComponent(this.containerEl);
+		this.statusDropdown.selectEl.addClass("cpm-filter-status");
+		this.statusDropdown
+			.addOption("all", pickLang("manage.filter.status.all"))
+			.addOption("enabled", pickLang("manage.filter.status.enabled"))
+			.addOption("disabled", pickLang("manage.filter.status.disabled"));
+		this.statusDropdown.onChange((value) => {
+			this.status = value as ManageFilterStatus;
 			this.options.onChange();
 		});
 
-		const manageButton = createEl("button", {
-			cls: "cpm-filter-manage",
-			text: pickLang("manage.filter.manageGroups"),
-		});
-		manageButton.type = "button";
-		manageButton.addEventListener("click", () => this.options.onManageGroups());
+		// 独立计数文本：aria-live，筛选变化时读屏可感知「剩 N 个」
+		this.countEl = createSpan({ cls: "cpm-filter-count" });
+		this.countEl.setAttribute("aria-live", "polite");
+		this.containerEl.appendChild(this.countEl);
 
-		this.containerEl.appendChild(this.keywordInput);
-		this.containerEl.appendChild(this.groupSelect);
-		this.containerEl.appendChild(this.statusButton);
-		this.containerEl.appendChild(manageButton);
-		this.paintStatus();
+		// 管理分组：图标按钮（tags），tooltip 替代文字
+		const manageBtn = new ExtraButtonComponent(this.containerEl);
+		manageBtn
+			.setIcon("tags")
+			.setTooltip(pickLang("manage.filter.manageGroups"))
+			.onClick(() => this.options.onManageGroups());
 	}
 
 	/** 挂载到目标容器（幂等：已挂载则跳过） */
@@ -72,7 +76,7 @@ export class ManageFilterBar {
 	getState(): ManageFilterState {
 		return {
 			keyword: this.keywordInput.value,
-			group: this.groupSelect.value || GROUP_ALL,
+			group: this.groupDropdown.getValue() || GROUP_ALL,
 			status: this.status,
 		};
 	}
@@ -82,26 +86,18 @@ export class ManageFilterBar {
 		groups: Array<{ key: string; name: string }>,
 		counts: Record<string, number>,
 	): void {
-		const previous = this.groupSelect.value;
-		this.groupSelect.textContent = "";
+		const previous = this.groupDropdown.getValue();
+		this.groupDropdown.selectEl.textContent = "";
 		for (const { key, name } of groups) {
 			const count = counts[key] ?? 0;
-			const option = createEl("option");
-			option.value = key;
-			option.textContent = `${name}（${count}）`;
-			this.groupSelect.appendChild(option);
+			this.groupDropdown.addOption(key, `${name}（${count}）`);
 		}
 		const stillExists = groups.some((g) => g.key === previous);
-		this.groupSelect.value = stillExists ? previous : GROUP_ALL;
+		this.groupDropdown.setValue(stillExists ? previous : GROUP_ALL);
 	}
 
-	private paintStatus(): void {
-		const label: Record<ManageFilterStatus, string> = {
-			all: pickLang("manage.filter.status.all"),
-			enabled: pickLang("manage.filter.status.enabled"),
-			disabled: pickLang("manage.filter.status.disabled"),
-		};
-		this.statusButton.textContent = label[this.status];
-		this.statusButton.setAttribute("data-status", this.status);
+	/** 更新「N 个插件」计数（已装插件总数） */
+	setCount(total: number): void {
+		this.countEl.textContent = total > 0 ? `${total} 个插件` : "";
 	}
 }

@@ -42,6 +42,10 @@ if (typeof g.HTMLElement !== "undefined" && !("setCssStyles" in (g.HTMLElement.p
 	const proto = g.HTMLElement.prototype as unknown as {
 		setCssStyles: (styles: Record<string, string>) => void;
 		setCssProps: (props: Record<string, string>) => void;
+		addClass: (...cls: string[]) => HTMLElement;
+		removeClass: (...cls: string[]) => HTMLElement;
+		toggleClass: (cls: string, on?: boolean) => HTMLElement;
+		empty: () => void;
 	};
 	proto.setCssStyles = function (this: HTMLElement, styles: Record<string, string>) {
 		for (const [k, v] of Object.entries(styles)) {
@@ -52,6 +56,23 @@ if (typeof g.HTMLElement !== "undefined" && !("setCssStyles" in (g.HTMLElement.p
 		for (const [k, v] of Object.entries(props)) {
 			this.style.setProperty(k, v);
 		}
+	};
+	// Obsidian 在 HTMLElement 上挂载的 class / 清空辅助方法，jsdom 原生没有
+	proto.addClass = function (this: HTMLElement, ...cls: string[]) {
+		this.classList.add(...cls);
+		return this;
+	};
+	proto.removeClass = function (this: HTMLElement, ...cls: string[]) {
+		this.classList.remove(...cls);
+		return this;
+	};
+	proto.toggleClass = function (this: HTMLElement, cls: string, on?: boolean) {
+		if (on === undefined) this.classList.toggle(cls);
+		else this.classList.toggle(cls, on);
+		return this;
+	};
+	proto.empty = function (this: HTMLElement) {
+		this.textContent = "";
 	};
 }
 

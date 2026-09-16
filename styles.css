@@ -5951,19 +5951,23 @@ button.pt-card-install-btn--installed {
 .cpm-filter-keyword {
 	width: 140px;
 }
-.cpm-filter-group {
-	max-width: 150px;
+/* 分组 / 状态两个原生下拉（视觉随 Obsidian 主题） */
+.cpm-filter-group,
+.cpm-filter-status {
+	margin: 0 2px;
 }
-.cpm-filter-status,
-.cpm-filter-manage {
+/* 独立计数文本：aria-live，推到最右 */
+.cpm-filter-count {
 	font-size: var(--font-ui-smaller, 12px);
-	padding: 2px 8px;
-}
-.cpm-filter-status[data-status="enabled"] {
-	color: var(--text-success, var(--color-green));
-}
-.cpm-filter-status[data-status="disabled"] {
 	color: var(--text-muted);
+	margin-left: auto;
+	white-space: nowrap;
+}
+/* 图标按钮（管理分组 / 设置面板删除·新增） */
+.extra-button.cpm-icon-tags,
+.extra-button.cpm-icon-trash,
+.extra-button.cpm-icon-plus {
+	margin-left: 4px;
 }
 
 /* 分组徽标：贴在插件名末尾，颜色由 --cpm-group-color 驱动 */
@@ -5989,8 +5993,10 @@ button.pt-card-install-btn--installed {
 }
 .cpm-note-input {
 	width: 100%;
-	min-height: 24px;
-	resize: vertical;
+	min-height: 28px;
+	max-height: 160px;
+	resize: none;
+	overflow-y: auto;
 	font: inherit;
 }
 

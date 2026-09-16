@@ -136,9 +136,10 @@ describe("PluginListEnhancer", () => {
 		const enhancer = new PluginListEnhancer(createStore(), { onManageGroups: () => {} });
 		enhancer.enhance(root);
 
-		const statusBtn = root.querySelector<HTMLButtonElement>(".cpm-filter-status")!;
-		statusBtn.click(); // all → enabled
-		expect(statusBtn.getAttribute("data-status")).toBe("enabled");
+		// 状态筛选现为原生下拉，不再用 data-status 循环按钮
+		const statusSelect = root.querySelector<HTMLSelectElement>("select.cpm-filter-status")!;
+		statusSelect.value = "enabled";
+		statusSelect.dispatchEvent(new Event("change"));
 
 		const [alpha, beta] = rows(root);
 		expect(alpha.classList.contains("cpm-filtered-out")).toBe(false);

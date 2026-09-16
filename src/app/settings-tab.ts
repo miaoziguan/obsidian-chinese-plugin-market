@@ -2,6 +2,7 @@ import {
 	PluginSettingTab,
 	Setting,
 	Notice,
+	ExtraButtonComponent,
 	requestUrl,
 	Platform,
 	type App,
@@ -887,12 +888,11 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				this.plugin.refreshSettingsIntegration();
 			});
 
-			row
-				.createEl("button", {
-					text: this.t("settings.manage.group.delete"),
-					cls: "pt-profile-del",
-				})
-				.addEventListener("click", () => {
+			const delBtn = new ExtraButtonComponent(row);
+			delBtn
+				.setIcon("trash")
+				.setTooltip(this.t("settings.manage.group.delete"))
+				.onClick(() => {
 					const nextGroups = removeGroup(this.plugin.settings.manage.pluginGroups, key);
 					if (!nextGroups) return;
 					const nextColors = { ...this.plugin.settings.manage.pluginGroupColors };
@@ -917,12 +917,11 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			cls: "pt-profile-input",
 			placeholder: this.t("settings.manage.group.name.ph"),
 		});
-		addRow
-			.createEl("button", {
-				text: this.t("settings.manage.group.add"),
-				cls: "pt-profile-save",
-			})
-			.addEventListener("click", () => {
+		const addBtn = new ExtraButtonComponent(addRow);
+		addBtn
+			.setIcon("plus")
+			.setTooltip(this.t("settings.manage.group.add"))
+			.onClick(() => {
 				const value = newName.value.trim();
 				if (!value) {
 					new Notice(this.t("settings.manage.group.nameRequired"));

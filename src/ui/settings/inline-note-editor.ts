@@ -41,6 +41,15 @@ export function renderInlineNoteEditor(
 			input.placeholder = options.placeholder;
 			input.rows = 1;
 			host.appendChild(input);
+
+			// 内容高度自适应：用 setCssStyles（Obsidian 扩展方法，非静态 style 赋值）
+			// 避免 lint 的 no-static-styles-assignment，且 jsdom 测试已由 setup.ts 补齐。
+			const autoResize = (): void => {
+				input.setCssStyles({ height: "auto" });
+				input.setCssStyles({ height: `${input.scrollHeight}px` });
+			};
+			input.addEventListener("input", autoResize);
+			autoResize();
 			input.focus();
 
 			let closed = false;

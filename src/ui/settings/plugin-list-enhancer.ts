@@ -258,6 +258,7 @@ export class PluginListEnhancer {
 			listGroups(this.store.settings.pluginGroups),
 			countByGroup(collected, state)
 		);
+		this.filterBar.setCount(collected.length);
 	}
 
 	/** 从行 DOM 抽取可计算的数据（剔除本插件注入元素，避免徽标污染名称） */
