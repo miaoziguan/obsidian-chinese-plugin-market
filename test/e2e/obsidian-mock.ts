@@ -173,13 +173,133 @@ export class PluginSettingTab {
 	containerEl = document.createElement("div");
 }
 
+/** E2E mock：控件组件公共的链式 API（不渲染真实控件，只保证调用链不炸） */
+class BaseComponent {
+	setName(_n: string): this { return this; }
+	setDesc(_d: string): this { return this; }
+	setClass(_c: string): this { return this; }
+	setTooltip(_t: string): this { return this; }
+	setDisabled(_v: boolean): this { return this; }
+}
+
+export class ButtonComponent extends BaseComponent {
+	buttonEl = document.createElement("button");
+	setButtonText(text: string): this {
+		this.buttonEl.textContent = text;
+		return this;
+	}
+	setIcon(_icon: string): this { return this; }
+	setCta(): this { return this; }
+	setWarning(): this { return this; }
+	onClick(_cb: () => unknown): this { return this; }
+}
+
+export class ExtraButtonComponent extends BaseComponent {
+	extraSettingsEl = document.createElement("div");
+	setIcon(_icon: string): this { return this; }
+	onClick(_cb: () => unknown): this { return this; }
+}
+
+export class ToggleComponent extends BaseComponent {
+	private _value = false;
+	setValue(v: boolean): this {
+		this._value = v;
+		return this;
+	}
+	getValue(): boolean { return this._value; }
+	onChange(_cb: (v: boolean) => unknown): this { return this; }
+}
+
+export class TextComponent extends BaseComponent {
+	inputEl = document.createElement("input");
+	private _value = "";
+	setValue(v: string): this {
+		this._value = v;
+		this.inputEl.value = v;
+		return this;
+	}
+	getValue(): string { return this._value; }
+	setPlaceholder(p: string): this {
+		this.inputEl.placeholder = p;
+		return this;
+	}
+	onChange(_cb: (v: string) => unknown): this { return this; }
+}
+
+export class DropdownComponent extends BaseComponent {
+	selectEl = document.createElement("select");
+	private _value = "";
+	addOption(value: string, display: string): this {
+		const opt = document.createElement("option");
+		opt.value = value;
+		opt.text = display;
+		this.selectEl.appendChild(opt);
+		return this;
+	}
+	addOptions(options: Record<string, string>): this {
+		for (const [v, d] of Object.entries(options)) this.addOption(v, d);
+		return this;
+	}
+	setValue(v: string): this {
+		this._value = v;
+		this.selectEl.value = v;
+		return this;
+	}
+	getValue(): string { return this._value; }
+	onChange(_cb: (v: string) => unknown): this { return this; }
+}
+
+export class ColorComponent extends BaseComponent {
+	private _value = "#000000";
+	setValue(v: string): this {
+		this._value = v;
+		return this;
+	}
+	getValue(): string { return this._value; }
+	onChange(_cb: (v: string) => unknown): this { return this; }
+}
+
+/** 版本门槛判断：E2E 里一律视为满足 */
+export function requireApiVersion(_version: string): boolean {
+	return true;
+}
+
 export class Setting {
+	settingEl = document.createElement("div");
+	infoEl = document.createElement("div");
+	nameEl = document.createElement("div");
+	descEl = document.createElement("div");
+	controlEl = document.createElement("div");
 	constructor(_containerEl?: HTMLElement) {}
 	setName(): this { return this; }
 	setDesc(): this { return this; }
-	addButton(): this { return this; }
-	addToggle(): this { return this; }
-	addText(): this { return this; }
+	setClass(_c: string): this { return this; }
+	setTooltip(_t: string): this { return this; }
+	setHeading(): this { return this; }
+	addButton(cb: (c: ButtonComponent) => unknown): this {
+		cb(new ButtonComponent());
+		return this;
+	}
+	addExtraButton(cb: (c: ExtraButtonComponent) => unknown): this {
+		cb(new ExtraButtonComponent());
+		return this;
+	}
+	addToggle(cb: (c: ToggleComponent) => unknown): this {
+		cb(new ToggleComponent());
+		return this;
+	}
+	addText(cb: (c: TextComponent) => unknown): this {
+		cb(new TextComponent());
+		return this;
+	}
+	addDropdown(cb: (c: DropdownComponent) => unknown): this {
+		cb(new DropdownComponent());
+		return this;
+	}
+	addColorPicker(cb: (c: ColorComponent) => unknown): this {
+		cb(new ColorComponent());
+		return this;
+	}
 }
 
 export class ItemView {
