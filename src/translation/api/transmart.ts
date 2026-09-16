@@ -20,6 +20,13 @@ const TRANSMART_API_URL = "https://transmart.qq.com/api/imt";
 const TRANSMART_TIMEOUT = 5000;
 /** 与现有在线免费层（Google/MyMemory/自托管）一致：超长文本只取前 500 字符（暂不按句分块） */
 const TEXT_CHAR_LIMIT = 500;
+/**
+ * 批量块（换行拼接）的字符上限。
+ * 实测：1052 字符 / 10 行、2062 字符 / 20 行均完整返回且行数严格保留（约 1.3~1.6s），
+ * 500 只是历史保守值，并非通道硬限制。取 2000 留出余量 —— 再大收益递减、
+ * 且一旦被服务端截断就会破坏「按行对齐」的还原依据。
+ */
+const BATCH_CHAR_LIMIT = 2000;
 
 /** client_key 前缀（对齐腾讯 Transmart 扩展的生成规则） */
 const CLIENT_KEY_PREFIX = "tencent_transmart_crx_";
@@ -145,16 +152,52 @@ export class TransmartClient {
 		return r.text;
 	}
 
+	/**
+	 * 批量翻译短串（设置页 DOM 通道专用）：把多条用换行拼成一个块，一次请求译完再按行拆分。
+	 *
+	 * 实测依据：腾讯通道对 \n 分隔的文本**严格保留行数**（20 条进 → 20 行出，逐行对齐），
+	 * 于是「一屏几十条设置项文案」从 2N 个请求（每条 detect + translate）压缩到 1 个请求，
+	 * 首屏耗时从约 35 秒降到数秒。源语言固定按 "en" 送 —— 调用方已过滤掉含 CJK 的文本，
+	 * 省掉每条一次的 text_analysis 往返。
+	 *
+	 * 失败 / 行数不符 / 任一条含换行 / 超长一律返回 null，由调用方降级为逐条翻译
+	 * （正确性优先：宁可慢，也不能把译文错配到别的设置项上）。
+	 */
+	async translateSegments(texts: string[]): Promise<string[] | null> {
+		if (!this.isAvailable() || texts.length === 0) return null;
+		// 含换行的串会破坏「按行对齐」的还原依据，整块放弃批量
+		if (texts.some((t) => !t.trim() || t.includes("\n"))) return null;
+		const joined = texts.join("\n");
+		if (joined.length > BATCH_CHAR_LIMIT) return null;
+		try {
+			const r = await this.translateText(joined, "en", BATCH_CHAR_LIMIT);
+			if (r.unchanged) return null; // 整块原文回显：交给逐条处理
+			const lines = r.text.split("\n").map((s) => s.trim());
+			if (lines.length !== texts.length) return null;
+			if (lines.some((s) => !s)) return null; // 出现空行说明对齐不可靠
+			this.netBreaker.recordSuccess();
+			return lines;
+		} catch (e: unknown) {
+			this.netBreaker.recordFailure(isFatalError(e));
+			logger.warn("[Chinese Plugin Market] 腾讯翻译（免费）批量分段失败:", e);
+			return null;
+		}
+	}
+
 	/** 单段翻译结果：text 为译文（unchanged 时为原文）；unchanged 表示腾讯原样返回（无需翻译） */
 
 	/**
-	 * 翻译单段文本（auto_translation_block）：超 500 字符截断。
+	 * 翻译单段文本（auto_translation_block）：超 maxLen 字符截断。
 	 * 空译文 / 真实 API 错误抛错；原文回显（含全大写经归一命中）不算失败，标记 unchanged 返回 ——
 	 * 专有名词返回原文是正常结果，判失败只会触发降级 + 熔断累积（热门大牌连锁致整批失效）。
 	 */
-	private async translateText(text: string, srcLang: string): Promise<BlockResult> {
+	private async translateText(
+		text: string,
+		srcLang: string,
+		maxLen: number = TEXT_CHAR_LIMIT,
+	): Promise<BlockResult> {
 		if (!text || !text.trim()) return { text, unchanged: true };
-		const truncated = text.length > TEXT_CHAR_LIMIT ? text.substring(0, TEXT_CHAR_LIMIT) : text;
+		const truncated = text.length > maxLen ? text.substring(0, maxLen) : text;
 		const json = await this.callApi({
 			header: { fn: "auto_translation_block", client_key: this.clientKey },
 			source: { lang: srcLang, text_block: truncated },

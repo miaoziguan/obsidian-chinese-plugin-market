@@ -16,7 +16,10 @@
  *   既避免 XSS，也不破坏 React 的 DOM 结构（React 依赖节点身份做 diff）。
  * - 防自激 + 防回退：写入会触发 characterData mutation。用 WeakMap 记「原文→译文」，
  *   回调识别自己的写入并忽略；若发现框架重渲染把文案打回原文，则把译文贴回去。
- * - 限流：单轮最多 MAX_TEXTS_PER_SCAN 条、并发 CONCURRENCY 个请求，翻不完的下一轮继续，
+ * - 快：文案按 MAX_BLOCK_ITEMS 条 / MAX_BLOCK_CHARS 字符切成块，一块一次请求（免费通道保留
+ *   换行行数，实测 20 条 ≈ 1.4s，而逐条「detect + translate」要 9s），块级并发 + 每块译完即
+ *   写入，用户看到的是从上到下快速刷出中文，而不是等全部翻完一次性跳变。
+ * - 限流：单轮最多 MAX_TEXTS_PER_SCAN 条、并发 BLOCK_CONCURRENCY 个块，翻不完的下一轮继续，
  *   避免首屏几百条瞬时打爆免费通道。
  * - 幂等：译文含中文，下次扫描被 shouldSkip 拦下；翻译失败的串累计到 MAX_FAIL_RETRIES 后
  *   本会话不再重试（网络抖动可自愈，不会一抖就永久不翻；清空缓存时一并复位）。
@@ -33,13 +36,17 @@ const MAX_TEXT_LEN = 500;
 /** 单轮扫描收集的节点上限（防超大设置页卡住主线程） */
 const MAX_NODES_PER_SCAN = 400;
 /** 单轮最多送翻的唯一文本条数 */
-const MAX_TEXTS_PER_SCAN = 60;
-/** 翻译请求并发数 */
-const CONCURRENCY = 4;
+const MAX_TEXTS_PER_SCAN = 300;
+/** 单个批量块的条数上限（与下面的字符上限共同约束，先到先切） */
+const MAX_BLOCK_ITEMS = 40;
+/** 单个批量块的字符上限：实测 2000 字符仍严格保留行数，留 100 余量 */
+const MAX_BLOCK_CHARS = 1900;
+/** 批量块的并发数 */
+const BLOCK_CONCURRENCY = 4;
 /** mutation 合流 debounce（ms）：React 一次渲染会产生成百条 mutation */
 const SCAN_DEBOUNCE_MS = 120;
 /** 根容器轮询间隔（ms）：设置面板打开 / 切 Tab 后才拿得到容器 */
-const ROOT_POLL_MS = 800;
+const ROOT_POLL_MS = 250;
 /** 同一条文本最多重试次数：网络抖动仍可自愈，连败到上限后本会话不再打扰 */
 const MAX_FAIL_RETRIES = 3;
 /** 失败表上限，超出整体清空（避免长期运行无限增长） */
@@ -65,8 +72,13 @@ const TRANSLATABLE_ATTRS = ["placeholder", "title", "aria-label"] as const;
 export interface SettingsDomTranslatorDeps {
 	/** 是否跳过该文本（中文 / 未启用 / 黑名单插件等，由上层统一判定） */
 	shouldSkip: (text: string) => boolean;
-	/** 翻译单条文本；失败或无译文返回 null */
+	/** 翻译单条文本；失败或无译文返回 null（批量降级时用） */
 	translate: (text: string) => Promise<string | null>;
+	/**
+	 * 批量翻译一整块文案，返回「原文 → 译文」（未译出的不出现在 Map 里）。
+	 * 这是首屏速度的关键：一块一次请求，而非每条两次往返。
+	 */
+	translateBatch: (texts: string[]) => Promise<Map<string, string>>;
 	/** 取当前应扫描的根元素（设置页内容容器）；取不到返回 null */
 	getRoot: () => HTMLElement | null;
 }
@@ -248,18 +260,96 @@ export class SettingsDomTranslator {
 			groups.set(c.text, [c]);
 		}
 
-		const results = await this.translateMany(Array.from(groups.keys()));
+		return await this.translateGroups(groups, remaining);
+	}
+
+	/**
+	 * 分块批量翻译 + 每块译完即写入（用户看到的是从上到下逐段刷出中文，而非最后一次性跳变）。
+	 * 块内未译出的串降级逐条，仍失败才记入 failed。
+	 */
+	private async translateGroups(
+		groups: Map<string, Candidate[]>,
+		remaining: number,
+	): Promise<ScanOutcome> {
+		const blocks = this.chunk(Array.from(groups.keys()));
+		let cursor = 0;
 		let translated = 0;
-		for (const [text, group] of groups) {
-			const dst = results.get(text);
-			if (!dst) {
-				this.rememberFailure(text);
+
+		const write = (text: string, dst: string): void => {
+			translated++;
+			for (const c of groups.get(text) ?? []) this.apply(c, text, dst);
+		};
+
+		const worker = async (): Promise<void> => {
+			while (cursor < blocks.length) {
+				const index = cursor++;
+				const block = blocks[index];
+				if (!block || block.length === 0) continue;
+				let results: Map<string, string>;
+				try {
+					results = await this.deps.translateBatch(block);
+				} catch {
+					results = new Map();
+				}
+				for (const text of block) {
+					const dst = results.get(text);
+					if (dst) write(text, dst);
+				}
+				// 块级批量没译出的（块请求失败 / 部分回显）→ 逐条兜底
+				for (const text of block) {
+					if (results.has(text)) continue;
+					const dst = await this.fallbackOne(text);
+					if (dst) write(text, dst);
+				}
+			}
+		};
+
+		const workers: Promise<void>[] = [];
+		for (let i = 0; i < Math.min(BLOCK_CONCURRENCY, blocks.length); i++) workers.push(worker());
+		await Promise.all(workers);
+		return { remaining, translated };
+	}
+
+	/** 单条兜底翻译：失败累计，连败到上限后本会话不再重试 */
+	private async fallbackOne(text: string): Promise<string | null> {
+		try {
+			const dst = await this.deps.translate(text);
+			if (dst && dst !== text) return dst;
+		} catch {
+			// 忽略，统一走失败计数
+		}
+		this.rememberFailure(text);
+		return null;
+	}
+
+	/**
+	 * 把待翻文本切成块：一块一次请求。
+	 * 含换行的串单独成块（会破坏「按行对齐」的还原依据，由批量实现自行降级逐条）。
+	 */
+	private chunk(texts: string[]): string[][] {
+		const out: string[][] = [];
+		let cur: string[] = [];
+		let len = 0;
+		for (const t of texts) {
+			if (t.includes("\n")) {
+				if (cur.length > 0) {
+					out.push(cur);
+					cur = [];
+					len = 0;
+				}
+				out.push([t]);
 				continue;
 			}
-			translated++;
-			for (const c of group) this.apply(c, text, dst);
+			if (cur.length >= MAX_BLOCK_ITEMS || len + t.length + 1 > MAX_BLOCK_CHARS) {
+				out.push(cur);
+				cur = [];
+				len = 0;
+			}
+			cur.push(t);
+			len += t.length + 1;
 		}
-		return { remaining, translated };
+		if (cur.length > 0) out.push(cur);
+		return out;
 	}
 
 	private collect(root: HTMLElement): Candidate[] {
@@ -302,29 +392,6 @@ export class SettingsDomTranslator {
 		// 属性槽位不受此限 —— input 的 placeholder 恰恰是要翻的目标。
 		if (slot === TEXT_SLOT && EXCLUDED_TAGS.has(host.tagName.toUpperCase())) return false;
 		return !this.deps.shouldSkip(text);
-	}
-
-	private async translateMany(texts: string[]): Promise<Map<string, string>> {
-		const out = new Map<string, string>();
-		if (texts.length === 0) return out;
-		let cursor = 0;
-		const worker = async (): Promise<void> => {
-			while (cursor < texts.length) {
-				const index = cursor++;
-				const text = texts[index];
-				if (text === undefined) continue;
-				try {
-					const dst = await this.deps.translate(text);
-					if (dst && dst !== text) out.set(text, dst);
-				} catch {
-					// 单条失败不拖累整批
-				}
-			}
-		};
-		const workers: Promise<void>[] = [];
-		for (let i = 0; i < Math.min(CONCURRENCY, texts.length); i++) workers.push(worker());
-		await Promise.all(workers);
-		return out;
 	}
 
 	/** 写入译文：仅在槽位内容仍是原文时落笔，避免覆盖期间被框架 / 用户改过的值 */

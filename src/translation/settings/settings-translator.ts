@@ -86,6 +86,7 @@ export class SettingsTranslator {
 		this.dom = new SettingsDomTranslator({
 			shouldSkip: (text) => !this.domEligible() || this.shouldSkip(text),
 			translate: (text) => this.translateText(text),
+			translateBatch: (texts) => this.translateBatchTexts(texts),
 			getRoot: () => this.domRoot(),
 		});
 	}
@@ -210,6 +211,53 @@ export class SettingsTranslator {
 		})();
 		this.pending.set(text, p);
 		return p;
+	}
+
+	/**
+	 * 批量翻译（DOM 通道专用）：一次译一整块文案，命中缓存的串直接返回。
+	 *
+	 * 性能关键：设置页首屏常有上百条文案，若逐条走「detect + translate」两次往返，
+	 * 免费通道要 30 秒以上才翻完一屏。这里整块一次请求（见 Translator.translateTextSegments），
+	 * 块内未译出的再逐条兜底，最后仍译不出的留给下一个通道，全部失败才判失败。
+	 */
+	private async translateBatchTexts(texts: string[]): Promise<Map<string, string>> {
+		const out = new Map<string, string>();
+		const miss: string[] = [];
+		for (const t of texts) {
+			const cached = this.cache.get(t);
+			if (cached !== undefined) out.set(t, cached);
+			else miss.push(t);
+		}
+		if (miss.length === 0) return out;
+
+		const cfg = this.getConfig();
+		const providers: Array<"tencent-transmart" | "baidu"> =
+			cfg.provider === "baidu" ? ["baidu"] : ["tencent-transmart", "baidu"];
+		let remaining = miss;
+		for (const prov of providers) {
+			if (remaining.length === 0) break;
+			let results: Array<string | null>;
+			try {
+				results = await this.translator.translateTextSegments(remaining, prov);
+			} catch (e) {
+				logger.warn("[Chinese Plugin Market] 设置页批量翻译失败:", e);
+				continue;
+			}
+			const next: string[] = [];
+			results.forEach((r, i) => {
+				const src = remaining[i];
+				if (src === undefined) return;
+				if (r && r.trim() && r !== src) {
+					out.set(src, r);
+					this.cache.set(src, r);
+				} else {
+					next.push(src);
+				}
+			});
+			remaining = next;
+		}
+		this.evict();
+		return out;
 	}
 
 	/**

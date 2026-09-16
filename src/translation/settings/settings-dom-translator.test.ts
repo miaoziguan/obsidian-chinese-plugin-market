@@ -28,13 +28,23 @@ function makeT(
 	options?: { shouldSkip?: (text: string) => boolean },
 ) {
 	const translate = vi.fn(async (text: string) => map[text] ?? null);
+	// 批量通道：模拟「一块一次请求」，只返回有译文的条目
+	const translateBatch = vi.fn(async (texts: string[]) => {
+		const out = new Map<string, string>();
+		for (const t of texts) {
+			const dst = map[t];
+			if (dst) out.set(t, dst);
+		}
+		return out;
+	});
 	const t = new SettingsDomTranslator({
 		shouldSkip: options?.shouldSkip ?? (() => false),
 		translate,
+		translateBatch,
 		getRoot: () => root,
 	});
 	started.push(t);
-	return { t, translate };
+	return { t, translate, translateBatch };
 }
 
 /** 等 MutationObserver 回调（jsdom 里按微任务/宏任务派发） */
@@ -42,12 +52,17 @@ function flushMutations(): Promise<void> {
 	return new Promise((resolve) => window.setTimeout(resolve, 0));
 }
 
+/** 取批量通道实际收到的全部文本（mock.calls 形如 [[texts]]） */
+function sentTexts(spy: { mock: { calls: unknown[][] } }): string[] {
+	return spy.mock.calls.flatMap((args) => (Array.isArray(args[0]) ? (args[0] as string[]) : []));
+}
+
 describe("SettingsDomTranslator 扫描", () => {
 	it("翻译 React 自绘设置页里的英文文本节点（不走原生 Setting 组件也生效）", async () => {
 		const root = makeRoot();
 		const name = addText(root, "div", "Enable Autocomplete");
 		const desc = addText(root, "p", "Suggest completions while you type.");
-		const { t, translate } = makeT(
+		const { t, translateBatch } = makeT(
 			{ "Enable Autocomplete": "启用自动补全", "Suggest completions while you type.": "输入时给出补全建议。" },
 			root,
 		);
@@ -56,7 +71,9 @@ describe("SettingsDomTranslator 扫描", () => {
 
 		expect(name.textContent).toBe("启用自动补全");
 		expect(desc.textContent).toBe("输入时给出补全建议。");
-		expect(translate).toHaveBeenCalledTimes(2);
+		// 两条合并进同一块 → 一次请求（逐条要 4 个请求：每条 detect + translate）
+		expect(translateBatch).toHaveBeenCalledTimes(1);
+		expect(translateBatch.mock.calls[0]?.[0]).toHaveLength(2);
 		t.stop();
 	});
 
@@ -111,7 +128,7 @@ describe("SettingsDomTranslator 扫描", () => {
 		const url = addText(root, "div", "https://example.com/docs");
 		const symbol = addText(root, "div", "→ ★ 123");
 		const ok = addText(root, "div", "Model temperature");
-		const { t, translate } = makeT({ "Model temperature": "模型温度" }, root);
+		const { t, translateBatch } = makeT({ "Model temperature": "模型温度" }, root);
 		t.start();
 		await t.scanNow();
 
@@ -121,7 +138,7 @@ describe("SettingsDomTranslator 扫描", () => {
 		expect(url.textContent).toBe("https://example.com/docs");
 		expect(symbol.textContent).toBe("→ ★ 123");
 		expect(ok.textContent).toBe("模型温度");
-		expect(translate).toHaveBeenCalledTimes(1);
+		expect(sentTexts(translateBatch)).toEqual(["Model temperature"]);
 		t.stop();
 	});
 
@@ -129,7 +146,7 @@ describe("SettingsDomTranslator 扫描", () => {
 		const root = makeRoot();
 		const en = addText(root, "div", "Enable");
 		const zh = addText(root, "div", "已启用");
-		const { t, translate } = makeT({ Enable: "启用" }, root, {
+		const { t, translateBatch } = makeT({ Enable: "启用" }, root, {
 			shouldSkip: (text) => !/[A-Za-z]/.test(text),
 		});
 		t.start();
@@ -137,7 +154,7 @@ describe("SettingsDomTranslator 扫描", () => {
 
 		expect(en.textContent).toBe("启用");
 		expect(zh.textContent).toBe("已启用");
-		expect(translate).not.toHaveBeenCalledWith("已启用");
+		expect(sentTexts(translateBatch)).not.toContain("已启用");
 		t.stop();
 	});
 
@@ -145,13 +162,13 @@ describe("SettingsDomTranslator 扫描", () => {
 		const root = makeRoot();
 		const a = addText(root, "div", "Save");
 		const b = addText(root, "div", "Save");
-		const { t, translate } = makeT({ Save: "保存" }, root);
+		const { t, translateBatch } = makeT({ Save: "保存" }, root);
 		t.start();
 		await t.scanNow();
 
 		expect(a.textContent).toBe("保存");
 		expect(b.textContent).toBe("保存");
-		expect(translate).toHaveBeenCalledTimes(1);
+		expect(sentTexts(translateBatch)).toEqual(["Save"]);
 		t.stop();
 	});
 
@@ -167,22 +184,43 @@ describe("SettingsDomTranslator 扫描", () => {
 		t.stop();
 	});
 
+	it("按条数 / 字符数切块：40 条或 1900 字符一块", async () => {
+		const root = makeRoot();
+		const map: Record<string, string> = {};
+		for (let i = 0; i < 45; i++) {
+			const text = `Phrase ${i}`;
+			map[text] = `短语 ${i}`;
+			addText(root, "div", text);
+		}
+		const { t, translateBatch } = makeT(map, root);
+		t.start();
+		await t.scanNow();
+
+		expect(translateBatch).toHaveBeenCalledTimes(2); // 45 条 → 40 / 5
+		for (const call of translateBatch.mock.calls) {
+			expect((call[0] ?? []).length).toBeLessThanOrEqual(40);
+		}
+		expect(root.children[0]?.textContent).toBe("短语 0");
+		expect(root.children[44]?.textContent).toBe("短语 44");
+		t.stop();
+	});
+
 	it("单轮超出上限的文本留到后续轮次（不一次性打爆免费通道）", async () => {
 		const root = makeRoot();
 		const map: Record<string, string> = {};
-		for (let i = 0; i < 100; i++) {
+		for (let i = 0; i < 400; i++) {
 			const text = `Phrase number ${i}`;
 			map[text] = `短语 ${i}`;
 			addText(root, "div", text);
 		}
-		const { t, translate } = makeT(map, root);
+		const { t, translateBatch } = makeT(map, root);
 		t.start();
 		await t.scanNow();
 
-		expect(translate).toHaveBeenCalledTimes(60);
+		expect(sentTexts(translateBatch)).toHaveLength(300); // 单轮上限
 		expect(root.children[0]?.textContent).toBe("短语 0");
-		// 第 60 条之后尚未翻（下一轮继续）
-		expect(root.children[70]?.textContent).toBe("Phrase number 70");
+		// 第 300 条之后尚未翻（下一轮继续）
+		expect(root.children[350]?.textContent).toBe("Phrase number 350");
 		t.stop();
 	});
 });
@@ -191,13 +229,13 @@ describe("SettingsDomTranslator 防自激 / 防回退", () => {
 	it("写入译文后不会触发重复扫描", async () => {
 		const root = makeRoot();
 		const el = addText(root, "div", "Enable");
-		const { t, translate } = makeT({ Enable: "启用" }, root);
+		const { t, translateBatch } = makeT({ Enable: "启用" }, root);
 		t.start();
 		await t.scanNow();
 		expect(el.textContent).toBe("启用");
 		await flushMutations();
 		await t.scanNow();
-		expect(translate).toHaveBeenCalledTimes(1);
+		expect(translateBatch).toHaveBeenCalledTimes(1);
 		t.stop();
 	});
 
@@ -239,25 +277,31 @@ describe("SettingsDomTranslator 防自激 / 防回退", () => {
 describe("SettingsDomTranslator 生命周期", () => {
 	it("容器不可用时不扫描，容器就绪后自动挂载并补扫", async () => {
 		let root: HTMLElement | null = null;
-		const translate = vi.fn(async (text: string) => (text === "Enable" ? "启用" : null));
-		const t = new SettingsDomTranslator({ shouldSkip: () => false, translate, getRoot: () => root });
+		const translate = vi.fn(async () => null);
+		const translateBatch = vi.fn(async (texts: string[]) => new Map(texts.map((t) => [t, "译:" + t])));
+		const t = new SettingsDomTranslator({
+			shouldSkip: () => false,
+			translate,
+			translateBatch,
+			getRoot: () => root,
+		});
 		started.push(t);
 		t.start();
 		await t.scanNow();
-		expect(translate).not.toHaveBeenCalled();
+		expect(translateBatch).not.toHaveBeenCalled();
 
 		root = makeRoot();
 		addText(root, "div", "Enable");
 		t.scheduleScan();
 		await new Promise((resolve) => window.setTimeout(resolve, 200));
-		expect(translate).toHaveBeenCalledWith("Enable");
+		expect(sentTexts(translateBatch)).toContain("Enable");
 		t.stop();
 	});
 
 	it("stop 后不再响应变更", async () => {
 		const root = makeRoot();
 		const el = addText(root, "div", "Enable");
-		const { t, translate } = makeT({ Enable: "启用" }, root);
+		const { t, translateBatch } = makeT({ Enable: "启用" }, root);
 		t.start();
 		await t.scanNow();
 		expect(el.textContent).toBe("启用");
@@ -266,6 +310,30 @@ describe("SettingsDomTranslator 生命周期", () => {
 		addText(root, "div", "Advanced");
 		await flushMutations();
 		await t.scanNow();
-		expect(translate).toHaveBeenCalledTimes(1);
+		expect(translateBatch).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("SettingsDomTranslator 批量降级", () => {
+	it("批量没译出的串会降级为逐条翻译", async () => {
+		const root = makeRoot();
+		const el = addText(root, "div", "Only single works");
+		const translateBatch = vi.fn(async () => new Map<string, string>()); // 批量整块失败
+		const translate = vi.fn(async (text: string) =>
+			text === "Only single works" ? "只有逐条能译" : null,
+		);
+		const t = new SettingsDomTranslator({
+			shouldSkip: () => false,
+			translate,
+			translateBatch,
+			getRoot: () => root,
+		});
+		started.push(t);
+		t.start();
+		await t.scanNow();
+
+		expect(el.textContent).toBe("只有逐条能译");
+		expect(translate).toHaveBeenCalledWith("Only single works");
+		t.stop();
 	});
 });
