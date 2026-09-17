@@ -416,8 +416,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 						},
 						(e) => {
 							window.clearTimeout(t);
-							reject(e);
-						}
+							reject(e instanceof Error ? e : new Error(String(e)));
+							}
 					);
 				});
 			// ── 源可用性探测（10 分钟缓存）──
@@ -1670,7 +1670,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 */
 	private createManageStore(): ManageStorePort {
 		const settings = this.settings.manage;
-		const flushSave = () => this.flushSaveSettings();
+		const flushSave = () => { void this.flushSaveSettings(); };
 		const requestRefresh = () => this.settingsIntegration?.requestRefresh();
 		const manifests = asAppInternals(this.app).plugins?.manifests ?? {};
 		return {
@@ -1705,7 +1705,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	createCssStore(): CssStorePort {
 		const settings = this.settings.manage;
 		const app = this.app;
-		const flushSave = () => this.flushSaveSettings();
+		const flushSave = () => { void this.flushSaveSettings(); };
 		const requestRefresh = () => this.settingsIntegration?.requestRefresh();
 		const refreshToggleCommands = () => this.refreshSnippetToggleCommands();
 		return {

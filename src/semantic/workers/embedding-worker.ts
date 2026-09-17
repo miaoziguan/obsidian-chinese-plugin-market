@@ -128,10 +128,10 @@ async function handleInit(msg: InitMsg): Promise<void> {
 	const nativeFetch = typeof selfWithFetch.fetch === "function" ? selfWithFetch.fetch.bind(selfWithFetch) : null;
 	if (nativeFetch) {
 		selfWithFetch.fetch = ((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-			const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
-			if (!/^https?:/i.test(url)) return nativeFetch(input as RequestInfo, init);
+			const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+			if (!/^https?:/i.test(url)) return nativeFetch(input, init);
 			const method =
-				(init?.method ?? (typeof input === "object" && !(input instanceof URL) ? (input as Request).method : "GET")) ||
+				(init?.method ?? (typeof input === "object" && !(input instanceof URL) ? input.method : "GET")) ||
 				"GET";
 			const id = ++bridgeFetchId;
 			const bridged = new Promise<Response>((resolve, reject) => {
@@ -145,7 +145,7 @@ async function handleInit(msg: InitMsg): Promise<void> {
 				const rewritten = url.replace(/^https?:\/\/hf-mirror\.com\//i, "https://huggingface.co/");
 				return nativeFetch(rewritten, init);
 			});
-		}) as typeof fetch;
+		});
 		postLog("[embedding-worker] fetch 桥接已安装（主线程代发，绕浏览器 CORS）");
 	}
 
