@@ -6114,8 +6114,10 @@ button.pt-card-install-btn--installed {
  * 未命中筛选的行隐藏而非删除：原生页面随时可能重绘重建 DOM，
  * 删除后 enhancer 无法再识别该行；隐藏则由 enhancer 每次重新计算可见性。
  */
-.cpm-filtered-out {
-	display: none !important;
+/* 插件行即 .setting-item，用 .setting-item.cpm-filtered-out（特异性 0,2,0）压过主题
+   .setting-item(0,1,0)，无需 !important */
+.setting-item.cpm-filtered-out {
+	display: none;
 }
 
 /* 设置面板：分组管理行 */

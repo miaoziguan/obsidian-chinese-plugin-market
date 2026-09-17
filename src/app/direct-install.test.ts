@@ -5,6 +5,7 @@ import {
 	parseGithubRepoFromRaw,
 	githubReleaseAssetUrls,
 	pickExactNameMatch,
+	rebuildUpdateSpec,
 } from "@app/direct-install";
 
 describe("parseSourceSpec — 钉选分支/标签/commit（P1）", () => {
@@ -184,6 +185,60 @@ describe("githubReleaseAssetUrls", () => {
 		expect(githubReleaseAssetUrls({ owner: "o", repo: "r" }, "manifest.json")).toEqual([
 			"https://github.com/o/r/releases/latest/download/manifest.json",
 		]);
+	});
+});
+
+describe("rebuildUpdateSpec — 更新来源重建（releaseTag 丢失 bug 回归）", () => {
+	it("release 条目还原钉选 tag → 更新走该 tag 而非 latest", () => {
+		const spec = rebuildUpdateSpec({
+			id: "x",
+			name: "X",
+			rootUrl: "https://raw.githubusercontent.com/o/x/1.2.3/",
+			installedVersion: "1.0.0",
+			frozen: false,
+			kind: "plugin",
+			release: true,
+			releaseTag: "1.2.3",
+		});
+		expect(spec.release).toBe(true);
+		expect(spec.releaseTag).toBe("1.2.3");
+		// 关键断言：资产 URL 锁定到 1.2.3，而不是 latest
+		expect(githubReleaseAssetUrls(spec.gh!, "main.js", spec.releaseTag)).toEqual([
+			"https://github.com/o/x/releases/download/1.2.3/main.js",
+			"https://github.com/o/x/releases/download/v1.2.3/main.js",
+			"https://github.com/o/x/releases/latest/download/main.js",
+		]);
+	});
+
+	it("无 releaseTag 的 release 条目（@release/@latest）退化为 latest", () => {
+		const spec = rebuildUpdateSpec({
+			id: "x",
+			name: "X",
+			rootUrl: "https://raw.githubusercontent.com/o/x/HEAD/",
+			installedVersion: "1",
+			frozen: false,
+			kind: "plugin",
+			release: true,
+		});
+		expect(spec.release).toBe(true);
+		expect(spec.releaseTag).toBeUndefined();
+		expect(githubReleaseAssetUrls(spec.gh!, "main.js", spec.releaseTag)).toEqual([
+			"https://github.com/o/x/releases/latest/download/main.js",
+		]);
+	});
+
+	it("普通分支条目：release 关、tag 不相关，走源码树", () => {
+		const spec = rebuildUpdateSpec({
+			id: "x",
+			name: "X",
+			rootUrl: "https://raw.githubusercontent.com/o/x/dev/",
+			installedVersion: "1",
+			frozen: false,
+			kind: "plugin",
+		});
+		expect(spec.release).toBe(false);
+		expect(spec.releaseTag).toBeUndefined();
+		expect(spec.root.pathname).toBe("/o/x/dev/");
 	});
 });
 

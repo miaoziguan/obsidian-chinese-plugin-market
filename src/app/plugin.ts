@@ -1525,8 +1525,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 	/** 按作用域构建统一分组数据端口（插件 / CSS） */
 	createGroupManageStore(type: GroupManageType): GroupManageStore {
-		const plugin = this;
-		const settings = plugin.settings.manage;
+		const settings = this.settings.manage;
 		const prefix = type === "css" ? "css" : "plugin";
 		return {
 			type,
@@ -1536,16 +1535,16 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			saveGroups: (groups, colors) => {
 				settings[`${prefix}Groups`] = groups;
 				settings[`${prefix}GroupColors`] = colors;
-				void plugin.flushSaveSettings();
-				plugin.settingsIntegration?.requestRefresh();
+				void this.flushSaveSettings();
+				this.settingsIntegration?.requestRefresh();
 			},
 			saveMeta: (id, patch) => {
 				settings[`${prefix}Meta`] = setMeta(settings[`${prefix}Meta`], id, patch);
-				void plugin.flushSaveSettings();
+				void this.flushSaveSettings();
 			},
 			replaceMeta: (meta) => {
 				settings[`${prefix}Meta`] = meta;
-				void plugin.flushSaveSettings();
+				void this.flushSaveSettings();
 			},
 		};
 	}
@@ -1577,6 +1576,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			frozen: idx >= 0 ? list[idx].frozen : false,
 			kind: info.kind,
 			release: info.release,
+			releaseTag: info.releaseTag,
 		};
 		if (idx >= 0) list[idx] = entry;
 		else list.push(entry);
@@ -1669,95 +1669,94 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 * 落盘统一走 flushSaveSettings（防抖取消 + 立即写），与全局设置保存口径一致。
 	 */
 	private createManageStore(): ManageStorePort {
-		const plugin = this;
+		const settings = this.settings.manage;
+		const flushSave = () => this.flushSaveSettings();
+		const requestRefresh = () => this.settingsIntegration?.requestRefresh();
+		const manifests = asAppInternals(this.app).plugins?.manifests ?? {};
 		return {
 			get settings() {
-				return plugin.settings.manage;
+				return settings;
 			},
 			saveGroups(groups, colors) {
-				plugin.settings.manage.pluginGroups = groups;
-				plugin.settings.manage.pluginGroupColors = colors;
-				void plugin.flushSaveSettings();
-				plugin.settingsIntegration?.requestRefresh();
+				settings.pluginGroups = groups;
+				settings.pluginGroupColors = colors;
+				flushSave();
+				requestRefresh();
 			},
 			saveMeta(id, patch) {
-				plugin.settings.manage.pluginMeta = setMeta(
-					plugin.settings.manage.pluginMeta,
-					id,
-					patch,
-				);
-				void plugin.flushSaveSettings();
+				settings.pluginMeta = setMeta(settings.pluginMeta, id, patch);
+				flushSave();
 			},
 			replaceMeta(meta) {
-				plugin.settings.manage.pluginMeta = meta;
-				void plugin.flushSaveSettings();
+				settings.pluginMeta = meta;
+				flushSave();
 			},
 			saveFilterState(state) {
-				plugin.settings.manage.filterState = state;
-				void plugin.flushSaveSettings();
+				settings.filterState = state;
+				flushSave();
 			},
 			installedIds() {
-				return Object.keys(asAppInternals(plugin.app).plugins?.manifests ?? {});
+				return Object.keys(manifests);
 			},
 		};
 	}
 
 	/** CSS 片段管理的数据端口实现（注入 settings-integration-controller 与设置页列表） */
 	createCssStore(): CssStorePort {
-		const plugin = this;
+		const settings = this.settings.manage;
+		const app = this.app;
+		const flushSave = () => this.flushSaveSettings();
+		const requestRefresh = () => this.settingsIntegration?.requestRefresh();
+		const refreshToggleCommands = () => this.refreshSnippetToggleCommands();
 		return {
 			get settings() {
-				return plugin.settings.manage;
+				return settings;
 			},
 			saveCssGroups(groups, colors) {
-				plugin.settings.manage.cssGroups = groups;
-				plugin.settings.manage.cssGroupColors = colors;
-				void plugin.flushSaveSettings();
-				plugin.settingsIntegration?.requestRefresh();
+				settings.cssGroups = groups;
+				settings.cssGroupColors = colors;
+				flushSave();
+				requestRefresh();
 			},
 			saveCssMeta(id, patch) {
-				plugin.settings.manage.cssMeta = setMeta(
-					plugin.settings.manage.cssMeta,
-					id,
-					patch,
-				);
-				void plugin.flushSaveSettings();
-				plugin.settingsIntegration?.requestRefresh();
+				settings.cssMeta = setMeta(settings.cssMeta, id, patch);
+				flushSave();
+				requestRefresh();
 			},
 			saveCssFilterState(state) {
-				plugin.settings.manage.cssFilterState = state;
-				void plugin.flushSaveSettings();
+				settings.cssFilterState = state;
+				flushSave();
 			},
 			async refreshSnippets() {
-				await refreshSnippets(plugin.app);
+				await refreshSnippets(app);
 				// 文件名集合可能变了，命令名也要跟上
-				plugin.refreshSnippetToggleCommands();
+				refreshToggleCommands();
 			},
 			listSnippets() {
-				return listSnippets(plugin.app);
+				return listSnippets(app);
 			},
 			async setSnippetEnabled(baseName, enabled) {
-				await setSnippetEnabled(plugin.app, baseName, enabled);
-				plugin.settingsIntegration?.requestRefresh();
+				await setSnippetEnabled(app, baseName, enabled);
+				requestRefresh();
 			},
 			async renameSnippet(oldBase, newBase) {
-				await renameSnippet(plugin.app, oldBase, newBase);
+				await renameSnippet(app, oldBase, newBase);
 				// 同步元数据 key（平台层不碰 manage.cssMeta）
-				const meta = plugin.settings.manage.cssMeta;
+				const meta = settings.cssMeta;
 				if (meta[oldBase]) {
 					const next = { ...meta, [newBase]: meta[oldBase] };
 					delete next[oldBase];
-					plugin.settings.manage.cssMeta = next;
-					void plugin.flushSaveSettings();
+					settings.cssMeta = next;
+					flushSave();
 				}
-				plugin.settingsIntegration?.requestRefresh();
+				requestRefresh();
 			},
 			openSnippet(path) {
-				openSnippetInDefaultApp(plugin.app, path);
+				openSnippetInDefaultApp(app, path);
 			},
 			replaceCssMeta(meta) {
-				plugin.settings.manage.cssMeta = meta;
-				void plugin.flushSaveSettings();
+				settings.cssMeta = meta;
+				flushSave();
 			},
 		};
 	}

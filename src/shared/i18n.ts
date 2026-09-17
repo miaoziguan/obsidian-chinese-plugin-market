@@ -873,7 +873,7 @@ export const STRINGS = {
 	"manage.file.rename.fail": { zh: "重命名失败，详情见控制台日志" },
 	"manage.file.open.fail": { zh: "打开文件失败，详情见控制台日志" },
 	"manage.css.empty.list": {
-		zh: "暂无 CSS 片段，在 vault 的 .obsidian/snippets/ 新建 .css 文件后，即可在此分组、备注与筛选。",
+		zh: "暂无 CSS 片段，在 vault 的 CSS 片段目录（snippets/）新建 .css 文件后，即可在此分组、备注与筛选。",
 	},
 	"manage.groups.plugin.title": { zh: "管理插件分组" },
 	"manage.groups.css.title": { zh: "管理 CSS 片段分组" },

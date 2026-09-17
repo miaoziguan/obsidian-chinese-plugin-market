@@ -26,6 +26,8 @@ const OWNED_ATTR = "data-cpm-owned";
 const ROW_OWNER = "plugin-row";
 const ENHANCED_ATTR = "data-cpm-enhanced";
 const FILTERED_CLASS = "cpm-filtered-out";
+/** 隐藏原生搜索框用的类（display 切换应走类而非内联样式，符合插件规范） */
+const HIDDEN_SEARCH_CLASS = "cpm-native-search-hidden";
 const GROUP_BTN_ROLE = "cpm-group-btn";
 
 const LIST_GROUP_SELECTOR = ".setting-group.mod-list";
@@ -89,7 +91,7 @@ export class PluginListEnhancer {
 		}
 		// 恢复被隐藏的原生搜索框
 		if (this.hiddenNativeSearch) {
-			this.hiddenNativeSearch.setCssProps({ display: "" });
+			this.hiddenNativeSearch.removeClass(HIDDEN_SEARCH_CLASS);
 			this.hiddenNativeSearch = null;
 		}
 		this.rootEl = null;
@@ -145,8 +147,8 @@ export class PluginListEnhancer {
 		// 隐藏原生搜索框（我们的工具栏已含搜索 / 分组 / 状态筛选，避免重复）；
 		// 每次 ensure 都确保隐藏，防止 Obsidian 重绘后原生搜索复现
 		const nativeSearch = listGroupEl.querySelector<HTMLElement>(".setting-group-search");
-		if (nativeSearch && nativeSearch.style.display !== "none") {
-			nativeSearch.setCssProps({ display: "none" });
+		if (nativeSearch && !nativeSearch.classList.contains(HIDDEN_SEARCH_CLASS)) {
+			nativeSearch.addClass(HIDDEN_SEARCH_CLASS);
 			this.hiddenNativeSearch = nativeSearch;
 		}
 	}

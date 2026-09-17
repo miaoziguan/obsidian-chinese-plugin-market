@@ -288,6 +288,8 @@ export interface BetaPluginEntry {
 	kind?: BetaKind;
 	/** 是否从 GitHub Release 资产安装（否则从源码树 raw 拉取） */
 	release?: boolean;
+	/** 钉选的 Release tag（仅 release 模式有意义）；更新时用来回拉同一 tag 的资产，缺失则退化为 latest */
+	releaseTag?: string;
 }
 
 /**
@@ -517,8 +519,7 @@ export async function updateBetaTheme(
 	app: App,
 	entry: BetaPluginEntry,
 ): Promise<{ updated: boolean; manifest: Manifest }> {
-	const spec = parseSourceSpec(entry.rootUrl);
-	if (entry.release) spec.release = true;
+	const spec = rebuildUpdateSpec(entry);
 	let manText: string | null = null;
 	let man: Manifest | null = null;
 	try {
@@ -557,12 +558,22 @@ export async function updateBetaTheme(
  * - 版本相同 → 视为已最新，不写盘、不重载（updated=false）
  * - 版本不同 → 重新拉三件套写盘启用
  */
+/**
+ * 由跟踪表项重建「更新用」来源：先按记录的 rootUrl 解析，再还原 release 开关与钉选 tag。
+ * 不还原 releaseTag 会导致更新退化为 latest（releaseTag 丢失 bug），故集中在此处处理。
+ */
+export function rebuildUpdateSpec(entry: BetaPluginEntry): SourceSpec {
+	const spec = parseSourceSpec(entry.rootUrl);
+	if (entry.release) spec.release = true;
+	if (entry.releaseTag) spec.releaseTag = entry.releaseTag;
+	return spec;
+}
+
 export async function updateBetaPlugin(
 	app: App,
 	entry: BetaPluginEntry,
 ): Promise<{ updated: boolean; manifest: Manifest }> {
-	const spec = parseSourceSpec(entry.rootUrl);
-	if (entry.release) spec.release = true;
+	const spec = rebuildUpdateSpec(entry);
 	const man = await fetchManifest(spec);
 	if (man.id !== entry.id) {
 		throw new Error(t("beta.idMismatch", { id: man.id, entry: entry.id }));
@@ -582,6 +593,8 @@ export interface InstalledInfo {
 	rootUrl: string;
 	kind: BetaKind;
 	release: boolean;
+	/** 钉选的 Release tag（release 模式且来自 /releases/tag|download/<tag> 时存在） */
+	releaseTag?: string;
 }
 
 /** 直链安装模态框：输入来源 → 一键安装插件或主题 */
@@ -645,6 +658,7 @@ export class DirectInstallModal extends Modal {
 					rootUrl: spec.root.href,
 					kind: "theme",
 					release: spec.release,
+					releaseTag: spec.releaseTag,
 				});
 				new Notice(t("beta.installed.theme", { name: info.name }), 6000);
 			} else {
@@ -656,6 +670,7 @@ export class DirectInstallModal extends Modal {
 					rootUrl: spec.root.href,
 					kind: "plugin",
 					release: spec.release,
+					releaseTag: spec.releaseTag,
 				});
 				new Notice(t("directInstall.done", { name: m.name || m.id, v: m.version }), 6000);
 			}

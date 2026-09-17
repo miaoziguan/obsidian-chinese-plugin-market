@@ -10,8 +10,7 @@ import type { App, TFile } from "obsidian";
 import { asAppInternals } from "./obsidian-internals";
 import { logger } from "@shared/logger";
 
-/** 默认配置目录名（vault.configDir 通常即 .obsidian，用户可自定义） */
-const DEFAULT_CONFIG_DIR = ".obsidian";
+/** snippets 目录跟随用户自定义的配置目录（通过 Vault#configDir 获取，切勿写死 .obsidian） */
 
 /**
  * snippets 目录（vault 相对路径），跟随用户自定义的配置目录。
@@ -19,7 +18,7 @@ const DEFAULT_CONFIG_DIR = ".obsidian";
  * 不能写死 `.obsidian`：用户可用自定义 configDir，写死会导致整份名单为空。
  */
 export function snippetDir(app: App): string {
-	const cfg = app.vault?.configDir || DEFAULT_CONFIG_DIR;
+	const cfg = app.vault?.configDir ?? "";
 	return `${cfg.replace(/\/+$/, "")}/snippets`;
 }
 
