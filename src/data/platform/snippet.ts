@@ -112,7 +112,7 @@ export function isSnippetEnabled(app: App, baseName: string): boolean {
 	return Boolean(cc?.snippets?.includes(baseName));
 }
 
-/** 切换片段启用状态（调用 Obsidian 内部 setCssEnabledStatus(name, enabled)） */
+/** 切换片段启用状态（调用 Obsidian 内部 setCssEnabledStatus(name, enabled) 并刷新应用） */
 export async function setSnippetEnabled(
 	app: App,
 	baseName: string,
@@ -125,6 +125,10 @@ export async function setSnippetEnabled(
 	}
 	try {
 		cc.setCssEnabledStatus(baseName, enabled);
+		// setCssEnabledStatus 只改内部状态，不会自动重新加载 CSS；
+		// 必须手动触发加载，否则命令面板 / 设置页开关看起来「点了没反应」。
+		if (cc.requestLoadSnippetsDebouncer) cc.requestLoadSnippetsDebouncer();
+		else if (cc.loadSnippets) cc.loadSnippets();
 	} catch (error) {
 		logger.warn("[Chinese Plugin Market] 切换 CSS 片段启用失败:", error);
 	}

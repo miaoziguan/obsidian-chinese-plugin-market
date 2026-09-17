@@ -26,6 +26,8 @@ interface FakeApp {
 		snippets: string[];
 		enabledSnippets?: Set<string>;
 		setCssEnabledStatus?: (n: string, e: boolean) => void;
+		loadSnippets?: () => void;
+		requestLoadSnippetsDebouncer?: () => void;
 	};
 	vault: {
 		configDir: string;
@@ -70,6 +72,12 @@ function makeApp(
 			setCssEnabledStatus: (n: string, e: boolean) => {
 				if (e) enabled.add(n);
 				else enabled.delete(n);
+			},
+			loadSnippets: () => {
+				/* no-op in fake */
+			},
+			requestLoadSnippetsDebouncer: () => {
+				/* no-op in fake */
 			},
 		},
 		vault: {
@@ -161,14 +169,34 @@ describe("snippet 平台层", () => {
 		expect(isSnippetEnabled(app as never, "y")).toBe(false);
 	});
 
-	it("setSnippetEnabled 调用 customCss.setCssEnabledStatus(name, enabled)", async () => {
+	it("setSnippetEnabled 调用 setCssEnabledStatus(name, enabled) 并刷新 CSS", async () => {
 		const calls: unknown[][] = [];
 		const app = makeApp();
 		app.customCss.setCssEnabledStatus = (n: string, e: boolean) => {
-			calls.push([n, e]);
+			calls.push(["set", n, e]);
+		};
+		app.customCss.loadSnippets = () => {
+			calls.push(["load"]);
+		};
+		app.customCss.requestLoadSnippetsDebouncer = undefined;
+		await setSnippetEnabled(app as never, "foo", true);
+		expect(calls).toEqual([["set", "foo", true], ["load"]]);
+	});
+
+	it("setSnippetEnabled 优先使用防抖刷新", async () => {
+		const calls: string[] = [];
+		const app = makeApp();
+		app.customCss.setCssEnabledStatus = () => {
+			calls.push("set");
+		};
+		app.customCss.requestLoadSnippetsDebouncer = () => {
+			calls.push("debounce");
+		};
+		app.customCss.loadSnippets = () => {
+			calls.push("load");
 		};
 		await setSnippetEnabled(app as never, "foo", true);
-		expect(calls).toEqual([["foo", true]]);
+		expect(calls).toEqual(["set", "debounce"]);
 	});
 
 	it("renameSnippet 复制内容到新文件、删旧文件、同步启用状态，并刷新清单", async () => {

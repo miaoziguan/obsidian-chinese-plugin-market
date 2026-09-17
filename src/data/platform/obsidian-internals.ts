@@ -100,6 +100,10 @@ export interface AppCustomCss {
 	 * name 为片段基名（无 .css）。
 	 */
 	setCssEnabledStatus?: (name: string, enabled: boolean) => void;
+	/** 立即重新加载并应用所有已启用 CSS 片段 */
+	loadSnippets?: () => void;
+	/** 防抖版的 loadSnippets（批量切换时避免频繁刷新） */
+	requestLoadSnippetsDebouncer?: () => void;
 	/** 切换并保存当前主题（目录名） */
 	setTheme?: (name: string) => void;
 }
