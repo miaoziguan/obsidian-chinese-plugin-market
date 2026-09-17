@@ -3170,6 +3170,8 @@ button.pt-card-install-btn--installed {
 	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
 		border-color var(--pt-duration-fast) var(--pt-ease);
 	margin-top: var(--pt-space-2xs);
+	/* 覆写 Obsidian 默认 button 自带的 box-shadow */
+	box-shadow: none;
 }
 .pt-drawer-close:hover {
 	background: var(--pt-surface-hover, var(--background-modifier-hover));
@@ -3292,6 +3294,8 @@ button.pt-card-install-btn--installed {
 	cursor: pointer;
 	transition: all 0.15s;
 	white-space: nowrap;
+	/* 覆写 Obsidian 默认 button 自带的 box-shadow */
+	box-shadow: none;
 }
 .pt-detail-btn:hover {
 	background: var(--background-secondary);

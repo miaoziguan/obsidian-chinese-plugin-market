@@ -54,6 +54,7 @@ export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard
 		deferSimilar: true,
 		triggerCard,
 		openDetail: (pid: string) => ctx.openDetailDrawer(pid),
+		installPlugin: (pluginInfo) => handleInstall(ctx, pluginInfo),
 		toggleFavorite: (pid: string) => ctx.toggleFavorite(pid),
 		isFavorited: (pid: string) => ctx.favoritesSet.has(pid),
 		installedIds: ctx.installedIds,
@@ -103,6 +104,42 @@ export function computeSimilarFor(ctx: ViewContext, info: PluginInfo) : SimilarC
 			ctx.invertedIndex
 		);
 	
+}
+
+/**
+ * 一键静默安装插件（卡片「安装」与详情页「安装」共用）。
+ * 加锁、刷新 UI、60s 超时兜底、安装后同步状态。
+ */
+export async function handleInstall(ctx: ViewContext, plugin: PluginInfo): Promise<void> {
+	if (ctx.installedIds.has(plugin.id) || ctx.installingIds.has(plugin.id)) return;
+	ctx.installingIds.add(plugin.id);
+	// 立即原地刷新本卡（而非 scheduleRender）：列表签名因 installing 未变，
+	// renderPluginList 的 S2 增量优化会直接 return 不重绘，导致 installing 胶囊永不出现。
+	ctx.refreshCardState(plugin.id);
+	ctx.scheduleRender(true);
+	const startedAt = Date.now();
+	try {
+		// 超时兜底：installCommunityPlugin 内部某步 await（网络下载 / Obsidian API）
+		// 在异常环境下可能永久 pending，导致 Promise 不 settle、finally 永不执行、
+		// installing 状态永久卡住。加 60s 超时强制让流程结束，保证 installing 一定清除。
+		const installTask = installCommunityPlugin(ctx, plugin);
+		const timeout = new Promise<void>((resolve) => window.setTimeout(resolve, 60_000));
+		await Promise.race([installTask, timeout]);
+		if (Date.now() - startedAt >= 60_000) {
+			logger.warn("[Chinese Plugin Market] 安装超时（60s）兜底清除 installing 状态：", plugin.id);
+		} else {
+			logger.debug(`[Chinese Plugin Market] 安装完成（耗时 ${Date.now() - startedAt}ms）：`, plugin.id);
+		}
+	} finally {
+		// 安装流程结束：先删除 installing 标记，再同步刷新当前卡片，最后兜底重建窗口。
+		// 注意：不要只依赖 scheduleRender，renderPluginList 的签名优化会跳过列表重绘；
+		// 也不要只依赖 invalidateAndRender，虚拟滚动 pending 填充可能把本卡推到 requestIdleCallback 才更新。
+		// 这里先 refreshCardState 直接原地更新当前卡片按钮，再 invalidateAndRender 重建窗口保一致性。
+		ctx.installingIds.delete(plugin.id);
+		ctx.snapshotInstalled();
+		ctx.refreshCardState(plugin.id);
+		ctx.invalidateAndRender(true);
+	}
 }
 
 /**
@@ -235,37 +272,7 @@ export function onCardClick(ctx: ViewContext, ev: MouseEvent) {
 			void handleUninstall(ctx, plugin);
 		} else if (action === "market") {
 			// 一键安装：后台下载 release 资产并加载启用（失败回退到跳转市场）
-			if (ctx.installedIds.has(plugin.id) || ctx.installingIds.has(plugin.id)) return;
-			ctx.installingIds.add(plugin.id);
-			// 立即原地刷新当前卡片（而非 scheduleRender）：列表签名因 installing 未变，
-			// renderPluginList 的 S2 增量优化会直接 return 不重绘，导致 installing 胶囊永不出现。
-			ctx.refreshCardState(plugin.id);
-			ctx.scheduleRender(true);
-			void (async () => {
-				const startedAt = Date.now();
-				try {
-					// 超时兜底：installCommunityPlugin 内部某步 await（网络下载 / Obsidian API）
-					// 在异常环境下可能永久 pending，导致 Promise 不 settle、finally 永不执行、
-					// installing 状态永久卡住。加 60s 超时强制让流程结束，保证 installing 一定清除。
-					const installTask = installCommunityPlugin(ctx, plugin);
-					const timeout = new Promise<void>((resolve) => window.setTimeout(resolve, 60_000));
-					await Promise.race([installTask, timeout]);
-					if (Date.now() - startedAt >= 60_000) {
-						logger.warn("[Chinese Plugin Market] 安装超时（60s）兜底清除 installing 状态：", plugin.id);
-					} else {
-						logger.debug(`[Chinese Plugin Market] 安装完成（耗时 ${Date.now() - startedAt}ms）：`, plugin.id);
-					}
-				} finally {
-					// 安装流程结束：先删除 installing 标记，再同步刷新当前卡片，最后兜底重建窗口。
-					// 注意：不要只依赖 scheduleRender，renderPluginList 的签名优化会跳过列表重绘；
-					// 也不要只依赖 invalidateAndRender，虚拟滚动 pending 填充可能把本卡推到 requestIdleCallback 才更新。
-					// 这里先 refreshCardState 直接原地更新当前卡片按钮，再 invalidateAndRender 重建窗口保一致性。
-					ctx.installingIds.delete(plugin.id);
-					ctx.snapshotInstalled();
-					ctx.refreshCardState(plugin.id);
-					ctx.invalidateAndRender(true);
-				}
-			})();
+			void handleInstall(ctx, plugin);
 		} else if (action === "author") {
 			// 作者钻取：点卡片作者名 → 只看该作者全部插件（与作者 facet 共用 authorFilter）
 			ctx.authorFilter = plugin.author;

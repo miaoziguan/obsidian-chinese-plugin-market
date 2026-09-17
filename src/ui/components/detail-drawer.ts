@@ -141,6 +141,8 @@ export interface DrawerOptions {
 	triggerCard: HTMLElement | null;
 	/** 打开新插件的详情（由 main.ts 处理 Drawer 生命周期管理） */
 	openDetail: (pluginId: string) => void;
+	/** 未安装插件的一键静默安装回调（失败内部已提示并回退市场） */
+	installPlugin?: (pluginInfo: PluginInfo) => void | Promise<void>;
 	toggleFavorite: (pluginId: string) => boolean;
 	/**
 	 * 当前是否已收藏（供初始图标判定）；未提供时回退到
@@ -178,6 +180,7 @@ export class PluginDetailDrawer {
 	private similar: SimilarCandidate[];
 	private triggerCard: HTMLElement | null;
 	private openDetail: (pluginId: string) => void;
+	private installPlugin: (pluginInfo: PluginInfo) => void | Promise<void>;
 	private toggleFavorite: (pluginId: string) => boolean;
 	private isFavorited: (pluginId: string) => boolean;
 	private installedIds: Set<string>;
@@ -229,6 +232,7 @@ export class PluginDetailDrawer {
 		this.similar = opts.similar;
 		this.triggerCard = opts.triggerCard;
 		this.openDetail = opts.openDetail;
+		this.installPlugin = opts.installPlugin ?? (() => {});
 		this.toggleFavorite = opts.toggleFavorite;
 		this.isFavorited = opts.isFavorited ?? ((pid: string) => this.plugin.settings.favorites.includes(pid));
 		this.installedIds = opts.installedIds ?? new Set();
@@ -320,6 +324,30 @@ export class PluginDetailDrawer {
 			if (attempt < 20) window.setTimeout(() => tryFocus(attempt + 1), 50);
 		};
 		tryFocus();
+	}
+
+	/** 重建详情内容并保留滚动位置（安装/启用状态变化后刷新 UI） */
+	refreshContent() {
+		const scrollEl = this.drawerEl?.querySelector(".pt-detail-page-scroll") as HTMLElement | null;
+		const scrollTop = scrollEl?.scrollTop ?? 0;
+
+		// 清理旧内容注册的监听器/定时器，避免泄漏
+		this._cleanupFns.forEach((fn) => fn());
+		this._cleanupFns = [];
+		this._journalDispose?.();
+		this._journalDispose = undefined;
+		this.renderComp?.unload();
+		this.renderComp = null;
+
+		this.buildContent();
+
+		// 恢复滚动位置
+		if (scrollTop > 0) {
+			window.requestAnimationFrame(() => {
+				const newScrollEl = this.drawerEl?.querySelector(".pt-detail-page-scroll") as HTMLElement | null;
+				if (newScrollEl) newScrollEl.scrollTop = scrollTop;
+			});
+		}
 	}
 
 	/**
@@ -832,13 +860,20 @@ export class PluginDetailDrawer {
 				new Notice(this.t("notice.market.opened"));
 			});
 		} else {
-			const installBtn = actions.createEl("a", {
+			const installBtn = actions.createEl("button", {
 				cls: "pt-detail-btn mod-cta",
-				text: this.t("card.install"),
-				attr: { href: `obsidian://show-plugin?id=${p.id}`, rel: "noopener noreferrer" },
+				attr: { type: "button" },
 			});
+			setIcon(installBtn, "download");
+			const installLabel = installBtn.createSpan({ text: this.t("card.install") });
 			installBtn.addEventListener("click", () => {
-				new Notice(this.t("notice.market.opened"));
+				installBtn.disabled = true;
+				installBtn.addClass("pt-detail-btn--loading");
+				installLabel.textContent = this.t("card.installing");
+				void Promise.resolve(this.installPlugin(p)).finally(() => {
+					// 安装流程结束后重建内容以展示已启用态
+					this.refreshContent();
+				});
 			});
 		}
 
