@@ -646,6 +646,28 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			callback: () => this.openCommunityPluginsSettings(),
 		});
 
+		// 命令：从直链安装插件（命令面板直达，与 ribbon 菜单入口一致）
+		this.addCommand({
+			id: "direct-install-plugin",
+			name: t("directInstall.menu"),
+			callback: () => {
+				new DirectInstallModal(this.app, "plugin", (info: InstalledInfo) =>
+					this.recordBetaInstall(info),
+				).open();
+			},
+		});
+
+		// 命令：从直链安装主题
+		this.addCommand({
+			id: "direct-install-theme",
+			name: t("beta.title.theme"),
+			callback: () => {
+				new DirectInstallModal(this.app, "theme", (info: InstalledInfo) =>
+					this.recordBetaInstall(info),
+				).open();
+			},
+		});
+
 		// 左侧栏图标：总是弹聚合菜单（打开市场 / 从直链安装 / 启用组合管理；
 		// 有 profile 时额外加「应用组合：xxx」一键切换项）。无 profile 用户也
 		// 能直达「启用组合管理」创建第一个组合，故不再按 profile 数量分流——
