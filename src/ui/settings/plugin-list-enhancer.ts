@@ -89,7 +89,7 @@ export class PluginListEnhancer {
 		}
 		// 恢复被隐藏的原生搜索框
 		if (this.hiddenNativeSearch) {
-			this.hiddenNativeSearch.style.display = "";
+			this.hiddenNativeSearch.setCssProps({ display: "" });
 			this.hiddenNativeSearch = null;
 		}
 		this.rootEl = null;
@@ -146,7 +146,7 @@ export class PluginListEnhancer {
 		// 每次 ensure 都确保隐藏，防止 Obsidian 重绘后原生搜索复现
 		const nativeSearch = listGroupEl.querySelector<HTMLElement>(".setting-group-search");
 		if (nativeSearch && nativeSearch.style.display !== "none") {
-			nativeSearch.style.display = "none";
+			nativeSearch.setCssProps({ display: "none" });
 			this.hiddenNativeSearch = nativeSearch;
 		}
 	}
