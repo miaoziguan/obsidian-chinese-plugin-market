@@ -79,6 +79,8 @@ export interface DrawerHostPlugin {
 	translator: Translator;
 	/** 立即（带防抖）持久化 translator 数据（洞察缓存落盘） */
 	saveTranslatorData: () => void;
+	/** 动态向量索引：列表/译文更新后防抖触发后台增量重建（非 local 模式 no-op） */
+	scheduleIndexRefresh: (reason: string) => void;
 	/**
 	 * TM 回灌就绪信号：vault 翻译记忆笔记灌入 translator.tmApproved 后 resolve。
 	 * 首屏 mergeOffline 前必须 await，否则命中不到已采纳译名。

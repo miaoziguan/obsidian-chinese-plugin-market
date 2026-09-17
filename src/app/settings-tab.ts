@@ -529,7 +529,13 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								name: this.t("settings.embedding.localModel"),
 								desc: this.t("settings.embedding.localModel.desc"),
 								visible: () => s.embeddingSource === "local",
-								control: { type: "text", key: "embeddingLocalModel", placeholder: "Xenova/bge-small-zh-v1.5" },
+								control: { type: "text", key: "embeddingLocalModel", placeholder: "Xenova/multilingual-e5-small" },
+							},
+							{
+								name: this.t("settings.embedding.remoteHost"),
+								desc: this.t("settings.embedding.remoteHost.desc"),
+								visible: () => s.embeddingSource === "local",
+								control: { type: "text", key: "embeddingRemoteHost", placeholder: "https://hf-mirror.com/" },
 							},
 							{
 								name: this.t("settings.embedding.wasm"),
@@ -549,15 +555,44 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								visible: () => s.embeddingSource === "local",
 								desc: this.t("settings.embedding.ready.checking"),
 								render: (setting) => {
-									void this.plugin.getLocalVectorStatus().then((st) => {
-										const parts: string[] = [];
-										parts.push(`SQLite：${st.sqliteReady ? "✓ 就绪" : "✗ 不可用"}`);
-										parts.push(`transformers.js：${st.transformReady ? "✓ 就绪" : "✗ 缺失"}`);
-										if (!st.sqliteReady && !st.sqlWasm) {
-											parts.push(`（缺 sql-wasm.wasm，需 ./sync.sh --with-ml）`);
+									const paint = () => {
+										void this.plugin
+											.getLocalVectorStatus()
+											.then((st) => {
+												if (!setting.descEl.isConnected) return;
+												const parts: string[] = [];
+												parts.push(`SQLite：${st.sqliteReady ? "✓ 就绪" : "✗ 不可用"}`);
+												parts.push(`transformers.js：${st.transformReady ? "✓ 就绪" : "✗ 缺失"}`);
+												// 下载通道可见性：桥接未装配时 worker 直连受浏览器 CORS 约束（镜像源必死）
+												parts.push(`下载桥接：${st.bridgeInstalled ? "✓ 已装配" : "✗ 未装配"}`);
+												parts.push(`镜像：${st.remoteHost || "HF 官方"}`);
+												const d = st.download;
+												if (d.status === "downloading" && d.total) {
+													parts.push(`下载：${Math.round((100 * (d.loaded ?? 0)) / d.total)}%`);
+												} else if (d.status === "downloading") {
+													// 桥接整包下载无字节级进度：显示活体信号，避免「数分钟静止=卡死」误判
+													parts.push("下载：进行中（桥接整包下载，无百分比）");
+												} else if (d.status === "error") {
+													parts.push(`下载：✗ ${d.error ?? "失败"}`);
+												} else if (d.status === "ready") {
+													parts.push("下载：✓ 模型就绪");
+												}
+												if (!st.sqliteReady && !st.sqlWasm) {
+													parts.push(`（缺 sql-wasm.wasm，需 ./sync.sh --with-ml）`);
+												}
+												setting.descEl.setText(parts.join(" · "));
+											})
+											.catch(() => setting.descEl.setText(this.t("settings.embedding.ready.fail")));
+									};
+									paint();
+									// 下载状态实时变化（首载 135MB 冷载数分钟）：设置页打开期间轮询刷新，元素脱离后自清理
+									const iv = window.setInterval(() => {
+										if (!setting.descEl.isConnected) {
+											window.clearInterval(iv);
+											return;
 										}
-										setting.descEl.setText(parts.join(" · "));
-									}).catch(() => setting.descEl.setText(this.t("settings.embedding.ready.fail")));
+										paint();
+									}, 2000);
 								},
 							},
 							{
@@ -1066,6 +1101,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			case "embeddingModel":
 			case "embeddingLocalModel":
 			case "embeddingLocalWasmPaths":
+			case "embeddingRemoteHost":
 				s[key] = typeof value === "string" ? value.trim() : value;
 				break;
 			// 数字字段：声明式 dropdown/text 回传字符串，收敛为 number（null 表示不过滤）
@@ -1210,14 +1246,21 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			if (!btn) return;
 			const st = this.plugin.localIndexState;
 			if (st.status === "building") {
-				setting.descEl.setText(this.t("settings.embedding.index.building", { p: String(st.progress), t: String(st.total) }));
+				let txt = this.t("settings.embedding.index.building", { p: String(st.progress), t: String(st.total) });
+				// 0/N 阶段 = 首批嵌入在等模型下载/加载（首载 ~135MB，桥接下载无百分比），
+				// 不加提示时用户会以为卡死（2026-09-16 用户实测反馈）
+				if (st.progress === 0 && st.total > 0) {
+					txt += "（首批嵌入等待模型就绪：首载约 135MB，进度见「模型就绪」行）";
+				}
+				setting.descEl.setText(txt);
 				const pct = st.total > 0 ? Math.round((st.progress / st.total) * 100) : 0;
 				progress.value = pct;
 				progress.setCssStyles({ display: "" });
 				btn.setDisabled(true);
 				btn.setButtonText(this.t("settings.embedding.index.buildingBtn"));
 			} else {
-				if (st.status === "done") setting.descEl.setText(this.t("settings.embedding.index.done"));
+				if (st.status === "done")
+					setting.descEl.setText(this.t("settings.embedding.index.done") + (st.message ? `（${st.message}）` : ""));
 				else if (st.status === "error") setting.descEl.setText(this.t("settings.embedding.index.error") + (st.error ? `（${st.error}）` : ""));
 				else setting.descEl.setText(this.t("settings.embedding.index.idle"));
 				progress.setCssStyles({ display: "none" });
@@ -1237,7 +1280,11 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				window.clearInterval(timer);
 				const st = this.plugin.localIndexState;
 				if (st.status === "done") {
-					new Notice(this.t("settings.embedding.index.doneNotice", { p: String(st.progress) }), 6000);
+					new Notice(
+						this.t("settings.embedding.index.doneNotice", { p: String(st.progress) }) +
+							(st.message ? `（${st.message}）` : ""),
+						6000
+					);
 				} else if (st.status === "error") {
 					new Notice(this.t("settings.embedding.index.errorNotice") + (st.error || ""), 10000);
 				}

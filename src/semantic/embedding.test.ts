@@ -4,6 +4,8 @@ import {
 	vectorRecall,
 	LocalEmbeddingProvider,
 	DEFAULT_LOCAL_MODEL,
+	DEFAULT_REMOTE_HOST,
+	normalizeRemoteHost,
 	__clearQueryVecCacheForTest,
 	type EmbeddingProvider,
 	type VectorIndex,
@@ -240,6 +242,36 @@ describe("LocalEmbeddingProvider（阶段 2.5）", () => {
 		expect((p as any).backend.cfg.wasmPaths).toBe("http://w/");
 	});
 
+	it("remoteHost 归一化后透传默认后端（模型下载镜像可配）", () => {
+		const p = new LocalEmbeddingProvider(undefined, "Xenova/foo-rh", undefined, "hf-mirror.com");
+		expect((p as any).backend.cfg.remoteHost).toBe("https://hf-mirror.com/");
+		// 留空 = 默认镜像（本插件面向中文用户；官方源需显式填）
+		const p2 = new LocalEmbeddingProvider(undefined, "Xenova/foo-rh2", undefined, "");
+		expect((p2 as any).backend.cfg.remoteHost).toBe("https://hf-mirror.com/");
+		// 显式官方源原样透传（海外/自托管逃生口）
+		const p3 = new LocalEmbeddingProvider(undefined, "Xenova/foo-rh3", undefined, "https://huggingface.co/");
+		expect((p3 as any).backend.cfg.remoteHost).toBe("https://huggingface.co/");
+	});
+});
+
+describe("normalizeRemoteHost（HF 镜像源归一化）", () => {
+	it("空/空白 → 默认镜像 hf-mirror.com（面向中文用户的产品默认）", () => {
+		expect(normalizeRemoteHost("")).toBe(DEFAULT_REMOTE_HOST);
+		expect(normalizeRemoteHost("   ")).toBe(DEFAULT_REMOTE_HOST);
+		expect(normalizeRemoteHost(undefined)).toBe(DEFAULT_REMOTE_HOST);
+		expect(DEFAULT_REMOTE_HOST).toBe("https://hf-mirror.com/");
+	});
+
+	it("自动补协议与尾斜杠（remoteHost 与路径模板直接拼接）", () => {
+		expect(normalizeRemoteHost("hf-mirror.com")).toBe("https://hf-mirror.com/");
+		expect(normalizeRemoteHost("https://hf-mirror.com")).toBe("https://hf-mirror.com/");
+		expect(normalizeRemoteHost("https://hf-mirror.com/")).toBe("https://hf-mirror.com/");
+		expect(normalizeRemoteHost(" http://127.0.0.1:8080 ")).toBe("http://127.0.0.1:8080/");
+		expect(normalizeRemoteHost("huggingface.co")).toBe("https://huggingface.co/");
+	});
+});
+
+describe("LocalEmbeddingProvider · 分批与降级", () => {
 	it("不超过 BATCH(32) 时一次调用 backend", async () => {
 		const backend = makeFakeBackend();
 		const p = new LocalEmbeddingProvider(backend);
@@ -266,9 +298,158 @@ describe("LocalEmbeddingProvider（阶段 2.5）", () => {
 	});
 });
 
+describe("双语索引（中文译文进索引文本 · 动态增量）", () => {
+	const withZh = [
+		{
+			id: "mm",
+			name: "Simple Mind Map",
+			description: "markmap based mindmap renderer",
+			nameZh: "简单思维导图",
+			descZh: "将 Markdown 渲染为交互式思维导图，支持导出",
+		},
+	];
+
+	it("中文译文前置、英文原文保留（中文 query 主对齐面）", async () => {
+		const captured: string[] = [];
+		const provider: EmbeddingProvider = {
+			name: "cap",
+			async embed(texts) {
+				captured.push(...texts);
+				return texts.map(() => [0, 0, 0]);
+			},
+		};
+		await buildVectorIndex(provider, withZh, "m1");
+		expect(captured[0]).toContain("简单思维导图");
+		expect(captured[0]).toContain("将 Markdown 渲染为交互式思维导图，支持导出");
+		expect(captured[0]).toContain("markmap based mindmap renderer");
+		// 中文描述在英文描述之前（512 预算内中文优先）
+		expect(captured[0].indexOf("将 Markdown 渲染为交互式思维导图，支持导出")).toBeLessThan(
+			captured[0].indexOf("markmap based mindmap renderer")
+		);
+	});
+
+	it("译文更新 → 指纹变化 → 仅该条增量重 embed（动态索引核心）", async () => {
+		const p1 = makeMockProvider({});
+		const first = await buildVectorIndex(p1, withZh, "m1");
+		const updated = [{ ...withZh[0], descZh: "人工采纳新译：思维导图双向同步与导出" }];
+		const p2 = makeMockProvider({});
+		const second = await buildVectorIndex(p2, updated, "m1", first);
+		expect(second).not.toBe(first);
+		expect(p2.calls).toBe(1); // 增量：只 embed 变化条目，非全量
+	});
+
+	it("译文未变：重建零 embed（fieldsHash 快路，no-op 维护无感）", async () => {
+		const p1 = makeMockProvider({});
+		const first = await buildVectorIndex(p1, withZh, "m1");
+		const p2 = makeMockProvider({});
+		const second = await buildVectorIndex(p2, withZh, "m1", first);
+		expect(second).toBe(first);
+		expect(p2.calls).toBe(0);
+	});
+});
+
+describe("动态全量构建（onPartial 实时发布 + buildStats 可见性）", () => {
+	const three = [
+		{ id: "a", name: "A", description: "aa" },
+		{ id: "b", name: "B", description: "bb" },
+		{ id: "c", name: "C", description: "cc" },
+	];
+
+	it("onPartial 按分片回调；buildStats 区分全量/增量/no-op", async () => {
+		const sizes: number[] = [];
+		const p1 = makeMockProvider({});
+		const idx = await buildVectorIndex(p1, three, "m1", undefined, undefined, {
+			chunk: 2,
+			onPartial: (u) => sizes.push(u.size),
+		});
+		expect(sizes).toEqual([2, 1]); // 3 条按 chunk=2 切片
+		expect(idx.buildStats).toEqual({ embedded: 3, reused: 0 }); // 全量
+		expect(idx.partial).toBeUndefined();
+
+		// 增量：改 1 条 → embedded=1 reused=2，onPartial 单片
+		const sizes2: number[] = [];
+		const changed = [{ ...three[0], description: "aa-changed" }, three[1], three[2]];
+		const p2 = makeMockProvider({});
+		const idx2 = await buildVectorIndex(p2, changed, "m1", idx, undefined, {
+			chunk: 2,
+			onPartial: (u) => sizes2.push(u.size),
+		});
+		expect(sizes2).toEqual([1]);
+		expect(idx2.buildStats).toEqual({ embedded: 1, reused: 2 });
+
+		// no-op：内容未变 → 零 embed，buildStats.embedded=0
+		const sizes3: number[] = [];
+		const p3 = makeMockProvider({});
+		const idx3 = await buildVectorIndex(p3, changed, "m1", idx2, undefined, {
+			chunk: 2,
+			onPartial: (u) => sizes3.push(u.size),
+		});
+		expect(sizes3).toEqual([]);
+		expect(idx3.buildStats).toEqual({ embedded: 0, reused: 3 });
+		expect(p3.calls).toBe(0);
+	});
+});
+
 describe("本地 embedding 默认模型", () => {
-	it("DEFAULT_LOCAL_MODEL 为面向中文的 bge-small-zh", () => {
-		expect(DEFAULT_LOCAL_MODEL).toBe("Xenova/bge-small-zh-v1.5");
+	it("DEFAULT_LOCAL_MODEL 为中英跨语言的 multilingual-e5-small（Xenova 转换版）", () => {
+		expect(DEFAULT_LOCAL_MODEL).toBe("Xenova/multilingual-e5-small");
+	});
+});
+
+describe("e5 指令前缀（query:/passage:）", () => {
+	function makeCaptureProvider(vec: number[] = [0, 0, 0]): EmbeddingProvider & { captured: string[] } {
+		const captured: string[] = [];
+		return {
+			name: "cap",
+			captured,
+			async embed(texts: string[]): Promise<number[][]> {
+				captured.push(...texts);
+				return texts.map(() => vec);
+			},
+		};
+	}
+
+	it("wantsE5Prefix：e5 系列识别，其它模型不误伤", async () => {
+		const { wantsE5Prefix } = await import("@semantic/embedding");
+		expect(wantsE5Prefix("Xenova/multilingual-e5-small")).toBe(true);
+		expect(wantsE5Prefix("intfloat/multilingual-e5-large")).toBe(true);
+		expect(wantsE5Prefix("onnx-community/e5-base")).toBe(true);
+		expect(wantsE5Prefix("Xenova/bge-small-zh-v1.5")).toBe(false);
+		expect(wantsE5Prefix("text-embedding-3-small")).toBe(false);
+		expect(wantsE5Prefix("BAAI/bge-m3")).toBe(false);
+	});
+
+	it("e5 模型：索引文本注入 passage: 前缀", async () => {
+		const provider = makeCaptureProvider();
+		await buildVectorIndex(provider, plugins, "Xenova/multilingual-e5-small");
+		expect(provider.captured[0].startsWith("passage: ")).toBe(true);
+		expect(provider.captured[0]).toContain("Sync");
+	});
+
+	it("e5 模型：query 注入 query: 前缀（与索引侧成对）", async () => {
+		const provider = makeCaptureProvider([1, 0, 0]);
+		const index: VectorIndex = {
+			ids: ["sync"],
+			vectors: [[1, 0, 0]],
+			hash: "h",
+			model: "Xenova/multilingual-e5-small",
+		};
+		await vectorRecall(provider, "思维导图", index, 1);
+		expect(provider.captured[0]).toBe("query: 思维导图");
+	});
+
+	it("非 e5 模型：不注入前缀（bge 行为不变）", async () => {
+		const provider = makeCaptureProvider();
+		await buildVectorIndex(provider, plugins, "Xenova/bge-small-zh-v1.5");
+		expect(provider.captured[0]).toBe("Sync\nkeep notes in sync across devices");
+	});
+
+	it("前缀参与指纹：同文本在 e5/bge 下 hash 不同（切模型必重建）", async () => {
+		const p1 = makeCaptureProvider();
+		const p2 = makeCaptureProvider();
+		const e5 = await buildVectorIndex(p1, plugins, "Xenova/multilingual-e5-small");
+		const bge = await buildVectorIndex(p2, plugins, "Xenova/bge-small-zh-v1.5");
+		expect(e5.hash).not.toBe(bge.hash);
 	});
 });
 

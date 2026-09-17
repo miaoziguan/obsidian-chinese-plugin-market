@@ -15,6 +15,8 @@ export type WorkerBackendConfig = {
 	model: string;
 	/** ONNX wasm 路径（WASM 回退路径用） */
 	wasmPaths?: string;
+	/** HF 模型下载镜像源（已归一化，worker 内写入 transformers env.remoteHost）；主线程侧总是传值（默认 hf-mirror.com） */
+	remoteHost?: string;
 };
 
 /**
@@ -28,6 +30,36 @@ let workerSourceLoader: WorkerSourceLoader | null = null;
 /** 注入 worker 源码加载器（app 层用 Obsidian adapter 读文件）。幂等。 */
 export function setWorkerSourceLoader(loader: WorkerSourceLoader): void {
 	workerSourceLoader = loader;
+}
+
+/**
+ * 模型下载桥接（CORS 逃生通道）。
+ *
+ * 为什么需要：worker 内的跨域 fetch 受浏览器 CORS 约束。实测（2026-09-16，Playwright
+ * 真 Chromium 复现）hf-mirror.com 等镜像在浏览器 CORS 校验下 `net::ERR_FAILED`
+ * （node/curl 无 CORS 概念故冒烟测试通过——该盲区已留痕 P-0059），而 Obsidian 页面
+ * origin 为 app:// 自定义 scheme，无法靠「换 origin」解决。官方 huggingface.co 有
+ * ACAO:* 能过 CORS 但国内直连 ~20KB/s。
+ *
+ * 做法：worker 把 http(s) fetch 经 postMessage 委托给主线程，主线程用 HttpClient
+ * （Obsidian requestUrl，Electron net 层，**无 CORS 约束**）取回字节，worker 侧组装
+ * 标准 Response 交给 transformers.js（CacheStorage 照常缓存，二次加载零网络）。
+ * 未注入桥接时 worker 回退原生 fetch（纯浏览器测试 / CORS 友好源仍可用）。
+ */
+export type WorkerFetchBridge = (
+	url: string,
+	method: string
+) => Promise<{ status: number; buffer: ArrayBuffer | null; headers?: Record<string, string>; error?: string }>;
+let workerFetchBridge: WorkerFetchBridge | null = null;
+
+/** 装配期注入下载桥接（app/plugin.ts onload 调用）。幂等。 */
+export function setWorkerFetchBridge(fn: WorkerFetchBridge): void {
+	workerFetchBridge = fn;
+}
+
+/** 桥接是否已装配（设置页状态行展示用）。未装配时 worker 回退原生 fetch（受 CORS 约束）。 */
+export function isWorkerFetchBridgeInstalled(): boolean {
+	return workerFetchBridge !== null;
 }
 
 /**
@@ -54,6 +86,11 @@ export function setModelProgressReporter(fn: ModelProgressReporter): void {
 	modelProgressReporter = fn;
 }
 
+/** 主动上报模型下载进度（供 app 层分块下载桥接逐块汇报真实百分比）。 */
+export function reportModelProgress(p: ModelProgress): void {
+	modelProgressReporter?.(p);
+}
+
 type PendingEmbed = {
 	resolve: (vecs: Float32Array[]) => void;
 	reject: (err: Error) => void;
@@ -72,11 +109,14 @@ export class WorkerLocalBackend implements LocalModelBackend {
 	/** 本实例在 instances Map 中的 key（model 兜底后的归一值），失败时用于从 Map 移除自身。 */
 	private readonly modelKey: string;
 
-	/** 获取（或创建）某模型的共享实例。所有 LocalEmbeddingProvider 用同 model 时返回同一实例。 */
+	/** 获取（或创建）某模型的共享实例。所有 LocalEmbeddingProvider 用同 model+镜像源时返回同一实例。 */
 	static getShared(cfg: WorkerBackendConfig): WorkerLocalBackend {
-		// model 兜底为默认 bge，确保预热/搜索用同一 key 共享同一 worker
-		const model = cfg.model || "Xenova/bge-small-zh-v1.5";
-		const key = `${model}`;
+		// model 兜底为默认 e5-small（与 embedding.ts DEFAULT_LOCAL_MODEL 保持一致；
+		// 不能直接 import——embedding.ts 依赖本模块，会形成循环），确保预热/搜索共享同一 worker。
+		// 镜像源进 key：切换 remoteHost 后新建实例（旧实例随下次重载自然释放），
+		// 否则改了镜像仍复用旧 worker、新配置不生效。
+		const model = cfg.model || "Xenova/multilingual-e5-small";
+		const key = cfg.remoteHost ? `${model}|${cfg.remoteHost}` : model;
 		let inst = WorkerLocalBackend.instances.get(key);
 		if (!inst) {
 			inst = new WorkerLocalBackend({ ...cfg, model }, key);
@@ -98,7 +138,7 @@ export class WorkerLocalBackend implements LocalModelBackend {
 
 	constructor(
 		private readonly cfg: WorkerBackendConfig,
-		modelKey = cfg.model || "Xenova/bge-small-zh-v1.5",
+		modelKey = cfg.model || "Xenova/multilingual-e5-small",
 	) {
 		this.modelKey = modelKey;
 	}
@@ -138,7 +178,7 @@ export class WorkerLocalBackend implements LocalModelBackend {
 	}
 
 	private async bootWorker(): Promise<void> {
-		logger.debug(`[Chinese Plugin Market] boot embedding worker（model=${this.cfg.model}）`);
+		logger.debug(`[Chinese Plugin Market] boot embedding worker（model=${this.cfg.model}${this.cfg.remoteHost ? ` · remoteHost=${this.cfg.remoteHost}` : ""}）`);
 		// PERF-3：worker 源码运行时从插件目录读独立文件（替代构建期内联巨字符串）
 		if (!workerSourceLoader) {
 			throw new Error("worker 源码加载器未注入（app 层需调用 setWorkerSourceLoader）");
@@ -166,21 +206,33 @@ export class WorkerLocalBackend implements LocalModelBackend {
 			this.pending.clear();
 		};
 
-		const initTimer = window.setTimeout(() => {
-			this.failInit(new Error(`本地模型加载超时（${INIT_TIMEOUT_MS / 1000}s），可能是模型下载太慢或网络不可用`));
-		}, INIT_TIMEOUT_MS);
+		// 初始化超时采用「按进展续表」而非固定窗口：worker 每收到一批下载 progress
+		// 就重置计时器。原因：默认模型 e5-small 冷缓存首载 = tokenizer 17MB + 权重
+		// 118MB ≈ 135MB，镜像源 ~540KB/s 也要 ~4.2min，超过旧的固定 240s 窗口必死；
+		// 且浏览器 CacheStorage 中断不留 partial、重试从零下载——固定窗口会让用户在
+		// 「差一点就下完」时被反复杀掉。改为：下载活着就不超时，停滞 240s 才判死。
+		this.armInitTimer();
 
 		worker.postMessage({
 			type: "init",
 			modelId: this.cfg.model,
 			dtype: "q8",
 			wasmPaths: this.cfg.wasmPaths,
+			remoteHost: this.cfg.remoteHost,
 		});
-		// 保留 timer 引用以便 ready 后清除
-		this.initTimer = initTimer;
 	}
 
 	private initTimer: number | null = null;
+
+	/** 初始化看门狗：INIT_TIMEOUT_MS 是「无进展窗口」——每次下载 progress 到达就续表
+	 *  （见 handleMessage），ready 后清除。停滞满窗口才判死（failInit 可自恢复）。 */
+	private armInitTimer(): void {
+		if (this.initTimer !== null) window.clearTimeout(this.initTimer);
+		this.initTimer = window.setTimeout(() => {
+			this.initTimer = null;
+			this.failInit(new Error(`本地模型加载超时（${INIT_TIMEOUT_MS / 1000}s 无进展），可能是下载停滞或网络不可用`));
+		}, INIT_TIMEOUT_MS);
+	}
 
 	private embedBatch(texts: string[]): Promise<Float32Array[]> {
 		if (!this.worker) throw new Error("worker not ready");
@@ -209,10 +261,15 @@ export class WorkerLocalBackend implements LocalModelBackend {
 			| { type: "ready"; dimension: number }
 			| { type: "init-error"; message: string; stack?: string }
 			| { type: "progress"; loaded: number; total: number; phase?: string }
+			| { type: "fetch"; id: number; url: string; method: string }
 			| { type: "result"; id: number; vectors: Float32Array[] | null; error?: string }
 			| { type: "log"; message: string };
 		if (m.type === "log") {
 			logger.warn(`[Chinese Plugin Market] ${m.message}`);
+			return;
+		}
+		if (m.type === "fetch") {
+			this.handleBridgeFetch(m.id, m.url, m.method);
 			return;
 		}
 		if (m.type === "ready") {
@@ -228,6 +285,8 @@ export class WorkerLocalBackend implements LocalModelBackend {
 			modelProgressReporter?.({ status: "error", error: m.message });
 			this.failInit(new Error(`本地模型加载失败：${m.message}`));
 		} else if (m.type === "progress") {
+			// 下载仍在推进 → 续表（首载 135MB 远超单个 240s 窗口，只要活着就不该杀）
+			if (!this.ready) this.armInitTimer();
 			logger.debug(`[Chinese Plugin Market] 模型下载 ${Math.round((m.loaded / Math.max(1, m.total)) * 100)}%${m.phase ? ` ${m.phase}` : ""}`);
 			// 上报下载进度：供首次本地搜索时复用设置页同款进度条/百分比
 			if (typeof m.loaded === "number" && typeof m.total === "number" && m.total > 0) {
@@ -242,6 +301,48 @@ export class WorkerLocalBackend implements LocalModelBackend {
 		}
 	}
 
+	/** 在途桥接下载的心跳定时器（dispose 时统一清理）。 */
+	private readonly bridgeHeartbeats = new Set<number>();
+
+	/**
+	 * 处理 worker 的 fetch 委托：主线程经桥接（requestUrl，无 CORS）取字节回传。
+	 * 在途期间每 30s 续一次初始化看门狗——单文件（118MB 权重）下载时长可能远超
+	 * 240s 空闲窗，但「在途」本身就是活着的证据，不该被判死。
+	 */
+	private handleBridgeFetch(id: number, url: string, method: string): void {
+		if (!this.ready) this.armInitTimer();
+		// 可观测性：桥接下载是 requestUrl 整包返回（无字节级进度），下载期间 worker 不会
+		// 发 progress，界面会数分钟无任何动静（用户误判为卡死）。此处发一个「不确定态」
+		// downloading（total=0），设置页据此显示「进行中（无百分比）」而非静止。
+		if (!this.ready) modelProgressReporter?.({ status: "downloading", loaded: 0, total: 0 });
+		const hb = window.setInterval(() => {
+			if (!this.ready) this.armInitTimer();
+		}, 30_000);
+		this.bridgeHeartbeats.add(hb);
+		void (async () => {
+			let out: { status: number; buffer: ArrayBuffer | null; headers?: Record<string, string>; error?: string };
+			try {
+				out = workerFetchBridge
+					? await workerFetchBridge(url, method)
+					: { status: 0, buffer: null, error: "fetch 桥接未注入（app 装配期应调用 setWorkerFetchBridge）" };
+			} catch (e: unknown) {
+				out = { status: 0, buffer: null, error: e instanceof Error ? e.message : String(e) };
+			}
+			window.clearInterval(hb);
+			this.bridgeHeartbeats.delete(hb);
+			if (!this.ready) this.armInitTimer();
+			const buffer = out.buffer ?? null;
+			try {
+				this.worker?.postMessage(
+					{ type: "fetch-result", id, status: out.status, buffer, headers: out.headers ?? null, error: out.error },
+					buffer ? [buffer] : []
+				);
+			} catch {
+				/* worker 已终止：静默 */
+			}
+		})();
+	}
+
 	private failInit(err: Error): void {
 		this.failed = true;
 		this.initReject?.(err);
@@ -253,6 +354,13 @@ export class WorkerLocalBackend implements LocalModelBackend {
 	}
 
 	dispose(): void {
+		// 看门狗一并拆除：防止 dispose 后残留 timer 触发 failInit 改动全局单例表
+		if (this.initTimer !== null) {
+			window.clearTimeout(this.initTimer);
+			this.initTimer = null;
+		}
+		for (const hb of this.bridgeHeartbeats) window.clearInterval(hb);
+		this.bridgeHeartbeats.clear();
 		if (this.worker) {
 			try {
 				this.worker.postMessage({ type: "dispose" });

@@ -24,10 +24,22 @@ type InitMsg = {
 	dtype?: "fp32" | "fp16" | "q8" | "q4";
 	/** ONNX wasm 路径（WASM 回退路径用；webgpu 忽略） */
 	wasmPaths?: string;
+	/** HF 模型下载镜像源（写入 transformers env.remoteHost）；未传则用 transformers 默认（官方 HF）。
+	 *  主线程侧经 normalizeRemoteHost 后总是传值（默认 hf-mirror.com）。 */
+	remoteHost?: string;
 };
 type EmbedMsg = { type: "embed"; id: number; texts: string[] };
 type DisposeMsg = { type: "dispose" };
-type IncomingMsg = InitMsg | EmbedMsg | DisposeMsg;
+/** 主线程桥接下载的回包（见 worker-backend setWorkerFetchBridge） */
+type FetchResultMsg = {
+	type: "fetch-result";
+	id: number;
+	status: number;
+	buffer: ArrayBuffer | null;
+	headers?: Record<string, string> | null;
+	error?: string;
+};
+type IncomingMsg = InitMsg | EmbedMsg | DisposeMsg | FetchResultMsg;
 
 type Extractor = (
 	text: string | string[],
@@ -37,13 +49,38 @@ type Extractor = (
 let extractor: Extractor | null = null;
 let modelDimension: number | null = null;
 
+/** 桥接 fetch 的在途请求表（id → resolve/reject），主线程 fetch-result 回包时结算。 */
+const bridgePending = new Map<number, { resolve: (r: Response) => void; reject: (e: Error) => void; method: string }>();
+let bridgeFetchId = 0;
+
+function handleFetchResult(m: FetchResultMsg): void {
+	const p = bridgePending.get(m.id);
+	if (!p) return;
+	bridgePending.delete(m.id);
+	if (m.error || (!m.buffer && p.method !== "HEAD")) {
+		p.reject(new Error(m.error ?? "bridge fetch failed"));
+		return;
+	}
+	try {
+		p.resolve(new Response(p.method === "HEAD" ? null : m.buffer, { status: m.status || 200, headers: m.headers ?? undefined }));
+	} catch (e: unknown) {
+		p.reject(e instanceof Error ? e : new Error(String(e)));
+	}
+}
+
 function postLog(msg: string): void {
 	self.postMessage({ type: "log", message: msg });
 }
 
 self.onmessage = (event: MessageEvent<IncomingMsg>) => {
+	const data = event.data;
+	// 桥接回包优先路由（不走 init/embed 分发）
+	if (data && (data as FetchResultMsg).type === "fetch-result") {
+		handleFetchResult(data as FetchResultMsg);
+		return;
+	}
 	void (async () => {
-		const msg = event.data;
+		const msg = data;
 		try {
 			if (msg.type === "init") await handleInit(msg);
 			else if (msg.type === "embed") await handleEmbed(msg);
@@ -80,8 +117,48 @@ async function handleInit(msg: InitMsg): Promise<void> {
 		/* ignore */
 	}
 
+	// CORS 下载桥接：worker 内跨域 fetch 受浏览器 CORS 约束（hf-mirror 等镜像在
+	// app:// origin 下 CORS 校验失败 → init 秒死静默降级关键词路，2026-09-16 实测）。
+	// 把 http(s) fetch 委托主线程用 requestUrl（Electron net 层，无 CORS 约束）代发，
+	// 回包组装标准 Response（transformers.js 照常写 CacheStorage，二次加载零网络）。
+	// 桥接失败自动回退原生 fetch（官方 HF 等 CORS 友好源行为不变）。
+	// ⚠️ 必须在 import transformers **之前**安装：transformers/ort 在模块求值时捕获
+	// fetch 引用（实测 import 后覆写 self.fetch 不生效，桥接零调用）。
+	const selfWithFetch = self as unknown as { fetch?: typeof fetch };
+	const nativeFetch = typeof selfWithFetch.fetch === "function" ? selfWithFetch.fetch.bind(selfWithFetch) : null;
+	if (nativeFetch) {
+		selfWithFetch.fetch = ((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+			const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+			if (!/^https?:/i.test(url)) return nativeFetch(input as RequestInfo, init);
+			const method =
+				(init?.method ?? (typeof input === "object" && !(input instanceof URL) ? (input as Request).method : "GET")) ||
+				"GET";
+			const id = ++bridgeFetchId;
+			const bridged = new Promise<Response>((resolve, reject) => {
+				bridgePending.set(id, { resolve, reject, method });
+				self.postMessage({ type: "fetch", id, url, method });
+			});
+			// 兜底=原生 fetch，但镜像源在浏览器 CORS 下必死（最初根因），回退不改 URL
+			// 等于兜底必死（2026-09-16 deploy#10 教训：「下载：✗ 所有设备初始化失败」）。
+			// 回退前把 hf-mirror 重写为官方源（ACAO:* 实测可用，慢但有真实进度）。
+			return bridged.catch(() => {
+				const rewritten = url.replace(/^https?:\/\/hf-mirror\.com\//i, "https://huggingface.co/");
+				return nativeFetch(rewritten, init);
+			});
+		}) as typeof fetch;
+		postLog("[embedding-worker] fetch 桥接已安装（主线程代发，绕浏览器 CORS）");
+	}
+
 	// esbuild alias 会把 @huggingface/transformers 映射到 transformers.web.js
 	const tfm = await import("@huggingface/transformers");
+
+	// 模型下载镜像源（可选）：国内 HF 直连被限速（实测 ~20KB/s），hf-mirror.com ~540KB/s。
+	// env.remoteHost 是 transformers.js 拼接模型 URL 的基址（默认 https://huggingface.co/）。
+	// 注意：浏览器 CacheStorage 按 URL 缓存，换镜像源后模型会重新下载（各自独立缓存）。
+	if (msg.remoteHost) {
+		tfm.env.remoteHost = msg.remoteHost;
+		postLog(`[embedding-worker] remoteHost=${msg.remoteHost}`);
+	}
 
 	// 配置 ORT wasm：wasm 回退路径用（webgpu 忽略）
 	const ortWasm = (tfm.env as unknown as {

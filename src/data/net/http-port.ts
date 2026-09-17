@@ -16,6 +16,8 @@ export interface HttpResponse {
 	json: unknown;
 	text: string;
 	headers: Record<string, string>;
+	/** 二进制响应体（模型权重 / wasm 等下载桥接用）。requestUrl 适配器恒提供；纯文本调用方可忽略。 */
+	arrayBuffer?: ArrayBuffer;
 }
 
 export interface HttpRequestOptions {

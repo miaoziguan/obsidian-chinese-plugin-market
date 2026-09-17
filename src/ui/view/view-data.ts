@@ -157,6 +157,8 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 		void ctx.savePluginListCache(data);
 		ctx.plugins = data;
 		ctx.buildAuthorFacet();
+		// 动态向量索引：列表更新后防抖触发后台增量重建（只 embed 新增/变化条目）
+		ctx.plugin.scheduleIndexRefresh("列表更新");
 		// 拉取成功：更新列表拉取时间戳（用于 TTL 判断）。
 		// plugin 级字段在 translator-view 的 ensureDataLoaded 落盘钩子里回写，
 		// 这里只更新 ctx 内存值；避免直接依赖 plugin 完整形状（DrawerHostPlugin 最小端口）。
@@ -413,6 +415,8 @@ export async function refreshData(ctx: ViewContext) : Promise<void> {
 			const data = await ctx.fetchPlugins();
 			ctx.plugins = data;
 			ctx.buildAuthorFacet();
+			// 动态向量索引：手动刷新列表后同样防抖触发增量重建
+			ctx.plugin.scheduleIndexRefresh("手动刷新列表");
 	
 			ctx.applyAIConfig();
 			const td = ctx.translator.getData();
@@ -901,6 +905,8 @@ export async function aiTranslateAllPending(ctx: ViewContext) {
 		if (refreshRAF !== null) window.cancelAnimationFrame(refreshRAF);
 		doRefresh();
 		ctx.buildSearchIndex();
+		// 动态向量索引：译文入库后防抖触发增量重建（译文进索引文本，指纹变化的条目重 embed）
+		ctx.plugin.scheduleIndexRefresh("翻译入库");
 		// 立即落盘（无防抖）：确保本次翻译结果（含 TM 已采纳 vault 笔记）在按钮流程结束时
 		// 立刻写出，不依赖 800ms 防抖定时器——否则重载插件时定时器未触发会导致数据静默丢失，
 		// 下次启动大量插件回到英文（本次实测 CJ vault 的 tmApproved/cache 均为 0 即此因）。

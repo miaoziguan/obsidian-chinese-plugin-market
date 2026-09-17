@@ -403,8 +403,10 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 				ctx.windowStart = -1; ctx.windowEnd = -1; // 清层后窗口守卫失效，防下次误跳过
 				const loading = layer.createDiv({ cls: "pt-empty pt-ai-loading-state" });
 				loading.createDiv({ cls: "pt-empty-icon" });
-				loading.createDiv({ cls: "pt-empty-title", text: ctx.t("notice.ai.analyzing") });
-				loading.createDiv({ cls: "pt-empty-hint", text: ctx.t("notice.ai.analyzing.hint") });
+				// 本地模式复用 AI 文案会误导（2026-09-16 用户截图反馈）：本地首载要下模型+建索引，文案指路设置页进度
+				const isLocalMode = ctx.searchMode === "local";
+				loading.createDiv({ cls: "pt-empty-title", text: ctx.t(isLocalMode ? "notice.local.analyzing" : "notice.ai.analyzing") });
+				loading.createDiv({ cls: "pt-empty-hint", text: ctx.t(isLocalMode ? "notice.local.analyzing.hint" : "notice.ai.analyzing.hint") });
 				return;
 			}
 			layer.empty();

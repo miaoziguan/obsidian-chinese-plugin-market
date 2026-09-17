@@ -87,6 +87,8 @@ export interface AISearchConfig {
 		localModel?: string;
 		/** 本地 WASM 路径（settings 文本框原样透传的字符串；当前无消费方，保留供本地嵌入实现使用） */
 		localWasmPaths?: string;
+		/** 本地模式：HF 模型下载镜像源（空 = 官方 huggingface.co；国内可填 https://hf-mirror.com/） */
+		localRemoteHost?: string;
 	};
 }
 

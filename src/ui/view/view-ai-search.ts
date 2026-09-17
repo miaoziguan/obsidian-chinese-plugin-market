@@ -69,11 +69,19 @@ export async function runAISearch(
 	let modelBarTimer = 0;
 
 	try {
-		const pluginArgs = ctx.plugins.map((p) => ({
-			id: p.id,
-			name: p.name,
-			description: p.description,
-		}));
+		const pluginArgs = ctx.plugins.map((p) => {
+			// 双语索引：把已缓存的中文译文一并送入向量索引（中文 query 的主对齐面）；
+			// original 兜底译文不算（等于没有译文）。译文后续更新会经指纹触发增量重 embed。
+			const tr = ctx.translator.cache?.[p.id];
+			const hasTr = tr && tr.source !== "original";
+			return {
+				id: p.id,
+				name: p.name,
+				description: p.description,
+				nameZh: hasTr ? tr.translatedName : undefined,
+				descZh: hasTr ? tr.translatedDesc : undefined,
+			};
+		});
 		const config = {
 			baseURL: settings.aiSearchBaseURL,
 			apiKey: settings.aiSearchApiKey,
@@ -85,11 +93,12 @@ export async function runAISearch(
 				model: settings.embeddingModel,
 				localModel: settings.embeddingLocalModel,
 				localWasmPaths: settings.embeddingLocalWasmPaths,
+				localRemoteHost: settings.embeddingRemoteHost,
 			},
 		};
 		const cats = ctx.selectedCategories.length ? ctx.selectedCategories : undefined;
 
-		// 本地语义：若索引尚未构建，先提示（首次会后台下载量化模型权重 ~23MB + 建索引，可能耗时）
+		// 本地语义：若索引尚未构建，先提示（首次会后台下载量化模型权重（e5-small q8 ~118MB，可配镜像加速）+ 建索引，可能耗时）
 		if (isLocal && !ctx.translator.getVectorIndex()) {
 			new Notice(ctx.t("notice.local.indexing"), 8000);
 		}
