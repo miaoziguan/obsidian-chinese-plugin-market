@@ -805,6 +805,19 @@ export class PluginDetailDrawer {
 				cls: "pt-detail-btn pt-detail-btn--enabled",
 				text: `✓ ${this.t("card.installed.on")}`,
 			});
+			// 直达该插件的设置选项面板（替代手动去 Obsidian 设置翻找）：
+			// 必须先 open 再 openTabById，否则设置面板未弹出时后者不生效（与 toolbar 齿轮一致）。
+			const settingsBtn = actions.createEl("button", {
+				cls: "pt-detail-btn",
+				attr: { type: "button", title: this.t("card.openSettings") },
+			});
+			setIcon(settingsBtn, "gear");
+			settingsBtn.createSpan({ text: this.t("card.openSettings") });
+			settingsBtn.addEventListener("click", () => {
+				const setting = asAppInternals(this.app).setting;
+				setting?.open?.();
+				setting?.openTabById?.(p.id);
+			});
 		} else if (isInstalled) {
 			const enableBtn = actions.createEl("a", {
 				cls: "pt-detail-btn",
