@@ -476,9 +476,8 @@ async function writeThemeFiles(
 	await ad.write(`${dir}/${THEME_CSS}`, css);
 	if (manText != null) await ad.write(`${dir}/${FILES[0]}`, manText);
 	const cssApi = asAppInternals(app).customCss;
-	// 主题启用：优先 setTheme（内部 API），缺失时退回 setCssEnabled(..., "theme")
+	// 主题启用：使用 Obsidian 内部 setTheme API
 	if (cssApi?.setTheme) cssApi.setTheme(name);
-	else cssApi?.setCssEnabled?.(true, name, "theme");
 }
 
 /** 从直链安装主题，返回主题信息（目录名 / 显示名 / 版本） */

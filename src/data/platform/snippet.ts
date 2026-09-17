@@ -33,8 +33,6 @@ export interface SnippetInfo {
 	path: string;
 }
 
-const SNIPPET_TYPE = "snippet" as const;
-
 /**
  * 片段清单缓存（按 app 隔离，避免插件重载 / 多 vault 串味）。
  *
@@ -64,7 +62,8 @@ export function listSnippets(app: App): SnippetInfo[] {
  */
 export async function refreshSnippets(app: App): Promise<SnippetInfo[]> {
 	const dir = snippetDir(app);
-	const enabled = new Set(asAppInternals(app).customCss?.snippets ?? []);
+	const cc = asAppInternals(app).customCss;
+	const enabled = cc?.enabledSnippets ?? new Set(cc?.snippets ?? []);
 	const byBase = new Map<string, string>();
 
 	for (const fileName of await listSnippetFileNames(app, dir)) {
@@ -106,31 +105,28 @@ async function listSnippetFileNames(app: App, dir: string): Promise<string[]> {
 	}
 }
 
-/** 某个片段是否启用 */
+/** 某个片段是否启用（新版用 enabledSnippets 集合，旧版回退 snippets 数组） */
 export function isSnippetEnabled(app: App, baseName: string): boolean {
-	return Boolean(asAppInternals(app).customCss?.snippets?.includes(baseName));
+	const cc = asAppInternals(app).customCss;
+	if (cc?.enabledSnippets) return cc.enabledSnippets.has(baseName);
+	return Boolean(cc?.snippets?.includes(baseName));
 }
 
-/** 切换片段启用状态（兼容 Obsidian 1.x 三参签名与旧版两参签名） */
+/** 切换片段启用状态（调用 Obsidian 内部 setCssEnabledStatus(name, enabled)） */
 export async function setSnippetEnabled(
 	app: App,
 	baseName: string,
 	enabled: boolean,
 ): Promise<void> {
 	const cc = asAppInternals(app).customCss;
-	if (!cc?.setCssEnabled) {
-		logger.warn("[Chinese Plugin Market] app.customCss.setCssEnabled 不可用，跳过切换");
+	if (!cc?.setCssEnabledStatus) {
+		logger.warn("[Chinese Plugin Market] app.customCss.setCssEnabledStatus 不可用，跳过切换");
 		return;
 	}
 	try {
-		cc.setCssEnabled(enabled, baseName, SNIPPET_TYPE);
-	} catch {
-		// 旧版回退：仅 (enabled, name)
-		try {
-			(cc.setCssEnabled as (e: boolean, n: string) => void)(enabled, baseName);
-		} catch (error) {
-			logger.warn("[Chinese Plugin Market] 切换 CSS 片段启用失败:", error);
-		}
+		cc.setCssEnabledStatus(baseName, enabled);
+	} catch (error) {
+		logger.warn("[Chinese Plugin Market] 切换 CSS 片段启用失败:", error);
 	}
 }
 

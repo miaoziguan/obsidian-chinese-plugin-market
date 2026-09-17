@@ -22,7 +22,11 @@ interface FakeApp {
 	configDir: string;
 	/** adapter.list 是否抛错（模拟目录不可读） */
 	listThrows?: boolean;
-	customCss: { snippets: string[]; setCssEnabled?: (e: boolean, n: string, t: string) => void };
+	customCss: {
+		snippets: string[];
+		enabledSnippets?: Set<string>;
+		setCssEnabledStatus?: (n: string, e: boolean) => void;
+	};
 	vault: {
 		configDir: string;
 		getFiles: () => Array<{ path: string; name: string }>;
@@ -62,7 +66,8 @@ function makeApp(
 			get snippets() {
 				return [...enabled] as string[];
 			},
-			setCssEnabled: (e: boolean, n: string) => {
+			enabledSnippets: enabled,
+			setCssEnabledStatus: (n: string, e: boolean) => {
 				if (e) enabled.add(n);
 				else enabled.delete(n);
 			},
@@ -143,32 +148,27 @@ describe("snippet 平台层", () => {
 		expect(names).toContain("on-disk");
 	});
 
-	it("isSnippetEnabled 按 customCss.snippets 判定", () => {
+	it("isSnippetEnabled 按 customCss.enabledSnippets 判定", () => {
 		const app = makeApp({ enabled: ["x"] });
 		expect(isSnippetEnabled(app as never, "x")).toBe(true);
 		expect(isSnippetEnabled(app as never, "y")).toBe(false);
 	});
 
-	it("setSnippetEnabled 调用 customCss.setCssEnabled（三参签名）", async () => {
-		const calls: unknown[][] = [];
-		const app = makeApp();
-		app.customCss.setCssEnabled = (e: boolean, n: string, t: string) => {
-			calls.push([e, n, t]);
-		};
-		await setSnippetEnabled(app as never, "foo", true);
-		expect(calls).toEqual([[true, "foo", "snippet"]]);
+	it("isSnippetEnabled 旧版 customCss.snippets 数组回退", () => {
+		const app = makeApp({ enabled: ["x"] });
+		delete (app.customCss as { enabledSnippets?: Set<string> }).enabledSnippets;
+		expect(isSnippetEnabled(app as never, "x")).toBe(true);
+		expect(isSnippetEnabled(app as never, "y")).toBe(false);
 	});
 
-	it("setSnippetEnabled 旧版两参签名回退（三参抛错时）", async () => {
+	it("setSnippetEnabled 调用 customCss.setCssEnabledStatus(name, enabled)", async () => {
 		const calls: unknown[][] = [];
 		const app = makeApp();
-		app.customCss.setCssEnabled = ((...args: unknown[]) => {
-			calls.push(args);
-			if (calls.length === 1) throw new Error("old api");
-		}) as never;
+		app.customCss.setCssEnabledStatus = (n: string, e: boolean) => {
+			calls.push([n, e]);
+		};
 		await setSnippetEnabled(app as never, "foo", true);
-		expect(calls[0].length).toBe(3); // 先试三参
-		expect(calls[1].length).toBe(2); // 回退两参
+		expect(calls).toEqual([["foo", true]]);
 	});
 
 	it("renameSnippet 复制内容到新文件、删旧文件、同步启用状态，并刷新清单", async () => {

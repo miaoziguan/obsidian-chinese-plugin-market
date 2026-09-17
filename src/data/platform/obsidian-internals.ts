@@ -91,18 +91,16 @@ export interface AppSetting {
 
 /** 自定义 CSS（主题 / 片段）运行时控制（app.customCss） */
 export interface AppCustomCss {
-	/** 已启用的主题 / 片段名（无 .css 后缀） */
+	/** 检测到的全部片段名（无 .css 后缀）；旧版中也作为已启用列表使用 */
 	snippets?: string[];
+	/** 当前已启用的 CSS 片段集合（Obsidian 新版优先使用） */
+	enabledSnippets?: Set<string>;
 	/**
-	 * 切换启用状态。Obsidian 1.x 统一签名 (enabled, name, type)；
-	 * type 取 "theme" | "snippet"。旧版可能仅接受 (enabled, name)。
+	 * 切换 CSS 片段启用状态。Obsidian 内部签名 (name, enabled)，
+	 * name 为片段基名（无 .css）。
 	 */
-	setCssEnabled?: (
-		enabled: boolean,
-		name: string,
-		type: "theme" | "snippet",
-	) => void;
-	/** 切换并保存当前主题（目录名）；优先于 setCssEnabled(..., "theme") */
+	setCssEnabledStatus?: (name: string, enabled: boolean) => void;
+	/** 切换并保存当前主题（目录名） */
 	setTheme?: (name: string) => void;
 }
 
