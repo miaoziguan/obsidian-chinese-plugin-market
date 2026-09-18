@@ -11,7 +11,7 @@
  *    setCssProps（符合插件规范，且测试环境由 test/setup.ts 补齐，可单测）。
  */
 
-import { Menu, Notice } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
 import { pickLang } from "@shared/i18n";
 import { logger } from "@shared/logger";
 import { GROUP_ALL, GROUP_OTHER, type ManageRow } from "@domain/manage/types";
@@ -211,12 +211,14 @@ export class PluginListEnhancer {
 		currentGroup: string
 	): void {
 		const button = createEl("button", {
-			cls: "cpm-group-btn",
-			text: pickLang("manage.group.set"),
+			cls: "cpm-group-btn clickable-icon",
 		});
+		setIcon(button, "tag");
 		button.type = "button";
 		button.setAttribute(OWNED_ATTR, ROW_OWNER);
 		button.setAttribute("data-role", GROUP_BTN_ROLE);
+		button.setAttribute("aria-label", pickLang("manage.group.set"));
+		button.setAttribute("title", pickLang("manage.group.set"));
 		button.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
 			event.stopPropagation();

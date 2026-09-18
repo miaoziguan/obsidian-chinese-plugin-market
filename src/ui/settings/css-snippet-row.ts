@@ -86,11 +86,11 @@ export function renderCssSnippetRow(
 		void store.setSnippetEnabled(snippet.baseName, enabled);
 	});
 
-	const groupBtn = createEl("button", {
-		cls: "cpm-group-btn",
-		text: pickLang("manage.group.set"),
-	});
+	const groupBtn = createEl("button", { cls: "cpm-group-btn clickable-icon" });
+	setIcon(groupBtn, "tag");
 	groupBtn.type = "button";
+	groupBtn.setAttribute("aria-label", pickLang("manage.group.set"));
+	groupBtn.setAttribute("title", pickLang("manage.group.set"));
 	groupBtn.addEventListener("click", (event: MouseEvent) => {
 		event.preventDefault();
 		event.stopPropagation();
