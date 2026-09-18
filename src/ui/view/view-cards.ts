@@ -7,7 +7,7 @@
 import { App, Modal, Notice } from "obsidian";
 import { type PluginInfo, type Translator } from "@domain/catalog/translator";
 import { computeSimilar, type SimilarCandidate } from "@domain/recommend/similar";
-import { PluginDetailDrawer } from "@ui/components/detail-drawer";
+import { PluginDetailDrawer, type DrawerOptions } from "@ui/components/detail-drawer";
 import type { ViewContext } from "@ui/view/view-context";
 import { q, toHTMLElement } from "@ui/dom/dom";
 import { fetchManifest, fetchReadmeText, fetchMainSignals, generateInsight } from "@domain/compare/plugin-insight";
@@ -16,6 +16,34 @@ import { LAYOUT } from "@shared/constants";
 import { logger } from "@shared/logger";
 import type { MirrorConfig } from "@domain/catalog/mirror";
 import { installCommunityPlugin, togglePluginEnabled, uninstallCommunityPlugin } from "@data/platform/plugin-installer";
+
+/**
+ * 装配详情抽屉的「依赖」端口。
+ *
+ * knownIds 在打开抽屉时算一次（列表全量约 5600 条，不能每行都重算）；
+ * 状态判定的三个集合走 ctx getter，始终是最新快照。
+ */
+function buildDepsPort(ctx: ViewContext): NonNullable<DrawerOptions["deps"]> {
+	const graph = ctx.pluginDeps as NonNullable<ViewContext["pluginDeps"]>;
+	const knownIds = new Set(ctx.allPlugins.map((p) => p.id));
+	const nameOf = (id: string) => ctx.allPlugins.find((p) => p.id === id)?.name ?? id;
+	return {
+		edgesOf: (id: string) => graph.edgesOf(id),
+		dependentsOf: (id: string) => graph.dependentsOf(id),
+		statusOf: (dep) =>
+			graph.statusOf(dep, {
+				installedIds: ctx.installedIds,
+				enabledIds: ctx.enabledIds,
+				installedVersions: ctx.installedVersions,
+				knownIds,
+			}),
+		canOpen: (id: string) => knownIds.has(id),
+		nameOf,
+		onOpen: (id: string) => ctx.openDetailDrawer(id),
+		onFix: (id: string, action: "install" | "enable" | "update") => ctx.fixDep(id, action),
+		ensure: (id: string, repo?: string) => ctx.ensurePluginDeps(id, repo),
+	};
+}
 
 export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard: HTMLElement | null = null, focusJournal = false) {
 	const info = ctx.plugins.find((p) => p.id === pluginId);
@@ -67,6 +95,8 @@ export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard
 			listVersions: (repo, force) => ctx.listPluginVersions(repo, force),
 			pin: (id, version) => ctx.pinPluginVersion(id, version),
 		},
+		// 依赖提示：数据集未加载时为 undefined，抽屉整块不渲染
+		deps: ctx.pluginDeps ? buildDepsPort(ctx) : undefined,
 		onClose: () => { ctx.exitDetailMode(); },
 	});
 	ctx.activeDrawer = drawer;

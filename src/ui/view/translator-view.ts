@@ -14,6 +14,7 @@ import {
 import { toHTMLElement, q } from "@ui/dom/dom";
 import { renderUpdatesList } from "@ui/view/view-updates";
 import { renderBetaList } from "@ui/view/view-beta";
+import { ensureDepsFor } from "@ui/view/deps-lazy";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
 import { type MirrorSource } from "@domain/catalog/mirror";
 import { type PluginStat } from "@domain/catalog/stats";
@@ -252,7 +253,7 @@ import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, rela
 import { runAISearch } from "@ui/view/view-ai-search";
 import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, updateWindow, disposeRenderTimers } from "@ui/view/view-render";
 import { startInstalledWatch } from "@ui/view/installed-watch";
-import { onCardClick, handleToggleEnabled, toggleFavorite, onCardKeydown, focusCardByIdx, flashAction, computeSimilarFor, openDetailDrawer as _openDetailDrawer } from "@ui/view/view-cards";
+import { onCardClick, handleInstall, handleToggleEnabled, toggleFavorite, onCardKeydown, focusCardByIdx, flashAction, computeSimilarFor, openDetailDrawer as _openDetailDrawer } from "@ui/view/view-cards";
 import { renderFeaturedSection, ensureFeaturedSection, hideFeaturedSection } from "@ui/view/view-featured";
 import { createViewContext, type ViewContext, type ViewTab } from "@ui/view/view-context";
 import { updateCompareTray, openCompareModal, enterCompareMode, exitCompareMode } from "@ui/view/view-compare";
@@ -647,6 +648,22 @@ export class ChinesePluginMarketView extends ItemView {
 		if (this.viewTab !== "beta") return;
 		renderBetaList(this._ctx);
 	};
+
+	/**
+	 * 处理一个依赖插件：安装 / 启用 / 更新。
+	 * 复用既有流程（handleInstall / handleToggleEnabled / updatePlugin），
+	 * 保证与卡片上的同名操作行为完全一致（含加锁、刷新、Notice）。
+	 */
+	public fixDep = (depId: string, action: "install" | "enable" | "update") => {
+		const info = this.plugins.find((p) => p.id === depId);
+		if (!info) return;
+		if (action === "install") void handleInstall(this._ctx, info);
+		else if (action === "enable") void handleToggleEnabled(this._ctx, info);
+		else void this.updatePlugin(depId);
+	};
+
+	/** 依赖基线里没有该插件时按需现算（委托 deps-lazy，会话内缓存） */
+	public ensurePluginDeps = (id: string, repo?: string) => ensureDepsFor(this._ctx, id, repo);
 
 	async onOpen() {
 		// 标记所属 leaf（替代 :has 选择器），供 CSS 隐藏该 leaf 的 view-header

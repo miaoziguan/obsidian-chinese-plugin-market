@@ -6495,3 +6495,79 @@ button.pt-card-install-btn--installed {
 	width: 14px;
 	height: 14px;
 }
+
+/* 详情抽屉：依赖 / 被依赖区块 */
+.pt-detail-deps {
+	margin-top: 8px;
+}
+.pt-detail-deps-title {
+	font-weight: var(--font-semibold, 600);
+	color: var(--text-normal);
+	margin-bottom: 4px;
+}
+.pt-detail-dep-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 0;
+	color: var(--text-normal);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.pt-detail-dep-dot {
+	display: inline-flex;
+	color: var(--text-faint);
+}
+.pt-detail-dep-row.is-ok .pt-detail-dep-dot {
+	color: var(--text-success);
+}
+.pt-detail-dep-row.is-missing .pt-detail-dep-dot,
+.pt-detail-dep-row.is-disabled .pt-detail-dep-dot,
+.pt-detail-dep-row.is-outdated .pt-detail-dep-dot {
+	color: var(--text-error);
+}
+.pt-detail-dep-dot svg {
+	width: 13px;
+	height: 13px;
+}
+.pt-detail-dep-name.is-link,
+.pt-detail-dependent-chip.is-link {
+	cursor: pointer;
+	text-decoration: underline dotted var(--text-faint);
+	text-underline-offset: 3px;
+}
+.pt-detail-dep-name.is-link:hover,
+.pt-detail-dependent-chip.is-link:hover {
+	color: var(--text-accent);
+}
+.pt-detail-dep-kind,
+.pt-detail-dep-ver,
+.pt-detail-dep-maybe,
+.pt-detail-dependent-chip {
+	padding: 0 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	color: var(--text-muted);
+}
+.pt-detail-dep-status {
+	color: var(--text-muted);
+	margin-left: auto;
+}
+.pt-detail-dep-fix {
+	margin: 0;
+	padding: 1px 8px;
+}
+.pt-detail-dependents summary {
+	cursor: pointer;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.pt-detail-dependents-hint {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller, 12px);
+	margin: 4px 0;
+}
+.pt-detail-dependents-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
