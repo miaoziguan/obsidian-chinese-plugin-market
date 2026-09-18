@@ -6400,6 +6400,70 @@ button.pt-card-install-btn--installed {
 	color: var(--text-accent);
 }
 
+/* 「直链」页签列表：行样式复用「更新」页签，仅直链专属元信息另加类 */
+.pt-beta-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+}
+.pt-beta-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+	line-height: 1.5;
+}
+.pt-beta-row {
+	flex-wrap: wrap;
+}
+.pt-beta-name.is-link {
+	cursor: pointer;
+	text-decoration: underline dotted var(--text-faint);
+	text-underline-offset: 3px;
+}
+.pt-beta-name.is-link:hover {
+	color: var(--text-accent);
+}
+.pt-beta-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.pt-beta-kind,
+.pt-beta-ver,
+.pt-beta-tag,
+.pt-beta-frozen {
+	padding: 0 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+	white-space: nowrap;
+}
+.pt-beta-ver {
+	color: var(--text-normal);
+}
+.pt-beta-frozen {
+	color: var(--text-accent);
+	border-color: var(--text-accent);
+}
+.pt-beta-source {
+	flex: 1 1 auto;
+	min-width: 0;
+	max-width: 42ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.pt-beta-action.is-on {
+	color: var(--text-accent);
+}
+.pt-beta-untrack:hover {
+	color: var(--text-error);
+}
+
 /* 版本选择弹窗（BRAT 式版本固定） */
 .pt-version-modal {
 	max-height: 70vh;

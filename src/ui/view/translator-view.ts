@@ -13,6 +13,7 @@ import {
 } from "obsidian";
 import { toHTMLElement, q } from "@ui/dom/dom";
 import { renderUpdatesList } from "@ui/view/view-updates";
+import { renderBetaList } from "@ui/view/view-beta";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
 import { type MirrorSource } from "@domain/catalog/mirror";
 import { type PluginStat } from "@domain/catalog/stats";
@@ -253,7 +254,7 @@ import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, upd
 import { startInstalledWatch } from "@ui/view/installed-watch";
 import { onCardClick, handleToggleEnabled, toggleFavorite, onCardKeydown, focusCardByIdx, flashAction, computeSimilarFor, openDetailDrawer as _openDetailDrawer } from "@ui/view/view-cards";
 import { renderFeaturedSection, ensureFeaturedSection, hideFeaturedSection } from "@ui/view/view-featured";
-import { createViewContext, type ViewContext } from "@ui/view/view-context";
+import { createViewContext, type ViewContext, type ViewTab } from "@ui/view/view-context";
 import { updateCompareTray, openCompareModal, enterCompareMode, exitCompareMode } from "@ui/view/view-compare";
 import { disposeComparePage } from "@ui/components/compare-view";
 
@@ -470,12 +471,14 @@ export class ChinesePluginMarketView extends ItemView {
 	/** 正在一键更新的插件 id 集合（防重点 + 驱动卡片按钮 loading 态） */
 	public updatingIds = new Set<string>();
 
-	/** 主视图当前页签：浏览（默认）/ 更新（已安装待更新列表） */
-	public viewTab: "browse" | "updates" = "browse";
+	/** 主视图当前页签：浏览（默认）/ 更新（已安装待更新）/ 直链（直链安装的插件与主题） */
+	public viewTab: ViewTab = "browse";
 	/** 更新页签里被勾选（待更新）的插件 id 集合 */
 	public updateSelection = new Set<string>();
 	/** 「更新」页签列表容器（由 view-chrome 创建并挂到 ctx.updatesListEl） */
 	public updatesListEl: HTMLElement | null = null;
+	/** 「直链」页签列表容器（由 view-chrome 创建并挂到 ctx.betaListEl） */
+	public betaListEl: HTMLElement | null = null;
 
 	/**
 	 * 更新单个已安装插件到官方最新版（桌面端）；传入 version 时改为固定安装到该 tag。
@@ -577,8 +580,11 @@ export class ChinesePluginMarketView extends ItemView {
 		this.updateSelection = new Set(this._ctx.outdatedIds);
 	}
 
-	/** 切换到指定页签（浏览 / 更新）：显隐卡片层/搜索栏，更新 tab 高亮，并渲染对应内容 */
-	public switchViewTab = (tab: "browse" | "updates") => {
+	/**
+	 * 切换到指定页签（浏览 / 更新 / 直链）：显隐卡片层/搜索栏与各页签列表，
+	 * 更新 tab 高亮，并渲染对应内容。三个页签共用同一个滚动视口，只做 display 切换。
+	 */
+	public switchViewTab = (tab: ViewTab) => {
 		if (this.viewTab === tab) return;
 		this.viewTab = tab;
 		const contentEl = this.contentEl;
@@ -590,22 +596,28 @@ export class ChinesePluginMarketView extends ItemView {
 		const headerRow = q(contentEl, ".pt-header-row");
 		const cardLayer = this.scrollCardLayer;
 		const updatesEl = this.updatesListEl;
+		const betaEl = this.betaListEl;
 		const featuredEl = q(contentEl, ".pt-featured");
-		if (tab === "updates") {
-			headerRow?.setCssStyles({ display: "none" });
-			cardLayer?.setCssStyles({ display: "none" });
-			featuredEl?.setCssStyles({ display: "none" });
-			if (updatesEl) {
-				updatesEl.setCssStyles({ display: "" });
+		const isBrowse = tab === "browse";
+
+		// 搜索行 / 卡片层 / featured 只在浏览页签显示
+		headerRow?.setCssStyles({ display: isBrowse ? "" : "none" });
+		cardLayer?.setCssStyles({ display: isBrowse ? "" : "none" });
+		featuredEl?.setCssStyles({ display: isBrowse ? "" : "none" });
+
+		if (updatesEl) {
+			updatesEl.setCssStyles({ display: tab === "updates" ? "" : "none" });
+			if (tab === "updates") {
 				this.syncUpdateSelectionToOutdated();
 				this.renderUpdatesList();
 			}
-		} else {
-			updatesEl?.setCssStyles({ display: "none" });
-			headerRow?.setCssStyles({ display: "" });
-			cardLayer?.setCssStyles({ display: "" });
-			this.renderPluginList(true);
 		}
+		if (betaEl) {
+			betaEl.setCssStyles({ display: tab === "beta" ? "" : "none" });
+			if (tab === "beta") this.renderBetaList();
+		}
+
+		if (isBrowse) this.renderPluginList(true);
 	};
 
 	/** 批量更新勾选的插件到最新版，结束后重新检测并刷新更新列表 */
@@ -628,6 +640,12 @@ export class ChinesePluginMarketView extends ItemView {
 	public renderUpdatesList = () => {
 		if (this.viewTab !== "updates") return;
 		renderUpdatesList(this._ctx);
+	};
+
+	/** 重渲染「直链」页签列表（内部委托给 view-beta 渲染器） */
+	public renderBetaList = () => {
+		if (this.viewTab !== "beta") return;
+		renderBetaList(this._ctx);
 	};
 
 	async onOpen() {

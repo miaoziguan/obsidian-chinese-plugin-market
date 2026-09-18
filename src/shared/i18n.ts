@@ -62,9 +62,10 @@ export const STRINGS = {
 	"action.update.fetchFail": { zh: "{file} 下载失败 HTTP {code}" },
 	"action.update.progress": { zh: "批量更新 {done}/{total}" },
 	"action.update.summary": { zh: "批量更新完成：成功 {ok} / 失败 {fail}" },
-	// 主视图页签：浏览 / 更新
+	// 主视图页签：浏览 / 更新 / 直链
 	"view.tab.browse": { zh: "浏览" },
 	"view.tab.updates": { zh: "更新" },
+	"view.tab.beta": { zh: "直链" },
 	// 更新列表（主视图「更新」页签）
 	"updates.empty": { zh: "暂无可用更新" },
 	"updates.empty.hint": { zh: "点「检查更新」检测已安装插件是否有新版本" },
@@ -678,6 +679,15 @@ export const STRINGS = {
 		zh: "填写主题仓库地址即可安装。也可用 owner/repo@分支、@标签、@commit 钉版本，或 @release 从 Release 安装。",
 	},
 	"beta.installed.theme": { zh: "已安装主题 {name}" },
+	// 主视图「直链」页签列表（与设置页同一批数据，但入口在主视图）
+	"betaList.hint": { zh: "只列出「从直链安装」的插件与主题：可更新到来源最新版、冻结（不参与自动更新）、或取消跟踪" },
+	"betaList.count": { zh: "共 {n} 项" },
+	"betaList.empty": { zh: "还没有通过直链安装的内容" },
+	"betaList.empty.hint": { zh: "从左侧栏图标菜单或命令面板选「{cmd}」，装过的插件与主题会自动出现在这里" },
+	"betaList.source": { zh: "来源" },
+	"betaList.release": { zh: "Release" },
+	"betaList.untracked": { zh: "已取消跟踪" },
+	"betaList.open": { zh: "查看详情" },
 	"badThemeName": { zh: "主题名不合法（不能含 / 或以 . 开头）" },
 	"directInstall.ghNoTheme": {
 		zh: "仓库 {repo} 里找不到 theme.css（这可能不是主题仓库）",
