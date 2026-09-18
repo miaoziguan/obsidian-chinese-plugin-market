@@ -11,6 +11,7 @@ import { type PluginInfo, type TranslateResult } from "@domain/catalog/translato
 import { resolveUrl, classifyNetworkError, type MirrorConfig } from "@domain/catalog/mirror";
 import { fetchPluginStats, PLUGIN_STATS_URL } from "@domain/catalog/stats";
 import { formatRelativeTime, type I18nKey } from "@shared/i18n";
+import { compareVersion } from "@shared/version";
 import { computeCoverage } from "@translation/lexicon/dictionary";
 import { createStrong, q, toHTMLElement } from "@ui/dom/dom";
 import { buildSearchBlob } from "@domain/filter/filter";
@@ -646,21 +647,6 @@ export function buildAuthorFacet(ctx: ViewContext) {
 			.map(([name, count]) => ({ name, count }));
 		ctx.authorFacetList = groupAuthorsByName(multi);
 	
-}
-
-/**
- * 比较两个 semver 版本号（major.minor.patch，忽略前缀 v）。
- * @returns 负数 = a<b（a 旧），0 = 相等，正数 = a>b（a 新）
- */
-function compareVersion(a: string, b: string): number {
-	const pa = a.replace(/^v/i, "").split(".").map((x) => parseInt(x, 10) || 0);
-	const pb = b.replace(/^v/i, "").split(".").map((x) => parseInt(x, 10) || 0);
-	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-		const da = pa[i] ?? 0;
-		const db = pb[i] ?? 0;
-		if (da !== db) return da - db;
-	}
-	return 0;
 }
 
 // 防重入锁：视图生命周期内只跑一次（已装插件数量少，结果内存缓存即可，不落盘）
