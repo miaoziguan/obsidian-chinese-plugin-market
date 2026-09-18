@@ -176,4 +176,12 @@ describe("runAISearch (P2-1: 从 view-data 拆离 AI 搜索编排)", () => {
 		expect(translator.aiSearchLocal).toHaveBeenCalled();
 		expect(ctx.aiSearchResult).toEqual({ rankedIds: ["a", "b"] });
 	});
+
+	it("pluginArgs 透传 downloads/updated（补丁 B 质量因子数据源，此前只在卡片展示）", async () => {
+		const { ctx, translator, searchInput, aiBadge } = mkCtx();
+		ctx.plugins.push({ id: "a", name: "A", description: "d", downloads: 123, updated: 456 } as any);
+		await runAISearch(ctx, searchInput, aiBadge);
+		const args = (translator.aiSearch as any).mock.calls[0][1];
+		expect(args[0]).toMatchObject({ id: "a", downloads: 123, updated: 456 });
+	});
 });

@@ -1116,7 +1116,7 @@ export class Translator {
 	 */
 	async aiSearch(
 		query: string,
-		allPlugins: { id: string; name: string; description: string }[],
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string; downloads?: number; updated?: number }[],
 		config?: AISearchConfig,
 		showReason = false,
 		onPhase?: (phase: string, detail: string) => void,
@@ -1132,7 +1132,7 @@ export class Translator {
 	 */
 	async aiSearchLocal(
 		query: string,
-		allPlugins: { id: string; name: string; description: string }[],
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string; downloads?: number; updated?: number }[],
 		config?: AISearchConfig,
 		filterCategories?: string[],
 	): Promise<AISearchResult> {

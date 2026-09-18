@@ -13,6 +13,7 @@
 import { parseJSON, parseRecallCandidates, fuzzyTitleScores, rrfFuse, topNFused, isLocalBaseUrl } from "@shared/utils";
 import { logger } from "@shared/logger";
 import { tokenizeForBM25, bm25Score } from "@domain/search/bm25";
+import { applyQualityFactors } from "@domain/search/quality";
 import { t2sForEmbed } from "@translation/lexicon/t2s";
 import { expandQuery } from "@translation/lexicon/synonyms";
 import {
@@ -233,7 +234,7 @@ export class AISearcher {
 	 */
 	async search(
 		query: string,
-		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[],
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string; downloads?: number; updated?: number }[],
 		showReason = false,
 		onPhase?: (phase: string, detail: string) => void,
 		filterCategories?: string[],
@@ -269,14 +270,16 @@ export class AISearcher {
 
 		// RRF 融合：向量 + 关键词 + 标题模糊 三路名次融合（异构分数量纲不同，RRF 只看名次，
 		// 比「并集取前 N」更稳；多路都命中的候选自然靠前，减少 LLM 精排负担）。
+		// 融合分再乘质量因子（recency×popularity，带宽 [0.85,1.15]）：平局区让
+		// 「还在维护的、用的人多的」上位；AI 模式下只影响候选池入选与截断，精排保持纯相关性。
 		let fusedIds: string[];
 		if (vectorScores && vectorScores.size > 0) {
 			// 向量路可用：三路融合（模糊权重低一些，作 tie-break）
-			const fused = rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5]);
+			const fused = applyQualityFactors(rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5]), allPlugins);
 			fusedIds = topNFused(fused, CANDIDATE_POOL_CAP).map((x) => x.id);
 		} else {
 			// 向量路不可用：关键词 + 标题模糊 两路融合
-			const fused = rrfFuse([localScores, fuzzyScores], [1.0, 0.5]);
+			const fused = applyQualityFactors(rrfFuse([localScores, fuzzyScores], [1.0, 0.5]), allPlugins);
 			fusedIds = topNFused(fused, CANDIDATE_POOL_CAP).map((x) => x.id);
 		}
 
@@ -338,7 +341,7 @@ export class AISearcher {
 	 */
 	async localSearch(
 		query: string,
-		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[],
+		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string; downloads?: number; updated?: number }[],
 		filterCategories?: string[],
 	): Promise<AISearchResult> {
 		if (!allPlugins.length) throw new Error("无插件数据，请先加载列表");
@@ -362,19 +365,15 @@ export class AISearcher {
 		const localScores = bm25RecallScores(query, this.getBm25Index(allPlugins));
 		const fuzzyScores = fuzzyTitleScores(query, allPlugins);
 
-		// RRF 融合（与 AI 模式召回一致；向量不可用时退化为关键词+标题）
-		let fusedIds: string[];
-		if (vectorScores && vectorScores.size > 0) {
-			fusedIds = topNFused(
-				rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5]),
-				CANDIDATE_POOL_CAP
-			).map((x) => x.id);
-		} else {
-			fusedIds = topNFused(
-				rrfFuse([localScores, fuzzyScores], [1.0, 0.5]),
-				CANDIDATE_POOL_CAP
-			).map((x) => x.id);
-		}
+		// RRF 融合（与 AI 模式召回一致；向量不可用时退化为关键词+标题）。
+		// 质量因子在此直接塑造最终排序（本地模式无 LLM 精排，是它的主战场）。
+		const fused = applyQualityFactors(
+			vectorScores && vectorScores.size > 0
+				? rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5])
+				: rrfFuse([localScores, fuzzyScores], [1.0, 0.5]),
+			allPlugins
+		);
+		const fusedIds = topNFused(fused, CANDIDATE_POOL_CAP).map((x) => x.id);
 
 		logger.debug(
 			`[Chinese Plugin Market] 本地语义搜索：query="${query}" · 向量命中=${vectorScores?.size ?? 0} · ` +

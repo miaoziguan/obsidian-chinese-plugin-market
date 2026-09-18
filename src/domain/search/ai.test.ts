@@ -245,3 +245,50 @@ describe("BM25 标题场加权（双场索引）", () => {
 		expect(idx2.docTokensById.get("a")?.title).toContain("甲");
 	});
 });
+
+describe("质量因子集成（补丁 B：recency×popularity）", () => {
+	beforeEach(() => {
+		req.mockReset();
+		setHttpClient({ request: req });
+	});
+	afterEach(() => {
+		resetHttpClient();
+	});
+
+	/** 同文本双插件：BM25/标题模糊分完全一致，RRF 平局按插入序 stale 在前——
+	 *  若 fresh 最终排第一，只能是质量因子翻的盘（确定性归因）。 */
+	function twinPlugins(now: number) {
+		const DAY = 86400000;
+		return [
+			{ id: "stale", name: "Note Track", description: "Track your notes", downloads: 100, updated: now - 1500 * DAY },
+			{ id: "fresh", name: "Note Track", description: "Track your notes", downloads: 2_000_000, updated: now - 3 * DAY },
+		];
+	}
+
+	it("localSearch：相关度平局时，新而热的排前（质量因子翻越 RRF 平局序）", async () => {
+		const { searcher } = makeSearcher();
+		req.mockRejectedValue(new Error("localSearch 不应调用网络"));
+		const result = await searcher.localSearch("track notes", twinPlugins(Date.now()) as any);
+		expect(result.rankedIds[0]).toBe("fresh");
+		expect(result.rankedIds).toEqual(["fresh", "stale"]);
+	});
+
+	it("localSearch：全部无 stats 数据 → 因子中性，平局保持原 RRF 序（无副作用回归）", async () => {
+		const { searcher } = makeSearcher();
+		req.mockRejectedValue(new Error("localSearch 不应调用网络"));
+		const plugins = [
+			{ id: "first", name: "Note Track", description: "Track your notes" },
+			{ id: "second", name: "Note Track", description: "Track your notes" },
+		];
+		const result = await searcher.localSearch("track notes", plugins as any);
+		expect(result.rankedIds).toEqual(["first", "second"]);
+	});
+
+	it("search() 降级路径（LLM 不可达）：候选序同样经过质量因子", async () => {
+		const { searcher } = makeSearcher();
+		req.mockRejectedValue(new Error("request failed"));
+		const result = await searcher.search("track notes", twinPlugins(Date.now()) as any);
+		expect(result.rankFallback).toBe(true);
+		expect(result.rankedIds[0]).toBe("fresh");
+	});
+});
