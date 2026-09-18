@@ -5,7 +5,7 @@
  * 表格渲染委托 @ui/components/journal-table，本文件只负责视图生命周期与数据组装。
  */
 import { ItemView, WorkspaceLeaf } from "obsidian";
-import { renderJournalTable, type JournalRow } from "@ui/components/journal-table";
+import { renderJournalTable, composeBilingualName, type JournalRow } from "@ui/components/journal-table";
 import type { JournalEntry } from "@domain/journal/journal-entry";
 import type { InstallRecord } from "@domain/journal/install-history";
 import type { I18nKey } from "@shared/i18n";
@@ -17,6 +17,8 @@ export interface JournalViewHost {
 	loadHistory: () => Promise<Record<string, InstallRecord>>;
 	/** 全部评测笔记 */
 	listEntries: () => Promise<JournalEntry[]>;
+	/** 官方社区列表的 id → 英文原名（供「英文为主 + 括号中文」的双语插件名展示） */
+	officialNames: () => Promise<Map<string, string>>;
 	/** 点击表格某行：跳回主视图对应插件 */
 	openPlugin: (id: string) => void;
 	t: (k: I18nKey) => string;
@@ -49,7 +51,11 @@ export class JournalView extends ItemView {
 		root.createDiv({ cls: "pt-journal-view-title", text: this.host.t("journal.footprint") });
 		const body = root.createDiv({ cls: "pt-journal-view-body" });
 
-		const [history, entries] = await Promise.all([this.host.loadHistory(), this.host.listEntries()]);
+		const [history, entries, official] = await Promise.all([
+			this.host.loadHistory(),
+			this.host.listEntries(),
+			this.host.officialNames(),
+		]);
 
 		// 还没写过任何评测：展示引导（B），并附「装过」记录数供参考
 		if (entries.length === 0) {
@@ -64,11 +70,13 @@ export class JournalView extends ItemView {
 
 		// 有评测：以评测笔记为主构建行，安装历史仅补充事实列
 		// （首次安装 / 最近动态 / 最后卸载 / 次数）
+		// 插件名按用户反馈做双语展示：英文原名为主，括号里是中文译名；
+		// 不在官方列表的（直链安装等）只有一个名字时原样展示
 		const rows: JournalRow[] = entries.map((e) => {
 			const h = history[e.id];
 			return {
 				id: e.id,
-				name: e.name ?? e.id,
+				name: composeBilingualName(official.get(e.id), e.name) || e.id,
 				status: e.status,
 				rating: e.rating,
 				verdict: e.verdict,

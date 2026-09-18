@@ -3,6 +3,7 @@ import {
 	filterJournalRows,
 	sortJournalRows,
 	journalRowsToMarkdown,
+	composeBilingualName,
 	type JournalRow,
 } from "@ui/components/journal-table";
 
@@ -75,5 +76,23 @@ describe("最后卸载列", () => {
 	it("可按最后卸载排序（无卸载时间的排在最前/最后）", () => {
 		expect(sortJournalRows(data, "uninstalled", false)[0].id).toBe("a");
 		expect(sortJournalRows(data, "uninstalled", true)[0].id).toBe("b");
+	});
+});
+
+describe("composeBilingualName 双语插件名", () => {
+	it("双语都有且不同：英文为主，全角括号补中文", () => {
+		expect(composeBilingualName("Outliner", "大纲")).toBe("Outliner（大纲）");
+	});
+	it("只有一个名字时原样展示（直链插件不在官方列表等场景）", () => {
+		expect(composeBilingualName(undefined, "代码空间")).toBe("代码空间");
+		expect(composeBilingualName("Outliner", undefined)).toBe("Outliner");
+	});
+	it("两个名字相同（忽略大小写与空白）时不重复括号——笔记名可能本就是英文", () => {
+		expect(composeBilingualName("Outliner", "outliner")).toBe("Outliner");
+		expect(composeBilingualName("Outliner", " Outliner ")).toBe("Outliner");
+	});
+	it("空白参数视同缺失，返回空串由调用方兜底 id", () => {
+		expect(composeBilingualName("  ", "  ")).toBe("");
+		expect(composeBilingualName(undefined, undefined)).toBe("");
 	});
 });
