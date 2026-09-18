@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-19T00:00:00.000Z",
+  "edges": {
+    "quickadd": [
+      {
+        "id": "templater-obsidian",
+        "name": "Templater",
+        "kind": "optional",
+        "source": "curated",
+        "confidence": 1
+      }
+    ]
+  }
+}
