@@ -1712,12 +1712,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		if (info.kind === "plugin") {
 			void this.recordInstallDiff(new Set([info.id]), new Set());
 		}
+		// 主视图「直链」页签即时显示新装的那条（若当前正停留在该页签）
+		this.refreshOpenViews();
 	}
 
 	/** 从跟踪表移除（仅移除记录，不卸载插件本身） */
 	removeBetaPlugin(id: string): void {
 		this.settings.betaPlugins = this.settings.betaPlugins.filter((e) => e.id !== id);
 		void this.flushSaveSettings();
+		this.refreshOpenViews(); // 主视图「直链」页签同步（若正停留在该页签）
 	}
 
 	/** 切换冻结态（冻结后不参与启动自动更新与「全部更新」） */
@@ -1726,6 +1729,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			e.id === id ? { ...e, frozen } : e,
 		);
 		void this.flushSaveSettings();
+		this.refreshOpenViews();
 	}
 
 	/** 更新单个直链 Beta 插件，并回写已装版本号 */
@@ -1752,6 +1756,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		} catch (err) {
 			new Notice(t("beta.failed", { msg: err instanceof Error ? err.message : String(err) }), 8000);
 		}
+		this.refreshOpenViews();
 	}
 
 	/** 全部更新（设置页按钮）：逐条更新未冻结项并回写版本号 */
@@ -1766,6 +1771,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 		this.settings.betaPlugins = [...byId.values()];
 		void this.flushSaveSettings();
+		this.refreshOpenViews();
 	}
 
 	/** 启动自动更新（onload 调用，静默跑，仅在有变化时给一条汇总） */

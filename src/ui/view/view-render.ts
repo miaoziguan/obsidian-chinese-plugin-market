@@ -322,9 +322,14 @@ export function disposeRenderTimers(ctx: ViewContext): void {
 
 export function scheduleRender(ctx: ViewContext, preserveScroll = false) {
 
-		// 「更新」页签：跳过虚拟卡片渲染，改为重绘更新列表
+		// 「更新」/「直链」页签：跳过虚拟卡片渲染，改为重绘对应页签的列表
+		// （直链列表的数据在 settings.betaPlugins 上，安装/冻结/取消跟踪后由这里统一刷新）
 		if (ctx.viewTab === "updates") {
 			ctx.renderUpdatesList();
+			return;
+		}
+		if (ctx.viewTab === "beta") {
+			ctx.renderBetaList();
 			return;
 		}
 

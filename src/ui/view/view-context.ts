@@ -35,6 +35,7 @@ import type { ListState } from "@ui/dom/list-state";
 import type { TrendingEngine } from "@domain/recommend/trending";
 import type { AuthorGroup } from "@translation/lexicon/pinyin-init";
 import type { PluginVersion } from "@data/platform/plugin-versions";
+import type { BetaPluginEntry } from "@app/direct-install";
 
 import type { I18nKey, I18nVars } from "@shared/i18n";
 import type { ChinesePluginMarketSettings, ChinesePluginMarketView, PluginProfile } from "@ui/view/translator-view";
@@ -45,6 +46,9 @@ import { makeT } from "@shared/i18n";
 // ──────────────────────────────────────────
 // ViewContext 接口定义
 // ──────────────────────────────────────────
+
+/** 主视图页签：浏览（默认）/ 更新（已安装待更新）/ 直链（直链安装的插件与主题） */
+export type ViewTab = "browse" | "updates" | "beta";
 
 /**
  * ViewContext 是 ChinesePluginMarketView 公共状态的扁平投影。
@@ -213,6 +217,8 @@ export interface ViewContext {
 	scrollCardLayer: HTMLElement | null;
 	/** 「更新」页签列表容器（由 view-chrome 创建，渲染更新列表用） */
 	updatesListEl: HTMLElement | null;
+	/** 「直链」页签列表容器（由 view-chrome 创建，渲染直链安装列表用） */
+	betaListEl: HTMLElement | null;
 	resultCountEl: HTMLElement | null;
 	aiTranslateBtnEl: HTMLButtonElement | null;
 	aiProgressEl: HTMLElement | null;
@@ -255,16 +261,18 @@ export interface ViewContext {
 	outdatedIds: Set<string>;
 	/** 可更新详情（id → {local, latest}） */
 	outdatedInfo: Map<string, { local: string; latest: string }>;
-	/** 主视图当前页签：浏览（默认）/ 更新（已安装待更新列表） */
-	viewTab: "browse" | "updates";
+	/** 主视图当前页签：浏览（默认）/ 更新（已安装待更新）/ 直链（直链安装的插件与主题） */
+	viewTab: ViewTab;
 	/** 更新页签里被勾选（待更新）的插件 id 集合 */
 	updateSelection: Set<string>;
-	/** 切换到指定页签（浏览 / 更新），负责显隐列表层并更新 tab 高亮 */
-	switchViewTab: (tab: "browse" | "updates") => void;
+	/** 切换到指定页签（浏览 / 更新 / 直链），负责显隐列表层并更新 tab 高亮 */
+	switchViewTab: (tab: ViewTab) => void;
 	/** 批量更新指定插件到最新版并刷新更新列表 */
 	updateSelected: (ids: string[]) => Promise<void>;
 	/** 重渲染「更新」页签列表（若当前不在该页签则无操作） */
 	renderUpdatesList: () => void;
+	/** 重渲染「直链」页签列表（若当前不在该页签则无操作） */
+	renderBetaList: () => void;
 	/** 刷新页签栏「更新」数量徽标（由工具栏构建时挂上，检测更新后调用） */
 	refreshViewTabsBadge?: () => void;
 	/** 正在一键安装中的插件 id 集合（安装中按钮显示「安装中…」并防重点） */
@@ -281,6 +289,18 @@ export interface ViewContext {
 	pinPluginVersion: (id: string, version: string | null) => Promise<void>;
 	/** 拉取仓库可选版本列表（新 → 旧；失败/无 Release 时返回空数组）；force=true 绕过缓存 */
 	listPluginVersions: (repo: string, force?: boolean) => Promise<PluginVersion[]>;
+
+	// ── 直链安装（Beta）跟踪表：主视图「直链」页签 ──
+	/** 直链跟踪表（settings.betaPlugins；插件与主题同表，用 kind 区分） */
+	betaPlugins: BetaPluginEntry[];
+	/** 单条更新（按记录的来源重拉三件套），失败内部已 Notice */
+	updateBetaPluginById: (id: string) => Promise<void>;
+	/** 批量更新（跳过冻结项） */
+	updateAllBetaPlugins: () => Promise<void>;
+	/** 切换冻结态（冻结后不再参与启动自动更新与「全部更新」） */
+	setBetaFrozen: (id: string, frozen: boolean) => void;
+	/** 取消跟踪（仅移除记录，不卸载插件本身） */
+	removeBetaPlugin: (id: string) => void;
 
 	// ── 智能信号 ──
 	smartSignals: Map<string, SignalId[]>;
@@ -585,6 +605,8 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set scrollCardLayer(v) { view.scrollCardLayer = v; },
 		get updatesListEl() { return view.updatesListEl; },
 		set updatesListEl(v) { view.updatesListEl = v; },
+		get betaListEl() { return view.betaListEl; },
+		set betaListEl(v) { view.betaListEl = v; },
 		get resultCountEl() { return view.resultCountEl; },
 		set resultCountEl(v) { view.resultCountEl = v; },
 		get aiTranslateBtnEl() { return view.aiTranslateBtnEl; },
@@ -733,6 +755,12 @@ get authorFacetList() { return view.authorFacetList; },
 		switchViewTab: (tab) => view.switchViewTab(tab),
 		updateSelected: (ids) => view.updateSelected(ids),
 		renderUpdatesList: () => view.renderUpdatesList(),
+		renderBetaList: () => view.renderBetaList(),
+		get betaPlugins() { return view.plugin.settings.betaPlugins; },
+		updateBetaPluginById: (id) => view.plugin.updateBetaPluginById(id),
+		updateAllBetaPlugins: () => view.plugin.updateAllBetaPlugins(),
+		setBetaFrozen: (id, frozen) => view.plugin.setBetaFrozen(id, frozen),
+		removeBetaPlugin: (id) => view.plugin.removeBetaPlugin(id),
 		get pluginVersionPins() { return view.plugin.settings.pluginVersionPins; },
 		pinPluginVersion: (id, version) => view.pinPluginVersion(id, version),
 		listPluginVersions: (repo, force) => view.listPluginVersions(repo, force),

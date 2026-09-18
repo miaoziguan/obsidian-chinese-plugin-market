@@ -15,7 +15,7 @@ import { isAIMode, isKeywordMode, isLocalMode } from "@domain/search/search-mode
 import { q } from "@ui/dom/dom";
 import { LAYOUT, SEARCH_MODES } from "@shared/constants";
 import { type SortBy } from "@domain/filter/sort";
-import type { ViewContext } from "@ui/view/view-context";
+import type { ViewContext, ViewTab } from "@ui/view/view-context";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { refreshOutdated } from "@ui/view/view-data";
 
@@ -72,9 +72,17 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			tabUpdatesBadge.setCssStyles({ display: n > 0 ? "" : "none" });
 		};
 		refreshTabsBadge();
-		const onSwitchTab = (tab: "browse" | "updates") => ctx.switchViewTab(tab);
+		// 「直链」页签：直链安装的插件与主题（同一批数据在设置页也能管，这里给个主视图入口）
+		const tabBeta = viewTabs.createEl("button", {
+			cls: "pt-view-tab",
+			attr: { "data-view-tab": "beta", "aria-pressed": "false", type: "button" },
+		});
+		tabBeta.setText(ctx.t("view.tab.beta"));
+		tabBeta.setAttribute("title", ctx.t("betaList.hint"));
+		const onSwitchTab = (tab: ViewTab) => ctx.switchViewTab(tab);
 		tabBrowse.addEventListener("click", () => onSwitchTab("browse"));
 		tabUpdates.addEventListener("click", () => onSwitchTab("updates"));
+		tabBeta.addEventListener("click", () => onSwitchTab("beta"));
 		// 把刷新徽标的回调挂到 ctx，供检测更新后同步
 		ctx.refreshViewTabsBadge = refreshTabsBadge;
 

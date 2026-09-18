@@ -481,6 +481,10 @@ export async function loadAndRender(ctx: ViewContext) {
 		const updatesEl = listContainer.createDiv({ cls: "pt-updates-list" });
 		updatesEl.setCssStyles({ display: "none" });
 		ctx.updatesListEl = updatesEl;
+		// 「直链」页签列表容器（与更新列表同级，默认隐藏；切到直链页签时显示）
+		const betaEl = listContainer.createDiv({ cls: "pt-beta-list" });
+		betaEl.setCssStyles({ display: "none" });
+		ctx.betaListEl = betaEl;
 		// S6 虚拟列表 ARIA：屏上只有窗口内卡片，用 list/listitem + posinset/setsize
 		// 告知读屏器"这是长列表的第 x/n 项"，而非只有十几项
 		cardLayer.setAttribute("role", "list");
