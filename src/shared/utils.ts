@@ -380,9 +380,20 @@ export function fuzzyTitleScores(
 			}
 			if (allMissing) continue;
 		}
+		// 字符覆盖门（2026-09-18「打卡」真机截图暴露）：query ≤2 字时 Jaro 仅共享 1 字
+		// 即得 (1/2+1/len+1)/3 ≥ 0.567，全过 0.55 阈值 → 「锁卡/桌卡/打印」等单字重叠
+		// 家族 flood 顶部（50 条标题命中淹掉真目标）。门：query 全部字符出现在该标题
+		// 才计分（「打卡」⊄「锁卡」拒、「打卡」⊂「打卡钟」留）；≥3 字 query 不动，
+		// 保住 P-0061 的前缀/拼写容错场景。per-target 判定：两个标题各自独立过门。
+		const strict = q.length <= 2;
+		const covers = (t: string): boolean => {
+			if (!strict || !qChars) return true;
+			for (const ch of qChars) if (t.indexOf(ch) === -1) return false;
+			return true;
+		};
 		const score = Math.max(
-			title ? jaroWinkler(q, title) : 0,
-			titleZh ? jaroWinkler(q, titleZh) : 0
+			title && covers(title) ? jaroWinkler(q, title) : 0,
+			titleZh && covers(titleZh) ? jaroWinkler(q, titleZh) : 0
 		);
 		if (score >= minScore) out.push([p.id, score]);
 	}

@@ -214,7 +214,7 @@ function metrics(ranked, gold) {
 	const top5 = ranked.slice(0, 5).filter((id) => g.has(id)).length;
 	const top10 = ranked.slice(0, 10).filter((id) => g.has(id)).length;
 	const first = ranked.findIndex((id) => g.has(id));
-	return { r5: top5 / gold.length, r10: top10 / gold.length, mrr: first >= 0 ? 1 / (first + 1) : 0 };
+	return { r5: top5 / gold.length, r10: top10 / gold.length, mrr: first >= 0 ? 1 / (first + 1) : 0, p10: top10 / 10 };
 }
 const agg = (rows, k) => rows.reduce((s, r) => s + r[k], 0) / rows.length;
 
@@ -239,11 +239,13 @@ for (const arm of ARMS) {
 		r5: agg(rows, "r5"),
 		r10: agg(rows, "r10"),
 		mrr: agg(rows, "mrr"),
+		p10: agg(rows, "p10"),
+		bucketP10: Object.fromEntries(buckets.map((b) => [b, agg(rows.filter((r) => r.bucket === b), "p10")])),
 		bucketR10: Object.fromEntries(buckets.map((b) => [b, agg(rows.filter((r) => r.bucket === b), "r10")])),
 		perQ,
 	};
 	console.log(
-		`${arm.label.padEnd(18)} R@5=${results[arm.id].r5.toFixed(3)} R@10=${results[arm.id].r10.toFixed(3)} MRR=${results[arm.id].mrr.toFixed(3)}` +
+		`${arm.label.padEnd(18)} R@5=${results[arm.id].r5.toFixed(3)} R@10=${results[arm.id].r10.toFixed(3)} MRR=${results[arm.id].mrr.toFixed(3)} P@10=${results[arm.id].p10.toFixed(3)}` +
 			` | 桶 ${buckets.map((b) => `${b}:${results[arm.id].bucketR10[b].toFixed(2)}`).join(" ")}` +
 			` | 索引 ${idx.tokens} tok / ${buildMs}ms`
 	);
@@ -261,7 +263,7 @@ const BASE = path.join(TASK, "eval-fusion-baseline.json");
 const snapshot = {
 	savedAt: new Date().toISOString(),
 	evalSetVersion: evalSet.version,
-	arms: Object.fromEntries(ARMS.map((a) => [a.id, { label: results[a.id].label, r5: results[a.id].r5, r10: results[a.id].r10, mrr: results[a.id].mrr, bucketR10: results[a.id].bucketR10, tokens: results[a.id].tokens }])),
+	arms: Object.fromEntries(ARMS.map((a) => [a.id, { label: results[a.id].label, r5: results[a.id].r5, r10: results[a.id].r10, mrr: results[a.id].mrr, p10: results[a.id].p10, bucketR10: results[a.id].bucketR10, bucketP10: results[a.id].bucketP10, tokens: results[a.id].tokens }])),
 };
 if (UPDATE || !fs.existsSync(BASE)) {
 	fs.writeFileSync(BASE, JSON.stringify(snapshot, null, 1));
@@ -270,8 +272,8 @@ if (UPDATE || !fs.existsSync(BASE)) {
 	const base = JSON.parse(fs.readFileSync(BASE, "utf8"));
 	const bt = base.arms?.tri;
 	const ct = results.tri;
-	if (bt && (bt.r10 - ct.r10 > 0.02 || bt.mrr - ct.mrr > 0.02)) {
-		console.error(`[gate] FAIL 现生产分词臂回退超阈：R@10 ${bt.r10.toFixed(3)}→${ct.r10.toFixed(3)} · MRR ${bt.mrr.toFixed(3)}→${ct.mrr.toFixed(3)}（阈 0.02）`);
+	if (bt && (bt.r10 - ct.r10 > 0.02 || bt.mrr - ct.mrr > 0.02 || bt.p10 - ct.p10 > 0.02)) {
+		console.error(`[gate] FAIL 现生产分词臂回退超阈：R@10 ${bt.r10.toFixed(3)}→${ct.r10.toFixed(3)} · MRR ${bt.mrr.toFixed(3)}→${ct.mrr.toFixed(3)} · P@10 ${(bt.p10 ?? 0).toFixed(3)}→${ct.p10.toFixed(3)}（阈 0.02）`);
 		process.exit(1);
 	}
 	console.log(`[gate] PASS tri 臂对基线无回退（基线 R@10=${bt?.r10?.toFixed(3)} MRR=${bt?.mrr?.toFixed(3)}）`);

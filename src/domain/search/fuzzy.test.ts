@@ -63,6 +63,29 @@ describe("fuzzyTitleScores 第三路检索器", () => {
 		]);
 		expect(m.get("kanban")).toBe(1); // nameZh 完全匹配
 	});
+
+	it("字符覆盖门：2 字 query 单字重叠拒（「打卡」真机案例 ×锁卡/打印）", () => {
+		const m = fuzzyTitleScores("打卡", [
+			{ id: "lock", name: "Lock Cards", description: "d", nameZh: "锁卡" },
+			{ id: "print", name: "Print", description: "d", nameZh: "打印" },
+			{ id: "punch", name: "Punch Clock", description: "d", nameZh: "打卡钟" },
+		]);
+		expect(m.get("lock")).toBeUndefined();
+		expect(m.get("print")).toBeUndefined();
+		expect(m.get("punch")!).toBeGreaterThan(0.55); // 全字符覆盖 → 留
+	});
+
+	it("字符覆盖门对 ≥3 字 query 不生效（P-0061 前缀容错保留）", () => {
+		const m = fuzzyTitleScores("迷你番茄", [
+			{ id: "minidoro", name: "Minidoro", description: "d", nameZh: "迷你番茄钟" },
+		]);
+		expect(m.get("minidoro")!).toBeGreaterThan(0.55);
+		// 3 字 query 部分字符缺失仍按原阈值（门只管 ≤2 字）
+		const m2 = fuzzyTitleScores("番茄钟", [
+			{ id: "pomo", name: "Pomo", description: "d", nameZh: "番茄工作法" },
+		]);
+		expect(m2.get("pomo")!).toBeGreaterThan(0.55);
+	});
 });
 
 describe("rrfFuse 融合", () => {
