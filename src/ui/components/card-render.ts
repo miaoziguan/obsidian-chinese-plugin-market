@@ -10,7 +10,8 @@
 import { Notice } from "obsidian";
 import type { PluginInfo, TranslateResult, AISearchResult } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
-import type { I18nKey } from "@shared/i18n";
+import type { I18nKey, I18nVars } from "@shared/i18n";
+import type { DepGraph } from "@domain/deps/graph";
 import { cleanChineseSpaces, stripReviewNotice } from "@shared/utils";
 import { appendSVG } from "@ui/dom/dom";
 import { isMacOS, macosSystemTranslate } from "@translation/platform/macos-shortcuts";
@@ -112,13 +113,19 @@ function highlightInto(el: HTMLElement, text: string, terms: string[] | undefine
 /** 卡片渲染上下文（由视图注入，避免渲染器依赖视图实例） */
 export interface CardRenderContext {
 	/** i18n 取词函数 */
-	t: (key: I18nKey) => string;
+	t: (key: I18nKey, vars?: I18nVars) => string;
 	/** 插件设置（健康度徽标 / 更新提醒等偏好，供卡片就地读取） */
 	settings: ChinesePluginMarketSettings;
 	/** 已安装插件 id 集合 */
 	installedIds: Set<string>;
 	/** 已启用插件 id 集合 */
 	enabledIds: Set<string>;
+	/** 已装插件本地版本号（id → manifest.version，供依赖最低版本判定） */
+	installedVersions?: Map<string, string>;
+	/** 插件依赖数据集（未加载为 null，依赖徽标不渲染） */
+	depGraph?: DepGraph | null;
+	/** 官方列表 id 集合（判定依赖目标能否给出安装入口） */
+	knownPluginIds?: Set<string>;
 	/** 评测台账：曾安装过的插件 id（含已卸载），供卡片「装过」徽标 */
 	journalTriedIds?: Set<string>;
 	/** 已写评测笔记的插件 id 集合（供卡片「评测」图标高亮） */
@@ -245,6 +252,8 @@ interface CardRefs {
 	newBadge: HTMLElement;
 	/** 「装过」标记：曾安装（含已卸载，不含当前已安装），融入作者行，常驻隐藏，applyCardState 填充 */
 	triedBadge: HTMLElement;
+	/** 「依赖未满足」徽标：必需依赖缺失/未启用/版本过低才显示，装齐了不显示（零常态噪音），applyCardState 填充 */
+	depBadge: HTMLElement;
 }
 
 const cardRefsMap = new WeakMap<HTMLElement, CardRefs>();
@@ -351,6 +360,11 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const triedBadge = metaInfo.createSpan({ cls: "pt-card-tried-badge" });
 	triedBadge.setAttribute("aria-hidden", "true");
 	triedBadge.setCssStyles({ display: "none" });
+
+	// 「依赖未满足」徽标：必需依赖缺失/未启用/版本过低才显示，装齐了不显示（零常态噪音）
+	const depBadge = metaInfo.createSpan({ cls: "pt-card-dep-badge" });
+	depBadge.setAttribute("aria-hidden", "true");
+	depBadge.setCssStyles({ display: "none" });
 
 	// ── 描述（固定行数截断展示，点击穿透到整卡委托打开详情页） ──
 	// 不再把描述区当成独立可点击元素：原方案 C 点描述 toggle 展开会占用大块可操作区、
@@ -476,7 +490,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 		nameSpan, originalName, installBtn, insightBtn, compareBtn, reviewBtn, favBtn, macosBtn, toggleSwitch, uninstallBtn,
 		descEl, statline, spark, sparkPath, dlChip, dlText, clkChip, clkText,
 		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, recommendBadge, matchSignals,
-		updateBadge, healthBadge, newBadge, triedBadge, updateBtn,
+		updateBadge, healthBadge, newBadge, triedBadge, depBadge, updateBtn,
 	});
 	cardCtxMap.set(card, ctx);
 	return card;
@@ -884,5 +898,29 @@ export function applyCardState(
 		tb.setCssStyles({ display: "" });
 	} else {
 		tb.setCssStyles({ display: "none" });
+	}
+
+	// 「依赖未满足」徽标：只在「有必需依赖且状态非 ok」时出现，装齐了不显示（避免常态噪音）。
+	// 复用 DepGraph.blockingOf：与详情区块、安装后检查共用同一份判定，三者结论一致。
+	const db = refs.depBadge;
+	const graph = ctx.depGraph;
+	const blocking =
+		graph && ctx.installedVersions && ctx.knownPluginIds
+			? graph.blockingOf(plugin.id, {
+					installedIds: ctx.installedIds,
+					enabledIds: ctx.enabledIds,
+					installedVersions: ctx.installedVersions,
+					knownIds: ctx.knownPluginIds,
+				})
+			: [];
+	if (blocking.length > 0) {
+		const first = blocking[0].dep.name || blocking[0].dep.id;
+		db.textContent =
+			blocking.length > 1
+				? t("card.depBadge.more", { name: first, n: String(blocking.length - 1) })
+				: t("card.depBadge", { name: first });
+		db.setCssStyles({ display: "" });
+	} else {
+		db.setCssStyles({ display: "none" });
 	}
 }
