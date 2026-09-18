@@ -27,7 +27,8 @@ import { createRequire } from "node:module";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "../..");
-const TASK = path.join(REPO, ".agents/state/tasks/semantic-zh-en");
+// 评测数据目录（eval-set/eval-pool/vec-cache/baseline）：默认任务目录，可用 EVAL_TASK_DIR 指向自备数据（上游贡献者无 .agents 时）
+const TASK = process.env.EVAL_TASK_DIR || path.join(REPO, ".agents/state/tasks/semantic-zh-en");
 const VAULT = path.join(
 	os.homedir(),
 	"Library/Mobile Documents/iCloud~md~obsidian/Documents/Agent/.obsidian/plugins/chinese-plugin-market"
