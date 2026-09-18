@@ -651,11 +651,10 @@ export const STRINGS = {
 	// 直链 Beta 插件管理（P0：tracked 列表 + 更新闭环 + 启动更新）
 	"beta.title": { zh: "直链安装的插件（Beta）" },
 	"beta.desc": {
-		zh: "这里列出通过「从直链安装插件」装上的插件，可一键检查并拉取 GitHub 上的更新；也可在每次启动时自动更新。",
+		zh: "直链安装的插件与主题在主视图顶部「直链」页签里管理（更新 / 冻结 / 取消跟踪 / 全部更新）；这里只保留「启动时自动检查更新」这一个开关。",
 	},
 	"beta.autoUpdate": { zh: "启动时自动检查更新" },
-	"beta.autoUpdateDesc": { zh: "打开 Obsidian 时，自动更新下方列表中未冻结的插件（仅桌面端，移动端禁止写入插件目录）。" },
-	"beta.empty": { zh: "还没有通过直链安装的插件。用命令面板「从直链安装插件」装上第一个吧。" },
+	"beta.autoUpdateDesc": { zh: "打开 Obsidian 时，自动更新直链安装且未冻结的插件与主题（仅桌面端，移动端禁止写入插件目录）。" },
 	"beta.update": { zh: "更新" },
 	"beta.updating": { zh: "更新中…" },
 	"beta.updateAll": { zh: "全部更新" },
