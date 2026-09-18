@@ -17,6 +17,7 @@ import { netRequest } from "@data/net/net";
 import type { MirrorConfig } from "@domain/catalog/mirror";
 import { mirrorConfig } from "@ui/view/view-data";
 import { logger } from "@shared/logger";
+import { reportMissingDeps } from "@ui/view/deps-report";
 
 /** 安装结果 */
 export interface InstallResult {
@@ -431,12 +432,17 @@ export async function installCommunityPlugin(
 
 	if (enabled) {
 		new Notice(t("notice.install.success", { name: plugin.name }));
+		// 安装后依赖检查：必需依赖没到位则弹可操作的提示（安装/启用/更新）。
+		// 必须晚于上面的 snapshotInstalled：此刻本体已被识别为「已装已启用」，
+		// blockingOf 不会再把它自己算成缺失，只暴露真正缺的依赖。
+		reportMissingDeps(ctx, plugin.id, plugin.name);
 		return { ok: true };
 	}
 
 	if (recognized) {
 		// 文件已写入且 Obsidian 已识别，只是未能自动启用
 		new Notice(t("notice.install.manualEnable", { name: plugin.name }));
+		reportMissingDeps(ctx, plugin.id, plugin.name);
 		return { ok: true };
 	}
 
