@@ -1,0 +1,24 @@
+{
+  "_comment": "人工精修层（不随包分发，仅供生成脚本消费）。按『枢纽插件』组织：维护『Dataview 被谁依赖』比反过来写更容易。dependents.required = 不装跑不起来；dependents.optional = 装了才有某功能。\n\n本文件是**保守种子**：只收录无误报把握的强关联。长尾依赖由 scripts/gen-plugin-deps.mjs 离线全量扫描生成（见 docs/plugin-deps-candidates.md 候选清单人工抽查后并入此处）。\n\n误报代价 > 漏报：一条错误的「必需」会直接劝退用户安装，所以不确定的不放进 required。",
+  "templater-obsidian": {
+    "name": "Templater",
+    "aliases": ["Templater"],
+    "dependents": {
+      "required": [],
+      "optional": [
+        "quickadd"
+      ]
+    }
+  },
+  "dataview": {
+    "name": "Dataview",
+    "aliases": ["DataviewJS", "dv"],
+    "dependents": {
+      "required": [],
+      "optional": [
+        "obsidian-banners",
+        "obsidian-tasks-plugin"
+      ]
+    }
+  }
+}
