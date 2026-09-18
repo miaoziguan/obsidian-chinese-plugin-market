@@ -31,7 +31,7 @@ describe("computeSimilar", () => {
 	};
 
 	it("同分类 + 标签命中排在前面", () => {
-		const sim = computeSimilar("a", all[0].description, all, ts, translated, 5);
+		const sim = computeSimilar("a", all[0].description, all, ts, translated, {}, 5);
 		// a 是 Kanban，同分类+看板标签：c (描述重叠少) 和 f (描述重叠多+多一个共享标签"任务")
 		expect(sim.length).toBeGreaterThanOrEqual(1);
 		// f 得分 = 4(分类) + 2(看板标签) + 2(任务标签) + Jaccard*2(kanban desc) ≈ 8.25
@@ -41,7 +41,7 @@ describe("computeSimilar", () => {
 	});
 
 	it("排除源插件自身", () => {
-		const sim = computeSimilar("a", all[0].description, all, ts, translated, 5);
+		const sim = computeSimilar("a", all[0].description, all, ts, translated, {}, 5);
 		expect(sim.map((s) => s.id)).not.toContain("a");
 	});
 
@@ -57,7 +57,7 @@ describe("computeSimilar", () => {
 		const tagsXy: Record<string, PluginTag> = {};
 		const ts2 = new PluginTagService();
 		ts2.load(tagsXy);
-		const sim = computeSimilar("x", plugins[0].description, plugins, ts2, {}, 5);
+		const sim = computeSimilar("x", plugins[0].description, plugins, ts2, {}, {}, 5);
 		expect(sim.length).toBeGreaterThanOrEqual(1);
 		expect(sim[0].id).toBe("y"); // 共享 "abc" 得分
 	});
@@ -72,12 +72,12 @@ describe("computeSimilar", () => {
 		const tagsAll: Record<string, PluginTag> = {};
 		const tsMany = new PluginTagService();
 		tsMany.load(tagsAll);
-		const sim = computeSimilar("0", many[0].description, many, tsMany, {}, 3);
+		const sim = computeSimilar("0", many[0].description, many, tsMany, {}, {}, 3);
 		expect(sim.length).toBeLessThanOrEqual(3);
 	});
 
 	it("reason 包含分类与标签信息", () => {
-		const sim = computeSimilar("a", all[0].description, all, ts, translated, 5);
+		const sim = computeSimilar("a", all[0].description, all, ts, translated, {}, 5);
 		for (const s of sim) {
 			expect(typeof s.reason).toBe("string");
 			expect(s.reason.length).toBeGreaterThan(0);
@@ -85,34 +85,43 @@ describe("computeSimilar", () => {
 	});
 
 	it("translatedName 优先使用翻译结果", () => {
-		const sim = computeSimilar("a", all[0].description, all, ts, translated, 5);
+		const sim = computeSimilar("a", all[0].description, all, ts, translated, {}, 5);
 		const c = sim.find((s) => s.id === "c");
 		expect(c?.translatedName).toBe("任务板");
 	});
 
+	it("translatedDesc 优先使用翻译结果", () => {
+		const translatedDescs: Record<string, string> = {
+			c: "可视化看板任务管理",
+		};
+		const sim = computeSimilar("a", all[0].description, all, ts, translated, translatedDescs, 5);
+		const c = sim.find((s) => s.id === "c");
+		expect(c?.translatedDesc).toBe("可视化看板任务管理");
+	});
+
 	it("无翻译结果时 fallback 到原名", () => {
 		// c 在 similar 结果中但 translated 为空，应 fallback 到 c.name
-		const sim = computeSimilar("a", all[0].description, all, ts, {}, 5);
+		const sim = computeSimilar("a", all[0].description, all, ts, {}, {}, 5);
 		const c = sim.find((s) => s.id === "c");
 		expect(c?.translatedName).toBe("Task Board");
 	});
 
 	it("无翻译结果时 fallback 到原名", () => {
 		// c 在 similar 结果中但没有 translatedNames，应 fallback 到 c.name
-		const sim = computeSimilar("a", all[0].description, all, ts, {}, 5);
+		const sim = computeSimilar("a", all[0].description, all, ts, {}, {}, 5);
 		const c = sim.find((s) => s.id === "c");
 		expect(c?.translatedName).toBe("Task Board"); // c.name 原名
 	});
 
 	it("标签重叠多者得分更高", () => {
-		const sim = computeSimilar("a", all[0].description, all, ts, translated, 5);
+		const sim = computeSimilar("a", all[0].description, all, ts, translated, {}, 5);
 		// f (3 共享标签 + kanban desc overlap) > c (1 共享标签 + kanban desc overlap)
 		expect(sim[0].id).toBe("f");
 		expect(sim.some((s) => s.id === "c")).toBe(true);
 	});
 
 	it("空插件列表不崩溃", () => {
-		const sim = computeSimilar("a", all[0].description, [], ts, translated, 5);
+		const sim = computeSimilar("a", all[0].description, [], ts, translated, {}, 5);
 		expect(sim).toEqual([]);
 	});
 
@@ -125,7 +134,7 @@ describe("computeSimilar", () => {
 		];
 		const emptyTs = new PluginTagService();
 		emptyTs.load({});
-		const sim = computeSimilar("s", plugins[0].description, plugins, emptyTs, {}, 5);
+		const sim = computeSimilar("s", plugins[0].description, plugins, emptyTs, {}, {}, 5);
 		expect(sim.length).toBe(1);
 		expect(sim[0].id).toBe("r");
 		expect(sim[0].score).toBeLessThanOrEqual(2);
@@ -144,7 +153,7 @@ describe("computeSimilar", () => {
 			{ id: "a", name: "Notepad", description: "simple markdown notepad for quick notes" },
 			{ id: "g", name: "Super Notepad", description: "advanced markdown notepad with rich editing features" },
 		];
-		const sim = computeSimilar("a", all2[0].description, all2, ts2, {}, 5);
+		const sim = computeSimilar("a", all2[0].description, all2, ts2, {}, {}, 5);
 		expect(sim[0].id).toBe("g");
 		expect(sim[0].reason).toContain("笔记");
 	});
@@ -166,7 +175,7 @@ describe("computeSimilar + 倒排索引健壮性（回归）", () => {
 	it("传未 build 的倒排索引时不返回空（空索引曾导致相似推荐全空）", () => {
 		const idx = new InvertedIndex(); // 未 build
 		expect(idx.isBuilt).toBe(false);
-		const sim = computeSimilar("a", all[0].description, all, ts, {}, 5, idx);
+		const sim = computeSimilar("a", all[0].description, all, ts, {}, {}, 5, idx);
 		// 快速路径候选为空 → 降级全量扫描（用真实 tagService 数据算分）→ 非空
 		expect(sim.length).toBeGreaterThan(0);
 	});
@@ -180,7 +189,7 @@ describe("computeSimilar + 倒排索引健壮性（回归）", () => {
 			}),
 		);
 		expect(idx.isBuilt).toBe(true);
-		const sim = computeSimilar("a", all[0].description, all, ts, {}, 5, idx);
+		const sim = computeSimilar("a", all[0].description, all, ts, {}, {}, 5, idx);
 		expect(sim.length).toBeGreaterThan(0);
 	});
 });

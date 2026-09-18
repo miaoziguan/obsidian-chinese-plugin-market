@@ -89,9 +89,11 @@ export function computeSimilarFor(ctx: ViewContext, info: PluginInfo) : SimilarC
 		}
 
 		const translatedMap: Record<string, string> = {};
+		const translatedDescMap: Record<string, string> = {};
 		for (const p of all) {
 			const r = ctx.translatedResults[p.id];
 			if (r?.translatedName) translatedMap[p.id] = r.translatedName;
+			if (r?.translatedDesc) translatedDescMap[p.id] = r.translatedDesc;
 		}
 
 		return computeSimilar(
@@ -100,6 +102,7 @@ export function computeSimilarFor(ctx: ViewContext, info: PluginInfo) : SimilarC
 			all,
 			tagService,
 			translatedMap,
+			translatedDescMap,
 			5,
 			ctx.invertedIndex
 		);

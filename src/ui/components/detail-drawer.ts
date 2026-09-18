@@ -1202,11 +1202,12 @@ export class PluginDetailDrawer {
 				card.createDiv({ cls: "pt-detail-similar-original", text: sim.name });
 			}
 
-			// 行3：插件简介（替代「描述相关」等推荐理由，可直接扫描过滤）
-			if (sim.description) {
+			// 行3：插件简介（优先使用已翻译中文描述，无译文再回落原文）
+			const descText = sim.translatedDesc?.trim() || sim.description;
+			if (descText) {
 				card.createDiv({
 					cls: "pt-detail-similar-desc",
-					text: stripReviewNotice(cleanChineseSpaces(sim.description)),
+					text: stripReviewNotice(cleanChineseSpaces(descText)),
 				});
 			}
 
