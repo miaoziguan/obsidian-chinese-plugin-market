@@ -96,6 +96,25 @@ function statusLabel(r: JournalRow, t: (k: I18nKey) => string): string {
 }
 
 /**
+ * 组合双语插件名：英文原名为主、全角括号补中文译名（用户反馈偏好）。
+ *
+ * - 两个名字都有且不同（忽略大小写/空白）→ `英文（中文）`
+ * - 只有一个 / 两者相同 → 直接用那一个（评测笔记的名字可能本就是英文：
+ *   它保存的是写评测时的显示名，跟随用户「插件标题显示」设置）
+ * - 都没有 → 空串（调用方自行兜底 id）
+ *
+ * 单元格是一个整体字符串，因此表格的「搜索」对中英文都能命中，无需拆两列。
+ */
+export function composeBilingualName(en?: string, zh?: string): string {
+	const e = en?.trim() ?? "";
+	const c = zh?.trim() ?? "";
+	if (!e) return c;
+	if (!c) return e;
+	if (e.localeCompare(c, undefined, { sensitivity: "base" }) === 0) return e;
+	return `${e}（${c}）`;
+}
+
+/**
  * 日期格式化；estimated=true 时加「≈」前缀，表示时间来自文件系统推断而非真实观测。
  */
 function fmtDate(ms?: number | null, estimated = false): string {

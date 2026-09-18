@@ -711,6 +711,23 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					return (await this.storage.loadInstallHistory()).entries;
 				},
 				listEntries: () => this.listJournalEntries(),
+				// 官方列表 id → 英文原名：足迹表做「英文为主 + 括号中文」的双语插件名
+				officialNames: async () => {
+					try {
+						const list = (await this.storage.loadPluginListCache()) as
+							| { id?: unknown; name?: unknown }[]
+							| null;
+						const m = new Map<string, string>();
+						for (const p of list ?? []) {
+							if (typeof p?.id === "string" && typeof p?.name === "string" && p.name.trim()) {
+								m.set(p.id, p.name.trim());
+							}
+						}
+						return m;
+					} catch {
+						return new Map<string, string>();
+					}
+				},
 				openPlugin: (id) => void this.openJournalTarget(id),
 				t: (k) => t(k),
 			}),
