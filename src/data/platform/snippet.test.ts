@@ -90,7 +90,12 @@ function makeApp(
 						files: files.filter((f) => f.path.startsWith(`${p}/`)).map((f) => f.path),
 					};
 				},
-				read: async (p: string) => `content-of-${p}`,
+				read: async (p: string) => {
+					if (p.endsWith("/appearance.json")) {
+						return JSON.stringify({ enabledCssSnippets: [...enabled] });
+					}
+					return `content-of-${p}`;
+				},
 				write: async (p: string) => {
 					writes.push(p);
 					files.push({ path: p, name: p.split("/").pop() ?? "" });
@@ -162,11 +167,27 @@ describe("snippet 平台层", () => {
 		expect(isSnippetEnabled(app as never, "y")).toBe(false);
 	});
 
-	it("isSnippetEnabled 旧版 customCss.snippets 数组回退", () => {
+	it("isSnippetEnabled 无 enabledSnippets 时以缓存为准", async () => {
 		const app = makeApp({ enabled: ["x"] });
 		delete (app.customCss as { enabledSnippets?: Set<string> }).enabledSnippets;
+		// 刷新后缓存写入真实启用状态，isSnippetEnabled 再读缓存
+		await refreshSnippets(app as never);
 		expect(isSnippetEnabled(app as never, "x")).toBe(true);
 		expect(isSnippetEnabled(app as never, "y")).toBe(false);
+	});
+
+	it("refreshSnippets 无 enabledSnippets 时从 appearance.json 读取启用状态", async () => {
+		const app = makeApp({
+			enabled: ["b"],
+			files: [
+				{ path: ".obsidian/snippets/a.css", name: "a.css" },
+				{ path: ".obsidian/snippets/b.css", name: "b.css" },
+			],
+		});
+		delete (app.customCss as { enabledSnippets?: Set<string> }).enabledSnippets;
+		const list = await refreshSnippets(app as never);
+		expect(list.find((s) => s.baseName === "a")?.enabled).toBe(false);
+		expect(list.find((s) => s.baseName === "b")?.enabled).toBe(true);
 	});
 
 	it("setSnippetEnabled 调用 setCssEnabledStatus(name, enabled) 并刷新 CSS", async () => {

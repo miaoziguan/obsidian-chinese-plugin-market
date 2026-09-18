@@ -22,12 +22,36 @@ export function snippetDir(app: App): string {
 	return `${cfg.replace(/\/+$/, "")}/snippets`;
 }
 
+/**
+ * 读取当前已启用 CSS 片段集合。
+ *
+ * 优先使用 Obsidian 内部 `customCss.enabledSnippets`（Set）。
+ * 部分旧版 Obsidian 无此字段，且 `customCss.snippets` 是「检测到的全部」而非
+ * 「已启用」，直接 fallback 会导致所有片段被误判为启用。此时从 appearance.json
+ * 的 `enabledCssSnippets` 数组读取真实启用状态。
+ */
+async function readEnabledSnippets(app: App): Promise<Set<string>> {
+	const cc = asAppInternals(app).customCss;
+	if (cc?.enabledSnippets instanceof Set) return cc.enabledSnippets;
+
+	const cfgDir = app.vault?.configDir ?? ".obsidian";
+	try {
+		const text = await app.vault.adapter.read(`${cfgDir}/appearance.json`);
+		const data = JSON.parse(text) as { enabledCssSnippets?: string[] };
+		const arr = Array.isArray(data?.enabledCssSnippets) ? data.enabledCssSnippets : [];
+		return new Set(arr.map((n) => n.replace(/\.css$/i, "")));
+	} catch (error) {
+		logger.warn("[Chinese Plugin Market] 读取 appearance.json 失败，CSS 启用状态可能不准确:", error);
+		return new Set();
+	}
+}
+
 export interface SnippetInfo {
 	/** 文件名（含 .css 后缀） */
 	name: string;
 	/** 去 .css 后缀的基名，用作分组 / 元数据 key */
 	baseName: string;
-	/** 是否处于启用状态（由 app.customCss.snippets 判定） */
+	/** 是否处于启用状态（由 app.customCss.enabledSnippets 或 appearance.json 判定） */
 	enabled: boolean;
 	/** vault 相对路径 */
 	path: string;
@@ -62,8 +86,7 @@ export function listSnippets(app: App): SnippetInfo[] {
  */
 export async function refreshSnippets(app: App): Promise<SnippetInfo[]> {
 	const dir = snippetDir(app);
-	const cc = asAppInternals(app).customCss;
-	const enabled = cc?.enabledSnippets ?? new Set(cc?.snippets ?? []);
+	const enabled = await readEnabledSnippets(app);
 	const byBase = new Map<string, string>();
 
 	for (const fileName of await listSnippetFileNames(app, dir)) {
@@ -105,11 +128,13 @@ async function listSnippetFileNames(app: App, dir: string): Promise<string[]> {
 	}
 }
 
-/** 某个片段是否启用（新版用 enabledSnippets 集合，旧版回退 snippets 数组） */
+/** 某个片段是否启用（优先 app.customCss.enabledSnippets，否则读缓存/appearance.json） */
 export function isSnippetEnabled(app: App, baseName: string): boolean {
 	const cc = asAppInternals(app).customCss;
-	if (cc?.enabledSnippets) return cc.enabledSnippets.has(baseName);
-	return Boolean(cc?.snippets?.includes(baseName));
+	if (cc?.enabledSnippets instanceof Set) return cc.enabledSnippets.has(baseName);
+	// 无运行时集合时，以最近一次 refreshSnippets 缓存为准
+	const cached = snippetCache.get(app)?.find((s) => s.baseName === baseName);
+	return cached?.enabled ?? false;
 }
 
 /** 切换片段启用状态（调用 Obsidian 内部 setCssEnabledStatus(name, enabled) 并刷新应用） */
