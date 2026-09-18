@@ -21,6 +21,12 @@ export interface InstallRecord {
 	installCount: number;
 	currentlyInstalled: boolean;
 	currentlyEnabled: boolean;
+	/**
+	 * 安装时间是否为**估算值**（true = 本台账开始记录前就已装上的插件，
+	 * 只能从文件系统时间推断）。UI 用「≈」前缀 + tooltip 标注，避免把估算当精确时间。
+	 * 一旦观测到一次真实的安装事件，该标记自动清除。
+	 */
+	estimated?: boolean;
 }
 
 export interface InstallHistoryFile {
@@ -40,10 +46,41 @@ export interface InstallDiff {
 	/** 取显示名（新记录时用；已有记录保留首次的名字） */
 	nameOf: (id: string) => string;
 	now: number;
+	/**
+	 * 新增记录的安装时间来源（可选）：key 存在 = 该记录的时间来自文件系统推断，
+	 * 会打上 estimated 标记；key 存在但值为空对象 = 推断不出来（用 now 兜底，仍标估算）。
+	 * 未提供 stamps 时按「真实观测到的安装事件」处理（精确时间，无标记）。
+	 */
+	stamps?: Record<string, { firstInstalled?: number; lastInstalled?: number }>;
 }
 
 export function emptyInstallHistory(): InstallHistoryFile {
 	return { version: 1, entries: {} };
+}
+
+/**
+ * 从文件系统时间推断安装时间（纯函数，供「台账启用前就已装上」的历史回填）。
+ *
+ * 依据：插件目录的创建时间（ctime）≈ 首次安装；manifest.json 的修改时间 ≈ 最近一次安装/更新
+ * （每次安装/更新都会重写该文件）。两个时间都拿不到时返回空对象，调用方仍会写入记录
+ * 但打上 estimated 标记（时间退化为 now）。
+ */
+export function estimateInstallTimes(
+	dirCtime: number | undefined,
+	manifestMtime: number | undefined,
+	now: number,
+): { firstInstalled?: number; lastInstalled?: number } {
+	// 允许 60s 时钟偏差，超过即视为脏数据（0 / NaN / 未来时间）
+	const valid = (ts: number | undefined): ts is number =>
+		typeof ts === "number" && Number.isFinite(ts) && ts > 0 && ts <= now + 60_000;
+	const dir = valid(dirCtime) ? dirCtime : undefined;
+	const man = valid(manifestMtime) ? manifestMtime : undefined;
+	const candidates = [dir, man].filter((v): v is number => v != null);
+	if (candidates.length === 0) return {};
+	return {
+		firstInstalled: dir ?? man,
+		lastInstalled: Math.max(...candidates),
+	};
 }
 
 /**
@@ -62,18 +99,23 @@ export function mergeInstallDiff(
 ): Record<string, InstallRecord> {
 	const out: Record<string, InstallRecord> = {};
 	for (const [id, r] of Object.entries(current)) out[id] = { ...r };
-	const { added, removed, installedIds, enabledIds, nameOf, now } = diff;
+	const { added, removed, installedIds, enabledIds, nameOf, now, stamps } = diff;
 
 	for (const id of added) {
 		const prev = out[id];
+		const stamp = stamps?.[id];
+		// 只有「带着 stamps 回来」的新增才是估算（回填场景）；真实安装事件不标
+		const estimated = stamps != null && Object.prototype.hasOwnProperty.call(stamps, id);
 		out[id] = {
 			name: prev?.name ?? nameOf(id),
-			firstInstalled: prev?.firstInstalled ?? now,
-			lastInstalled: now,
+			// 已有记录保留更早的首次安装时间；重装不把 firstInstalled 往后推
+			firstInstalled: stamp?.firstInstalled ?? prev?.firstInstalled ?? now,
+			lastInstalled: stamp?.lastInstalled ?? now,
 			uninstalled: null,
 			installCount: (prev?.installCount ?? 0) + 1,
 			currentlyInstalled: true,
 			currentlyEnabled: enabledIds.has(id),
+			...(estimated ? { estimated: true } : {}),
 		};
 	}
 

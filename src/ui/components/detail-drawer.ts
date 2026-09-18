@@ -110,12 +110,15 @@ export interface DrawerHostPlugin {
 	 * 记录一次安装/卸载 diff 到评测台账的历史索引（评测台账阶段 2）。
 	 * 由 installed-watch 监听插件目录变化时调用；fire-and-forget，失败只 warn，
 	 * 绝不影响首屏与已安装徽标刷新。
+	 *
+	 * installedIds/enabledIds 可省略：实现方会自行取内存快照（避免调用方传半套集合
+	 * 导致「跨会话卸载」误判）。
 	 */
 	recordInstallDiff: (
 		added: Set<string>,
 		removed: Set<string>,
-		installedIds: Set<string>,
-		enabledIds: Set<string>,
+		installedIds?: Set<string>,
+		enabledIds?: Set<string>,
 	) => Promise<void>;
 	// 评测台账（P3）：抽屉内的「我的评测」编辑区所需端口
 	journalEnabled: () => boolean;

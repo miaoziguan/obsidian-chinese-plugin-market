@@ -47,5 +47,33 @@ describe("journalRowsToMarkdown", () => {
 		const lines = md.split("\n");
 		expect(lines.length).toBe(5);
 		expect(lines[0]).toContain("journal.col.name");
+		expect(lines[0]).toContain("journal.col.uninstalled");
+	});
+});
+
+describe("最后卸载列", () => {
+	const data: JournalRow[] = [
+		{ id: "a", name: "A", firstInstalled: 100, lastActive: 200, uninstalled: 150, estimated: true },
+		{ id: "b", name: "B", firstInstalled: 300, lastActive: 400 },
+	];
+
+	it("导出 Markdown：卸载时间独立成列，未卸载为「—」", () => {
+		const lines = journalRowsToMarkdown(data, (k) => k as string).split("\n");
+		const cellsA = lines[2].split(" | ");
+		const cellsB = lines[3].split(" | ");
+		// 列序：插件 | 状态 | 评分 | 原因 | 首次安装 | 最近动态 | 最后卸载 | 备注
+		expect(cellsA[6]).not.toBe("—");
+		expect(cellsB[6]).toBe("—");
+	});
+
+	it("估算时间加「≈」前缀，避免把推断值当精确时间", () => {
+		const lines = journalRowsToMarkdown(data, (k) => k as string).split("\n");
+		expect(lines[2]).toContain("≈");
+		expect(lines[3]).not.toContain("≈");
+	});
+
+	it("可按最后卸载排序（无卸载时间的排在最前/最后）", () => {
+		expect(sortJournalRows(data, "uninstalled", false)[0].id).toBe("a");
+		expect(sortJournalRows(data, "uninstalled", true)[0].id).toBe("b");
 	});
 });

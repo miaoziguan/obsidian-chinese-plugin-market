@@ -16,12 +16,22 @@ export interface JournalRow {
 	firstInstalled?: number;
 	/** 最近动态：卸载时间优先，否则最近安装时间（用于「最近动态」列与排序） */
 	lastActive?: number | null;
+	/** 最后一次卸载时间；当前仍安装 / 从未记录过卸载则为空 */
+	uninstalled?: number | null;
+	/** 安装时间为文件系统推断的估算值（「≈」前缀展示） */
+	estimated?: boolean;
 	installCount?: number;
 	currentlyInstalled?: boolean;
 	note?: string;
 }
 
-export type JournalSortKey = "name" | "status" | "rating" | "firstInstalled" | "lastActive";
+export type JournalSortKey =
+	| "name"
+	| "status"
+	| "rating"
+	| "firstInstalled"
+	| "lastActive"
+	| "uninstalled";
 
 export type JournalStatusFilter = "all" | JournalStatus | "tried";
 
@@ -69,6 +79,9 @@ export function sortJournalRows(rows: JournalRow[], key: JournalSortKey, asc: bo
 			case "lastActive":
 				cmp = (a.lastActive ?? 0) - (b.lastActive ?? 0);
 				break;
+			case "uninstalled":
+				cmp = (a.uninstalled ?? 0) - (b.uninstalled ?? 0);
+				break;
 		}
 		if (cmp === 0) cmp = (a.name || a.id).localeCompare(b.name || b.id, "zh");
 		return cmp * dir;
@@ -82,10 +95,13 @@ function statusLabel(r: JournalRow, t: (k: I18nKey) => string): string {
 	return t("journal.status.tried");
 }
 
-function fmtDate(ms?: number | null): string {
+/**
+ * 日期格式化；estimated=true 时加「≈」前缀，表示时间来自文件系统推断而非真实观测。
+ */
+function fmtDate(ms?: number | null, estimated = false): string {
 	if (!ms) return "—";
 	try {
-		return new Date(ms).toLocaleDateString();
+		return `${estimated ? "≈" : ""}${new Date(ms).toLocaleDateString()}`;
 	} catch {
 		return "—";
 	}
@@ -100,6 +116,7 @@ export function journalRowsToMarkdown(rows: JournalRow[], t: (k: I18nKey) => str
 		t("journal.col.verdict"),
 		t("journal.col.first"),
 		t("journal.col.active"),
+		t("journal.col.uninstalled"),
 		t("journal.col.note"),
 	];
 	const esc = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
@@ -111,8 +128,9 @@ export function journalRowsToMarkdown(rows: JournalRow[], t: (k: I18nKey) => str
 				statusLabel(r, t),
 				r.rating ? "★".repeat(r.rating) : "—",
 				(r.verdict ?? []).join("、") || "—",
-				fmtDate(r.firstInstalled),
-				fmtDate(r.lastActive),
+				fmtDate(r.firstInstalled, r.estimated),
+				fmtDate(r.lastActive, r.estimated),
+				fmtDate(r.uninstalled),
 				esc((r.note ?? "").slice(0, 60)) || "—",
 			].join(" | "),
 		);
@@ -146,6 +164,7 @@ export function renderJournalTable(
 		["rating", "journal.col.rating"],
 		["firstInstalled", "journal.col.first"],
 		["lastActive", "journal.col.active"],
+		["uninstalled", "journal.col.uninstalled"],
 	];
 
 	const draw = () => {
@@ -252,8 +271,13 @@ export function renderJournalTable(
 				nameTd.addEventListener("click", () => host.onOpen(r.id));
 				tr.createEl("td", { text: statusLabel(r, t) });
 				tr.createEl("td", { text: r.rating ? "★".repeat(r.rating) : "—" });
-				tr.createEl("td", { text: fmtDate(r.firstInstalled) });
-				tr.createEl("td", { text: fmtDate(r.lastActive) });
+				// 估算时间：加「≈」并用原生 tooltip 说明来源，避免把推断值当成精确时间
+				const estHint = r.estimated ? t("journal.estimated") : null;
+				const firstTd = tr.createEl("td", { text: fmtDate(r.firstInstalled, r.estimated) });
+				if (estHint) firstTd.setAttribute("title", estHint);
+				const activeTd = tr.createEl("td", { text: fmtDate(r.lastActive, r.estimated) });
+				if (estHint) activeTd.setAttribute("title", estHint);
+				tr.createEl("td", { text: fmtDate(r.uninstalled) });
 				tr.createEl("td", { text: (r.verdict ?? []).join("、") || "—" });
 				const noteText = r.note ?? "";
 				const noteTd = tr.createEl("td", { cls: "pt-journal-note-cell", text: noteText || "—" });
