@@ -2726,15 +2726,16 @@ button.pt-card-install-btn--installed {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-/* 行3：推荐理由（背景块 + 左边框） */
-.pt-detail-similar-reason {
+/* 行3：插件简介（最多两行，可扫描过滤） */
+.pt-detail-similar-desc {
 	margin-top: 6px;
-	padding: 6px 10px;
-	background: var(--background-secondary);
-	border-radius: 6px;
 	font-size: var(--pt-text-base);
-	color: var(--pt-text-strong, var(--text-normal));
+	color: var(--pt-text-muted);
 	line-height: 1.5;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
 }
 /* 行4：下载量 meta */
 .pt-detail-similar-meta {
@@ -2742,6 +2743,14 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-xs);
 	color: var(--pt-text-muted);
 	opacity: 0.7;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.pt-detail-similar-meta .pt-detail-similar-dl-icon svg {
+	display: block;
+	width: 10px;
+	height: 10px;
 }
 /* 面板级引导语 */
 .pt-detail-similar-hint {

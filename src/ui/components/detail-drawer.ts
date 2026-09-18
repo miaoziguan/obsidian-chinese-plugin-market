@@ -25,7 +25,8 @@ import { isMobileEnvironment, requestIdle } from "@shared/platform";
 import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import { makeT, type TFunc, type I18nKey } from "@shared/i18n";
-import { cleanChineseSpaces } from "@shared/utils";
+import { cleanChineseSpaces, stripReviewNotice } from "@shared/utils";
+import { ICON_DOWNLOAD } from "@ui/components/card-render";
 import type { JournalEntry } from "@domain/journal/journal-entry";
 import { renderJournalEditor } from "@ui/components/journal-editor";
 import { formatDownloads, formatUpdated } from "@domain/catalog/stats";
@@ -1201,15 +1202,20 @@ export class PluginDetailDrawer {
 				card.createDiv({ cls: "pt-detail-similar-original", text: sim.name });
 			}
 
-			// 行3：推荐理由
-			if (sim.reason) {
-				card.createDiv({ cls: "pt-detail-similar-reason", text: sim.reason });
+			// 行3：插件简介（替代「描述相关」等推荐理由，可直接扫描过滤）
+			if (sim.description) {
+				card.createDiv({
+					cls: "pt-detail-similar-desc",
+					text: stripReviewNotice(cleanChineseSpaces(sim.description)),
+				});
 			}
 
-			// 行4：下载量
+			// 行4：下载量（与首页卡片使用同一 SVG 图标，保持视觉一致）
 			if (sim.downloads != null) {
 				const dl = card.createDiv({ cls: "pt-detail-similar-meta" });
-				dl.textContent = `↓ ${formatDownloads(sim.downloads)}`;
+				const iconWrap = dl.createSpan({ cls: "pt-detail-similar-dl-icon" });
+				appendSVG(iconWrap, ICON_DOWNLOAD);
+				dl.createSpan({ text: formatDownloads(sim.downloads) });
 			}
 
 			// 键盘可点击

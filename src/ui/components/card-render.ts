@@ -173,7 +173,7 @@ const ICON_INSIGHT = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none
 // 系统翻译（macOS 快捷指令，按需）：苹果标
 const ICON_SYS_TRANSLATE = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.9c-2.8.8-5.1-1.8-4.3-4.6.5-1.8 2.2-3 4.3-3s3.8 1.2 4.3 3c.8 2.8-1.5 5.4-4.3 4.6z"/><path d="M12 3.1c2.8-.8 5.1 1.8 4.3 4.6-.5 1.8-2.2 3-4.3 3s-3.8-1.2-4.3-3c-.8-2.8 1.5-5.4 4.3-4.6z"/><path d="M4.2 9.4 19.8 14.6"/><path d="M4.2 14.6 19.8 9.4"/></svg>`;
 // 下载量：向下箭头（统计行 chip 图标，替代 emoji ⬇）
-const ICON_DOWNLOAD = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+export const ICON_DOWNLOAD = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 // 更新时间：时钟（统计行 chip 图标，替代 emoji 🕐）
 const ICON_CLOCK = `<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 // 作者：线性人头图标（卡片作者标识）

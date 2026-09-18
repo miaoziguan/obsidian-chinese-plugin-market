@@ -29,6 +29,8 @@ export interface SimilarCandidate {
 	id: string;
 	name: string;
 	translatedName: string;
+	/** 插件简介（原始 description），替代原来的 reason 文本做扫描 */
+	description: string;
 	reason: string;
 	/** 相似度得分（已按相关度排序，越大越相关），用于强度条 */
 	score: number;
@@ -406,6 +408,7 @@ export function computeSimilar(
 			id: p.id,
 			name: p.name,
 			translatedName: translatedNames[p.id] || p.name,
+			description: p.description,
 			reason: makeReason(signals),
 			score,
 			signals,
