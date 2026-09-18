@@ -52,6 +52,7 @@ import {
 import { parseJournalNote, renderJournalNote, type JournalEntry } from "@domain/journal/journal-entry";
 import { computeJournalStats, buildVerdictIndex, type JournalStats } from "@domain/journal/journal-stats";
 import { JournalView, JOURNAL_VIEW_TYPE } from "@ui/view/journal-view";
+import { DepGraph } from "@domain/deps/graph";
 import type { DrawerHostPlugin } from "@ui/components/detail-drawer";
 import { SettingsIntegrationController } from "@app/settings-integration/settings-integration-controller";
 import type { ManageStorePort } from "@ui/settings/manage-store";
@@ -97,6 +98,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	journalVerdictIds: Map<string, Set<string>> = new Map();
 	/** 设置页增强控制器（增强原生「设置 → 社区插件」页）；未启用或不支持时为 null */
 	settingsIntegration: SettingsIntegrationController | null = null;
+	/** 插件依赖数据集（plugin-deps.json）；未加载 / 加载失败为 null，依赖相关 UI 整体不渲染 */
+	pluginDeps: DepGraph | null = null;
 	/** 已注册的「切换插件」命令 id（插件增删后整体刷新） */
 	private pluginToggleCommandIds: string[] = [];
 	/** 已注册的「切换 CSS 片段」命令 id（片段增删后整体刷新） */
@@ -1157,6 +1160,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 后台异步加载中文生态人工清单（「中文生态」维度用，不阻塞视图启动）
 		this.loadChineseEcosystem().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载中文生态清单失败：", e),
+		);
+		// 后台异步加载插件依赖数据集（依赖提示用，不阻塞视图启动）
+		this.loadPluginDeps().catch((e) =>
+			logger.warn("[Chinese Plugin Market] 后台加载插件依赖数据集失败：", e),
 		);
 		// 后台异步加载竹林中国系列清单（「系列」维度用，不阻塞视图启动）
 		this.loadBambooSeries().catch((e) =>
@@ -2274,6 +2281,30 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			}
 		} catch (e: unknown) {
 			logger.warn(`[Chinese Plugin Market] 加载中文生态清单失败，已跳过：`, e);
+		}
+	}
+
+	/**
+	 * 加载随插件分发的「插件依赖」数据集 plugin-deps.json。
+	 *
+	 * 内容 = 插件 id → 依赖边列表（人工精修打底 + 离线自动检测补长尾）。
+	 * 缺失 / 解析失败 / schema 不匹配一律静默降级：依赖提示整体消失，
+	 * 绝不影响市场本身（这是锦上添花的能力，不能反过来拖垮主流程）。
+	 */
+	private async loadPluginDeps(): Promise<void> {
+		const fileName = "plugin-deps.json";
+		try {
+			const adapter = this.app.vault.adapter;
+			const fullPath = `.obsidian/plugins/${this.manifest.id}/${fileName}`;
+			if (!(await adapter.exists(fullPath))) return;
+			const graph = DepGraph.parse(await adapter.read(fullPath));
+			if (!graph) return;
+			this.pluginDeps = graph;
+			// 已打开的视图重渲染一次，使详情区块 / 卡片徽标即时生效
+			this.refreshOpenViews();
+			logger.debug("[Chinese Plugin Market] 已加载插件依赖数据集");
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 加载插件依赖数据集失败，已跳过：", e);
 		}
 	}
 

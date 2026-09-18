@@ -29,6 +29,7 @@ FILES=(
 	"plugin-release-dates.json"
 	"plugin-chinese-ecosystem.json"
 	"plugin-bamboo-series.json"
+	"plugin-deps.json"
 )
 
 # ── 解析参数 ──
