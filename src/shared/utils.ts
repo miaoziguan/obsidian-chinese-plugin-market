@@ -189,6 +189,8 @@ export interface RecallCandidate {
 	id: string;
 	name: string;
 	description: string;
+	/** 中文名（译文，可选）：模糊标题路的第二匹配目标（如"番茄"命中 nameZh"迷你番茄钟"） */
+	nameZh?: string;
 }
 
 /**
@@ -326,19 +328,22 @@ export function jaroWinkler(a: string, b: string): number {
 }
 
 /**
- * 标题模糊匹配（第三路检索器）：把 query 与每个插件的 name 做 Jaro-Winkler，
- * 返回 `Map<插件id, 分数>`（相似度 ≥ minScore 且降序截断到 top）。
+ * 标题模糊匹配（第三路检索器）：把 query 与每个插件的 name / nameZh（中文名译文）
+ * 分别做 Jaro-Winkler 取较高分，返回 `Map<插件id, 分数>`（相似度 ≥ minScore 且降序截断到 top）。
  *
  * 目的：覆盖「用户只记得插件名的大概/首字母/拼写，但记不全」的场景——
  * 关键词精确匹配与向量语义都可能漏，标题模糊匹配能兜住（如查 "番茄" 命中
  * "番茄钟番茄工作法"、"notion" 命中 "Notion 增强"）。
+ * nameZh 作为第二目标后，中文查询对「英文原名 + 中文译名」的插件也能拼写容错
+ * （如 "迷你番茄" 命中 name="Minidoro" nameZh="迷你番茄钟"；子串居中的短查询
+ * 受 Jaro 匹配窗口限制打 0 分，由 BM25 三元组路兜底，两路互补）。
  *
  * @param query 用户输入
- * @param allPlugins 插件候选（只用 name）
+ * @param allPlugins 插件候选（用 name 与可选 nameZh）
  * @param top 最多保留多少条
  * @param minScore 相似度下限（默认 0.55，比 vault-curate 的 0.7 更宽松以兜住短名）
  */
-/** 小写名缓存：插件 name 固定，避免每次模糊搜索对每插件重复 toLowerCase（O(N) 字符串分配） */
+/** 小写名缓存：插件 name/nameZh 固定，避免每次模糊搜索对每插件重复 toLowerCase（O(N) 字符串分配） */
 const lowerNameCache = new Map<string, string>();
 
 export function fuzzyTitleScores(
@@ -352,25 +357,44 @@ export function fuzzyTitleScores(
 	const out: Array<[string, number]> = [];
 	// 字符粗筛用的 q 字符集（只算一次，避免每插件重建）
 	const qChars = q.length > 0 ? new Set(q) : null;
-	for (const p of allPlugins) {
-		const raw = p.name || "";
-		if (!raw) continue;
-		let title = lowerNameCache.get(raw);
-		if (title === undefined) {
-			title = raw.toLowerCase();
-			lowerNameCache.set(raw, title);
+	const lowerCached = (raw: string): string => {
+		if (!raw) return "";
+		let v = lowerNameCache.get(raw);
+		if (v === undefined) {
+			v = raw.toLowerCase();
+			lowerNameCache.set(raw, v);
 		}
-		if (!title) continue;
-		// 快速否决（严格安全）：q 的所有唯一字符都不在 title → 匹配字符必为 0，Jaro 分数必为 0 < minScore，跳过完整 Jaro-Winkler。
+		return v;
+	};
+	for (const p of allPlugins) {
+		const title = lowerCached(p.name || "");
+		const titleZh = lowerCached(p.nameZh || "");
+		if (!title && !titleZh) continue;
+		// 快速否决（严格安全）：q 的所有唯一字符都不在两个标题里 → 匹配字符必为 0，
+		// Jaro 分数必为 0 < minScore，跳过完整 Jaro-Winkler。
 		// 仅此严格情形可安全跳过（不改召回；任何有公共字符的情况仍跑 Jaro，避免误杀）
 		if (qChars) {
 			let allMissing = true;
 			for (const ch of qChars) {
-				if (title.indexOf(ch) !== -1) { allMissing = false; break; }
+				if (title.indexOf(ch) !== -1 || titleZh.indexOf(ch) !== -1) { allMissing = false; break; }
 			}
 			if (allMissing) continue;
 		}
-		const score = jaroWinkler(q, title);
+		// 字符覆盖门（2026-09-18「打卡」真机截图暴露）：query ≤2 字时 Jaro 仅共享 1 字
+		// 即得 (1/2+1/len+1)/3 ≥ 0.567，全过 0.55 阈值 → 「锁卡/桌卡/打印」等单字重叠
+		// 家族 flood 顶部（50 条标题命中淹掉真目标）。门：query 全部字符出现在该标题
+		// 才计分（「打卡」⊄「锁卡」拒、「打卡」⊂「打卡钟」留）；≥3 字 query 不动，
+		// 保住 P-0061 的前缀/拼写容错场景。per-target 判定：两个标题各自独立过门。
+		const strict = q.length <= 2;
+		const covers = (t: string): boolean => {
+			if (!strict || !qChars) return true;
+			for (const ch of qChars) if (t.indexOf(ch) === -1) return false;
+			return true;
+		};
+		const score = Math.max(
+			title && covers(title) ? jaroWinkler(q, title) : 0,
+			titleZh && covers(titleZh) ? jaroWinkler(q, titleZh) : 0
+		);
 		if (score >= minScore) out.push([p.id, score]);
 	}
 	out.sort((a, b) => b[1] - a[1]);

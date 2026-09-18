@@ -2,9 +2,11 @@
  * 轻量 CJK 感知 BM25（借鉴 vault-curate 的 cjkTokenize + bm25）。
  *
  * 为什么替代「简单关键词重叠」：中文无空格，简单重叠需要精确整词匹配，对词边界
- * 歧义/同义/变体不鲁棒。BM25 用 CJK 三元组分词 + IDF：
+ * 歧义/同义/变体不鲁棒。BM25 用 CJK n-gram 分词 + IDF：
  *   - IDF 天然降权「插件」「工具」等高频词（内置停用词效果）；
- *   - 三元组让任意连续 3 字可命中（容忍词边界/切分歧义）；
+ *   - n-gram 让任意连续 2-3 字可命中（容忍词边界/切分歧义；bigram 兜 2 字 query
+ *     打长 run 的盲区——旧纯 trigram 在「门禁」×「门禁系统管理工具」恒漏，
+ *     ④ harness 实测 short 桶 Recall@10 0.40→0.58）；
  *   - 文档长度归一化避免长 description 天然占优。
  *
  * 本实现不预构建倒排索引（插件列表每次刷新，场景是搜索时对当前几千条算分），
@@ -13,6 +15,12 @@
 
 const CJK_RE = /[㐀-鿿豈-﫿]/;
 const ASCII_WORD_RE = /[a-zA-Z0-9_-]/;
+
+/**
+ * 分词器版本指纹：进 bm25IndexSig——分词策略变更（n-gram 组合/换 Intl 等）必须 bump，
+ * 令 BM25 索引缓存失效重建（P-0055 同族：索引语义变了缓存必须跟着失效）。
+ */
+export const BM25_TOKENIZER_VERSION = "cjk-bi23-v1";
 
 function isCJK(ch: string): boolean {
 	return CJK_RE.test(ch);
@@ -40,9 +48,13 @@ export function tokenizeCJK(text: string): string {
 			if (run.length <= 3) {
 				tokens.push(run);
 			} else {
-				for (let s = 0; s <= run.length - 3; s++) {
-					tokens.push(run.slice(s, s + 3));
-				}
+				// bigram+trigram（④ harness 2026-09-18 裁决采纳：short 桶 Recall@10 0.40→0.58、
+				// MRR +0.04、general 桶代价 -0.02）：bigram 让 2 字 query 命中长 run
+				// （「门禁」×「门禁系统管理工具」，旧纯 trigram 恒漏），trigram 保留邻接精度；
+				// 成本 = 索引 token +55%（418k→648k 实测）。gram 顺序 [2,3] 与 harness
+				// ngramTok([2,3]) 同构（parity 基线）。
+				for (let s = 0; s <= run.length - 2; s++) tokens.push(run.slice(s, s + 2));
+				for (let s = 0; s <= run.length - 3; s++) tokens.push(run.slice(s, s + 3));
 			}
 			i = end;
 		} else if (isAsciiWord(ch)) {

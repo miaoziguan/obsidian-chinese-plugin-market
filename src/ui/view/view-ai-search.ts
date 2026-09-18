@@ -80,6 +80,10 @@ export async function runAISearch(
 				description: p.description,
 				nameZh: hasTr ? tr.translatedName : undefined,
 				descZh: hasTr ? tr.translatedDesc : undefined,
+				// 质量因子数据源（补丁 B）：stats 的 downloads/updated 透传给融合排序
+				//（此前只在卡片 UI 展示，排序不消费；缺失时排序侧按中性 1.0 处理）
+				downloads: p.downloads,
+				updated: p.updated,
 			};
 		});
 		const config = {
