@@ -294,6 +294,10 @@ export interface ViewContext {
 	// ── 插件依赖提示 ──
 	/** 依赖数据集（plugin-deps.json 未加载时为 null，依赖相关 UI 整体不渲染） */
 	pluginDeps: DepGraph | null;
+	/** 卡片徽标用：依赖数据集（与 pluginDeps 同源；CardRenderContext 字段名是 depGraph） */
+	depGraph?: DepGraph | null;
+	/** 卡片徽标用：官方列表 id 集合（判定依赖目标能否给出安装入口） */
+	knownPluginIds?: Set<string>;
 	/** 处理某个依赖：安装 / 启用 / 更新（视图层找到 PluginInfo 后走既有流程） */
 	fixDep: (depId: string, action: "install" | "enable" | "update") => void;
 	/** 基线缺该插件时按 repo 现算依赖（异步，会话内缓存，失败静默） */
@@ -774,6 +778,10 @@ get authorFacetList() { return view.authorFacetList; },
 		pinPluginVersion: (id, version) => view.pinPluginVersion(id, version),
 		listPluginVersions: (repo, force) => view.listPluginVersions(repo, force),
 		get pluginDeps() { return view.plugin.pluginDeps; },
+		/** 卡片徽标用：依赖数据集（与 pluginDeps 同源；CardRenderContext 字段名是 depGraph） */
+		get depGraph() { return view.plugin.pluginDeps; },
+		/** 卡片徽标用：官方列表 id 集合（判定依赖目标能否给出安装入口） */
+		get knownPluginIds() { return new Set(view.plugins.map((p) => p.id)); },
 		fixDep: (id, action) => view.fixDep(id, action),
 		ensurePluginDeps: (id, repo) => view.ensurePluginDeps(id, repo),
 		fillVisibleWindow: view.fillVisibleWindow.bind(view),

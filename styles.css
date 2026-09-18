@@ -2867,6 +2867,17 @@ button.pt-card-install-btn--installed {
 	margin-left: 4px;
 }
 
+/* 「依赖未满足」徽标：出现在作者行，红框红字，零常态噪音（装齐了不显示） */
+.pt-card-dep-badge {
+	font-size: var(--pt-text-xs);
+	color: var(--pt-text-error, var(--text-error));
+	border: 1px solid var(--pt-text-error, var(--text-error));
+	border-radius: 8px;
+	padding: 0 6px;
+	margin-left: 4px;
+	white-space: nowrap;
+}
+
 /* ── 无障碍 ── */
 /* 屏幕阅读器专用（视觉隐藏但可被读屏器读出） */
 .pt-sr-only {
