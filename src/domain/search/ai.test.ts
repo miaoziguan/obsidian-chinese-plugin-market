@@ -163,3 +163,85 @@ describe("AISearcher 降级健壮性", () => {
 		expect(Object.keys(result.reasons!)).toEqual(["dataview", "calendar", "translate"]);
 	});
 });
+
+describe("BM25 标题场加权（双场索引）", () => {
+	beforeEach(() => {
+		req.mockReset();
+		setHttpClient({ request: req });
+	});
+	afterEach(() => {
+		resetHttpClient();
+	});
+
+	it("同一查询词：标题命中排在仅正文命中之前（TITLE_W=2.0 生效）", async () => {
+		const { searcher } = makeSearcher();
+		const plugins = [
+			{ id: "body-hit", name: "Note Helper", description: "Create mindmap diagrams easily" },
+			{ id: "title-hit", name: "Mindmap Tools", description: "Drawing utilities for visual thinking" },
+		];
+		const r = await searcher.localSearch("mindmap", plugins as any);
+		expect(r.rankedIds[0]).toBe("title-hit");
+		expect(r.rankedIds).toContain("body-hit");
+	});
+
+	it("标题场含中文名、正文场含中文描述（译文进关键词路）", () => {
+		const { searcher } = makeSearcher();
+		const plugins = [
+			{
+				id: "minidoro",
+				name: "Minidoro",
+				description: "Pomodoro timer widget",
+				nameZh: "迷你番茄钟",
+				descZh: "番茄工作法计时器",
+			},
+			{ id: "other", name: "Other", description: "Unrelated tool" },
+		];
+		const idx = searcher.getBm25Index(plugins as any);
+		const doc = idx.docTokensById.get("minidoro");
+		// 标题场 = name + nameZh 的 trigram，应含"番茄钟"
+		expect(doc?.title).toContain("番茄钟");
+		// 正文场 = description + descZh 的 trigram，应含"番茄工"与英文 token
+		expect(doc?.body).toContain("番茄工");
+		expect(doc?.body).toContain("pomodoro");
+		// 双场各自统计 df
+		expect(idx.dfTitle.get("番茄钟")).toBe(1);
+		expect(idx.dfBody.get("番茄钟")).toBeUndefined();
+	});
+
+	it("中文 query 经关键词路直接命中中文名（无向量、无 LLM）", async () => {
+		const { searcher } = makeSearcher();
+		req.mockRejectedValue(new Error("localSearch 不应调用网络"));
+		const plugins = [
+			{
+				id: "minidoro",
+				name: "Minidoro",
+				description: "Pomodoro timer widget",
+				nameZh: "迷你番茄钟",
+				descZh: "番茄工作法计时器",
+			},
+			{ id: "kanban", name: "Kanban", description: "Kanban board for notes", nameZh: "看板", descZh: "笔记看板" },
+		];
+		const r = await searcher.localSearch("番茄钟", plugins as any);
+		expect(r.rankedIds[0]).toBe("minidoro");
+		expect(r.rankedIds).not.toContain("kanban");
+	});
+
+	it("译文到达后 BM25 索引签名失效重建（缓存失效坑回归，P-0055 同族）", () => {
+		const { searcher } = makeSearcher();
+		const base = [
+			{ id: "a", name: "A", description: "aaa" },
+			{ id: "b", name: "B", description: "bbb" },
+		];
+		const idx1 = searcher.getBm25Index(base as any);
+		// 同列表（长度+首尾 id+译文指纹全同）→ 复用同一对象
+		expect(searcher.getBm25Index(base as any)).toBe(idx1);
+		// 长度与首尾 id 不变、仅译文补齐 → 签名必须变化并重建
+		const withZh = [
+			{ ...base[0], nameZh: "甲" },
+			{ ...base[1], descZh: "乙乙乙" },
+		];
+		const idx2 = searcher.getBm25Index(withZh as any);
+		expect(idx2).not.toBe(idx1);
+		expect(idx2.docTokensById.get("a")?.title).toContain("甲");
+	});
+});

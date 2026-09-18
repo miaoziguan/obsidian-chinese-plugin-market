@@ -50,48 +50,91 @@ const BATCH_SIZE = 3000;
 const RANK_TOP_N = 30;
 /** 向量召回最低相似度阈值（0-1），低于此值的命中不纳入候选 */
 const VECTOR_MIN_SCORE = 0.3;
+/**
+ * BM25 标题场加权倍数：标题场（name+nameZh）命中比正文场（description+descZh）命中更值钱。
+ * 对齐 search-engine v2_2 的 TITLE_W=2.0 惯例（独立标题倒排 + 标题场得分×2）——
+ * 插件搜索里「名字即答案」是高频形态（搜"思维导图"应让名字含 Mindmap/思维导图 的插件置顶），
+ * 不加权时长 description 会稀释名字信号。
+ */
+const BM25_TITLE_W = 2.0;
 
 /** 判断插件是否被 LLM 判定为无关 */
 const IRRELEVANT_KEYWORDS = ["无关", "不相关", "无关联", "不相关", "没关", "无关系"];
 
-/** 预先构建的 BM25 倒排/词频索引（只依赖插件列表，与 query 无关，可跨多次搜索复用） */
+/** 预先构建的 BM25 倒排/词频索引（只依赖插件列表，与 query 无关，可跨多次搜索复用）。
+ *  标题场（name+nameZh）与正文场（description+descZh）分开统计 df/avgdl：
+ *  两场长度与 IDF 分布差异大（标题仅 2-6 token，正文几十 token），混在一个 df 里
+ *  会让正文稀释标题信号——search-engine 用独立标题倒排（titleIndex.dat）是同一理由。 */
 interface Bm25Index {
-	docTokensById: Map<string, string[]>;
-	df: Map<string, number>;
+	docTokensById: Map<string, { title: string[]; body: string[] }>;
+	dfTitle: Map<string, number>;
+	dfBody: Map<string, number>;
 	N: number;
-	avgdl: number;
-	/** 失效签名：列表长度 + 首尾 id，任一变化即重建 */
+	avgdlTitle: number;
+	avgdlBody: number;
+	/** 失效签名：列表长度 + 首尾 id + 译文长度指纹，任一变化即重建（见 bm25IndexSig） */
 	sig: string;
 }
 
 /**
- * 构建 BM25 索引：对全量插件列表做简体转换 + CJK 分词 + 文档频率 df 统计。
+ * BM25 索引失效签名：列表长度 + 首尾 id + 译文长度合计。
+ * 译文指纹必不可少：nameZh/descZh 参与分词文本后，异步翻译加载完成时列表长度与
+ * 首尾 id 都不变——没有指纹则缓存永不重建、中文关键词路永久缺失
+ *（同 P-0055「索引变更必须联动失效缓存」一族教训）。
+ * 已知边界：等长译文改写不触发重建（低频、可接受；重启或列表刷新即恢复）。
+ */
+function bm25IndexSig(
+	allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[]
+): string {
+	let zhLen = 0;
+	for (const p of allPlugins) zhLen += (p.nameZh?.length ?? 0) + (p.descZh?.length ?? 0);
+	return (
+		allPlugins.length + ":" +
+		(allPlugins[0]?.id ?? "") + ":" +
+		(allPlugins[allPlugins.length - 1]?.id ?? "") + ":" +
+		zhLen
+	);
+}
+
+/**
+ * 构建 BM25 索引：对全量插件列表做简体转换 + CJK 分词 + 分场文档频率 df 统计。
+ * 标题场 = `name nameZh`，正文场 = `description descZh`（译文自此参与关键词路——
+ * 此前 BM25 只吃英文原文，中文 query 全靠同义词词典兜）。
  * 该结果只依赖插件列表本身，与 query 无关，故可缓存跨多次搜索复用
  * （连续输入触发多次 AI 搜索时避免对 6000 条反复分词，省数百 ms）。
  */
 function buildBm25Index(
 	allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[]
 ): Bm25Index {
-	const docTokensById = new Map<string, string[]>();
-	const df = new Map<string, number>();
-	let totalLen = 0;
+	const docTokensById = new Map<string, { title: string[]; body: string[] }>();
+	const dfTitle = new Map<string, number>();
+	const dfBody = new Map<string, number>();
+	let totalTitleLen = 0;
+	let totalBodyLen = 0;
 	for (const p of allPlugins) {
-		const text = t2sForEmbed(`${p.name} ${p.description}`);
-		const tokens = tokenizeForBM25(text);
-		docTokensById.set(p.id, tokens);
-		totalLen += tokens.length;
-		const seen = new Set(tokens);
-		for (const t of seen) df.set(t, (df.get(t) ?? 0) + 1);
+		const titleTokens = tokenizeForBM25(t2sForEmbed(`${p.name} ${p.nameZh ?? ""}`));
+		const bodyTokens = tokenizeForBM25(t2sForEmbed(`${p.description} ${p.descZh ?? ""}`));
+		docTokensById.set(p.id, { title: titleTokens, body: bodyTokens });
+		totalTitleLen += titleTokens.length;
+		totalBodyLen += bodyTokens.length;
+		for (const t of new Set(titleTokens)) dfTitle.set(t, (dfTitle.get(t) ?? 0) + 1);
+		for (const t of new Set(bodyTokens)) dfBody.set(t, (dfBody.get(t) ?? 0) + 1);
 	}
 	const N = allPlugins.length;
-	const avgdl = N > 0 ? totalLen / N : 0;
-	const sig =
-		N + ":" + (allPlugins[0]?.id ?? "") + ":" + (allPlugins[N - 1]?.id ?? "");
-	return { docTokensById, df, N, avgdl, sig };
+	return {
+		docTokensById,
+		dfTitle,
+		dfBody,
+		N,
+		avgdlTitle: N > 0 ? totalTitleLen / N : 0,
+		avgdlBody: N > 0 ? totalBodyLen / N : 0,
+		sig: bm25IndexSig(allPlugins),
+	};
 }
 
 /**
- * CJK 三元组 BM25 关键词召回：对当前插件列表算 BM25 分，返回 Map<id, score>。
+ * CJK 三元组 BM25 关键词召回（标题/正文双场加权）：返回 Map<id, score>。
+ * score = TITLE_W × BM25(标题场) + BM25(正文场)，两场各用自己的 df/avgdl 统计。
  * query 与文档都转简体（t2s）以保证与向量路同 token 空间；BM25 分数供 RRF 融合（只看排名）。
  * index 由调用方缓存复用（见 AISearcher.getBm25Index），避免列表不变时重复分词。
  */
@@ -106,12 +149,14 @@ function bm25RecallScores(
 	const queryTokens = tokenizeForBM25(q);
 	if (queryTokens.length === 0) return out;
 
-	const { docTokensById, df, N, avgdl } = index;
+	const { docTokensById, dfTitle, dfBody, N, avgdlTitle, avgdlBody } = index;
 	// 预计算 query term 频次（qtf 只依赖 query，批量打分每文档复用，避免重复重建 Map）
 	const qtf = new Map<string, number>();
 	for (const t of queryTokens) qtf.set(t, (qtf.get(t) ?? 0) + 1);
-	for (const [id, docTokens] of docTokensById) {
-		const score = bm25Score(queryTokens, docTokens, df, N, avgdl, 1.5, 0.75, qtf);
+	for (const [id, doc] of docTokensById) {
+		const titleScore = bm25Score(queryTokens, doc.title, dfTitle, N, avgdlTitle, 1.5, 0.75, qtf);
+		const bodyScore = bm25Score(queryTokens, doc.body, dfBody, N, avgdlBody, 1.5, 0.75, qtf);
+		const score = BM25_TITLE_W * titleScore + bodyScore;
 		if (score > 0) out.set(id, score);
 	}
 	return out;
@@ -166,16 +211,14 @@ export class AISearcher {
 
 	/**
 	 * 获取（或惰性构建并缓存）BM25 索引。
-	 * 用「列表长度 + 首尾 id」作失效签名：列表内容变化才重建，否则直接复用上一次的
-	 * 全量分词与 df 统计结果，连续输入触发多次 AI 搜索时省去重复的全库分词开销。
+	 * 失效签名 =「列表长度 + 首尾 id + 译文长度指纹」（bm25IndexSig）：列表内容或
+	 * 译文到达才重建，否则直接复用上一次的全量分词与 df 统计结果，
+	 * 连续输入触发多次 AI 搜索时省去重复的全库分词开销。
 	 */
 	getBm25Index(
 		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[]
 	): Bm25Index {
-		const sig =
-			allPlugins.length + ":" +
-			(allPlugins[0]?.id ?? "") + ":" +
-			(allPlugins[allPlugins.length - 1]?.id ?? "");
+		const sig = bm25IndexSig(allPlugins);
 		if (this.bm25Cache && this.bm25Cache.sig === sig) return this.bm25Cache;
 		this.bm25Cache = buildBm25Index(allPlugins);
 		return this.bm25Cache;

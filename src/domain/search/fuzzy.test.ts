@@ -46,6 +46,23 @@ describe("fuzzyTitleScores 第三路检索器", () => {
 	it("空 query 返回空", () => {
 		expect(fuzzyTitleScores("   ", plugins).size).toBe(0);
 	});
+
+	it("nameZh 作为第二标题目标：中文查询模糊命中译名", () => {
+		const m = fuzzyTitleScores("迷你番茄", [
+			{ id: "minidoro", name: "Minidoro", description: "timer", nameZh: "迷你番茄钟" },
+		]);
+		// 英文名与查询无公共字符必 miss；nameZh 前缀匹配 → jw≈0.94 ≥ 0.55。
+		// 注意：Jaro 匹配窗口=floor(max(len)/2)-1，子串居中的短查询（如"番茄"vs"迷你番茄钟"）
+		// 窗口外交配为 0，由 BM25 三元组路兜底（见 ai.test.ts 中文 query 用例），不归模糊路管。
+		expect(m.has("minidoro")).toBe(true);
+	});
+
+	it("快速否决不误杀：英文名无公共字符但 nameZh 有，仍进入打分", () => {
+		const m = fuzzyTitleScores("看板", [
+			{ id: "kanban", name: "Kanban Board", description: "board", nameZh: "看板" },
+		]);
+		expect(m.get("kanban")).toBe(1); // nameZh 完全匹配
+	});
 });
 
 describe("rrfFuse 融合", () => {
