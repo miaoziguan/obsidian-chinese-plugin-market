@@ -32,6 +32,18 @@ describe("tokenizeForBM25 CJK 三元组", () => {
 		const tokens = tokenizeForBM25("看板");
 		expect(tokens).toContain("看板");
 	});
+	it("长 CJK run（≥4）产 bigram+trigram（④ harness 裁决：2 字 query 命中长 run）", () => {
+		const tokens = tokenizeForBM25("门禁系统管理工具");
+		// bigram 让 2 字 query「门禁」命中该 run（旧纯 trigram 恒漏，short 桶 R@10 0.40→0.58）
+		expect(tokens).toContain("门禁");
+		expect(tokens).toContain("系统");
+		// trigram 保留邻接精度
+		expect(tokens).toContain("门禁系");
+	});
+	it("≤3 字 run 不被 bigram 拆（整词语义不变）", () => {
+		expect(tokenizeForBM25("看板")).toEqual(["看板"]);
+		expect(tokenizeForBM25("番茄钟")).toEqual(["番茄钟"]);
+	});
 });
 
 describe("bm25Score", () => {

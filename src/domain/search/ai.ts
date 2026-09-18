@@ -12,7 +12,7 @@
 
 import { parseJSON, parseRecallCandidates, fuzzyTitleScores, rrfFuse, topNFused, isLocalBaseUrl } from "@shared/utils";
 import { logger } from "@shared/logger";
-import { tokenizeForBM25, bm25Score } from "@domain/search/bm25";
+import { tokenizeForBM25, bm25Score, BM25_TOKENIZER_VERSION } from "@domain/search/bm25";
 import { applyQualityFactors } from "@domain/search/quality";
 import { t2sForEmbed } from "@translation/lexicon/t2s";
 import { expandQuery } from "@translation/lexicon/synonyms";
@@ -78,10 +78,12 @@ interface Bm25Index {
 }
 
 /**
- * BM25 索引失效签名：列表长度 + 首尾 id + 译文长度合计。
+ * BM25 索引失效签名：分词器版本指纹 + 列表长度 + 首尾 id + 译文长度合计。
  * 译文指纹必不可少：nameZh/descZh 参与分词文本后，异步翻译加载完成时列表长度与
  * 首尾 id 都不变——没有指纹则缓存永不重建、中文关键词路永久缺失
  *（同 P-0055「索引变更必须联动失效缓存」一族教训）。
+ * 分词器版本指纹同理：n-gram 策略变更（如 ④ harness 采纳的 bigram+trigram）必须让
+ * 旧索引失效重建，否则 df/倒排还是旧分词语义、新策略不生效（BM25_TOKENIZER_VERSION）。
  * 已知边界：等长译文改写不触发重建（低频、可接受；重启或列表刷新即恢复）。
  */
 function bm25IndexSig(
@@ -90,6 +92,7 @@ function bm25IndexSig(
 	let zhLen = 0;
 	for (const p of allPlugins) zhLen += (p.nameZh?.length ?? 0) + (p.descZh?.length ?? 0);
 	return (
+		BM25_TOKENIZER_VERSION + ":" +
 		allPlugins.length + ":" +
 		(allPlugins[0]?.id ?? "") + ":" +
 		(allPlugins[allPlugins.length - 1]?.id ?? "") + ":" +
@@ -134,7 +137,7 @@ function buildBm25Index(
 }
 
 /**
- * CJK 三元组 BM25 关键词召回（标题/正文双场加权）：返回 Map<id, score>。
+ * CJK bigram+trigram BM25 关键词召回（标题/正文双场加权）：返回 Map<id, score>。
  * score = TITLE_W × BM25(标题场) + BM25(正文场)，两场各用自己的 df/avgdl 统计。
  * query 与文档都转简体（t2s）以保证与向量路同 token 空间；BM25 分数供 RRF 融合（只看排名）。
  * index 由调用方缓存复用（见 AISearcher.getBm25Index），避免列表不变时重复分词。
@@ -212,9 +215,9 @@ export class AISearcher {
 
 	/**
 	 * 获取（或惰性构建并缓存）BM25 索引。
-	 * 失效签名 =「列表长度 + 首尾 id + 译文长度指纹」（bm25IndexSig）：列表内容或
-	 * 译文到达才重建，否则直接复用上一次的全量分词与 df 统计结果，
-	 * 连续输入触发多次 AI 搜索时省去重复的全库分词开销。
+	 * 失效签名 =「分词器版本指纹 + 列表长度 + 首尾 id + 译文长度指纹」（bm25IndexSig）：
+	 * 列表内容、译文到达或分词策略变更（BM25_TOKENIZER_VERSION）才重建，否则直接复用
+	 * 上一次的全量分词与 df 统计结果，连续输入触发多次 AI 搜索时省去重复的全库分词开销。
 	 */
 	getBm25Index(
 		allPlugins: { id: string; name: string; description: string; nameZh?: string; descZh?: string }[]
@@ -261,7 +264,7 @@ export class AISearcher {
 			}
 		}
 
-		// 关键词召回（CJK 三元组 BM25 + 同义词 + t2s，对齐本地语义模式）
+		// 关键词召回（CJK bigram+trigram BM25 + 同义词 + t2s，对齐本地语义模式）
 		onPhase?.("本地召回", "正在本地粗筛候选…");
 		const localScores = bm25RecallScores(query, this.getBm25Index(allPlugins));
 
@@ -361,7 +364,7 @@ export class AISearcher {
 			}
 		}
 
-		// 关键词召回（CJK 三元组 BM25，替代简单重叠）+ 标题模糊
+		// 关键词召回（CJK bigram+trigram BM25，替代简单重叠）+ 标题模糊
 		const localScores = bm25RecallScores(query, this.getBm25Index(allPlugins));
 		const fuzzyScores = fuzzyTitleScores(query, allPlugins);
 
@@ -740,7 +743,7 @@ ${candidateLines}
 		fuzzyScores: Map<string, number>,
 		llmIds?: Set<string>,
 	): { highlightTerms: string[]; signals: Record<string, string[]> } {
-		// 高亮词：query 分词（CJK 三元组 + ASCII 词）+ 同义词扩展
+		// 高亮词：query 分词（CJK bigram+trigram + ASCII 词）+ 同义词扩展
 		const baseTokens = tokenizeForBM25(query).map((t) => t.toLowerCase());
 		const expanded = expandQuery(query).toLowerCase();
 		const synonymTokens = tokenizeForBM25(expanded).map((t) => t.toLowerCase());

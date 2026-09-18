@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { setHttpClient, resetHttpClient } from "@data/net/http-port";
 import { AISearcher } from "@domain/search/ai";
+import { BM25_TOKENIZER_VERSION } from "@domain/search/bm25";
 import { LLMClient } from "@translation/api/api";
 import { PluginTagService } from "@domain/catalog/plugin-tags";
 
@@ -290,5 +291,33 @@ describe("质量因子集成（补丁 B：recency×popularity）", () => {
 		const result = await searcher.search("track notes", twinPlugins(Date.now()) as any);
 		expect(result.rankFallback).toBe(true);
 		expect(result.rankedIds[0]).toBe("fresh");
+	});
+});
+
+describe("bigram 盲区回归（④ harness 胜出臂采纳）", () => {
+	beforeEach(() => {
+		req.mockReset();
+		setHttpClient({ request: req });
+	});
+	afterEach(() => {
+		resetHttpClient();
+	});
+
+	it("2 字 query 命中正文长 run（旧纯 trigram 该 query 关键词路恒漏）", async () => {
+		const { searcher } = makeSearcher();
+		req.mockRejectedValue(new Error("不应调用网络"));
+		const plugins = [
+			{ id: "door", name: "DoorMaster", description: "门禁系统管理工具" },
+			{ id: "other", name: "Other", description: "完全不相关的内容" },
+		];
+		const r = await searcher.localSearch("门禁", plugins as any);
+		expect(r.rankedIds).toContain("door");
+		expect(r.rankedIds).not.toContain("other");
+	});
+
+	it("bm25IndexSig 含分词器版本指纹（分词策略变更必须失效缓存，P-0055 同族）", () => {
+		const { searcher } = makeSearcher();
+		const idx = searcher.getBm25Index([{ id: "a", name: "A", description: "aaa" }] as any);
+		expect(idx.sig.startsWith(BM25_TOKENIZER_VERSION + ":")).toBe(true);
 	});
 });

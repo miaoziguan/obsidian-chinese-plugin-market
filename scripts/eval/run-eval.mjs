@@ -130,14 +130,12 @@ try {
 	const d = new Set(tokBig("门禁系统管理工具"));
 	if (!d.has("门禁")) throw new Error("bigram 臂自证失败：字符类可能被截断");
 	if (new Set(tokTri("迷你番茄钟")).has("番茄钟") !== true) throw new Error("trigram 臂自证失败");
-	if (tokTri("门禁系统管理工具").join(",") !== ngramTok([3])("门禁系统管理工具").join(",")) throw new Error("harness runs() 与生产分词漂移：CJK_RE 不一致");
+	if (tokTri("门禁系统管理工具").join(",") !== ngramTok([2,3])("门禁系统管理工具").join(",")) throw new Error("harness runs() 与生产分词漂移：CJK_RE 不一致");
 }
 
 const ARMS = [
 	{ id: "tri", label: "trigram(现生产)", tok: tokTri },
-	{ id: "big", label: "+bigram", tok: tokBig },
 	...(tokIntl ? [{ id: "intl", label: "intl∪trigram", tok: tokIntl }] : []),
-	...(tokIntl ? [{ id: "intlbi", label: "intl∪bi∪tri", tok: (t) => [...tokIntl(t), ...tokBig(t).filter(x => !tokIntl(t).includes(x))] }] : []),
 	...(tokJieba ? [{ id: "jieba", label: "jieba-CS", tok: tokJieba }] : []),
 ];
 
