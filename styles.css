@@ -6365,10 +6365,128 @@ button.pt-card-install-btn--installed {
 	font-size: var(--font-ui-smaller, 12px);
 	flex-shrink: 0;
 }
-.pt-updates-row-update {
+.pt-updates-row-update,
+.pt-updates-row-pin {
 	flex-shrink: 0;
 }
-.pt-updates-row-update svg {
+.pt-updates-row-update svg,
+.pt-updates-row-pin svg {
 	width: 16px;
 	height: 16px;
+}
+
+/* 「已固定版本」分区：锁定到指定版本的插件独立成区，不混在可更新列表里 */
+.pt-updates-pinned {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px dashed var(--background-modifier-border);
+}
+.pt-updates-pinned-title {
+	font-weight: var(--font-semibold, 600);
+	color: var(--text-normal);
+}
+.pt-updates-pinned-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.pt-updates-row--pinned {
+	background: transparent;
+	border: 1px solid var(--background-modifier-border);
+}
+.pt-updates-pinned-ver {
+	color: var(--text-accent);
+}
+
+/* 版本选择弹窗（BRAT 式版本固定） */
+.pt-version-modal {
+	max-height: 70vh;
+}
+.pt-version-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.pt-version-title {
+	margin: 0;
+	flex: 1 1 auto;
+}
+.pt-version-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 55vh;
+	overflow-y: auto;
+	margin-top: 8px;
+}
+.pt-version-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 8px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	text-align: left;
+	cursor: pointer;
+}
+.pt-version-row:hover {
+	background: var(--background-modifier-hover);
+}
+.pt-version-row.is-active {
+	border-color: var(--text-accent);
+}
+.pt-version-dot {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+.pt-version-dot svg {
+	width: 14px;
+	height: 14px;
+}
+.pt-version-row.is-active .pt-version-dot {
+	color: var(--text-accent);
+}
+.pt-version-row-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.pt-version-row-label {
+	font-weight: var(--font-semibold, 600);
+}
+.pt-version-row-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.pt-version-row-meta {
+	flex-shrink: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+}
+.pt-version-loading,
+.pt-version-error {
+	padding: 12px 4px;
+	color: var(--text-muted);
+}
+.pt-version-empty {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	align-items: center;
+	padding: 24px 8px;
+	color: var(--text-muted);
+}
+.pt-version-empty-title {
+	color: var(--text-normal);
+}
+
+/* 详情页「选择版本」按钮（与已固定态区分） */
+.pt-detail-btn--version svg {
+	width: 14px;
+	height: 14px;
 }

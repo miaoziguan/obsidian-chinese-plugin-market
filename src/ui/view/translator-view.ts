@@ -43,6 +43,7 @@ import type { BetaPluginEntry } from "@app/beta-updater";
 
 import type ChinesePluginMarketPlugin from "@app/plugin";
 import { updatePluginCore } from "@app/plugin-updater";
+import { fetchPluginVersions } from "@data/platform/plugin-versions";
 // ──────────────────────────────────────────
 // 常量
 // ──────────────────────────────────────────
@@ -139,6 +140,12 @@ export interface ChinesePluginMarketSettings {
 	betaPlugins: BetaPluginEntry[];
 	/** 启动时自动检查并更新未冻结的 Beta 插件（仅桌面端） */
 	betaAutoUpdate: boolean;
+	/**
+	 * 插件版本固定表（BRAT 式）：插件 id → 固定版本号（GitHub tag）。
+	 * 不在表内的插件 = 跟随最新（默认，参与「检查更新」提示）。
+	 * 已固定的插件不参与可更新检测，只有手动改版本才会重新下载。
+	 */
+	pluginVersionPins: Record<string, string>;
 }
 
 /** 单个启用组合 Profile：命名 + 启用插件 id 列表 + 可选绑定工作区布局 */
@@ -205,6 +212,7 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	manage: createDefaultManageSettings(),
 	betaPlugins: [],
 	betaAutoUpdate: false,
+	pluginVersionPins: {},
 };
 
 /**
@@ -224,7 +232,12 @@ export function getDefaultSettings(): ChinesePluginMarketSettings {
 	}
 	// manage 是可变对象，必须每次新建：加载设置走的是 Object.assign 浅合并，
 	// 若直接沿用 DEFAULT_SETTINGS.manage，任何改动都会污染进程内的默认常量。
-	const base = { ...DEFAULT_SETTINGS, manage: createDefaultManageSettings() };
+	// pluginVersionPins 同理（可变的固定版本表），一并重建避免共享引用。
+	const base = {
+		...DEFAULT_SETTINGS,
+		manage: createDefaultManageSettings(),
+		pluginVersionPins: {},
+	};
 	return isMobile ? { ...base, embeddingSource: "keyword" } : base;
 }
 
@@ -465,12 +478,13 @@ export class ChinesePluginMarketView extends ItemView {
 	public updatesListEl: HTMLElement | null = null;
 
 	/**
-	 * 更新单个已安装插件到官方最新版（桌面端）。
+	 * 更新单个已安装插件到官方最新版（桌面端）；传入 version 时改为固定安装到该 tag。
 	 * 维护 updatingIds 并在开始/结束各刷新一次卡片按钮态；内部 try/catch 兜底，不向调用方抛错。
 	 * @param pluginId 插件 id
 	 * @param silent   为 true 时不弹单个插件的结果 Notice（批量更新时由 updateAll 汇总）
+	 * @param version  可选：GitHub tag（固定版本安装，严格按该 tag 取三件套）
 	 */
-	public updatePlugin = async (pluginId: string, silent = false): Promise<void> => {
+	public updatePlugin = async (pluginId: string, silent = false, version?: string): Promise<void> => {
 		if (this.updatingIds.has(pluginId)) return;
 		const info = this.plugins.find((p) => p.id === pluginId);
 		if (!info || !info.repo) {
@@ -481,7 +495,7 @@ export class ChinesePluginMarketView extends ItemView {
 		this._ctx.refreshCardState?.(pluginId);
 		try {
 			const mirror = this._ctx.mirrorConfig();
-			const man = await updatePluginCore(this.app, pluginId, info.repo, mirror);
+			const man = await updatePluginCore(this.app, pluginId, info.repo, mirror, version);
 			if (!silent) new Notice(this.t("action.update.done", { name: man.name || pluginId, version: man.version ?? "" }), 6000);
 		} catch (e) {
 			new Notice(this.t("action.update.failed", { msg: e instanceof Error ? e.message : String(e) }), 8000);
@@ -494,6 +508,47 @@ export class ChinesePluginMarketView extends ItemView {
 		this.plugin.setRibbonUpdateBadge(this._ctx.outdatedIds?.size ?? 0);
 		// 同步「更新」页签徽标与列表（若当前正停留在该页签）
 		this._ctx.refreshViewTabsBadge?.();
+		this.renderUpdatesList();
+	};
+
+	/** 拉取仓库可选版本列表（BRAT 式版本选择弹窗用） */
+	public listPluginVersions = (repo: string, force = false) => fetchPluginVersions(repo, force);
+
+	/**
+	 * 固定插件到指定版本，或改回「保持最新」。
+	 *
+	 * - version 非空：写入固定表 → 立即按该 tag 重装（严格版本，不回落 latest）
+	 * - version 为 null：从固定表移除 → 重新参与更新检测；若已落后则立即更新到最新
+	 *
+	 * 固定表落盘走 saveSettings（防抖合并），失败路径不写表（避免「记了版本却没装上」）。
+	 */
+	public pinPluginVersion = async (id: string, version: string | null): Promise<void> => {
+		const info = this.plugins.find((p) => p.id === id);
+		if (!info || !info.repo) {
+			new Notice(this.t("action.update.noRepo"));
+			return;
+		}
+		const pins = this.plugin.settings.pluginVersionPins;
+
+		if (version) {
+			pins[id] = version;
+			this.plugin.saveSettings();
+			await this.updatePlugin(id, false, version);
+			if (this.plugin.settings.pluginVersionPins[id] === version) {
+				new Notice(this.t("version.pin.done", { name: info.name || id, version }), 6000);
+			}
+		} else {
+			delete pins[id];
+			this.plugin.saveSettings();
+			new Notice(this.t("version.unpin.done", { name: info.name || id }), 6000);
+			// 改回「保持最新」：重新检测，若已落后立即更新到最新
+			await refreshOutdated(this._ctx);
+			if (this._ctx.outdatedIds?.has(id)) await this.updatePlugin(id, true);
+		}
+
+		this.plugin.setRibbonUpdateBadge(this._ctx.outdatedIds?.size ?? 0);
+		this._ctx.refreshViewTabsBadge?.();
+		this._ctx.refreshCardState?.(id);
 		this.renderUpdatesList();
 	};
 

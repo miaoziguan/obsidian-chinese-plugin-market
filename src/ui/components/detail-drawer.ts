@@ -36,6 +36,8 @@ import { asAppInternals } from "@data/platform/obsidian-internals";
 import { openInsightModal } from "@ui/view/view-cards";
 import { isMacOS, macosSystemTranslate, splitMarkdownForTranslate } from "@translation/platform/macos-shortcuts";
 import { appendSVG, appendIconText, toHTMLElement } from "@ui/dom/dom";
+import { openVersionPicker } from "@ui/components/version-picker-modal";
+import type { PluginVersion } from "@data/platform/plugin-versions";
 
 /** README 会话级缓存（PERF micro）：按 raw url 缓存整篇 markdown，限容防内存膨胀。 */
 const README_CACHE = new Map<string, string>();
@@ -170,6 +172,18 @@ export interface DrawerOptions {
 	deferSimilar?: boolean;
 	/** 打开后自动滚动并高亮「我的评测」编辑区（由卡片「评测」图标触发） */
 	focusJournal?: boolean;
+	/**
+	 * 版本控制端口（BRAT 式版本固定）：未提供则不渲染「选择版本」按钮。
+	 * 已安装插件可在此固定到某个 Release/Tag，或改回「保持最新」。
+	 */
+	versionControl?: {
+		/** id → 已固定版本 */
+		pins: Record<string, string>;
+		/** 拉取仓库可选版本列表 */
+		listVersions: (repo: string, force?: boolean) => Promise<PluginVersion[]>;
+		/** 固定到指定版本（null = 保持最新） */
+		pin: (id: string, version: string | null) => Promise<void>;
+	};
 }
 
 export class PluginDetailDrawer {
@@ -186,6 +200,8 @@ export class PluginDetailDrawer {
 	private isFavorited: (pluginId: string) => boolean;
 	private installedIds: Set<string>;
 	private onCloseCb: () => void;
+	/** 版本控制端口（BRAT 式版本固定）；缺省时详情页不渲染版本按钮 */
+	private versionControl?: DrawerOptions["versionControl"];
 
 	/** 浏览历史栈（Drawer 内部就地跳转，无需关闭重建） */
 	private _history: Array<{ info: PluginInfo; result: TranslateResult | undefined; similar: SimilarCandidate[] }> = [];
@@ -242,6 +258,7 @@ export class PluginDetailDrawer {
 		this.mode = opts.mode ?? "overlay";
 		this._similarPending = opts.deferSimilar === true;
 		this._focusJournal = opts.focusJournal === true;
+		this.versionControl = opts.versionControl;
 
 		this._boundKeydown = this.onKeydown.bind(this);
 		this._boundBackdropClick = this.onBackdropClick.bind(this);
@@ -250,6 +267,16 @@ export class PluginDetailDrawer {
 	/** 当前展示的插件 id（宿主延迟回填相似推荐时校验用，防快速跳转错填） */
 	get currentPluginId(): string {
 		return this.info.id;
+	}
+
+	/** 已安装插件的本地版本号（读 Obsidian 内部 manifests；取不到返回 undefined） */
+	private installedVersionOf(id: string): string | undefined {
+		try {
+			const plugins = asAppInternals(this.app).plugins;
+			return plugins?.manifests?.[id]?.version ?? undefined;
+		} catch {
+			return undefined;
+		}
 	}
 
 	/** 打开 Drawer */
@@ -874,6 +901,36 @@ export class PluginDetailDrawer {
 				void Promise.resolve(this.installPlugin(p)).finally(() => {
 					// 安装流程结束后重建内容以展示已启用态
 					this.refreshContent();
+				});
+			});
+		}
+
+		// 版本（BRAT 式版本固定）：仅已安装 + 有仓库 + 宿主提供版本控制端口时展示
+		const versionRepo = p.repo;
+		if (isInstalled && versionRepo && this.versionControl) {
+			const pinned = this.versionControl.pins[p.id];
+			const verBtn = actions.createEl("button", {
+				cls: "pt-detail-btn pt-detail-btn--version",
+				attr: {
+					type: "button",
+					title: this.t("updates.pin"),
+				},
+			});
+			setIcon(verBtn, "tag");
+			verBtn.createSpan({
+				text: pinned ? this.t("version.pinned", { version: pinned }) : this.t("updates.pin"),
+			});
+			verBtn.addEventListener("click", () => {
+				const vc = this.versionControl;
+				if (!vc) return;
+				openVersionPicker({
+					app: this.app,
+					pluginName: p.name,
+					repo: versionRepo,
+					pinned: vc.pins[p.id] ?? null,
+					installedVersion: this.installedVersionOf(p.id),
+					listVersions: (repo, force) => vc.listVersions(repo, force),
+					onPick: (version) => vc.pin(p.id, version).then(() => this.refreshContent()),
 				});
 			});
 		}
