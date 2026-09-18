@@ -62,7 +62,8 @@ export class JournalView extends ItemView {
 			return;
 		}
 
-		// 有评测：以评测笔记为主构建行，安装历史仅补充事实列（首次安装 / 最近动态 / 次数）
+		// 有评测：以评测笔记为主构建行，安装历史仅补充事实列
+		// （首次安装 / 最近动态 / 最后卸载 / 次数）
 		const rows: JournalRow[] = entries.map((e) => {
 			const h = history[e.id];
 			return {
@@ -73,6 +74,8 @@ export class JournalView extends ItemView {
 				verdict: e.verdict,
 				firstInstalled: h?.firstInstalled,
 				lastActive: h?.uninstalled ?? h?.lastInstalled,
+				uninstalled: h?.uninstalled,
+				estimated: h?.estimated,
 				installCount: h?.installCount,
 				currentlyInstalled: h?.currentlyInstalled,
 				note: e.note,

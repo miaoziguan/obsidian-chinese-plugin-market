@@ -424,6 +424,11 @@ export async function installCommunityPlugin(
 	ctx.refreshCardState(plugin.id);
 	ctx.scheduleRender(true);
 
+	// 8.5 评测台账：文件已写盘即算「装过」。必须在这里直接记账，不能等 installed-watch 的
+	// 目录 diff —— 下一行 snapshotInstalled 已经把 id 写进 ctx.installedIds，等 fs.watch 的
+	// debounce（500ms）触发时基线里早就有它了，diff 恒为空 → 足迹表这两列永远是「—」。
+	void ctx.plugin.recordInstallDiff(new Set([plugin.id]), new Set());
+
 	if (enabled) {
 		new Notice(t("notice.install.success", { name: plugin.name }));
 		return { ok: true };
@@ -810,6 +815,9 @@ export async function uninstallCommunityPlugin(
 	logger.debug(`[Chinese Plugin Market] 已卸载插件 ${plugin.id}`);
 	ctx.snapshotInstalled();
 	ctx.refreshCardState(plugin.id);
+	// 评测台账：记卸载时间（「最近动态」用它的较早者、「最后卸载」列直接展示）。
+	// 同样不能等 fs 监听的 diff：上面的 snapshotInstalled 已经把 id 从基线里删掉。
+	void ctx.plugin.recordInstallDiff(new Set(), new Set([plugin.id]));
 	return true;
 }
 

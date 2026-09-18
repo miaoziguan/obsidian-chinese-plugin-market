@@ -44,7 +44,11 @@ import { writeTMNote, removeTMNote, TM_FOLDER, parseTMNote, type TMEntry } from 
 import { SqliteVectorStore, initSqlJsStatic, type PersistAdapter } from "@semantic/vec-store";
 import { applyProfileByIds, applyEnabledProfile } from "@data/platform/plugin-installer";
 import type { TrendSnapshot } from "@domain/recommend/trending";
-import { mergeInstallDiff, type InstallHistoryFile } from "@domain/journal/install-history";
+import {
+	mergeInstallDiff,
+	estimateInstallTimes,
+	type InstallHistoryFile,
+} from "@domain/journal/install-history";
 import { parseJournalNote, renderJournalNote, type JournalEntry } from "@domain/journal/journal-entry";
 import { computeJournalStats, buildVerdictIndex, type JournalStats } from "@domain/journal/journal-stats";
 import { JournalView, JOURNAL_VIEW_TYPE } from "@ui/view/journal-view";
@@ -99,26 +103,56 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	private cssToggleCommandIds: string[] = [];
 
 	/**
+	 * 读当前「已安装 / 已启用」id 快照（与视图的 snapshotInstalled 同源：app.plugins 内存态）。
+	 * 供台账写入时使用——mergeInstallDiff 需要完整快照来判断「跨会话卸载」，
+	 * 传入不完整的集合会把其它已记录插件误标为已卸载。
+	 */
+	private installedSnapshot(): { installed: Set<string>; enabled: Set<string>; nameOf: (id: string) => string } {
+		const plugins = asAppInternals(this.app).plugins;
+		const manifests = plugins?.manifests ?? {};
+		const installed = new Set(Object.keys(manifests));
+		const ep = plugins?.enabledPlugins;
+		const enabled =
+			ep && typeof (ep as Set<string>).forEach === "function"
+				? new Set(ep as Set<string>)
+				: new Set<string>();
+		return {
+			installed,
+			enabled,
+			nameOf: (id: string) => {
+				const name = manifests[id]?.name;
+				return typeof name === "string" && name.trim() ? name.trim() : id;
+			},
+		};
+	}
+
+	/**
 	 * 记录一次安装/卸载 diff 到历史索引（评测台账）。fire-and-forget：失败只 warn，
 	 * 绝不影响首屏与已安装徽标刷新（installed-watch 在主路径上同步调用，必须零风险）。
+	 *
+	 * @param installedIds/enabledIds 省略时自行取内存快照（调用方无需手拼，避免传半套集合）
+	 * @param stamps 新增记录的时间来源（回填场景用文件系统时间；传入即标 estimated）
 	 */
 	async recordInstallDiff(
 		added: Set<string>,
 		removed: Set<string>,
-		installedIds: Set<string>,
-		enabledIds: Set<string>,
+		installedIds?: Set<string>,
+		enabledIds?: Set<string>,
+		stamps?: Record<string, { firstInstalled?: number; lastInstalled?: number }>,
 	): Promise<void> {
 		try {
+			const snap = this.installedSnapshot();
 			// 优先用内存中已加载的历史为基（避免每次读盘造成的异步 RMW 竞态丢写）；
 			// 内存未就绪时再读盘（首屏前、onload 预载尚未完成的极小窗口）。
 			const base = this.journalHistory ?? (await this.storage.loadInstallHistory());
 			const entries = mergeInstallDiff(base.entries, {
 				added,
 				removed,
-				installedIds,
-				enabledIds,
-				nameOf: (id) => id,
+				installedIds: installedIds ?? snap.installed,
+				enabledIds: enabledIds ?? snap.enabled,
+				nameOf: snap.nameOf,
 				now: Date.now(),
+				stamps,
 			});
 			base.entries = entries;
 			await this.storage.saveInstallHistory(base);
@@ -129,6 +163,63 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 		// 插件增删后同步「切换插件」命令列表（仅在有安装/卸载 diff 时触发，频率极低）
 		this.refreshPluginToggleCommands();
+	}
+
+	/**
+	 * 台账历史回填（启动时 + 打开「我的插件足迹」前各跑一次，幂等）。
+	 *
+	 * 背景：安装历史原先只由 installed-watch 的目录 diff 产生，于是「本插件自己发起的
+	 * 安装」几乎都记不上——安装流程在写盘后立刻 snapshotInstalled()，等 fs.watch 的
+	 * debounce（500ms）触发时基线里已经有该 id，diff 恒为空（直链安装更是完全不走视图，
+	 * 连监听都没起）。结果是足迹表里这些插件的「首次安装 / 最近动态」永远是「—」。
+	 *
+	 * 修复分两层：写路径已改为在动作发生处直接记账（见 ViewContext.recordJournalChange）；
+	 * 本方法负责**补齐已经装上、但从来没有记录**的插件，时间取文件系统推断值（标 ≈ 估算）。
+	 */
+	async backfillInstallHistory(): Promise<void> {
+		try {
+			const { installed, enabled } = this.installedSnapshot();
+			// manifests 尚未加载完（快照为空）时不做任何事：否则第三轮「跨会话卸载」判定
+			// 会把历史里所有仍安装的插件误标成已卸载。
+			if (installed.size === 0) return;
+
+			const base = this.journalHistory ?? (await this.storage.loadInstallHistory());
+			this.journalHistory = base;
+			const missing = [...installed].filter((id) => !base.entries[id]);
+			// 已经全部有记录：仍然走一次 merge，用来补写「Obsidian 关闭期间被卸载」的 uninstalled
+			const stamps: Record<string, { firstInstalled?: number; lastInstalled?: number }> = {};
+			for (const id of missing) stamps[id] = await this.estimateTimesFromDisk(id);
+			if (missing.length === 0 && !this.hasStaleInstalledRecord(base, installed)) return;
+
+			await this.recordInstallDiff(new Set(missing), new Set(), installed, enabled, stamps);
+		} catch (e: unknown) {
+			logger.warn("[Chinese Plugin Market] 回填安装历史失败：", e);
+		}
+	}
+
+	/** 历史里是否存在「记着仍安装、实际已不在」的条目（跨会话卸载，需要补写卸载时间） */
+	private hasStaleInstalledRecord(base: InstallHistoryFile, installed: Set<string>): boolean {
+		return Object.entries(base.entries).some(
+			([id, r]) => r.currentlyInstalled && !installed.has(id),
+		);
+	}
+
+	/** 从插件目录 / manifest.json 的文件时间推断安装时间（取不到返回空对象，仍标估算） */
+	private async estimateTimesFromDisk(
+		id: string,
+	): Promise<{ firstInstalled?: number; lastInstalled?: number }> {
+		try {
+			const ad = this.app.vault.adapter as unknown as {
+				stat?: (path: string) => Promise<{ ctime?: number; mtime?: number }>;
+			};
+			if (typeof ad.stat !== "function") return {};
+			const dir = `${this.app.vault.configDir}/plugins/${id}`;
+			const dirStat = await ad.stat(dir).catch(() => null);
+			const manStat = await ad.stat(`${dir}/manifest.json`).catch(() => null);
+			return estimateInstallTimes(dirStat?.ctime, manStat?.mtime, Date.now());
+		} catch {
+			return {};
+		}
 	}
 
 	/** 评测台账是否启用（默认开启；预留开关位供后续设置页接入） */
@@ -614,7 +705,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 评测台账：独立标签页「我的插件足迹」视图（单例复用已有 leaf）
 		this.registerView(JOURNAL_VIEW_TYPE, (leaf) =>
 			new JournalView(leaf, {
-				loadHistory: () => this.storage.loadInstallHistory().then((f) => f.entries),
+				// 打开足迹前先回填一次：补齐「装上了但从未记录」的插件，保证首屏就有日期
+				loadHistory: async () => {
+					await this.backfillInstallHistory();
+					return (await this.storage.loadInstallHistory()).entries;
+				},
 				listEntries: () => this.listJournalEntries(),
 				openPlugin: (id) => void this.openJournalTarget(id),
 				t: (k) => t(k),
@@ -786,6 +881,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			this.startSettingsIntegration();
 			// 为每个已安装插件注册「切换插件」命令（插件增删后由 recordInstallDiff 刷新）
 			this.refreshPluginToggleCommands();
+			// 台账历史回填：补齐「早已装上、从未被记录」的插件并补写跨会话卸载时间
+			void this.backfillInstallHistory();
 			// CSS 片段名单异步预扫（配置目录不进 vault 文件树），再注册「切换片段」命令
 			void this.reloadCssSnippets();
 			});
@@ -1608,6 +1705,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		else list.push(entry);
 		this.settings.betaPlugins = list;
 		void this.flushSaveSettings();
+		// 评测台账：直链安装不一定在搜索视图里发生（命令面板 / ribbon 菜单即可触发），
+		// 此时既没有 installed-watch 的目录 diff，也没有任何人记账 —— 必须在这里直接写，
+		// 否则足迹表里该插件的「首次安装 / 最近动态」永远是「—」。
+		// 主题不计入插件足迹（台账是插件维度的）。
+		if (info.kind === "plugin") {
+			void this.recordInstallDiff(new Set([info.id]), new Set());
+		}
 	}
 
 	/** 从跟踪表移除（仅移除记录，不卸载插件本身） */
