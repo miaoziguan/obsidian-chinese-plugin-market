@@ -47,3 +47,4 @@ stats-cache.json
 translator-cache.json
 tm-approved-snapshot.json
 trending-history.json
+scripts/eval/eval.bundle.cjs
