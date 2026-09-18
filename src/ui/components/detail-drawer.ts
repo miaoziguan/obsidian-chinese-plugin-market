@@ -24,7 +24,7 @@ import {
 import { isMobileEnvironment, requestIdle } from "@shared/platform";
 import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
-import { makeT, type TFunc, type I18nKey } from "@shared/i18n";
+import { makeT, type TFunc, type I18nKey, type I18nVars } from "@shared/i18n";
 import { cleanChineseSpaces, stripReviewNotice } from "@shared/utils";
 import { ICON_DOWNLOAD } from "@ui/components/card-render";
 import type { JournalEntry } from "@domain/journal/journal-entry";
@@ -38,6 +38,9 @@ import { isMacOS, macosSystemTranslate, splitMarkdownForTranslate } from "@trans
 import { appendSVG, appendIconText, toHTMLElement } from "@ui/dom/dom";
 import { openVersionPicker } from "@ui/components/version-picker-modal";
 import type { PluginVersion } from "@data/platform/plugin-versions";
+import type { DepEdge, DependentRef, DepStatus } from "@domain/deps/types";
+import type { DepFixAction } from "@ui/components/dep-section";
+import { renderDepSection, renderDependentsSection } from "@ui/components/dep-section";
 
 /** README 会话级缓存（PERF micro）：按 raw url 缓存整篇 markdown，限容防内存膨胀。 */
 const README_CACHE = new Map<string, string>();
@@ -187,6 +190,21 @@ export interface DrawerOptions {
 		/** 固定到指定版本（null = 保持最新） */
 		pin: (id: string, version: string | null) => Promise<void>;
 	};
+	/**
+	 * 依赖提示端口（未提供则不渲染依赖区块）。
+	 * 数据全部由宿主提供，抽屉不直接读 plugin 形状，与既有端口风格一致。
+	 */
+	deps?: {
+		edgesOf: (id: string) => DepEdge[];
+		dependentsOf: (id: string) => DependentRef[];
+		statusOf: (dep: DepEdge) => DepStatus;
+		canOpen: (depId: string) => boolean;
+		nameOf: (pluginId: string) => string;
+		onOpen: (depId: string) => void;
+		onFix: (depId: string, action: DepFixAction) => void;
+		/** 基线缺失时按需现算（异步；完成后由抽屉自行重渲依赖区块） */
+		ensure?: (id: string, repo?: string) => Promise<void>;
+	};
 }
 
 export class PluginDetailDrawer {
@@ -205,6 +223,8 @@ export class PluginDetailDrawer {
 	private onCloseCb: () => void;
 	/** 版本控制端口（BRAT 式版本固定）；缺省时详情页不渲染版本按钮 */
 	private versionControl?: DrawerOptions["versionControl"];
+	/** 依赖提示端口；缺省时详情页不渲染依赖区块 */
+	private deps?: DrawerOptions["deps"];
 
 	/** 浏览历史栈（Drawer 内部就地跳转，无需关闭重建） */
 	private _history: Array<{ info: PluginInfo; result: TranslateResult | undefined; similar: SimilarCandidate[] }> = [];
@@ -262,6 +282,7 @@ export class PluginDetailDrawer {
 		this._similarPending = opts.deferSimilar === true;
 		this._focusJournal = opts.focusJournal === true;
 		this.versionControl = opts.versionControl;
+		this.deps = opts.deps;
 
 		this._boundKeydown = this.onKeydown.bind(this);
 		this._boundBackdropClick = this.onBackdropClick.bind(this);
@@ -837,6 +858,43 @@ export class PluginDetailDrawer {
 				}
 			} catch { /* 半官方 API，容错忽略 */ }
 		}
+
+	// ── 依赖 / 被依赖（数据集未加载时整块不渲染，零噪音）──
+	if (this.deps) {
+		const dc = this.deps;
+		const host = {
+			// this.t 是 TFunc，原生支持带参（同上方的 version.pinned），直接透传
+			t: (k: I18nKey, vars?: Record<string, string>) => this.t(k, vars as I18nVars),
+			statusOf: (dep: DepEdge) => dc.statusOf(dep),
+			canOpen: (id: string) => dc.canOpen(id),
+			nameOf: (id: string) => dc.nameOf(id),
+			onOpen: (id: string) => dc.onOpen(id),
+			onFix: (id: string, action: DepFixAction) => dc.onFix(id, action),
+		};
+		const deps = dc.edgesOf(p.id);
+		if (deps.length > 0) {
+			const section = headBlock.createDiv({ cls: "pt-detail-deps" });
+			section.createDiv({ cls: "pt-detail-deps-title", text: this.t("dep.section") });
+			renderDepSection(section, deps, host);
+		} else if (dc.ensure && p.repo) {
+			// 基线里没有：按需现算一次（长尾兜底），算出来就补渲染区块
+			const pid = p.id;
+			void dc.ensure(pid, p.repo).then(() => {
+				if (this.currentPluginId !== pid) return; // 期间用户跳走了就别动 DOM
+				const fresh = dc.edgesOf(pid);
+				if (fresh.length === 0) return;
+				const section = headBlock.createDiv({ cls: "pt-detail-deps" });
+				section.createDiv({ cls: "pt-detail-deps-title", text: this.t("dep.section") });
+				renderDepSection(section, fresh, host);
+			});
+		}
+		const dependents = dc.dependentsOf(p.id);
+		if (dependents.length > 0) {
+			const section = headBlock.createDiv({ cls: "pt-detail-deps" });
+			renderDependentsSection(section, dependents, host);
+		}
+	}
+
 
 		// ── 描述（含来源信息 chip） ──
 		const descSection = headBlock.createDiv({ cls: "pt-detail-desc-section" });

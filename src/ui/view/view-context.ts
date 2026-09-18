@@ -36,6 +36,7 @@ import type { TrendingEngine } from "@domain/recommend/trending";
 import type { AuthorGroup } from "@translation/lexicon/pinyin-init";
 import type { PluginVersion } from "@data/platform/plugin-versions";
 import type { BetaPluginEntry } from "@app/direct-install";
+import type { DepGraph } from "@domain/deps/graph";
 
 import type { I18nKey, I18nVars } from "@shared/i18n";
 import type { ChinesePluginMarketSettings, ChinesePluginMarketView, PluginProfile } from "@ui/view/translator-view";
@@ -289,6 +290,14 @@ export interface ViewContext {
 	pinPluginVersion: (id: string, version: string | null) => Promise<void>;
 	/** 拉取仓库可选版本列表（新 → 旧；失败/无 Release 时返回空数组）；force=true 绕过缓存 */
 	listPluginVersions: (repo: string, force?: boolean) => Promise<PluginVersion[]>;
+
+	// ── 插件依赖提示 ──
+	/** 依赖数据集（plugin-deps.json 未加载时为 null，依赖相关 UI 整体不渲染） */
+	pluginDeps: DepGraph | null;
+	/** 处理某个依赖：安装 / 启用 / 更新（视图层找到 PluginInfo 后走既有流程） */
+	fixDep: (depId: string, action: "install" | "enable" | "update") => void;
+	/** 基线缺该插件时按 repo 现算依赖（异步，会话内缓存，失败静默） */
+	ensurePluginDeps: (id: string, repo?: string) => Promise<void>;
 
 	// ── 直链安装（Beta）跟踪表：主视图「直链」页签 ──
 	/** 直链跟踪表（settings.betaPlugins；插件与主题同表，用 kind 区分） */
@@ -764,6 +773,9 @@ get authorFacetList() { return view.authorFacetList; },
 		get pluginVersionPins() { return view.plugin.settings.pluginVersionPins; },
 		pinPluginVersion: (id, version) => view.pinPluginVersion(id, version),
 		listPluginVersions: (repo, force) => view.listPluginVersions(repo, force),
+		get pluginDeps() { return view.plugin.pluginDeps; },
+		fixDep: (id, action) => view.fixDep(id, action),
+		ensurePluginDeps: (id, repo) => view.ensurePluginDeps(id, repo),
 		fillVisibleWindow: view.fillVisibleWindow.bind(view),
 		updateWindow: view.updateWindow.bind(view),
 		get windowStart() { return view.windowStart; },
