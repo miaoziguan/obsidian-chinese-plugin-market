@@ -1,11 +1,29 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-19T00:00:00.000Z",
+  "generatedAt": "2026-09-18T18:23:03.254Z",
   "edges": {
     "quickadd": [
       {
         "id": "templater-obsidian",
         "name": "Templater",
+        "kind": "optional",
+        "source": "curated",
+        "confidence": 1
+      }
+    ],
+    "obsidian-banners": [
+      {
+        "id": "dataview",
+        "name": "Dataview",
+        "kind": "optional",
+        "source": "curated",
+        "confidence": 1
+      }
+    ],
+    "obsidian-tasks-plugin": [
+      {
+        "id": "dataview",
+        "name": "Dataview",
         "kind": "optional",
         "source": "curated",
         "confidence": 1
