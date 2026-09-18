@@ -52,6 +52,32 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	const container = ctx.contentEl;
 		const header = container.createDiv({ cls: "pt-header" });
 
+		// 顶部页签栏：浏览 / 更新（更新页签常驻显示已安装待更新插件，支持多选 + 一键全更）
+		const viewTabs = header.createDiv({ cls: "pt-view-tabs" });
+		const tabBrowse = viewTabs.createEl("button", {
+			cls: "pt-view-tab",
+			attr: { "data-view-tab": "browse", "aria-pressed": "true", type: "button" },
+		});
+		tabBrowse.setText(ctx.t("view.tab.browse"));
+		const tabUpdates = viewTabs.createEl("button", {
+			cls: "pt-view-tab",
+			attr: { "data-view-tab": "updates", "aria-pressed": "false", type: "button" },
+		});
+		tabUpdates.setText(ctx.t("view.tab.updates"));
+		// 可更新数量徽标：有更新时显示小红点 + 数字
+		const tabUpdatesBadge = tabUpdates.createSpan({ cls: "pt-view-tab-badge" });
+		const refreshTabsBadge = () => {
+			const n = ctx.outdatedIds?.size ?? 0;
+			tabUpdatesBadge.setText(n > 0 ? String(n) : "");
+			tabUpdatesBadge.setCssStyles({ display: n > 0 ? "" : "none" });
+		};
+		refreshTabsBadge();
+		const onSwitchTab = (tab: "browse" | "updates") => ctx.switchViewTab(tab);
+		tabBrowse.addEventListener("click", () => onSwitchTab("browse"));
+		tabUpdates.addEventListener("click", () => onSwitchTab("updates"));
+		// 把刷新徽标的回调挂到 ctx，供检测更新后同步
+		ctx.refreshViewTabsBadge = refreshTabsBadge;
+
 		// ── 单行头部：搜索框(flex:1) + 模式下拉 + ⚙折叠 + ↻刷新 ──
 		let facetContainer: HTMLElement | null = null;
 		const headerRow = header.createDiv({ cls: "pt-header-row" });
@@ -460,6 +486,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			checkUpdateBtn.addClass("pt-spin");
 			void refreshOutdated(ctx)
 				.then(() => {
+					ctx.refreshViewTabsBadge?.();
 					const n = ctx.outdatedIds?.size ?? 0;
 					if (n <= 0) new Notice(ctx.t("action.checkUpdate.upToDate"));
 					else new Notice(ctx.t("action.checkUpdate.available", { n: String(n) }));

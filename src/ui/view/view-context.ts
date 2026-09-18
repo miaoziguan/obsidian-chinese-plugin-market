@@ -210,6 +210,8 @@ export interface ViewContext {
 	// ── DOM 引用 ──
 	scrollViewport: HTMLElement | null;
 	scrollCardLayer: HTMLElement | null;
+	/** 「更新」页签列表容器（由 view-chrome 创建，渲染更新列表用） */
+	updatesListEl: HTMLElement | null;
 	resultCountEl: HTMLElement | null;
 	aiTranslateBtnEl: HTMLButtonElement | null;
 	aiProgressEl: HTMLElement | null;
@@ -252,6 +254,18 @@ export interface ViewContext {
 	outdatedIds: Set<string>;
 	/** 可更新详情（id → {local, latest}） */
 	outdatedInfo: Map<string, { local: string; latest: string }>;
+	/** 主视图当前页签：浏览（默认）/ 更新（已安装待更新列表） */
+	viewTab: "browse" | "updates";
+	/** 更新页签里被勾选（待更新）的插件 id 集合 */
+	updateSelection: Set<string>;
+	/** 切换到指定页签（浏览 / 更新），负责显隐列表层并更新 tab 高亮 */
+	switchViewTab: (tab: "browse" | "updates") => void;
+	/** 批量更新指定插件到最新版并刷新更新列表 */
+	updateSelected: (ids: string[]) => Promise<void>;
+	/** 重渲染「更新」页签列表（若当前不在该页签则无操作） */
+	renderUpdatesList: () => void;
+	/** 刷新页签栏「更新」数量徽标（由工具栏构建时挂上，检测更新后调用） */
+	refreshViewTabsBadge?: () => void;
 	/** 正在一键安装中的插件 id 集合（安装中按钮显示「安装中…」并防重点） */
 	installingIds: Set<string>;
 	/** 正在一键更新的插件 id 集合（更新中按钮显示「更新中…」并防重点） */
@@ -562,6 +576,8 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set scrollViewport(v) { view.scrollViewport = v; },
 		get scrollCardLayer() { return view.scrollCardLayer; },
 		set scrollCardLayer(v) { view.scrollCardLayer = v; },
+		get updatesListEl() { return view.updatesListEl; },
+		set updatesListEl(v) { view.updatesListEl = v; },
 		get resultCountEl() { return view.resultCountEl; },
 		set resultCountEl(v) { view.resultCountEl = v; },
 		get aiTranslateBtnEl() { return view.aiTranslateBtnEl; },
@@ -626,6 +642,10 @@ get authorFacetList() { return view.authorFacetList; },
 		set installedVersions(v) { view.installedVersions = v; },
 		get outdatedIds() { return view.outdatedIds; },
 		get outdatedInfo() { return view.outdatedInfo; },
+		get viewTab() { return view.viewTab; },
+		set viewTab(v) { view.viewTab = v; },
+		get updateSelection() { return view.updateSelection; },
+		set updateSelection(v) { view.updateSelection = v; },
 		get installingIds() { return view.installingIds; },
 		set installingIds(v) { view.installingIds = v; },
 		get updatingIds() { return view.updatingIds; },
@@ -703,6 +723,9 @@ get authorFacetList() { return view.authorFacetList; },
 		refreshCardState: view.refreshCardState.bind(view),
 		updatePlugin: (id, silent) => view.updatePlugin(id, silent),
 		updateAll: () => view.updateAll(),
+		switchViewTab: (tab) => view.switchViewTab(tab),
+		updateSelected: (ids) => view.updateSelected(ids),
+		renderUpdatesList: () => view.renderUpdatesList(),
 		fillVisibleWindow: view.fillVisibleWindow.bind(view),
 		updateWindow: view.updateWindow.bind(view),
 		get windowStart() { return view.windowStart; },

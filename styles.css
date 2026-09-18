@@ -6225,3 +6225,150 @@ button.pt-card-install-btn--installed {
 .pt-beta-actions button {
 	margin: 0;
 }
+
+/* 主视图顶部页签栏：浏览 / 更新 */
+.pt-view-tabs {
+	display: flex;
+	gap: 4px;
+	padding: 6px 8px 0;
+}
+.pt-view-tab {
+	position: relative;
+	border: none;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small, 13px);
+	padding: 4px 12px;
+	border-radius: 6px 6px 0 0;
+	cursor: pointer;
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+.pt-view-tab:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.pt-view-tab[aria-pressed="true"] {
+	color: var(--text-normal);
+	background: var(--background-secondary);
+	font-weight: var(--font-semibold, 600);
+}
+.pt-view-tab-badge {
+	position: absolute;
+	top: -2px;
+	right: -2px;
+	min-width: 16px;
+	height: 16px;
+	line-height: 16px;
+	padding: 0 4px;
+	border-radius: 8px;
+	background: var(--text-accent);
+	color: var(--text-on-accent);
+	font-size: 10px;
+	text-align: center;
+}
+
+/* 「更新」页签列表 */
+.pt-updates-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+}
+.pt-updates-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.pt-updates-count {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small, 13px);
+	margin-right: auto;
+}
+.pt-updates-bar button {
+	margin: 0;
+}
+.pt-updates-selectall,
+.pt-updates-deselect {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--text-muted);
+	padding: 2px 8px;
+	cursor: pointer;
+}
+.pt-updates-selectall:hover,
+.pt-updates-deselect:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.pt-updates-update-sel,
+.pt-updates-update-all {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+	padding: 2px 10px;
+	cursor: pointer;
+}
+.pt-updates-update-all {
+	color: var(--text-on-accent);
+	background: var(--text-accent);
+	border-color: var(--text-accent);
+}
+.pt-updates-empty {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	align-items: center;
+	padding: 40px 12px;
+	color: var(--text-muted);
+}
+.pt-updates-empty-title {
+	font-size: var(--font-ui-medium, 15px);
+	color: var(--text-normal);
+}
+.pt-updates-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.pt-updates-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px;
+	border-radius: 6px;
+	background: var(--background-secondary);
+}
+.pt-updates-row:hover {
+	background: var(--background-modifier-hover);
+}
+.pt-updates-check {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+}
+.pt-updates-name {
+	font-weight: var(--font-semibold, 600);
+	color: var(--text-normal);
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.pt-updates-diff {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller, 12px);
+	flex-shrink: 0;
+}
+.pt-updates-row-update {
+	flex-shrink: 0;
+}
+.pt-updates-row-update svg {
+	width: 16px;
+	height: 16px;
+}

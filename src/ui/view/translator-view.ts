@@ -11,7 +11,8 @@ import {
 	Platform,
 	Notice,
 } from "obsidian";
-import { toHTMLElement } from "@ui/dom/dom";
+import { toHTMLElement, q } from "@ui/dom/dom";
+import { renderUpdatesList } from "@ui/view/view-updates";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
 import { type MirrorSource } from "@domain/catalog/mirror";
 import { type PluginStat } from "@domain/catalog/stats";
@@ -456,6 +457,13 @@ export class ChinesePluginMarketView extends ItemView {
 	/** 正在一键更新的插件 id 集合（防重点 + 驱动卡片按钮 loading 态） */
 	public updatingIds = new Set<string>();
 
+	/** 主视图当前页签：浏览（默认）/ 更新（已安装待更新列表） */
+	public viewTab: "browse" | "updates" = "browse";
+	/** 更新页签里被勾选（待更新）的插件 id 集合 */
+	public updateSelection = new Set<string>();
+	/** 「更新」页签列表容器（由 view-chrome 创建并挂到 ctx.updatesListEl） */
+	public updatesListEl: HTMLElement | null = null;
+
 	/**
 	 * 更新单个已安装插件到官方最新版（桌面端）。
 	 * 维护 updatingIds 并在开始/结束各刷新一次卡片按钮态；内部 try/catch 兜底，不向调用方抛错。
@@ -484,6 +492,9 @@ export class ChinesePluginMarketView extends ItemView {
 		// 更新后重检该插件是否为最新，并刷新 ribbon 红点计数
 		await refreshOutdated(this._ctx);
 		this.plugin.setRibbonUpdateBadge(this._ctx.outdatedIds?.size ?? 0);
+		// 同步「更新」页签徽标与列表（若当前正停留在该页签）
+		this._ctx.refreshViewTabsBadge?.();
+		this.renderUpdatesList();
 	};
 
 	/** 批量更新所有可更新插件（桌面端；遍历 outdatedIds 顺序执行，每条静默后汇总） */
@@ -504,6 +515,64 @@ export class ChinesePluginMarketView extends ItemView {
 			new Notice(this.t("action.update.progress", { done: String(ok + fail), total: String(total) }));
 		}
 		new Notice(this.t("action.update.summary", { ok: String(ok), fail: String(fail) }), 6000);
+	};
+
+	/** 切换到「更新」页签时，默认勾选当前全部可更新插件 */
+	private syncUpdateSelectionToOutdated() {
+		this.updateSelection = new Set(this._ctx.outdatedIds);
+	}
+
+	/** 切换到指定页签（浏览 / 更新）：显隐卡片层/搜索栏，更新 tab 高亮，并渲染对应内容 */
+	public switchViewTab = (tab: "browse" | "updates") => {
+		if (this.viewTab === tab) return;
+		this.viewTab = tab;
+		const contentEl = this.contentEl;
+		contentEl
+			.querySelectorAll<HTMLElement>("[data-view-tab]")
+			.forEach((btn) => {
+				btn.setAttribute("aria-pressed", String(btn.getAttribute("data-view-tab") === tab));
+			});
+		const headerRow = q(contentEl, ".pt-header-row");
+		const cardLayer = this.scrollCardLayer;
+		const updatesEl = this.updatesListEl;
+		const featuredEl = q(contentEl, ".pt-featured");
+		if (tab === "updates") {
+			headerRow?.setCssStyles({ display: "none" });
+			cardLayer?.setCssStyles({ display: "none" });
+			featuredEl?.setCssStyles({ display: "none" });
+			if (updatesEl) {
+				updatesEl.setCssStyles({ display: "" });
+				this.syncUpdateSelectionToOutdated();
+				this.renderUpdatesList();
+			}
+		} else {
+			updatesEl?.setCssStyles({ display: "none" });
+			headerRow?.setCssStyles({ display: "" });
+			cardLayer?.setCssStyles({ display: "" });
+			this.renderPluginList(true);
+		}
+	};
+
+	/** 批量更新勾选的插件到最新版，结束后重新检测并刷新更新列表 */
+	public updateSelected = async (ids: string[]) => {
+		if (ids.length === 0) return;
+		let ok = 0;
+		let fail = 0;
+		for (const id of ids) {
+			if (this.disposed) break;
+			await this.updatePlugin(id, true);
+			if (this._ctx.outdatedIds?.has(id)) fail++;
+			else ok++;
+		}
+		new Notice(this.t("updates.summary", { ok: String(ok), fail: String(fail) }), 6000);
+		this.syncUpdateSelectionToOutdated();
+		this.renderUpdatesList();
+	};
+
+	/** 重渲染「更新」页签列表（内部委托给 view-updates 渲染器） */
+	public renderUpdatesList = () => {
+		if (this.viewTab !== "updates") return;
+		renderUpdatesList(this._ctx);
 	};
 
 	async onOpen() {
@@ -763,7 +832,7 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 			this.scrollViewport.setCssStyles({ display: "", visibility: "visible", opacity: "1" });
 		}
 		const featuredEl = toHTMLElement(this.contentEl.querySelector(".pt-featured"));
-		if (featuredEl) featuredEl.setCssStyles({ display: "" });
+		if (featuredEl && this.viewTab === "browse") featuredEl.setCssStyles({ display: "" });
 		this.activeDrawer = null;
 		// 关闭丝滑优化：列表 DOM 在详情态只是 display:none 藏着，恢复显示是瞬时的；
 		// 强制重渲（过滤管线 + 全量渲染）推迟到下一帧，避免与关闭点击挤同一帧。
