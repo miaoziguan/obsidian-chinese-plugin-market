@@ -62,6 +62,20 @@ export const STRINGS = {
 	"action.update.fetchFail": { zh: "{file} 下载失败 HTTP {code}" },
 	"action.update.progress": { zh: "批量更新 {done}/{total}" },
 	"action.update.summary": { zh: "批量更新完成：成功 {ok} / 失败 {fail}" },
+	// 主视图页签：浏览 / 更新
+	"view.tab.browse": { zh: "浏览" },
+	"view.tab.updates": { zh: "更新" },
+	// 更新列表（主视图「更新」页签）
+	"updates.empty": { zh: "暂无可用更新" },
+	"updates.empty.hint": { zh: "点「检查更新」检测已安装插件是否有新版本" },
+	"updates.selectAll": { zh: "全选" },
+	"updates.deselectAll": { zh: "取消全选" },
+	"updates.updateSelected": { zh: "更新所选 ({n})" },
+	"updates.updateAll": { zh: "全部更新" },
+	"updates.count": { zh: "已选 {n} / 共 {m}" },
+	"updates.versionDiff": { zh: "{local} → {latest}" },
+	"updates.summary": { zh: "更新完成：成功 {ok} / 失败 {fail}" },
+	"updates.checking": { zh: "正在检测更新…" },
 	// 智能混合翻译（AI 优先，失败自动降级 Google/MyMemory/腾讯免费引擎）
 	"action.aiTranslate": { zh: "智能混合翻译" },
 	"action.aiTranslate.disabled": { zh: "智能混合翻译（未配置）" },

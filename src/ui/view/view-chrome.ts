@@ -477,6 +477,10 @@ export async function loadAndRender(ctx: ViewContext) {
 		// 卡片内容层（正常流 grid，原生滚动 + content-visibility 接管窗口化）
 		const cardLayer = listContainer.createDiv({ cls: "pt-list-layer" });
 		ctx.scrollCardLayer = cardLayer;
+		// 「更新」页签列表容器（与卡片层同级，默认隐藏；切到更新页签时显示）
+		const updatesEl = listContainer.createDiv({ cls: "pt-updates-list" });
+		updatesEl.setCssStyles({ display: "none" });
+		ctx.updatesListEl = updatesEl;
 		// S6 虚拟列表 ARIA：屏上只有窗口内卡片，用 list/listitem + posinset/setsize
 		// 告知读屏器"这是长列表的第 x/n 项"，而非只有十几项
 		cardLayer.setAttribute("role", "list");

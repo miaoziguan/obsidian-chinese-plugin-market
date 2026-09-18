@@ -322,6 +322,12 @@ export function disposeRenderTimers(ctx: ViewContext): void {
 
 export function scheduleRender(ctx: ViewContext, preserveScroll = false) {
 
+		// 「更新」页签：跳过虚拟卡片渲染，改为重绘更新列表
+		if (ctx.viewTab === "updates") {
+			ctx.renderUpdatesList();
+			return;
+		}
+
 		if (ctx.renderRAF) return;
 		ctx.renderRAF = window.requestAnimationFrame(() => {
 			ctx.renderRAF = 0;
