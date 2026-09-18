@@ -34,6 +34,7 @@ import type { SignalId } from "@domain/filter/smart-signal";
 import type { ListState } from "@ui/dom/list-state";
 import type { TrendingEngine } from "@domain/recommend/trending";
 import type { AuthorGroup } from "@translation/lexicon/pinyin-init";
+import type { PluginVersion } from "@data/platform/plugin-versions";
 
 import type { I18nKey, I18nVars } from "@shared/i18n";
 import type { ChinesePluginMarketSettings, ChinesePluginMarketView, PluginProfile } from "@ui/view/translator-view";
@@ -270,10 +271,16 @@ export interface ViewContext {
 	installingIds: Set<string>;
 	/** 正在一键更新的插件 id 集合（更新中按钮显示「更新中…」并防重点） */
 	updatingIds: Set<string>;
-	/** 更新单个已安装插件到官方最新版（桌面端） */
-	updatePlugin: (pluginId: string, silent?: boolean) => Promise<void>;
+	/** 更新单个已安装插件到官方最新版（桌面端）；version 传入时改为固定安装到该 tag */
+	updatePlugin: (pluginId: string, silent?: boolean, version?: string) => Promise<void>;
 	/** 批量更新所有可更新插件（桌面端） */
 	updateAll: () => Promise<void>;
+	/** 已固定版本的插件表（id → GitHub tag）；不在表内 = 保持最新 */
+	pluginVersionPins: Record<string, string>;
+	/** 固定到指定版本（version=null 表示改回「保持最新」并更新到最新） */
+	pinPluginVersion: (id: string, version: string | null) => Promise<void>;
+	/** 拉取仓库可选版本列表（新 → 旧；失败/无 Release 时返回空数组）；force=true 绕过缓存 */
+	listPluginVersions: (repo: string, force?: boolean) => Promise<PluginVersion[]>;
 
 	// ── 智能信号 ──
 	smartSignals: Map<string, SignalId[]>;
@@ -721,11 +728,14 @@ get authorFacetList() { return view.authorFacetList; },
 		invalidateAndRender: view.invalidateAndRender.bind(view),
 		postRenderSync: view.postRenderSync.bind(view),
 		refreshCardState: view.refreshCardState.bind(view),
-		updatePlugin: (id, silent) => view.updatePlugin(id, silent),
+		updatePlugin: (id, silent, version) => view.updatePlugin(id, silent, version),
 		updateAll: () => view.updateAll(),
 		switchViewTab: (tab) => view.switchViewTab(tab),
 		updateSelected: (ids) => view.updateSelected(ids),
 		renderUpdatesList: () => view.renderUpdatesList(),
+		get pluginVersionPins() { return view.plugin.settings.pluginVersionPins; },
+		pinPluginVersion: (id, version) => view.pinPluginVersion(id, version),
+		listPluginVersions: (repo, force) => view.listPluginVersions(repo, force),
 		fillVisibleWindow: view.fillVisibleWindow.bind(view),
 		updateWindow: view.updateWindow.bind(view),
 		get windowStart() { return view.windowStart; },

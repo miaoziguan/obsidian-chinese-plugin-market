@@ -679,8 +679,16 @@ export async function refreshOutdated(ctx: ViewContext): Promise<void> {
 	outdatedRefreshing = true;
 	try {
 		// 构建 id → repo 映射（仅已装且官方列表有记录的插件）
+		// 已固定版本的插件跳过检测：用户显式锁定版本，不应再提示「有更新」。
+		const pins = ctx.pluginVersionPins ?? {};
 		const repoOf = new Map<string, string>();
 		for (const p of ctx.plugins) {
+			if (pins[p.id]) {
+				// 曾标记过可更新：固定后立刻撤销标记，避免旧状态残留
+				ctx.outdatedIds?.delete?.(p.id);
+				ctx.outdatedInfo?.delete?.(p.id);
+				continue;
+			}
 			if (ctx.installedVersions.has(p.id) && p.repo) repoOf.set(p.id, p.repo);
 		}
 		if (repoOf.size === 0) return;

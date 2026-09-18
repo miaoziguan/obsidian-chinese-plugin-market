@@ -37,12 +37,68 @@ function parseRepo(repo: string): { owner: string; repo: string } | null {
 	return { owner: parts[0], repo: parts[1] };
 }
 
-/** 构造任意文件的 raw 源码树 URL（经镜像） */
-function buildRawUrl(repo: string, file: string, mirror: MirrorConfig): string {
-	const ref = parseRepo(repo);
-	if (!ref) return "";
-	const rawUrl = `https://raw.githubusercontent.com/${ref.owner}/${ref.repo}/HEAD/${file}`;
+/** 构造任意文件的 raw 源码树 URL（经镜像），ref 缺省取 HEAD（最新） */
+function buildRawUrl(repo: string, file: string, mirror: MirrorConfig, ref = "HEAD"): string {
+	const gh = parseRepo(repo);
+	if (!gh) return "";
+	const rawUrl = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${ref}/${file}`;
 	return resolveUrl(rawUrl, mirror);
+}
+
+/** 构造仓库内任意 ref（分支/tag）的 raw URL（经镜像） */
+function buildRawUrlAtRef(
+	gh: { owner: string; repo: string },
+	ref: string,
+	file: string,
+	mirror: MirrorConfig,
+): string {
+	const rawUrl = `https://raw.githubusercontent.com/${gh.owner}/${gh.repo}/${ref}/${file}`;
+	return resolveUrl(rawUrl, mirror);
+}
+
+/** 构造 Release 资产 URL（严格模式：只认指定 tag，不用 latest 兜底，保证版本精确） */
+function strictReleaseAssetUrls(
+	gh: { owner: string; repo: string },
+	file: string,
+	ref: string,
+): string[] {
+	const tag = encodeURIComponent(ref);
+	return [`https://github.com/${gh.owner}/${gh.repo}/releases/download/${tag}/${file}`];
+}
+
+/**
+ * tag 变体：社区既可能打 `1.2.3` 也可能打 `v1.2.3`。
+ * 返回「原样优先、另一形态兜底」的候选顺序。
+ */
+export function tagVariants(version: string): string[] {
+	const v = version.trim();
+	if (!v) return [];
+	const noV = v.replace(/^v/i, "");
+	const withV = `v${noV}`;
+	const out = v.startsWith("v") || v.startsWith("V") ? [v, noV] : [v, withV];
+	return [...new Set(out.filter(Boolean))];
+}
+
+/**
+ * 依次尝试候选 URL 取文本：404/410 继续下一个来源，其它状态码直接抛错。
+ * @param optional true 时全部未命中返回 null 而非抛错（styles.css 这类可选文件）
+ */
+async function fetchFirstUrl(
+	urls: string[],
+	fileLabel: string,
+	optional: boolean,
+): Promise<string | null> {
+	let lastStatus = 0;
+	for (const url of urls) {
+		const r = await requestUrl({ url, throw: false });
+		if (r.status >= 200 && r.status < 300) return r.text;
+		if (r.status !== 404 && r.status !== 410) {
+			throw new Error(t("action.update.fetchFail", { file: fileLabel, code: String(r.status) }));
+		}
+		lastStatus = r.status;
+	}
+	if (optional) return null;
+	throw new Error(t("action.update.fetchFail", { file: fileLabel, code: String(lastStatus || 404) }));
 }
 
 /**
@@ -76,12 +132,13 @@ export async function fetchWithReleaseFallback(
 }
 
 /**
- * 把已安装插件升级到官方仓库最新版本。
+ * 把已安装插件升级到官方仓库最新版本，或固定安装到指定版本（BRAT 式）。
  *
- * @param app    Obsidian App（写盘 + 重载插件实例）
- * @param id     插件 id（用于写盘目录与校验 manifest.id）
- * @param repo   插件仓库 owner/name（来自官方列表 PluginInfo.repo）
- * @param mirror 镜像配置（manifest/main.js 下载源）
+ * @param app     Obsidian App（写盘 + 重载插件实例）
+ * @param id      插件 id（用于写盘目录与校验 manifest.id）
+ * @param repo    插件仓库 owner/name（来自官方列表 PluginInfo.repo）
+ * @param mirror  镜像配置（manifest/main.js 下载源）
+ * @param version 可选：指定版本（GitHub tag）。传入时严格按该 tag 取三件套，不回落 latest
  * @returns 安装后的 Manifest（含版本号）
  * @throws 移动端 / 无仓库 / 下载失败 / 启用失败等错误（调用方负责 Notice）
  */
@@ -90,9 +147,12 @@ export async function updatePluginCore(
 	id: string,
 	repo: string,
 	mirror: MirrorConfig,
+	version?: string,
 ): Promise<Manifest> {
 	if (Platform.isMobile) throw new Error(t("action.update.mobileBlocked"));
 	if (!repo) throw new Error(t("action.update.noRepo"));
+
+	if (version && version.trim()) return installPinnedVersion(app, id, repo, mirror, version.trim());
 
 	// 1) 拉最新 manifest 原始文本（用 installFromUrl 同款校验，避免覆盖成装不上的版本）
 	const manUrl = buildManifestUrl(repo, mirror);
@@ -102,11 +162,7 @@ export async function updatePluginCore(
 		throw new Error(t("action.update.fetchFail", { file: "manifest.json", code: String(manResp.status) }));
 	}
 	const man = JSON.parse(manResp.text) as Manifest;
-	if (typeof man.id !== "string" || man.id !== id) throw new Error(t("directInstall.badManifest"));
-	// 写盘不可逆：先确认新版本在本机能跑起来
-	if (man.minAppVersion && !requireApiVersion(man.minAppVersion)) {
-		throw new Error(t("directInstall.minApp", { v: man.minAppVersion }));
-	}
+	assertManifest(man, id);
 
 	// 2) 下载 main.js（必选）/ styles.css（可选）
 	// 源码树优先（享镜像），404 则回退 GitHub Release 资产（很多插件不把构建产物提交到 git）
@@ -115,16 +171,37 @@ export async function updatePluginCore(
 	if (!mainText || !mainText.trim()) throw new Error(t("directInstall.emptyMain"));
 	const cssText = await fetchWithReleaseFallback(repo, "styles.css", man.version ?? "", mirror, true);
 
-	// 3) 写盘覆盖（manifest / main.js 必写；styles.css 新版无则删旧）
+	await writeAndReload(app, id, manResp.text, mainText, cssText);
+	return man;
+}
+
+/** manifest 校验（id 一致 + 本机 API 版本满足），写盘前必须通过 */
+function assertManifest(man: Manifest, id: string): void {
+	if (typeof man.id !== "string" || man.id !== id) throw new Error(t("directInstall.badManifest"));
+	// 写盘不可逆：先确认新版本在本机能跑起来
+	if (man.minAppVersion && !requireApiVersion(man.minAppVersion)) {
+		throw new Error(t("directInstall.minApp", { v: man.minAppVersion }));
+	}
+}
+
+/** 写盘三件套 + 重载插件实例（更新与固定版本共用同一收尾逻辑） */
+async function writeAndReload(
+	app: App,
+	id: string,
+	manText: string,
+	mainText: string,
+	cssText: string | null,
+): Promise<void> {
+	// 写盘覆盖（manifest / main.js 必写；styles.css 新版无则删旧）
 	const ad = app.vault.adapter;
 	const dir = app.vault.configDir + "/plugins/" + id;
 	if (!(await ad.exists(dir))) await ad.mkdir(dir);
-	await ad.write(dir + "/manifest.json", manResp.text);
+	await ad.write(dir + "/manifest.json", manText);
 	await ad.write(dir + "/main.js", mainText);
 	if (cssText != null) await ad.write(dir + "/styles.css", cssText);
 	else if (await ad.exists(dir + "/styles.css")) await ad.remove(dir + "/styles.css");
 
-	// 4) 重载插件实例（先停后起，否则新代码不生效）
+	// 重载插件实例（先停后起，否则新代码不生效）
 	const plugins = asAppInternals(app).plugins;
 	if (!plugins) throw new Error(t("directInstall.noPluginsApi"));
 	await plugins.loadManifests?.();
@@ -136,6 +213,51 @@ export async function updatePluginCore(
 	else throw new Error(t("directInstall.noPluginsApi"));
 	const stillEnabled = plugins.enabledPlugins?.has?.(id) ?? Boolean(plugins.manifests?.[id]);
 	if (!stillEnabled) throw new Error(t("directInstall.enableFailed"));
+}
 
+/**
+ * 固定安装：严格按指定 tag（含 v 前缀变体）取 manifest / main.js / styles.css。
+ *
+ * 与「跟随最新」的差别：**不做 latest 兜底**——否则用户点了 v1.2.3 却装成最新版，
+ * 违背「固定版本」语义。候选顺序仍是「源码树优先（享镜像），Release 资产兜底」
+ * （很多插件不把构建产物提交到 git，只在 Release 挂 main.js）。
+ */
+async function installPinnedVersion(
+	app: App,
+	id: string,
+	repo: string,
+	mirror: MirrorConfig,
+	version: string,
+): Promise<Manifest> {
+	const gh = parseRepo(repo);
+	if (!gh) throw new Error(t("action.update.noRepo"));
+	const refs = tagVariants(version);
+	if (refs.length === 0) throw new Error(t("action.update.noRepo"));
+
+	// 1) manifest：先定版本再决定入口文件名
+	const manUrls: string[] = [];
+	for (const ref of refs) {
+		manUrls.push(buildRawUrlAtRef(gh, ref, "manifest.json", mirror));
+		manUrls.push(...strictReleaseAssetUrls(gh, "manifest.json", ref));
+	}
+	const manText = (await fetchFirstUrl(manUrls, "manifest.json", false)) as string;
+	const man = JSON.parse(manText) as Manifest;
+	assertManifest(man, id);
+
+	// 2) main.js（必选）/ styles.css（可选）
+	const mainFile = man.main && man.main.trim() ? man.main.trim() : "main.js";
+	const mainUrls: string[] = [];
+	const cssUrls: string[] = [];
+	for (const ref of refs) {
+		mainUrls.push(buildRawUrlAtRef(gh, ref, mainFile, mirror));
+		mainUrls.push(...strictReleaseAssetUrls(gh, mainFile, ref));
+		cssUrls.push(buildRawUrlAtRef(gh, ref, "styles.css", mirror));
+		cssUrls.push(...strictReleaseAssetUrls(gh, "styles.css", ref));
+	}
+	const mainText = await fetchFirstUrl(mainUrls, mainFile, false);
+	if (!mainText || !mainText.trim()) throw new Error(t("directInstall.emptyMain"));
+	const cssText = await fetchFirstUrl(cssUrls, "styles.css", true);
+
+	await writeAndReload(app, id, manText, mainText, cssText);
 	return man;
 }

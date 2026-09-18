@@ -61,6 +61,12 @@ export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard
 		container: ctx.contentEl,
 		mode: "page",
 		focusJournal,
+		// 版本控制（BRAT 式固定版本）：已安装插件可固定到指定 Release/Tag
+		versionControl: {
+			pins: ctx.pluginVersionPins ?? {},
+			listVersions: (repo, force) => ctx.listPluginVersions(repo, force),
+			pin: (id, version) => ctx.pinPluginVersion(id, version),
+		},
 		onClose: () => { ctx.exitDetailMode(); },
 	});
 	ctx.activeDrawer = drawer;

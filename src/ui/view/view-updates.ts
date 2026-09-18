@@ -2,14 +2,31 @@
  * 「更新」页签列表渲染器。
  *
  * 主视图顶部的「更新」页签切到本视图时，调用 renderUpdatesList 在
- * ctx.updatesListEl 中渲染：可更新插件的「名称 + 本地→最新版本差 + 勾选框」，
+ * ctx.updatesListEl 中渲染：
+ * - 可更新插件的「名称 + 本地→最新版本差 + 勾选框 + 选版本 + 更新」；
+ * - 「已固定版本」分区：列出被锁定到指定版本的插件（不参与自动更新检测），
+ *   可一键「保持最新」或重新选择版本（BRAT 式）。
  * 顶部带「检查更新 / 全选 / 取消全选 / 更新所选(N) / 全部更新」工具条，
- * 底部为逐行更新按钮。多选 + 一键全更直接复用 ctx.updateSelected / ctx.updateAll。
+ * 多选 + 一键全更直接复用 ctx.updateSelected / ctx.updateAll。
  */
 
 import { Notice, setIcon } from "obsidian";
 import type { ViewContext } from "@ui/view/view-context";
 import { refreshOutdated } from "@ui/view/view-data";
+import { openVersionPicker } from "@ui/components/version-picker-modal";
+
+/** 打开某插件的版本选择弹窗（更新页签与详情抽屉共用同一交互） */
+function openPickerFor(ctx: ViewContext, id: string, name: string, repo: string): void {
+	openVersionPicker({
+		app: ctx.app,
+		pluginName: name,
+		repo,
+		pinned: ctx.pluginVersionPins?.[id] ?? null,
+		installedVersion: ctx.installedVersions?.get(id),
+		listVersions: (r, force) => ctx.listPluginVersions(r, force),
+		onPick: (version) => ctx.pinPluginVersion(id, version),
+	});
+}
 
 export function renderUpdatesList(ctx: ViewContext): void {
 	const el = ctx.updatesListEl;
@@ -72,6 +89,7 @@ export function renderUpdatesList(ctx: ViewContext): void {
 		const empty = el.createDiv({ cls: "pt-updates-empty" });
 		empty.createDiv({ cls: "pt-updates-empty-title", text: t("updates.empty") });
 		empty.createDiv({ cls: "pt-updates-empty-hint", text: t("updates.empty.hint") });
+		renderPinnedSection(ctx, el);
 		return;
 	}
 
@@ -106,6 +124,16 @@ export function renderUpdatesList(ctx: ViewContext): void {
 			text: t("updates.versionDiff", { local: info?.local ?? "", latest: info?.latest ?? "" }),
 		});
 
+		// 选版本（固定到某个旧版本，或改为保持最新）
+		const pinBtn = row.createEl("button", {
+			cls: "pt-updates-row-pin clickable-icon",
+			attr: { "aria-label": t("updates.pin"), title: t("updates.pin"), type: "button" },
+		});
+		setIcon(pinBtn, "tag");
+		pinBtn.addEventListener("click", () => {
+			if (p.repo) openPickerFor(ctx, p.id, p.name, p.repo);
+		});
+
 		const updBtn = row.createEl("button", {
 			cls: "pt-updates-row-update clickable-icon",
 			attr: { "aria-label": t("action.update"), title: t("action.update"), type: "button" },
@@ -117,6 +145,58 @@ export function renderUpdatesList(ctx: ViewContext): void {
 			await ctx.updatePlugin(p.id);
 			updBtn.removeClass("pt-spin");
 			ctx.refreshViewTabsBadge?.();
+			ctx.renderUpdatesList();
+		});
+	}
+
+	renderPinnedSection(ctx, el);
+}
+
+/**
+ * 「已固定版本」分区：列出锁定到指定版本的已安装插件。
+ * 这些插件不参与自动更新检测，因此不会出现在上面的可更新列表里，
+ * 需要独立分区让用户能看见并解除固定。
+ */
+function renderPinnedSection(ctx: ViewContext, el: HTMLElement): void {
+	const pins = ctx.pluginVersionPins ?? {};
+	const t = ctx.t;
+	const pinned = ctx.allPlugins
+		.filter((p) => pins[p.id] && (ctx.installedIds?.has(p.id) ?? false))
+		.sort((a, b) => a.name.localeCompare(b.name));
+	if (pinned.length === 0) return;
+
+	const section = el.createDiv({ cls: "pt-updates-pinned" });
+	section.createDiv({ cls: "pt-updates-pinned-title", text: t("updates.pinned.title") });
+	section.createDiv({ cls: "pt-updates-pinned-hint", text: t("updates.pinned.hint") });
+
+	const rows = section.createDiv({ cls: "pt-updates-rows" });
+	for (const p of pinned) {
+		const row = rows.createDiv({ cls: "pt-updates-row pt-updates-row--pinned" });
+		row.createDiv({ cls: "pt-updates-name", text: p.name });
+		row.createDiv({
+			cls: "pt-updates-diff pt-updates-pinned-ver",
+			text: t("version.pinned", { version: pins[p.id] }),
+		});
+
+		const pinBtn = row.createEl("button", {
+			cls: "pt-updates-row-pin clickable-icon",
+			attr: { "aria-label": t("updates.pin"), title: t("updates.pin"), type: "button" },
+		});
+		setIcon(pinBtn, "tag");
+		pinBtn.addEventListener("click", () => {
+			if (p.repo) openPickerFor(ctx, p.id, p.name, p.repo);
+		});
+
+		const unpinBtn = row.createEl("button", {
+			cls: "pt-updates-row-update pt-updates-unpin clickable-icon",
+			attr: { "aria-label": t("version.latest"), title: t("version.latest"), type: "button" },
+		});
+		setIcon(unpinBtn, "arrow-down-to-line");
+		unpinBtn.addEventListener("click", async () => {
+			if (unpinBtn.hasClass("pt-spin")) return;
+			unpinBtn.addClass("pt-spin");
+			await ctx.pinPluginVersion(p.id, null);
+			unpinBtn.removeClass("pt-spin");
 			ctx.renderUpdatesList();
 		});
 	}

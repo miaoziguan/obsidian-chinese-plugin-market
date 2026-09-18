@@ -1371,6 +1371,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.settings.manage = normalizeManageSettings(this.settings.manage);
 		// 直链 Beta 跟踪表：旧数据缺字段/类型不对时兜底为空数组，避免遍历报错
 		if (!Array.isArray(this.settings.betaPlugins)) this.settings.betaPlugins = [];
+		// 版本固定表：旧数据缺失/类型不对时兜底为空对象（并切断对默认常量的共享引用）
+		if (!this.settings.pluginVersionPins || typeof this.settings.pluginVersionPins !== "object") {
+			this.settings.pluginVersionPins = {};
+		}
 		// 设置页即时机翻：用户开启则挂载钩子并载入缓存
 		if (this.settings.translateSettingsEnabled) {
 			this.ensureSettingsTranslator();
