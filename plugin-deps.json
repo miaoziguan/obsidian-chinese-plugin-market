@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-19T07:35:48.690Z",
+  "generatedAt": "2026-09-19T16:26:01.594Z",
   "edges": {
     "uri-commands": [
       {
@@ -34,15 +34,6 @@
         "confidence": 0.7
       }
     ],
-    "game-search": [
-      {
-        "id": "templater-obsidian",
-        "name": "Templater",
-        "kind": "required",
-        "source": "readme",
-        "confidence": 0.7
-      }
-    ],
     "quickadd": [
       {
         "id": "templater-obsidian",
@@ -70,6 +61,15 @@
         "confidence": 1
       }
     ],
+    "game-search": [
+      {
+        "id": "templater-obsidian",
+        "name": "Templater",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
     "modalforms": [
       {
         "id": "dataview",
@@ -81,6 +81,24 @@
       {
         "id": "quickadd",
         "name": "QuickAdd",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "note-to-mp": [
+      {
+        "id": "obsidian-asciimath",
+        "name": "Asciimath",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "git-integration": [
+      {
+        "id": "obsidian-git",
+        "name": "Git",
         "kind": "required",
         "source": "readme",
         "confidence": 0.7
@@ -108,6 +126,455 @@
       {
         "id": "ollama",
         "name": "Ollama",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "journal-folder": [
+      {
+        "id": "templater-obsidian",
+        "name": "Templater",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "external-file-card": [
+      {
+        "id": "ink",
+        "name": "Ink",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "codeless-heatmap-calendar": [
+      {
+        "id": "dataview",
+        "name": "Dataview",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "emoji-selector": [
+      {
+        "id": "emo-uploader",
+        "name": "Emo",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "canvas-export": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "discourse-graphs": [
+      {
+        "id": "datacore",
+        "name": "Datacore",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "book-catalog": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "music-catalog": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "mcp-rest": [
+      {
+        "id": "smart-connections",
+        "name": "Smart Connections",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "audio-transcription": [
+      {
+        "id": "ollama",
+        "name": "Ollama",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "home-base": [
+      {
+        "id": "periodic-notes",
+        "name": "Periodic Notes",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      },
+      {
+        "id": "journals",
+        "name": "Journals",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "memo-ai": [
+      {
+        "id": "review-obsidian",
+        "name": "Review",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "tubesage": [
+      {
+        "id": "ollama",
+        "name": "Ollama",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "porygon": [
+      {
+        "id": "ollama",
+        "name": "Ollama",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "real-tasks": [
+      {
+        "id": "doing",
+        "name": "doing",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "ingester": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "ai-model-workbench": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "smart-lookup": [
+      {
+        "id": "cluster",
+        "name": "Cluster",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "busy-goblins": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "operon": [
+      {
+        "id": "obsidian-structured-plugin",
+        "name": "Structured",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "marp-slides-presenter": [
+      {
+        "id": "marp",
+        "name": "Marp",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "docx-exporter-plus": [
+      {
+        "id": "longform",
+        "name": "Longform",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "paperflow": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "tasknotes-workflows": [
+      {
+        "id": "review-obsidian",
+        "name": "Review",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "cloudflare-media-sync": [
+      {
+        "id": "ezimage",
+        "name": "EzImage",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "nn-bridge": [
+      {
+        "id": "notebook-navigator",
+        "name": "Notebook Navigator",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "feishu-lark-cli-sync": [
+      {
+        "id": "obsidian-git",
+        "name": "Git",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "hermes-agent": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "git-history-reviewer": [
+      {
+        "id": "review-obsidian",
+        "name": "Review",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "task-calendar-bridge": [
+      {
+        "id": "calendar",
+        "name": "Calendar",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "dotpass": [
+      {
+        "id": "desk",
+        "name": "Desk",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "zotero-completion": [
+      {
+        "id": "review-obsidian",
+        "name": "Review",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "trellis": [
+      {
+        "id": "review-obsidian",
+        "name": "Review",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "drivesync": [
+      {
+        "id": "google-drive-sync",
+        "name": "Google Drive Sync",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "supersync": [
+      {
+        "id": "obsidian-git",
+        "name": "Git",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "tasktodo": [
+      {
+        "id": "taskslite",
+        "name": "TaskLite",
+        "kind": "required",
+        "minVersion": "0.4.12",
+        "source": "manifest",
+        "confidence": 0.9
+      }
+    ],
+    "llm-content-block": [
+      {
+        "id": "scrolling",
+        "name": "Scrolling",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "digital-archive": [
+      {
+        "id": "dataview",
+        "name": "Dataview",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "kan-sync": [
+      {
+        "id": "doing",
+        "name": "doing",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "nightly-journal": [
+      {
+        "id": "ollama",
+        "name": "Ollama",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "yaml-properties": [
+      {
+        "id": "templater-obsidian",
+        "name": "Templater",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "kcal-calc": [
+      {
+        "id": "review-obsidian",
+        "name": "Review",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "mubu-sync": [
+      {
+        "id": "writing",
+        "name": "Writing",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "anki-card-link": [
+      {
+        "id": "obsidian-advanced-uri",
+        "name": "Advanced URI",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "poster-wall": [
+      {
+        "id": "obsidian-git",
+        "name": "Git",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "knowledge-heatmap": [
+      {
+        "id": "review-obsidian",
+        "name": "Review",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "ez-highlighter": [
+      {
+        "id": "editing-toolbar",
+        "name": "Editing Toolbar",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "folder-color-system": [
+      {
+        "id": "obsidian-style-settings",
+        "name": "Style Settings",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "daymark": [
+      {
+        "id": "obsidian-git",
+        "name": "Git",
         "kind": "required",
         "source": "readme",
         "confidence": 0.7
