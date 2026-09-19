@@ -31,9 +31,9 @@ const PLUGINS_URL =
 	"https://cdn.jsdelivr.net/gh/obsidianmd/obsidian-releases/community-plugins.json";
 const RAW = "https://raw.githubusercontent.com";
 const CDN = "https://cdn.jsdelivr.net/gh";
-const CONCURRENCY = 20;
+const CONCURRENCY = 120;
 const README_LIMIT = 5000;
-const FETCH_TIMEOUT = 8000; // 经代理个别请求会挂死，必须超时释放并发槽
+const FETCH_TIMEOUT = 45000; // 代理对未缓存的长尾文件去 GitHub 上游很慢（~15-20s/个），放宽超时避免慢请求被误杀
 
 /** 抓取文本；失败/超时返回 null（单个插件失败不影响整体） */
 async function fetchText(url) {
@@ -77,7 +77,25 @@ async function main() {
 
 	const curated = JSON.parse(readFileSync("scripts/deps/curated.json", "utf8"));
 	console.log("· 拉取插件列表…");
-	const list = (await (await fetch(PLUGINS_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT) })).json()).slice(0, limit);
+	// 列表拉取是整次运行的入口，失败就全崩；代理高负载会偶发 ECONNRESET，故多源重试
+	let listJson = null;
+	const listSources = [
+		PLUGINS_URL,
+		"https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json",
+	];
+	for (const src of listSources) {
+		for (let attempt = 1; attempt <= 3 && !listJson; attempt++) {
+			try {
+				const r = await fetch(src, { signal: AbortSignal.timeout(FETCH_TIMEOUT) });
+				if (r.ok) listJson = await r.json();
+			} catch {
+				/* 重试 */
+			}
+		}
+		if (listJson) break;
+	}
+	if (!listJson) throw new Error("无法拉取插件列表（代理可能不稳定，稍后重试）");
+	const list = listJson.slice(0, limit);
 	console.log(`· 共 ${list.length} 个插件待处理`);
 
 	const prev = onlyNew
