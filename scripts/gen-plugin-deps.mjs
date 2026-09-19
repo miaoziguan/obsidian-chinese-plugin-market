@@ -28,7 +28,9 @@ const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
 if (proxy) setGlobalDispatcher(new ProxyAgent(proxy));
 
 const PLUGINS_URL =
-	"https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json";
+	"https://cdn.jsdelivr.net/gh/obsidianmd/obsidian-releases/community-plugins.json";
+const RAW = "https://raw.githubusercontent.com";
+const CDN = "https://cdn.jsdelivr.net/gh";
 const CONCURRENCY = 20;
 const README_LIMIT = 5000;
 const FETCH_TIMEOUT = 8000; // 经代理个别请求会挂死，必须超时释放并发槽
@@ -44,10 +46,20 @@ async function fetchText(url) {
 	}
 }
 
+/**
+ * 抓插件仓库内的文件：优先 jsDelivr CDN（不同主机，本机代理对 raw.githubusercontent
+ * 的持续流有严重限速，jsDelivr 不受影响），失败再回退 raw.githubusercontent。
+ */
+async function fetchRepoFile(repo, path) {
+	const cdn = await fetchText(`${CDN}/${repo}/${path}`);
+	if (cdn) return cdn;
+	return fetchText(`${RAW}/${repo}/HEAD/${path}`);
+}
+
 /** 依次尝试常见 README 文件名，取前 README_LIMIT 字符 */
 async function fetchReadme(repo) {
 	for (const name of ["README.md", "readme.md"]) {
-		const text = await fetchText(`https://raw.githubusercontent.com/${repo}/HEAD/${name}`);
+		const text = await fetchRepoFile(repo, name);
 		if (text) return text.slice(0, README_LIMIT);
 	}
 	return "";
@@ -93,9 +105,7 @@ async function main() {
 			if (!p.repo || edges[p.id] || processed.has(p.id)) continue;
 			processed.add(p.id);
 			try {
-				const manifest = await fetchText(
-					`https://raw.githubusercontent.com/${p.repo}/HEAD/manifest.json`,
-				);
+				const manifest = await fetchRepoFile(p.repo, "manifest.json");
 				// 主题 / 无 manifest 的跳过（本功能只覆盖插件→插件依赖）
 				if (!manifest) continue;
 				const parsed = JSON.parse(manifest);
