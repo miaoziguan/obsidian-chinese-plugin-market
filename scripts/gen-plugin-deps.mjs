@@ -31,9 +31,18 @@ const PLUGINS_URL =
 	"https://cdn.jsdelivr.net/gh/obsidianmd/obsidian-releases/community-plugins.json";
 const RAW = "https://raw.githubusercontent.com";
 const CDN = "https://cdn.jsdelivr.net/gh";
-const CONCURRENCY = 120;
+const STATICDN = "https://raw.staticdn.net";
+// 多主机轮询：代理对「单主机」的 GitHub 上游有限流（~1/s），但跨主机的聚合吞吐高一个数量级
+// （实测长尾未缓存三源并行 ~19/s）。轮询分散负载，避免单主机被打进限速态。
+const HOST_BUILDERS = [
+	(repo, path) => `${CDN}/${repo}/${path}`,
+	(repo, path) => `${RAW}/${repo}/HEAD/${path}`,
+	(repo, path) => `${STATICDN}/${repo}/${path}`,
+];
+let hostRot = 0;
+const CONCURRENCY = 60;
 const README_LIMIT = 5000;
-const FETCH_TIMEOUT = 45000; // 代理对未缓存的长尾文件去 GitHub 上游很慢（~15-20s/个），放宽超时避免慢请求被误杀
+const FETCH_TIMEOUT = 45000; // 个别未缓存请求经代理较慢，放宽超时避免被误杀
 
 /** 抓取文本；失败/超时返回 null（单个插件失败不影响整体） */
 async function fetchText(url) {
@@ -47,13 +56,16 @@ async function fetchText(url) {
 }
 
 /**
- * 抓插件仓库内的文件：优先 jsDelivr CDN（不同主机，本机代理对 raw.githubusercontent
- * 的持续流有严重限速，jsDelivr 不受影响），失败再回退 raw.githubusercontent。
+ * 抓插件仓库内的文件：多主机轮询（jsDelivr / raw / staticdn），分散代理的单主机限流。
+ * 任一主机拿到内容即返回；全部失败返回 null（单插件失败不影响整体）。
  */
 async function fetchRepoFile(repo, path) {
-	const cdn = await fetchText(`${CDN}/${repo}/${path}`);
-	if (cdn) return cdn;
-	return fetchText(`${RAW}/${repo}/HEAD/${path}`);
+	for (let i = 0; i < HOST_BUILDERS.length; i++) {
+		const url = HOST_BUILDERS[hostRot++ % HOST_BUILDERS.length](repo, path);
+		const text = await fetchText(url);
+		if (text) return text;
+	}
+	return null;
 }
 
 /** 依次尝试常见 README 文件名，取前 README_LIMIT 字符 */
