@@ -20,17 +20,23 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { ProxyAgent, setGlobalDispatcher } from "undici";
 import { loadModule } from "./esbuild-load.mjs";
+
+// 走代理（本机直连 github raw 被拒）。设了 HTTPS_PROXY/HTTP_PROXY 就接管全局 fetch。
+const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+if (proxy) setGlobalDispatcher(new ProxyAgent(proxy));
 
 const PLUGINS_URL =
 	"https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json";
-const CONCURRENCY = 8;
+const CONCURRENCY = 20;
 const README_LIMIT = 5000;
+const FETCH_TIMEOUT = 8000; // 经代理个别请求会挂死，必须超时释放并发槽
 
-/** 抓取文本；失败返回 null（单个插件失败不影响整体） */
+/** 抓取文本；失败/超时返回 null（单个插件失败不影响整体） */
 async function fetchText(url) {
 	try {
-		const res = await fetch(url);
+		const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) });
 		if (!res.ok) return null;
 		return await res.text();
 	} catch {
@@ -58,11 +64,17 @@ async function main() {
 	const { REQUIRED_MIN, DROP_BELOW } = await loadModule("src/domain/deps/rules.ts");
 
 	const curated = JSON.parse(readFileSync("scripts/deps/curated.json", "utf8"));
-	const list = (await (await fetch(PLUGINS_URL)).json()).slice(0, limit);
+	console.log("· 拉取插件列表…");
+	const list = (await (await fetch(PLUGINS_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT) })).json()).slice(0, limit);
+	console.log(`· 共 ${list.length} 个插件待处理`);
 
 	const prev = onlyNew
 		? JSON.parse(readFileSync("plugin-deps.json", "utf8")).edges ?? {}
 		: {};
+	// 旁路：记录已真正抓取过的 id，--only-new 时跳过，避免分块重跑时重复抓取无依赖的插件
+	const processedPrev = onlyNew
+		? new Set(JSON.parse(readFileSync("plugin-deps-processed.json", "utf8")))
+		: new Set();
 	const dict = list.map((p) => ({
 		id: p.id,
 		name: p.name,
@@ -70,6 +82,7 @@ async function main() {
 	}));
 
 	const edges = { ...prev };
+	const processed = new Set(processedPrev);
 	const candidates = [];
 	let cursor = 0;
 	let doneCount = 0;
@@ -77,7 +90,8 @@ async function main() {
 	async function worker() {
 		while (cursor < list.length) {
 			const p = list[cursor++];
-			if (!p.repo || edges[p.id]) continue;
+			if (!p.repo || edges[p.id] || processed.has(p.id)) continue;
+			processed.add(p.id);
 			try {
 				const manifest = await fetchText(
 					`https://raw.githubusercontent.com/${p.repo}/HEAD/manifest.json`,
@@ -106,7 +120,7 @@ async function main() {
 				/* 单插件失败不影响整体 */
 			} finally {
 				doneCount++;
-				if (doneCount % 500 === 0) console.log(`…已处理 ${doneCount}/${list.length}`);
+				if (doneCount % 100 === 0) console.log(`…已处理 ${doneCount}/${list.length}`);
 			}
 		}
 	}
@@ -148,6 +162,7 @@ async function main() {
 			"",
 		].join("\n"),
 	);
+	writeFileSync("plugin-deps-processed.json", JSON.stringify([...processed], null, 2) + "\n");
 	console.log(`✓ 写入 ${Object.keys(edges).length} 条插件记录，${candidates.length} 条弱信号候选`);
 }
 
