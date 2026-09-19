@@ -134,7 +134,7 @@ export class SnippetListEnhancer {
 		const root = this.rootEl;
 		if (!root) return [];
 		const existing = root.querySelector<HTMLElement>('[data-cpm-owned="css-rows"]');
-		// 原生已逐行列出片段（或 vault 里确实没有片段）→ 不重复渲染
+		// 原生已逐行列出片段（或 vault 里确实没有片段，或探测到未识别原生行）→ 不重复渲染
 		if (
 			nativeRows.length > 0 ||
 			this.snippets.length === 0 ||
@@ -144,8 +144,17 @@ export class SnippetListEnhancer {
 			return [];
 		}
 
+		const renderKey = this.snippets.map((s) => `${s.baseName}:${s.enabled ? 1 : 0}`).join("|");
+		const existingKey = existing?.getAttribute("data-cpm-render-key") ?? "";
 		const listEl = existing ?? createDiv({ cls: "cpm-css-settings-list" });
 		listEl.setAttribute(OWNED_ATTR, "css-rows");
+		listEl.setAttribute("data-cpm-render-key", renderKey);
+
+		// 已存在且数据未变、仍在 DOM 中 → 跳过全量重建，避免返回/切换 Tab 时闪烁
+		if (existing && existing.isConnected && renderKey === existingKey) {
+			return Array.from(listEl.querySelectorAll<HTMLElement>(`[${ENHANCED_ATTR}]`));
+		}
+
 		listEl.innerHTML = "";
 
 		const rows: HTMLElement[] = [];

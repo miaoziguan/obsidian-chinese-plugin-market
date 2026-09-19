@@ -74,6 +74,8 @@ export class SettingsIntegrationController {
 	private patchedMethods: PatchedMethod[] = [];
 	private cleanupSignature = "";
 	private cssCleanupSignature = "";
+	/** 当前是否正在 reconcile：避免我们自己的 DOM 变更触发 observer 自激 */
+	private isReconciling = false;
 	/** 上次命中的 Tab id：用于识别「重新进入外观页」，触发片段名单重扫 */
 	private lastTabId: string | null = null;
 	/** 已对该外观页根元素扫过一次片段（防止 reconcile 自激无限重扫） */
@@ -126,45 +128,52 @@ export class SettingsIntegrationController {
 	// ── 重建 ──
 
 	private reconcile(): void {
-		const setting = this.setting;
-		if (!setting || !setting.tabContentContainer?.isConnected) {
+		// 锁住 observer，防止本次 reconcile 内部产生的 DOM 变更（如清理/重建自己的行）
+		// 再次 scheduleReconcile，导致闪烁或循环。
+		this.isReconciling = true;
+		try {
+			const setting = this.setting;
+			if (!setting || !setting.tabContentContainer?.isConnected) {
+				this.enhancer.cleanup();
+				this.cssEnhancer.cleanup();
+				return;
+			}
+
+			if (!this.store.settings.enabled) {
+				this.enhancer.cleanup();
+				this.cssEnhancer.cleanup();
+				return;
+			}
+
+			this.scheduleOrphanedCleanup();
+
+			const activeTab = setting.activeTab;
+			const rootEl = activeTab?.containerEl ?? setting.tabContentContainer;
+			if (!rootEl) return;
+
+			const tabId = activeTab?.id ?? null;
+			if (tabId !== this.lastTabId) {
+				this.lastTabId = tabId;
+				// 切走再切回属于新的一次打开，允许重新扫描片段名单
+				this.scannedRootEl = null;
+			}
+
+			if (tabId === COMMUNITY_PLUGINS_TAB_ID) {
+				this.enhancer.enhance(rootEl);
+				this.cssEnhancer.cleanup();
+				return;
+			}
+			if (tabId === APPEARANCE_TAB_ID) {
+				this.cssEnhancer.enhance(rootEl);
+				this.enhancer.cleanup();
+				this.ensureSnippetsScanned(rootEl);
+				return;
+			}
 			this.enhancer.cleanup();
 			this.cssEnhancer.cleanup();
-			return;
+		} finally {
+			this.isReconciling = false;
 		}
-
-		if (!this.store.settings.enabled) {
-			this.enhancer.cleanup();
-			this.cssEnhancer.cleanup();
-			return;
-		}
-
-		this.scheduleOrphanedCleanup();
-
-		const activeTab = setting.activeTab;
-		const rootEl = activeTab?.containerEl ?? setting.tabContentContainer;
-		if (!rootEl) return;
-
-		const tabId = activeTab?.id ?? null;
-		if (tabId !== this.lastTabId) {
-			this.lastTabId = tabId;
-			// 切走再切回属于新的一次打开，允许重新扫描片段名单
-			this.scannedRootEl = null;
-		}
-
-		if (tabId === COMMUNITY_PLUGINS_TAB_ID) {
-			this.enhancer.enhance(rootEl);
-			this.cssEnhancer.cleanup();
-			return;
-		}
-		if (tabId === APPEARANCE_TAB_ID) {
-			this.cssEnhancer.enhance(rootEl);
-			this.enhancer.cleanup();
-			this.ensureSnippetsScanned(rootEl);
-			return;
-		}
-		this.enhancer.cleanup();
-		this.cssEnhancer.cleanup();
 	}
 
 	/**
@@ -221,6 +230,7 @@ export class SettingsIntegrationController {
 	}
 
 	private shouldReconcileMutation(mutation: MutationRecord): boolean {
+		if (this.isReconciling) return false;
 		const targetEl =
 			mutation.target.nodeType === Node.ELEMENT_NODE
 				? (mutation.target as Element)
