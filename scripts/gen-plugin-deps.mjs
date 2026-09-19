@@ -160,7 +160,10 @@ async function main() {
 				/* 单插件失败不影响整体 */
 			} finally {
 				doneCount++;
-				if (doneCount % 100 === 0) console.log(`…已处理 ${doneCount}/${list.length}`);
+				if (doneCount % 100 === 0) {
+					console.log(`…已处理 ${doneCount}/${list.length}`);
+					flush(); // 周期性落盘：被空闲超时杀掉也只丢最后 <100 个，重跑同块即可续
+				}
 			}
 		}
 	}
@@ -181,28 +184,32 @@ async function main() {
 		}
 	}
 
-	writeFileSync(
-		"plugin-deps.json",
-		`${JSON.stringify({ version: 1, generatedAt: new Date().toISOString(), edges }, null, 2)}\n`,
-	);
-	writeFileSync(
-		"docs/plugin-deps-candidates.md",
-		[
-			"# 依赖候选（弱信号，需人工抽查后并入 scripts/deps/curated.json）",
-			"",
-			"弱信号（README 弱措辞 / main.js 低置信）不自动入库：误报比漏报贵，一条错误的「必需」会劝退安装。",
-			"确认成立的，把目标 hub 加进 scripts/deps/curated.json 的 dependents 即可下次生效。",
-			"",
-			"| 插件 | 插件名 | 依赖 | 依赖名 | 类型 | 置信度 | 来源 |",
-			"| --- | --- | --- | --- | --- | --- | --- |",
-			...candidates.map(
-				(c) =>
-					`| ${c.id} | ${c.name} | ${c.depId} | ${c.depName} | ${c.kind} | ${c.confidence} | ${c.source} |`,
-			),
-			"",
-		].join("\n"),
-	);
-	writeFileSync("plugin-deps-processed.json", JSON.stringify([...processed], null, 2) + "\n");
+	// 落盘：edges + 已处理集 + 候选清单一起写，保证中断后重跑同块能正确续上
+	function flush() {
+		writeFileSync(
+			"plugin-deps.json",
+			`${JSON.stringify({ version: 1, generatedAt: new Date().toISOString(), edges }, null, 2)}\n`,
+		);
+		writeFileSync("plugin-deps-processed.json", JSON.stringify([...processed], null, 2) + "\n");
+		writeFileSync(
+			"docs/plugin-deps-candidates.md",
+			[
+				"# 依赖候选（弱信号，需人工抽查后并入 scripts/deps/curated.json）",
+				"",
+				"弱信号（README 弱措辞 / main.js 低置信）不自动入库：误报比漏报贵，一条错误的「必需」会劝退安装。",
+				"确认成立的，把目标 hub 加进 scripts/deps/curated.json 的 dependents 即可下次生效。",
+				"",
+				"| 插件 | 插件名 | 依赖 | 依赖名 | 类型 | 置信度 | 来源 |",
+				"| --- | --- | --- | --- | --- | --- | --- |",
+				...candidates.map(
+					(c) =>
+						`| ${c.id} | ${c.name} | ${c.depId} | ${c.depName} | ${c.kind} | ${c.confidence} | ${c.source} |`,
+				),
+				"",
+			].join("\n"),
+		);
+	}
+	flush();
 	console.log(`✓ 写入 ${Object.keys(edges).length} 条插件记录，${candidates.length} 条弱信号候选`);
 }
 
