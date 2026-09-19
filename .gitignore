@@ -48,3 +48,6 @@ translator-cache.json
 tm-approved-snapshot.json
 trending-history.json
 scripts/eval/eval.bundle.cjs
+
+# 依赖扫描生成的已处理旁路（增量续跑用，不入库）
+plugin-deps-processed.json

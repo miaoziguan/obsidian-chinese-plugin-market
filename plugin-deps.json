@@ -1,7 +1,48 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-18T18:23:03.254Z",
+  "generatedAt": "2026-09-19T07:35:48.690Z",
   "edges": {
+    "uri-commands": [
+      {
+        "id": "hotkey-helper",
+        "name": "Hotkey Helper",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      },
+      {
+        "id": "obsidian-advanced-uri",
+        "name": "Advanced URI",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      },
+      {
+        "id": "metaedit",
+        "name": "MetaEdit",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "obsidian-plotly": [
+      {
+        "id": "dataview",
+        "name": "Dataview",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "game-search": [
+      {
+        "id": "templater-obsidian",
+        "name": "Templater",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
     "quickadd": [
       {
         "id": "templater-obsidian",
@@ -27,6 +68,49 @@
         "kind": "optional",
         "source": "curated",
         "confidence": 1
+      }
+    ],
+    "modalforms": [
+      {
+        "id": "dataview",
+        "name": "Dataview",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      },
+      {
+        "id": "quickadd",
+        "name": "QuickAdd",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "fix-require-modules": [
+      {
+        "id": "modules",
+        "name": "Modules",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "gistr": [
+      {
+        "id": "obsidian-git",
+        "name": "Git",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
+      }
+    ],
+    "ai-image-analyzer": [
+      {
+        "id": "ollama",
+        "name": "Ollama",
+        "kind": "required",
+        "source": "readme",
+        "confidence": 0.7
       }
     ]
   }
