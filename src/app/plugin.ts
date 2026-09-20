@@ -1945,6 +1945,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				refreshToggleCommands();
 				requestRefresh();
 			},
+			onManageGroups: () => this.openManageGroups("css"),
 		};
 	}
 

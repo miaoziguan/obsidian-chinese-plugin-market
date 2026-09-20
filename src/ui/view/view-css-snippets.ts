@@ -22,6 +22,7 @@ import type { ViewContext } from "@ui/view/view-context";
 import type { CssStorePort } from "@ui/settings/snippet-manage-store";
 import type { SnippetInfo } from "@data/platform/snippet";
 import { renderCssSnippetRow } from "@ui/settings/css-snippet-row";
+import { SnippetRenameModal } from "@ui/settings/snippet-rename-modal";
 import { matchesFilter, type ManageFilterState } from "@domain/manage/manage-filter";
 import { getMeta } from "@domain/manage/plugin-meta";
 import { GROUP_ALL, type ManageFilterStatus, type ManageRow } from "@domain/manage/types";
@@ -84,6 +85,14 @@ export function renderCssSnippetsList(ctx: ViewContext): void {
 	});
 	bar.appendChild(newBtn);
 	newBtn.addEventListener("click", () => requestCreate(ctx, store));
+	// 「管理分组」入口：打开与设置页同源的分组管理弹窗（新建 / 重命名 / 删除分组）
+	const groupsBtn = createEl("button", {
+		cls: "pt-css-groups clickable-icon",
+		text: ctx.t("css.manage.groups"),
+		attr: { "data-cpm-css-groups": "", type: "button" },
+	});
+	bar.appendChild(groupsBtn);
+	groupsBtn.addEventListener("click", () => store.onManageGroups());
 
 	rerender();
 }
@@ -163,13 +172,11 @@ function requestCreate(ctx: ViewContext, store: CssStorePort): void {
 	void store.createSnippet(base, "").then(() => renderCssSnippetsList(ctx));
 }
 
-/** 重命名：复用现有重命名范式（通过 store.renameSnippet） */
+/** 重命名：复用与设置页一致的 SnippetRenameModal（弹窗输入基名 → store.renameSnippet） */
 function requestRename(ctx: ViewContext, store: CssStorePort, base: string): void {
-	const raw = window.prompt(ctx.t("css.rename.name"), base);
-	if (raw == null) return;
-	const next = raw.trim().replace(/\.css$/i, "");
-	if (!next || next === base) return;
-	void store.renameSnippet(base, next).then(() => renderCssSnippetsList(ctx));
+	new SnippetRenameModal(ctx.app, base, (newBase) => {
+		void store.renameSnippet(base, newBase).then(() => renderCssSnippetsList(ctx));
+	}).open();
 }
 
 /** 删除：确认 Modal → store.deleteSnippet → 重渲染 */

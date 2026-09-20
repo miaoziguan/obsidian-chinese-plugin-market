@@ -22,6 +22,7 @@ function makeStore(over: Partial<CssStorePort> = {}): CssStorePort {
 		replaceCssMeta: vi.fn(),
 		createSnippet: vi.fn(async () => {}),
 		deleteSnippet: vi.fn(async () => {}),
+		onManageGroups: vi.fn(),
 		...over,
 	};
 }
@@ -79,5 +80,14 @@ describe("renderCssSnippetsList", () => {
 		const rows = ctx.cssSnippetListEl!.querySelectorAll("[data-cpm-snippet]");
 		expect(rows.length).toBe(1);
 		expect(rows[0].getAttribute("data-cpm-snippet")).toBe("alpha");
+	});
+	it("管理分组按钮点击调用 onManageGroups", () => {
+		const store = makeStore();
+		const ctx = makeCtx(store);
+		renderCssSnippetsList(ctx);
+		const btn = ctx.cssSnippetListEl!.querySelector<HTMLButtonElement>('[data-cpm-css-groups]')!;
+		expect(btn).toBeTruthy();
+		btn.click();
+		expect(store.onManageGroups).toHaveBeenCalled();
 	});
 });

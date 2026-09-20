@@ -50,4 +50,6 @@ export interface CssStorePort {
 	createSnippet(baseName: string, content?: string): Promise<void>;
 	/** 删除片段文件（含元数据孤儿清理），并重新扫描目录 */
 	deleteSnippet(baseName: string): Promise<void>;
+	/** 打开分组管理弹窗（与设置页同源，用于新建 / 重命名 / 删除分组） */
+	onManageGroups(): void;
 }
