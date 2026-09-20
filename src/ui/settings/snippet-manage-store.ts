@@ -46,4 +46,8 @@ export interface CssStorePort {
 	openSnippet(path: string): void;
 	/** 整体替换 CSS 元数据（孤儿清理用） */
 	replaceCssMeta(meta: Record<string, PluginMetaEntry>): void;
+	/** 新建片段：在 <configDir>/snippets/<baseName>.css 写空文件（content 可选，默认空） */
+	createSnippet(baseName: string, content?: string): Promise<void>;
+	/** 删除片段文件（含元数据孤儿清理），并重新扫描目录 */
+	deleteSnippet(baseName: string): Promise<void>;
 }

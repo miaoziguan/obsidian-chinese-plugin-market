@@ -69,6 +69,9 @@ import {
 	renameSnippet,
 	openSnippetInDefaultApp,
 	isSnippetEnabled,
+	writeSnippet,
+	deleteSnippet,
+	isValidSnippetBaseName,
 } from "@data/platform/snippet";
 import { SnippetRenameModal } from "@ui/settings/snippet-rename-modal";
 /** Translator.loadData 的入参结构（避免导入未导出的内部类型） */
@@ -1917,6 +1920,30 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			replaceCssMeta(meta) {
 				settings.cssMeta = meta;
 				flushSave();
+			},
+			async createSnippet(baseName, content = "") {
+				if (!isValidSnippetBaseName(baseName)) {
+					new Notice(pickLang("css.new.invalid"));
+					return;
+				}
+				await writeSnippet(app, baseName, content);
+				await refreshSnippets(app);
+				refreshToggleCommands();
+				requestRefresh();
+			},
+			async deleteSnippet(baseName) {
+				await deleteSnippet(app, baseName);
+				// 元数据孤儿清理：移除已不存在的基名键
+				const meta = settings.cssMeta;
+				if (meta[baseName]) {
+					const next = { ...meta };
+					delete next[baseName];
+					settings.cssMeta = next;
+					flushSave();
+				}
+				await refreshSnippets(app);
+				refreshToggleCommands();
+				requestRefresh();
 			},
 		};
 	}
