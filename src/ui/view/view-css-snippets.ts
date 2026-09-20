@@ -44,10 +44,12 @@ export function renderCssSnippetsList(ctx: ViewContext): void {
 		attr: { "data-cpm-css-search": "", type: "text", placeholder: ctx.t("css.filter.keyword.ph") },
 	});
 	bar.appendChild(search);
+	const countEl = createSpan({ cls: "pt-css-count" });
+	bar.appendChild(countEl);
 	const listEl = createDiv({ cls: "pt-css-list-inner" });
 	el.appendChild(listEl);
 
-	const rerender = () => rerenderList(ctx, store, listEl, selected, state);
+	const rerender = () => rerenderList(ctx, store, listEl, countEl, selected, state);
 	search.addEventListener("input", () => {
 		state.keyword = search.value;
 		rerender();
@@ -115,12 +117,17 @@ function rerenderList(
 	ctx: ViewContext,
 	store: CssStorePort,
 	listEl: HTMLElement,
+	countEl: HTMLElement,
 	selected: Set<string>,
 	state: ManageFilterState,
 ): void {
 	listEl.innerHTML = "";
 	const snippets = store.listSnippets();
 	let shown = 0;
+	countEl.textContent = ctx.t("css.count", {
+		shown: String(0),
+		total: String(snippets.length),
+	});
 	for (const snippet of snippets) {
 		if (!matchesFilter(toRow(snippet, store), state)) continue;
 		shown++;
@@ -138,8 +145,8 @@ function rerenderList(
 		});
 		renderCssSnippetRow(rowEl, snippet, {
 			store,
-			onRowChange: () => rerenderList(ctx, store, listEl, selected, state),
-			onFilterChange: () => rerenderList(ctx, store, listEl, selected, state),
+			onRowChange: () => rerenderList(ctx, store, listEl, countEl, selected, state),
+			onFilterChange: () => rerenderList(ctx, store, listEl, countEl, selected, state),
 			requestRename: (base) => requestRename(ctx, store, base),
 		});
 		// 行内删除按钮（复用行控件区）
@@ -156,6 +163,10 @@ function rerenderList(
 	if (shown === 0) {
 		listEl.appendChild(createDiv({ cls: "pt-css-empty", text: ctx.t("css.empty") }));
 	}
+	countEl.textContent = ctx.t("css.count", {
+		shown: String(shown),
+		total: String(snippets.length),
+	});
 	// 清理已不在可见列表中的选中项
 	for (const b of [...selected]) {
 		const s = snippets.find((x) => x.baseName === b);

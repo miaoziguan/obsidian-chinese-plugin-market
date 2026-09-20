@@ -90,4 +90,12 @@ describe("renderCssSnippetsList", () => {
 		btn.click();
 		expect(store.onManageGroups).toHaveBeenCalled();
 	});
+	it("工具栏显示片段计数（找到 1 / 共 1）", () => {
+		const store = makeStore();
+		const ctx = makeCtx(store);
+		renderCssSnippetsList(ctx);
+		const count = ctx.cssSnippetListEl!.querySelector<HTMLElement>('.pt-css-count')!;
+		expect(count).toBeTruthy();
+		expect(count.textContent).toContain("css.count");
+	});
 });
