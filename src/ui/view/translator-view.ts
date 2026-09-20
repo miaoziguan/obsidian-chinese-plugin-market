@@ -614,10 +614,12 @@ export class ChinesePluginMarketView extends ItemView {
 		const betaEl = this.betaListEl;
 		const cssEl = this.cssSnippetListEl;
 		const featuredEl = q(contentEl, ".pt-featured");
+		const advancedEl = q(contentEl, ".pt-advanced");
 		const isBrowse = tab === "browse";
 
-		// 搜索行 / 卡片层 / featured 只在浏览页签显示
+		// 搜索行 / 卡片层 / 高级筛选面板 / featured 只在浏览页签显示
 		headerRow?.setCssStyles({ display: isBrowse ? "" : "none" });
+		advancedEl?.setCssStyles({ display: isBrowse ? "" : "none" });
 		cardLayer?.setCssStyles({ display: isBrowse ? "" : "none" });
 		featuredEl?.setCssStyles({ display: isBrowse ? "" : "none" });
 

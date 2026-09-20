@@ -962,6 +962,7 @@ export const STRINGS = {
 	"css.bulk.summary": { zh: "批量完成：成功 {ok} / 失败 {fail}" },
 	"css.manage.groups": { zh: "管理分组" },
 	"css.filter.keyword.ph": { zh: "搜索片段名或备注" },
+	"css.count": { zh: "找到 {shown} / 共 {total}" },
 	"action.ok": { zh: "确定" },
 	"css.filter.status.all": { zh: "全部状态" },
 	"css.filter.status.enabled": { zh: "已启用" },

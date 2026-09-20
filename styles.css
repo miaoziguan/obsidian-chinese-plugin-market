@@ -183,6 +183,15 @@
 	white-space: nowrap;
 }
 
+/* CSS 片段页签工具栏计数（推到右侧，与插件搜索结果计数风格一致） */
+.pt-css-count {
+	font-size: var(--pt-text-sm);
+	font-variant-numeric: tabular-nums;
+	color: var(--pt-text-muted);
+	margin-left: auto;
+	white-space: nowrap;
+}
+
 /* 搜索行下方的左侧操作行：仅显示已安装 toggle + 结果计数 */
 .pt-header-right-row {
 	display: flex;
