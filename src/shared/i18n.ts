@@ -960,6 +960,7 @@ export const STRINGS = {
 	"css.bulk.disable": { zh: "批量停用" },
 	"css.bulk.delete": { zh: "批量删除" },
 	"css.bulk.summary": { zh: "批量完成：成功 {ok} / 失败 {fail}" },
+	"css.manage.groups": { zh: "管理分组" },
 	"css.filter.keyword.ph": { zh: "搜索片段名或备注" },
 	"action.ok": { zh: "确定" },
 	"css.filter.status.all": { zh: "全部状态" },
