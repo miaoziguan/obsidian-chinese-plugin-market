@@ -123,8 +123,8 @@ export type FavoriteFilter = "all" | "favorited" | "unfavorited";
 /** 中文生态筛选（"all" 表示全部；"eco" 仅中文生态插件） */
 export type ChineseEcoFilter = "all" | "eco";
 
-/** 系列筛选（"all" 表示全部；"bamboo" 仅竹林中国系列插件） */
-export type SeriesFilter = "all" | "bamboo";
+/** 系列筛选（"all" 表示全部；"bamboo" 仅竹林中国系列；"yulin" 仅羽鳞精选） */
+export type SeriesFilter = "all" | "bamboo" | "yulin";
 
 /** 装过筛选（"all" 表示全部；"tried" 仅曾安装过，含已卸载） */
 export type TriedFilter = "all" | "tried";
@@ -178,10 +178,12 @@ export interface MatchOptions {
 	chineseEcoFilter?: ChineseEcoFilter;
 	/** 中文生态人工清单 id 集合（plugin-chinese-ecosystem.json） */
 	chineseEcoSet?: Set<string>;
-	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "yulin" 仅羽鳞精选 / "all" 全部 */
 	seriesFilter?: SeriesFilter;
-	/** 系列插件 id 集合（plugin-bamboo-series.json） */
+	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json） */
 	bambooSeriesSet?: Set<string>;
+	/** 羽鳞精选插件 id 集合（plugin-yulin-picks.json） */
+	yulinPicksSet?: Set<string>;
 	/** 装过筛选："tried" 仅曾安装过（含已卸载） / "all" 全部 */
 	triedFilter?: TriedFilter;
 	/** 曾安装过的插件 id 集合（含已卸载），来自安装历史索引 */
@@ -256,9 +258,12 @@ export function matchesPlugin(
 		const isEco = opts.chineseEcoSet?.has(p.id) === true || isChineseEcosystem(p);
 		if (!isEco) return false;
 	}
-	// 系列筛选：仅「竹林中国系列」插件（plugin-bamboo-series.json 人工清单）
+	// 系列筛选：仅「竹林中国系列」或「羽鳞精选」插件（plugin-bamboo-series.json / plugin-yulin-picks.json 人工清单）
 	if (opts.seriesFilter === "bamboo") {
 		if (opts.bambooSeriesSet?.has(p.id) !== true) return false;
+	}
+	if (opts.seriesFilter === "yulin") {
+		if (opts.yulinPicksSet?.has(p.id) !== true) return false;
 	}
 	// 装过筛选：仅保留曾安装过（含已卸载）的插件
 	if (opts.triedFilter === "tried" && !(opts.journalTriedIds?.has(p.id) ?? false)) return false;
@@ -336,10 +341,12 @@ export interface FilterParams {
 	chineseEcoFilter?: ChineseEcoFilter;
 	/** 中文生态人工清单 id 集合 */
 	chineseEcoSet?: Set<string>;
-	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "yulin" 仅羽鳞精选 / "all" 全部 */
 	seriesFilter?: SeriesFilter;
-	/** 系列插件 id 集合（plugin-bamboo-series.json） */
+	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json） */
 	bambooSeriesSet?: Set<string>;
+	/** 羽鳞精选插件 id 集合（plugin-yulin-picks.json） */
+	yulinPicksSet?: Set<string>;
 	/** 装过筛选："tried" 仅曾安装过 / "all" 全部 */
 	triedFilter?: TriedFilter;
 	/** 曾安装过的插件 id 集合（含已卸载） */
@@ -459,7 +466,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		chineseEcoFilter, chineseEcoSet,
-		seriesFilter, bambooSeriesSet,
+		seriesFilter, bambooSeriesSet, yulinPicksSet,
 		triedFilter, journalTriedIds,
 		abandonedFilter, journalAbandonedIds,
 		verdictFilter, journalVerdictIds,
@@ -478,7 +485,7 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		recommendedOnly, recommendedSet,
 		sortFavoritesFirst, favoriteFilter, favoritesSet,
 		chineseEcoFilter, chineseEcoSet,
-		seriesFilter, bambooSeriesSet,
+		seriesFilter, bambooSeriesSet, yulinPicksSet,
 		triedFilter, journalTriedIds,
 		abandonedFilter, journalAbandonedIds,
 		verdictFilter, journalVerdictIds,

@@ -110,6 +110,8 @@ export interface ViewContext {
 	chineseEcoSet: Set<string>;
 	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json 开发者清单） */
 	bambooSeriesSet: Set<string>;
+	/** 羽鳞精选插件 id 集合（plugin-yulin-picks.json 开发者清单） */
+	yulinPicksSet: Set<string>;
 
 	// ── Obsidian ItemView DOM ──
 	containerEl: HTMLElement;
@@ -490,6 +492,7 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		// 避免值拷贝持有空 Set 导致筛选恒空（修复：视图先开时系列筛选为空）
 		get chineseEcoSet() { return view.chineseEcoSet; },
 		get bambooSeriesSet() { return view.bambooSeriesSet; },
+		get yulinPicksSet() { return view.yulinPicksSet; },
 
 		// ── Obsidian ItemView DOM ──
 		containerEl: view.containerEl,

@@ -875,7 +875,7 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public favoriteFilter: FavoriteFilter = "all";
 	/** 中文生态筛选："eco" 仅中文生态 / "all" 全部 */
 	public chineseEcoFilter: ChineseEcoFilter = "all";
-	/** 系列筛选："bamboo" 仅竹林中国系列 / "all" 全部 */
+	/** 系列筛选："bamboo" 仅竹林中国系列 / "yulin" 仅羽鳞精选 / "all" 全部 */
 	public seriesFilter: SeriesFilter = "all";
 	/** 装过筛选："tried" 仅曾安装过（含已卸载） / "all" 全部 */
 	public triedFilter: TriedFilter = "all";
@@ -897,6 +897,8 @@ public exitCompareMode = () => exitCompareMode(this._ctx);
 	public chineseEcoSet: Set<string> = new Set();
 	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json 开发者清单） */
 	public bambooSeriesSet: Set<string> = new Set();
+	/** 羽鳞精选插件 id 集合（plugin-yulin-picks.json 开发者清单） */
+	public yulinPicksSet: Set<string> = new Set();
 	/** 作者字母筛选：选中的首字母（null = 不展开任何组，只显示字母条） */
 	public activeAuthorLetter: string | null = null;
 	/** 作者 facet 展开态（字母组作者 > maxVisible 时「更多 ▾/收起 ▴」状态） */

@@ -29,6 +29,7 @@ FILES=(
 	"plugin-release-dates.json"
 	"plugin-chinese-ecosystem.json"
 	"plugin-bamboo-series.json"
+	"plugin-yulin-picks.json"
 	"plugin-deps.json"
 )
 

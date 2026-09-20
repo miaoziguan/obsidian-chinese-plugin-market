@@ -160,6 +160,7 @@ export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[
 			chineseEcoSet: ctx.chineseEcoSet,
 			seriesFilter: ctx.seriesFilter,
 			bambooSeriesSet: ctx.bambooSeriesSet,
+			yulinPicksSet: ctx.yulinPicksSet,
 			triedFilter: ctx.triedFilter,
 			journalTriedIds: ctx.journalTriedIds,
 			abandonedFilter: ctx.abandonedFilter,
