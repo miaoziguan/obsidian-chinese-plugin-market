@@ -12,7 +12,7 @@
 
 import { parseJSON, parseRecallCandidates, fuzzyTitleScores, rrfFuse, topNFused, isLocalBaseUrl } from "@shared/utils";
 import { logger } from "@shared/logger";
-import { tokenizeForBM25, bm25Score, BM25_TOKENIZER_VERSION } from "@domain/search/bm25";
+import { tokenizeForBM25, bm25Score, BM25_TOKENIZER_VERSION, hasIntlSegmenter } from "@domain/search/bm25";
 import { applyQualityFactors } from "@domain/search/quality";
 import { t2sForEmbed } from "@translation/lexicon/t2s";
 import { expandQuery } from "@translation/lexicon/synonyms";
@@ -92,7 +92,7 @@ function bm25IndexSig(
 	let zhLen = 0;
 	for (const p of allPlugins) zhLen += (p.nameZh?.length ?? 0) + (p.descZh?.length ?? 0);
 	return (
-		BM25_TOKENIZER_VERSION + ":" +
+		BM25_TOKENIZER_VERSION + (hasIntlSegmenter() ? "i" : "n") + ":" +
 		allPlugins.length + ":" +
 		(allPlugins[0]?.id ?? "") + ":" +
 		(allPlugins[allPlugins.length - 1]?.id ?? "") + ":" +

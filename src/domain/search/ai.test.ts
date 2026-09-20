@@ -318,6 +318,6 @@ describe("bigram 盲区回归（④ harness 胜出臂采纳）", () => {
 	it("bm25IndexSig 含分词器版本指纹（分词策略变更必须失效缓存，P-0055 同族）", () => {
 		const { searcher } = makeSearcher();
 		const idx = searcher.getBm25Index([{ id: "a", name: "A", description: "aaa" }] as any);
-		expect(idx.sig.startsWith(BM25_TOKENIZER_VERSION + ":")).toBe(true);
+		expect(idx.sig.startsWith(BM25_TOKENIZER_VERSION)).toBe(true);
 	});
 });

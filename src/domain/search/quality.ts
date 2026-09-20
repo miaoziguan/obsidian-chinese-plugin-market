@@ -11,6 +11,10 @@
  * - **质量因子只做 tie-break，不许喧宾夺主**。乘性带宽 [0.85, 1.15]，在 RRF(k=60)
  *   相邻名次分差（≈1.6%）下约等于移动 6-8 个名次：平局区内能翻盘，
  *   相关度差距大的翻不动——热门永远压不过相关。
+ *   外部共识背书（Obsidian 官方团队 joethei，forum 102077）："Regular/recent updates
+ *   are not a good sign of a functional plugin… Requiring regular updates for these tiny
+ *   plugins sets the wrong incentives."——更新频繁≠质量好，故 recency 只做平局裁决、
+ *   带宽不设过猛（2026-09-20 论坛调研归档）。
  * - **缺失一律中性 1.0**：没有 stats 数据的插件（新上架/抓取失败）不受罚也不获益。
  * - 与 search-engine `recency_factor`（SearchEngine.cc，无下限 exp(-age/365)）的差异是
  *   **有意温和化**：文档检索里陈旧≈失效，可以狠压；插件市场 2 年未更新但能用的

@@ -1938,6 +1938,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			...seed?.cache,
 			...fileCache,
 		};
+		// 缩水守卫基准：记录合并后条数（写回缩水超 50% 时 storage 拒写，2026-09-20 事故防线）
+		this.storage.noteTranslatorCacheLoaded?.(Object.keys(cache).length);
 		const aiDict: Record<string, DictEntry> = {
 			...seed?.aiDict,
 			...fileAiDict,

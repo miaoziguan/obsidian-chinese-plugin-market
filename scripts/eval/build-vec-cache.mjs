@@ -8,7 +8,7 @@ const VAULT = path.join(os.homedir(), "Library/Mobile Documents/iCloud~md~obsidi
 const pool = JSON.parse(fs.readFileSync(path.join(TASK, "eval-pool.json"), "utf8"));
 const tags = JSON.parse(fs.readFileSync(path.join(REPO, "plugin-tags.json"), "utf8"));
 const evalSet = JSON.parse(fs.readFileSync(path.join(TASK, "eval-set.json"), "utf8"));
-const zh = JSON.parse(fs.readFileSync(path.join(VAULT, "translator-cache.json"), "utf8")).cache ?? {};
+const zhU = JSON.parse(fs.readFileSync(path.join(VAULT, "translator-cache.json"), "utf8")).cache ?? {}; const zhS = (()=>{try{return JSON.parse(fs.readFileSync(path.join(VAULT, "seeded-translator-cache.json"), "utf8")).cache ?? {};}catch{return {};}})(); const zh = { ...zhS, ...zhU };
 function assemble(p) {
   const parts = []; const t = tags[p.id];
   if (t && t.category) parts.push(`分类：${t.category}`);

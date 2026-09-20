@@ -45,7 +45,15 @@ const BM25_TITLE_W = 2.0; // 镜像 ai.ts 常量（漂移由 parity 兜底）
 const pool = JSON.parse(fs.readFileSync(path.join(TASK, "eval-pool.json"), "utf8"));
 const evalSet = JSON.parse(fs.readFileSync(path.join(TASK, "eval-set.json"), "utf8"));
 const vecCache = JSON.parse(fs.readFileSync(path.join(TASK, "eval-vec-cache.json"), "utf8"));
-const zh = JSON.parse(fs.readFileSync(path.join(VAULT, "translator-cache.json"), "utf8")).cache ?? {};
+// zh 面 = 种子 ∪ 用户文件（用户优先）——镜像生产 onload 合并语义（plugin.ts: cache={...seed,...file}）。
+// 2026-09-20 事故：用户文件被空写回（iCloud 读竞争怀疑），harness 只读用户文件 → 静默跑在纯英文面。
+const zhUser = JSON.parse(fs.readFileSync(path.join(VAULT, "translator-cache.json"), "utf8")).cache ?? {};
+const zhSeed = (() => { try { return JSON.parse(fs.readFileSync(path.join(VAULT, "seeded-translator-cache.json"), "utf8")).cache ?? {}; } catch { return {}; } })();
+const zh = { ...zhSeed, ...zhUser };
+if (Object.keys(zh).length < pool.length * 0.5) {
+	console.error("[guard] zh 覆盖 " + Object.keys(zh).length + " < 池 50%——缓存疑似被清空，拒绝在残缺面出数字");
+	process.exit(3);
+}
 const stats = JSON.parse(fs.readFileSync(path.join(VAULT, "stats-cache.json"), "utf8")).stats ?? {};
 
 const plugins = pool.map((p) => {
@@ -131,12 +139,13 @@ try {
 	const d = new Set(tokBig("门禁系统管理工具"));
 	if (!d.has("门禁")) throw new Error("bigram 臂自证失败：字符类可能被截断");
 	if (new Set(tokTri("迷你番茄钟")).has("番茄钟") !== true) throw new Error("trigram 臂自证失败");
-	if (tokTri("门禁系统管理工具").join(",") !== ngramTok([2,3])("门禁系统管理工具").join(",")) throw new Error("harness runs() 与生产分词漂移：CJK_RE 不一致");
+	const expectTok = [...B.segmentWords("门禁系统管理工具"), ...ngramTok([2,3])("门禁系统管理工具")];
+	if (tokTri("门禁系统管理工具").join(",") !== expectTok.join(",")) throw new Error("harness 与生产分词漂移：词层∪n-gram 不一致");
 }
 
 const ARMS = [
 	{ id: "tri", label: "trigram(现生产)", tok: tokTri },
-	...(tokIntl ? [{ id: "intl", label: "intl∪trigram", tok: tokIntl }] : []),
+	{ id: "ngram", label: "bi∪tri(采纳前生产)", tok: ngramTok([2, 3]) },
 	...(tokJieba ? [{ id: "jieba", label: "jieba-CS", tok: tokJieba }] : []),
 ];
 
