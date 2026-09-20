@@ -162,6 +162,15 @@ describe("snippet 平台层", () => {
 		expect(names).toContain("on-disk");
 	});
 
+	it("adapter.list 成功时只显示真实文件，不列出已启用但已删除的幽灵片段", async () => {
+		const app = makeApp({
+			enabled: ["deleted-but-enabled", "on-disk"],
+			files: [{ path: ".obsidian/snippets/on-disk.css", name: "on-disk.css" }],
+		});
+		const list = await refreshSnippets(app as never);
+		expect(list.map((s) => s.baseName)).toEqual(["on-disk"]);
+	});
+
 	it("isSnippetEnabled 按 customCss.enabledSnippets 判定", () => {
 		const app = makeApp({ enabled: ["x"] });
 		expect(isSnippetEnabled(app as never, "x")).toBe(true);
