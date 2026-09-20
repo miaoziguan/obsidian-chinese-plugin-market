@@ -1303,6 +1303,10 @@ button.pt-facet-letter-btn.is-active {
 	border-radius: 0 var(--pt-radius-input) var(--pt-radius-input) 0;
 	outline: none;
 }
+/* 提高特异性压过部分主题对 input[type="search"] 的 padding 覆盖，避免放大镜与 placeholder 重合 */
+.pt-search input[type="search"].pt-search-input {
+	padding-left: 36px;
+}
 .pt-search-input::placeholder { color: var(--pt-text-faint); }
 
 /* 一键清除按钮（搜索框内右侧，有内容时由 JS 显示） */
@@ -3356,6 +3360,15 @@ button.pt-card-install-btn--installed {
 	pointer-events: none;
 	font-weight: 600;
 	font-size: var(--pt-text-md);
+}
+/* 卸载按钮：红色描边，hover 淡红底 */
+.pt-detail-btn--danger {
+	color: var(--pt-color-error, var(--text-error));
+	background: transparent;
+	border: 1px solid color-mix(in srgb, var(--pt-color-error, var(--text-error)) 40%, transparent);
+}
+.pt-detail-btn--danger:hover {
+	background: color-mix(in srgb, var(--pt-color-error, var(--text-error)) 10%, transparent);
 }
 
 /* ── 区段标题公共（README / 相似推荐） ── */
