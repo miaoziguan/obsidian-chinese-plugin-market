@@ -63,4 +63,21 @@ describe("renderCssSnippetsList", () => {
 		expect(store.createSnippet).toHaveBeenCalledWith("newone", "");
 		promptSpy.mockRestore();
 	});
+	it("按关键词过滤可见行", () => {
+		const store = makeStore({
+			listSnippets: () => [
+				{ name: "alpha.css", baseName: "alpha", enabled: true, path: "x/alpha.css" },
+				{ name: "beta.css", baseName: "beta", enabled: false, path: "x/beta.css" },
+			],
+		});
+		const ctx = makeCtx(store);
+		renderCssSnippetsList(ctx);
+		const input = ctx.cssSnippetListEl!.querySelector<HTMLInputElement>('[data-cpm-css-search]')!;
+		expect(input).toBeTruthy();
+		input.value = "alpha";
+		input.dispatchEvent(new Event("input"));
+		const rows = ctx.cssSnippetListEl!.querySelectorAll("[data-cpm-snippet]");
+		expect(rows.length).toBe(1);
+		expect(rows[0].getAttribute("data-cpm-snippet")).toBe("alpha");
+	});
 });

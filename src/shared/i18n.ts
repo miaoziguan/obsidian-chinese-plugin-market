@@ -962,6 +962,10 @@ export const STRINGS = {
 	"css.bulk.summary": { zh: "批量完成：成功 {ok} / 失败 {fail}" },
 	"css.filter.keyword.ph": { zh: "搜索片段名或备注" },
 	"action.ok": { zh: "确定" },
+	"css.filter.status.all": { zh: "全部状态" },
+	"css.filter.status.enabled": { zh: "已启用" },
+	"css.filter.status.disabled": { zh: "已禁用" },
+	"css.filter.group.all": { zh: "全部分组" },
 } as const;
 
 export type I18nKey = keyof typeof STRINGS;
