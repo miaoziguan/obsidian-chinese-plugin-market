@@ -79,10 +79,18 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 		tabBeta.setText(ctx.t("view.tab.beta"));
 		tabBeta.setAttribute("title", ctx.t("betaList.hint"));
+		// 「CSS 片段」页签：独立片段管理页（启用 / 新建 / 删除 / 搜索 / 批量）
+		const tabCss = viewTabs.createEl("button", {
+			cls: "pt-view-tab",
+			attr: { "data-view-tab": "css", "aria-pressed": "false", type: "button" },
+		});
+		tabCss.setText(ctx.t("view.tab.css"));
+		tabCss.setAttribute("title", ctx.t("css.tab.hint"));
 		const onSwitchTab = (tab: ViewTab) => ctx.switchViewTab(tab);
 		tabBrowse.addEventListener("click", () => onSwitchTab("browse"));
 		tabUpdates.addEventListener("click", () => onSwitchTab("updates"));
 		tabBeta.addEventListener("click", () => onSwitchTab("beta"));
+		tabCss.addEventListener("click", () => onSwitchTab("css"));
 		// 把刷新徽标的回调挂到 ctx，供检测更新后同步
 		ctx.refreshViewTabsBadge = refreshTabsBadge;
 

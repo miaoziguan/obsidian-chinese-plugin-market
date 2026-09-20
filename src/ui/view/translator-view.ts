@@ -14,6 +14,8 @@ import {
 import { toHTMLElement, q } from "@ui/dom/dom";
 import { renderUpdatesList } from "@ui/view/view-updates";
 import { renderBetaList } from "@ui/view/view-beta";
+import { renderCssSnippetsList } from "@ui/view/view-css-snippets";
+import type { CssStorePort } from "@ui/settings/snippet-manage-store";
 import { ensureDepsFor } from "@ui/view/deps-lazy";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
 import { type MirrorSource } from "@domain/catalog/mirror";
@@ -480,6 +482,18 @@ export class ChinesePluginMarketView extends ItemView {
 	public updatesListEl: HTMLElement | null = null;
 	/** 「直链」页签列表容器（由 view-chrome 创建并挂到 ctx.betaListEl） */
 	public betaListEl: HTMLElement | null = null;
+	/** 「CSS 片段」页签列表容器（由 view-chrome 创建并挂到 ctx.cssSnippetListEl） */
+	public cssSnippetListEl: HTMLElement | null = null;
+	/** CSS 片段管理数据端口（与设置页同源，复用分组/备注/行 UI）；延迟到插件就绪后创建单实例 */
+	private _cssStore: CssStorePort | null = null;
+	public get cssStore(): CssStorePort {
+		if (!this._cssStore) {
+			this._cssStore = (this.plugin as unknown as {
+				createCssStore(): CssStorePort;
+			}).createCssStore();
+		}
+		return this._cssStore;
+	}
 
 	/**
 	 * 更新单个已安装插件到官方最新版（桌面端）；传入 version 时改为固定安装到该 tag。
@@ -598,6 +612,7 @@ export class ChinesePluginMarketView extends ItemView {
 		const cardLayer = this.scrollCardLayer;
 		const updatesEl = this.updatesListEl;
 		const betaEl = this.betaListEl;
+		const cssEl = this.cssSnippetListEl;
 		const featuredEl = q(contentEl, ".pt-featured");
 		const isBrowse = tab === "browse";
 
@@ -616,6 +631,10 @@ export class ChinesePluginMarketView extends ItemView {
 		if (betaEl) {
 			betaEl.setCssStyles({ display: tab === "beta" ? "" : "none" });
 			if (tab === "beta") this.renderBetaList();
+		}
+		if (cssEl) {
+			cssEl.setCssStyles({ display: tab === "css" ? "" : "none" });
+			if (tab === "css") this.renderCssSnippetsList();
 		}
 
 		if (isBrowse) this.renderPluginList(true);
@@ -647,6 +666,12 @@ export class ChinesePluginMarketView extends ItemView {
 	public renderBetaList = () => {
 		if (this.viewTab !== "beta") return;
 		renderBetaList(this._ctx);
+	};
+
+	/** 重渲染「CSS 片段」页签列表（内部委托给 view-css-snippets 渲染器） */
+	public renderCssSnippetsList = () => {
+		if (this.viewTab !== "css") return;
+		renderCssSnippetsList(this._ctx);
 	};
 
 	/**
