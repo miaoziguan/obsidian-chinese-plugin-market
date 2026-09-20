@@ -218,3 +218,19 @@ export function openSnippetInDefaultApp(app: App, path: string): void {
 		logger.warn("[Chinese Plugin Market] 系统打开 CSS 片段失败:", error);
 	}
 }
+
+/**
+ * 校验 CSS 片段基名（文件名去 .css）是否安全可写。
+ *
+ * 禁止空名、路径分隔符、上级目录引用（../）、超长，避免越权写盘。
+ * UI 弹窗与 store 层共用，保证新建前拦截非法基名。
+ */
+export function isValidSnippetBaseName(base: string): boolean {
+	const b = base.trim();
+	if (!b) return false;
+	if (b === "." || b === "..") return false;
+	if (/[/\\]/.test(b)) return false;
+	if (b.startsWith("..")) return false;
+	if (b.length > 200) return false;
+	return true;
+}

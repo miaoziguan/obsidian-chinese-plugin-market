@@ -13,6 +13,7 @@ import {
 	setSnippetEnabled,
 	renameSnippet,
 	openSnippetInDefaultApp,
+	isValidSnippetBaseName,
 } from "./snippet";
 
 interface FakeApp {
@@ -243,5 +244,25 @@ describe("snippet 平台层", () => {
 
 	it("openSnippetInDefaultApp 无 API 时静默失败", () => {
 		expect(() => openSnippetInDefaultApp({} as never, "x.css")).not.toThrow();
+	});
+});
+
+describe("isValidSnippetBaseName", () => {
+	it("接受普通基名", () => {
+		expect(isValidSnippetBaseName("my-theme")).toBe(true);
+		expect(isValidSnippetBaseName("  blue  ")).toBe(true); // 仅首尾空格，内核合法
+	});
+	it("拒绝空名", () => {
+		expect(isValidSnippetBaseName("")).toBe(false);
+		expect(isValidSnippetBaseName("   ")).toBe(false);
+	});
+	it("拒绝路径分隔符与上级引用", () => {
+		expect(isValidSnippetBaseName("a/b")).toBe(false);
+		expect(isValidSnippetBaseName("a\\b")).toBe(false);
+		expect(isValidSnippetBaseName("..")).toBe(false);
+		expect(isValidSnippetBaseName("../etc")).toBe(false);
+	});
+	it("拒绝过长基名", () => {
+		expect(isValidSnippetBaseName("x".repeat(201))).toBe(false);
 	});
 });
