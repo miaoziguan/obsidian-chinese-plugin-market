@@ -89,13 +89,17 @@ export async function refreshSnippets(app: App): Promise<SnippetInfo[]> {
 	const enabled = await readEnabledSnippets(app);
 	const byBase = new Map<string, string>();
 
-	for (const fileName of await listSnippetFileNames(app, dir)) {
+	const { files, fallback } = await listSnippetFileNames(app, dir);
+	for (const fileName of files) {
 		byBase.set(fileName.replace(/\.css$/i, ""), fileName);
 	}
-	// 兜底：即便目录扫描失败（adapter 不可用 / 目录被占用），也至少把 customCss
-	// 里处于启用状态的片段呈现出来，避免再次出现「原生有、本插件 0 个」的错位。
-	for (const baseName of enabled) {
-		if (!byBase.has(baseName)) byBase.set(baseName, `${baseName}.css`);
+	// 兜底：adapter.list 失败（fallback）或目录确实为空时，才把 customCss 里处于启用
+	// 状态的片段呈现出来，避免「原生有、本插件 0 个」的错位。adapter.list 成功且读到
+	// 文件时只显示真实文件，防止 appearance.json 里残留的历史启用项被当成幽灵片段。
+	if (fallback || byBase.size === 0) {
+		for (const baseName of enabled) {
+			if (!byBase.has(baseName)) byBase.set(baseName, `${baseName}.css`);
+		}
 	}
 
 	const list = Array.from(byBase, ([baseName, fileName]) => ({
@@ -109,22 +113,30 @@ export async function refreshSnippets(app: App): Promise<SnippetInfo[]> {
 	return list;
 }
 
+interface SnippetFileNames {
+	files: string[];
+	/** 为 true 表示 adapter.list 抛错，已退回到 vault 文件树枚举 */
+	fallback: boolean;
+}
+
 /** 读取 snippets 目录下的 .css 文件名；adapter.list 不可用时退回 vault 文件树 */
-async function listSnippetFileNames(app: App, dir: string): Promise<string[]> {
+async function listSnippetFileNames(app: App, dir: string): Promise<SnippetFileNames> {
 	try {
 		const listing = await app.vault.adapter.list(dir);
-		return (listing?.files ?? [])
+		const files = (listing?.files ?? [])
 			.map((p) => p.split("/").pop() ?? "")
 			.filter((name) => name.toLowerCase().endsWith(".css"));
+		return { files, fallback: false };
 	} catch (error) {
 		logger.warn("[Chinese Plugin Market] 扫描 CSS 片段目录失败，退回 vault 文件树:", error);
-		return app.vault
+		const files = app.vault
 			.getFiles()
 			.filter(
 				(f): f is TFile =>
 					f.path.startsWith(`${dir}/`) && f.path.toLowerCase().endsWith(".css"),
 			)
 			.map((f) => f.name);
+		return { files, fallback: true };
 	}
 }
 
