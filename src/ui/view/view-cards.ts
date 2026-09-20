@@ -83,6 +83,7 @@ export function openDetailDrawer(ctx: ViewContext, pluginId: string, triggerCard
 		triggerCard,
 		openDetail: (pid: string) => ctx.openDetailDrawer(pid),
 		installPlugin: (pluginInfo) => handleInstall(ctx, pluginInfo),
+		uninstallPlugin: (pluginInfo) => handleUninstall(ctx, pluginInfo),
 		toggleFavorite: (pid: string) => ctx.toggleFavorite(pid),
 		isFavorited: (pid: string) => ctx.favoritesSet.has(pid),
 		installedIds: ctx.installedIds,

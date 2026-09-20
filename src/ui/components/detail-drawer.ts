@@ -152,6 +152,8 @@ export interface DrawerOptions {
 	openDetail: (pluginId: string) => void;
 	/** 未安装插件的一键静默安装回调（失败内部已提示并回退市场） */
 	installPlugin?: (pluginInfo: PluginInfo) => void | Promise<void>;
+	/** 已安装插件的卸载回调（卸载完成后抽屉刷新安装态） */
+	uninstallPlugin?: (pluginInfo: PluginInfo) => void | Promise<void>;
 	toggleFavorite: (pluginId: string) => boolean;
 	/**
 	 * 当前是否已收藏（供初始图标判定）；未提供时回退到
@@ -217,6 +219,7 @@ export class PluginDetailDrawer {
 	private triggerCard: HTMLElement | null;
 	private openDetail: (pluginId: string) => void;
 	private installPlugin: (pluginInfo: PluginInfo) => void | Promise<void>;
+	private uninstallPlugin: (pluginInfo: PluginInfo) => void | Promise<void>;
 	private toggleFavorite: (pluginId: string) => boolean;
 	private isFavorited: (pluginId: string) => boolean;
 	private installedIds: Set<string>;
@@ -273,6 +276,7 @@ export class PluginDetailDrawer {
 		this.triggerCard = opts.triggerCard;
 		this.openDetail = opts.openDetail;
 		this.installPlugin = opts.installPlugin ?? (() => {});
+		this.uninstallPlugin = opts.uninstallPlugin ?? (() => {});
 		this.toggleFavorite = opts.toggleFavorite;
 		this.isFavorited = opts.isFavorited ?? ((pid: string) => this.plugin.settings.favorites.includes(pid));
 		this.installedIds = opts.installedIds ?? new Set();
@@ -1073,6 +1077,22 @@ export class PluginDetailDrawer {
 		updateReviewBtn();
 		// 切换「我的评测」编辑区显隐（默认折叠，再次点击折叠）
 		reviewBtn.addEventListener("click", () => this.toggleJournalArea());
+
+		// 卸载：已安装插件在详情页直接卸载，写评测后无需回到列表再找开关
+		if (isInstalled) {
+			const uninstallBtn = actions.createEl("button", {
+				cls: "pt-detail-btn pt-detail-btn--danger",
+				attr: { type: "button", title: this.t("card.uninstall") },
+			});
+			appendIconText(uninstallBtn, `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`, this.t("card.uninstall"));
+			uninstallBtn.addEventListener("click", () => {
+				uninstallBtn.disabled = true;
+				uninstallBtn.addClass("pt-detail-btn--loading");
+				void Promise.resolve(this.uninstallPlugin(this.info)).finally(() => {
+					this.refreshContent();
+				});
+			});
+		}
 
 		// ── README 标题行（移到 head-block：README 翻译/了解功能按钮随滚动常驻贴顶） ──
 		const readmeHeader = headBlock.createDiv({ cls: "pt-detail-section-head pt-detail-section-head--readme" });
