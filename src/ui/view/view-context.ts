@@ -43,13 +43,14 @@ import type { ChinesePluginMarketSettings, ChinesePluginMarketView, PluginProfil
 import type { TrendSnapshot } from "@domain/recommend/trending";
 import type { App, PluginManifest } from "obsidian";
 import { makeT } from "@shared/i18n";
+import type { CssStorePort } from "@ui/settings/snippet-manage-store";
 
 // ──────────────────────────────────────────
 // ViewContext 接口定义
 // ──────────────────────────────────────────
 
-/** 主视图页签：浏览（默认）/ 更新（已安装待更新）/ 直链（直链安装的插件与主题） */
-export type ViewTab = "browse" | "updates" | "beta";
+/** 主视图页签：浏览（默认）/ 更新（已安装待更新）/ 直链（直链安装的插件与主题）/ CSS 片段（独立片段管理页） */
+export type ViewTab = "browse" | "updates" | "beta" | "css";
 
 /**
  * ViewContext 是 ChinesePluginMarketView 公共状态的扁平投影。
@@ -220,6 +221,12 @@ export interface ViewContext {
 	updatesListEl: HTMLElement | null;
 	/** 「直链」页签列表容器（由 view-chrome 创建，渲染直链安装列表用） */
 	betaListEl: HTMLElement | null;
+	/** 「CSS 片段」页签列表容器（由 view-chrome 创建，渲染片段列表用） */
+	cssSnippetListEl: HTMLElement | null;
+	/** CSS 片段管理的数据端口（与设置页同源，复用分组/备注/行 UI） */
+	cssStore: CssStorePort;
+	/** 重渲染「CSS 片段」页签列表（若当前不在该页签则无操作） */
+	renderCssSnippetsList: () => void;
 	resultCountEl: HTMLElement | null;
 	aiTranslateBtnEl: HTMLButtonElement | null;
 	aiProgressEl: HTMLElement | null;
@@ -620,6 +627,10 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set updatesListEl(v) { view.updatesListEl = v; },
 		get betaListEl() { return view.betaListEl; },
 		set betaListEl(v) { view.betaListEl = v; },
+		get cssSnippetListEl() { return view.cssSnippetListEl; },
+		set cssSnippetListEl(v) { view.cssSnippetListEl = v; },
+		cssStore: view.cssStore,
+		renderCssSnippetsList: () => view.renderCssSnippetsList(),
 		get resultCountEl() { return view.resultCountEl; },
 		set resultCountEl(v) { view.resultCountEl = v; },
 		get aiTranslateBtnEl() { return view.aiTranslateBtnEl; },
