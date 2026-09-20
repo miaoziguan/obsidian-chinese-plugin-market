@@ -952,21 +952,27 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.scheduleRender(true);
 	});
 
-	// ── 系列筛选（开发者自维护系列，如「竹林中国系列」；toggle 全部↔系列） ──
+	// ── 系列筛选（开发者自维护系列：「竹林中国系列」「羽鳞精选」；互斥 toggle） ──
 	const seriesRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 	seriesRow.createSpan({ cls: "pt-facet-label", text: "系列" });
 	const seriesChips = seriesRow.createDiv({ cls: "pt-facet-chips" });
-	const seriesToggle = seriesChips.createEl("button", { cls: "pt-filter pt-toggle-series", text: "竹林中国系列" });
-	const updateSeriesToggle = () => {
-		const active = ctx.seriesFilter === "bamboo";
-		seriesToggle.setAttribute("aria-pressed", active ? "true" : "false");
-		seriesToggle.textContent = "竹林中国系列";
+	const bambooToggle = seriesChips.createEl("button", { cls: "pt-filter pt-toggle-series", text: "竹林中国系列" });
+	const yulinToggle = seriesChips.createEl("button", { cls: "pt-filter pt-toggle-series", text: "羽鳞精选" });
+	const updateSeriesToggles = () => {
+		bambooToggle.setAttribute("aria-pressed", ctx.seriesFilter === "bamboo" ? "true" : "false");
+		yulinToggle.setAttribute("aria-pressed", ctx.seriesFilter === "yulin" ? "true" : "false");
 	};
-	updateSeriesToggle();
-	seriesToggle.addEventListener("click", () => {
+	updateSeriesToggles();
+	bambooToggle.addEventListener("click", () => {
 		ctx.seriesFilter = ctx.seriesFilter === "bamboo" ? "all" : "bamboo";
-		updateSeriesToggle();
+		updateSeriesToggles();
 		ctx.track(ctx.seriesFilter === "bamboo" ? "filter:series_bamboo" : "filter:series_bamboo_off");
+		ctx.scheduleRender(true);
+	});
+	yulinToggle.addEventListener("click", () => {
+		ctx.seriesFilter = ctx.seriesFilter === "yulin" ? "all" : "yulin";
+		updateSeriesToggles();
+		ctx.track(ctx.seriesFilter === "yulin" ? "filter:series_yulin" : "filter:series_yulin_off");
 		ctx.scheduleRender(true);
 	});
 
@@ -1053,7 +1059,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			updateEcoToggle();
 			// 重置系列筛选
 			ctx.seriesFilter = "all";
-			updateSeriesToggle();
+			updateSeriesToggles();
 			// 重置踩坑原因筛选（保留兜底：即便 UI 移除 verdict tag，重置时仍置 all）
 			ctx.verdictFilter = "all";
 			// 重置新上线 + 近期更新筛选

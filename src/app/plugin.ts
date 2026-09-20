@@ -374,6 +374,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	chineseEcoSet: Set<string> = new Set();
 	/** 竹林中国系列插件 id 集合（plugin-bamboo-series.json，开发者自维护清单） */
 	bambooSeriesSet: Set<string> = new Set();
+	/** 羽鳞精选插件 id 集合（plugin-yulin-picks.json，开发者自维护清单） */
+	yulinPicksSet: Set<string> = new Set();
 	/** SQLite 向量库（P3+：真 SQLite，sql.js/WASM）。null 表示未初始化（sql-wasm 缺失或加载失败）。 */
 	private vectorStore: SqliteVectorStore | null = null;
 	/** SQLite 初始化失败记忆：true 后本会话不再重试（Obsidian 沙箱可能无法加载 sql.js，避免反复报错刷屏）。 */
@@ -1171,6 +1173,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 后台异步加载竹林中国系列清单（「系列」维度用，不阻塞视图启动）
 		this.loadBambooSeries().catch((e) =>
 			logger.warn("[Chinese Plugin Market] 后台加载竹林系列清单失败：", e),
+		);
+		// 后台异步加载羽鳞精选清单（「系列」维度用，不阻塞视图启动）
+		this.loadYulinPicks().catch((e) =>
+			logger.warn("[Chinese Plugin Market] 后台加载羽鳞精选清单失败：", e),
 		);
 		// 后台异步刷新全局评测统计 + 已弃用集合（扫描评测笔记，不阻塞视图启动）
 		void this.refreshJournalStats();
@@ -2363,6 +2369,36 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			}
 		} catch (e: unknown) {
 			logger.warn(`[Chinese Plugin Market] 加载竹林系列清单失败，已跳过：`, e);
+		}
+	}
+
+	/**
+	 * 加载随插件分发的「羽鳞精选」清单 plugin-yulin-picks.json。
+	 * 内容 = 开发者自维护的精选插件 id（{ id: true }）。缺失/解析失败静默降级（系列维度无数据）。
+	 */
+	private async loadYulinPicks() {
+		const fileName = "plugin-yulin-picks.json";
+		try {
+			const adapter = this.app.vault.adapter;
+			const fullPath = `.obsidian/plugins/${this.manifest.id}/${fileName}`;
+			if (!(await adapter.exists(fullPath))) return;
+			const text = await adapter.read(fullPath);
+			const parsed = JSON.parse(text) as Record<string, unknown>;
+			if (parsed && typeof parsed === "object") {
+				const set = new Set<string>(Object.keys(parsed));
+				this.yulinPicksSet = set;
+				// 注入已打开的视图并触发重渲染
+				for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+					const view = leaf.view;
+					if (view instanceof ChinesePluginMarketView) {
+						view.yulinPicksSet = set;
+						view.invalidateAndRender(false);
+					}
+				}
+				logger.debug(`[Chinese Plugin Market] 已加载 ${set.size} 个羽鳞精选插件`);
+			}
+		} catch (e: unknown) {
+			logger.warn(`[Chinese Plugin Market] 加载羽鳞精选清单失败，已跳过：`, e);
 		}
 	}
 
