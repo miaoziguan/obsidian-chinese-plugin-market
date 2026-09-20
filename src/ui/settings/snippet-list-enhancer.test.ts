@@ -70,6 +70,8 @@ function createStore(opts: {
 		listSnippets: () => snippets,
 		setSnippetEnabled: async () => {},
 		renameSnippet: async () => {},
+		createSnippet: async () => {},
+		deleteSnippet: async () => {},
 		openSnippet: () => {},
 		replaceCssMeta(m) {
 			settings.cssMeta = m;

@@ -945,6 +945,23 @@ export const STRINGS = {
 	"manage.group.added": { zh: "已添加分组「{name}」" },
 	"manage.group.renamed": { zh: "已重命名分组为「{name}」" },
 	"manage.groups.open": { zh: "管理分组" },
+	// CSS 片段管理页（主视图独立 Tab）
+	"view.tab.css": { zh: "CSS 片段" },
+	"css.tab.hint": { zh: "管理 vault 的 CSS 片段：启用、新建、删除、搜索与批量操作。" },
+	"css.new": { zh: "新建片段" },
+	"css.new.name": { zh: "片段名称（不含 .css 后缀）" },
+	"css.new.invalid": { zh: "名称无效：不能为空或含路径分隔符" },
+	"css.rename.name": { zh: "新片段名称（不含 .css 后缀）" },
+	"css.delete": { zh: "删除片段" },
+	"css.delete.confirm": { zh: "确认删除片段「{name}」？此操作不可撤销，文件将从磁盘移除。" },
+	"css.empty": { zh: "暂无 CSS 片段" },
+	"css.bulk.selected": { zh: "已选 {n} 项" },
+	"css.bulk.enable": { zh: "批量启用" },
+	"css.bulk.disable": { zh: "批量停用" },
+	"css.bulk.delete": { zh: "批量删除" },
+	"css.bulk.summary": { zh: "批量完成：成功 {ok} / 失败 {fail}" },
+	"css.filter.keyword.ph": { zh: "搜索片段名或备注" },
+	"action.ok": { zh: "确定" },
 } as const;
 
 export type I18nKey = keyof typeof STRINGS;
