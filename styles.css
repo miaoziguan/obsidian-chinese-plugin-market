@@ -1264,27 +1264,13 @@ button.pt-facet-letter-btn.is-active {
 	box-shadow: none;
 }
 
-/* 右段：内容输入区（承载放大镜、输入框、清除按钮、AI 徽章的定位上下文） */
+/* 右段：内容输入区（承载输入框、清除按钮、AI 徽章的定位上下文） */
 .pt-search-field {
 	position: relative;
 	flex: 1 1 auto;
 	min-width: 0;
 	display: flex;
 	align-items: center;
-}
-.pt-search-field::before {
-	content: "";
-	position: absolute;
-	left: 12px;
-	top: 50%;
-	width: 14px;
-	height: 14px;
-	transform: translateY(-50%);
-	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a8e' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
-	background-repeat: no-repeat;
-	background-size: contain;
-	pointer-events: none;
-	opacity: 0.55;
 }
 .pt-search-input {
 	width: 100%;
@@ -1293,8 +1279,9 @@ button.pt-facet-letter-btn.is-active {
 	line-height: 36px;
 	vertical-align: middle;
 	margin: 0;
-	/* 左边距给放大镜图标留白（图标 left:12px + 14px 宽），与 placeholder 文字分开 */
-	padding: 0 64px 0 36px;
+	/* 不画放大镜图标：输入框本身就是搜索语义，图标属冗余装饰；
+	   左侧保留常规内边距，右侧给清除按钮 + AI 徽章留白。 */
+	padding: 0 64px 0 12px;
 	font-size: var(--pt-text-md);
 	letter-spacing: -0.01em;
 	color: var(--pt-text);
@@ -1302,10 +1289,6 @@ button.pt-facet-letter-btn.is-active {
 	border: 0;
 	border-radius: 0 var(--pt-radius-input) var(--pt-radius-input) 0;
 	outline: none;
-}
-/* 提高特异性压过部分主题对 input[type="search"] 的 padding 覆盖，避免放大镜与 placeholder 重合 */
-.pt-search input[type="search"].pt-search-input {
-	padding-left: 36px;
 }
 .pt-search-input::placeholder { color: var(--pt-text-faint); }
 
@@ -5780,15 +5763,10 @@ button.pt-card-install-btn--installed {
 	.pt-mode-caret {
 		right: 6px;
 	}
-	/* 移动端直接隐藏搜索放大镜图标：窄屏空间珍贵且图标与文字的间距问题价值不高，
-	   去掉后 placeholder 紧贴模式段右缘、无重叠风险，输入区纯文本更清爽。 */
-	.pt-search-field::before {
-		display: none;
-	}
 	/* 提升特异性（.pt-header 祖先前缀）压过 UA/主题对 <input> 的内置控件层，
 	   替代原 !important，避免 iOS WebView 圆角胶囊回归（container query 内特异性不变，靠祖先类提权）。 */
 	.pt-header .pt-search-input {
-		/* 放大镜已隐藏，左侧 padding 让出空间不必保留，缩到常规即可 */
+		/* 无放大镜图标（已全局移除），左侧 padding 用常规值即可 */
 		padding: 0 44px 0 12px;
 		/* 内嵌子元素不重复画圆角，由外框 .pt-search 独自负责视觉圆角 + overflow 裁剪，
 		   避免窄屏下「内部 input 圆角与外框圆角错位 1px」造成的尖角瑕疵。
