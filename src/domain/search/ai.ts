@@ -269,7 +269,7 @@ export class AISearcher {
 		const localScores = bm25RecallScores(query, this.getBm25Index(allPlugins));
 
 		// 标题模糊匹配（第三路）：兜住「用户只记得名字大概」的场景
-		const fuzzyScores = fuzzyTitleScores(query, allPlugins);
+		const fuzzyScores = fuzzyTitleScores(t2sForEmbed(query), allPlugins);
 
 		// RRF 融合：向量 + 关键词 + 标题模糊 三路名次融合（异构分数量纲不同，RRF 只看名次，
 		// 比「并集取前 N」更稳；多路都命中的候选自然靠前，减少 LLM 精排负担）。
@@ -366,7 +366,7 @@ export class AISearcher {
 
 		// 关键词召回（CJK bigram+trigram BM25，替代简单重叠）+ 标题模糊
 		const localScores = bm25RecallScores(query, this.getBm25Index(allPlugins));
-		const fuzzyScores = fuzzyTitleScores(query, allPlugins);
+		const fuzzyScores = fuzzyTitleScores(t2sForEmbed(query), allPlugins);
 
 		// RRF 融合（与 AI 模式召回一致；向量不可用时退化为关键词+标题）。
 		// 质量因子在此直接塑造最终排序（本地模式无 LLM 精排，是它的主战场）。
@@ -495,9 +495,11 @@ export class AISearcher {
 		);
 		const buildMs = Date.now() - tBuild;
 
+		// query 侧 t2s（trad 修复 2026-09-20）：向量索引 doc 侧本就简体，繁体 query 不归一
+		// 则跨文字匹配弱于简体同词（trad 桶首金 #6 vs 简体 #1 的根因之一）；doc 侧不动=零 re-embed
 		const anchoredQuery = filterCategories?.length
-			? `分类：${filterCategories.join(" / ")}\n${query}`
-			: query;
+			? `分类：${filterCategories.join(" / ")}\n${t2sForEmbed(query)}`
+			: t2sForEmbed(query);
 
 		const tRecall = Date.now();
 		const scored = await vectorRecallScores(provider, anchoredQuery, this.vectorIndex, VECTOR_RECALL_CAP, VECTOR_MIN_SCORE);
@@ -743,8 +745,8 @@ ${candidateLines}
 		fuzzyScores: Map<string, number>,
 		llmIds?: Set<string>,
 	): { highlightTerms: string[]; signals: Record<string, string[]> } {
-		// 高亮词：query 分词（CJK bigram+trigram + ASCII 词）+ 同义词扩展
-		const baseTokens = tokenizeForBM25(query).map((t) => t.toLowerCase());
+		// 高亮词：query 分词（CJK bigram+trigram + ASCII 词）+ 同义词扩展；query 侧 t2s 与召回路一致（繁体 query 高亮简体描述）
+		const baseTokens = tokenizeForBM25(t2sForEmbed(query)).map((t) => t.toLowerCase());
 		const expanded = expandQuery(query).toLowerCase();
 		const synonymTokens = tokenizeForBM25(expanded).map((t) => t.toLowerCase());
 		const termSet = new Set<string>([...baseTokens, ...synonymTokens].filter((t) => t.length > 1));

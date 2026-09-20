@@ -320,4 +320,19 @@ describe("bigram 盲区回归（④ harness 胜出臂采纳）", () => {
 		const idx = searcher.getBm25Index([{ id: "a", name: "A", description: "aaa" }] as any);
 		expect(idx.sig.startsWith(BM25_TOKENIZER_VERSION)).toBe(true);
 	});
+
+	it("繁简等价：模糊路 query 侧 t2s（trad 修复，繁体 query 不再整路缺席）", async () => {
+		const { searcher } = makeSearcher();
+		req.mockRejectedValue(new Error("不应调用网络"));
+		const plugins = [
+			{ id: "cal", name: "Calendar", description: "Calendar view for vault", nameZh: "日历" },
+			{ id: "other", name: "Other", description: "unrelated stuff", nameZh: "其他" },
+		];
+		// 模糊路命中证据 = signals 含 title（BM25 路本就会命中，故用 signals 隔离模糊路行为）
+		const rT = await searcher.localSearch("日曆", plugins as any);
+		const rS = await searcher.localSearch("日历", plugins as any);
+		expect(rT.signals?.["cal"]).toContain("title");
+		expect(rS.signals?.["cal"]).toContain("title");
+		expect(rT.rankedIds[0]).toBe("cal");
+	});
 });

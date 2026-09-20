@@ -187,7 +187,8 @@ function recallScores(query, idx, tok) {
 
 // ───────── 单 query 融合排序（镜像 localSearch） ─────────
 function rank(query, idx, tok) {
-	const vectorScores = new Map(vecCache.perQuery[query] ?? []);
+	// trad 修复配套：生产 embed 的是 t2s(query)，缓存键同构（简体 query 的 t2s=自身，繁体键=简体孪生）
+		const vectorScores = new Map(vecCache.perQuery[B.t2sForEmbed(query)] ?? vecCache.perQuery[query] ?? []);
 	const localScores = recallScores(query, idx, tok);
 	const fuzzyScores = fuzzyTitleScores(query, plugins);
 	const fused =
