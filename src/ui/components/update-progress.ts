@@ -1,5 +1,3 @@
-import { createDiv } from "obsidian";
-
 export interface UpdateProgressHandle {
 	/** 进度条根元素（由调用方挂载到合适位置，避免被列表重渲染清空） */
 	el: HTMLElement;
@@ -15,17 +13,26 @@ export interface UpdateProgressHandle {
  * 返回控制器：el 为根元素，set 实时更新填充宽度 + 百分比 + 文本，finish 淡出移除。
  */
 export function createUpdateProgressLayer(): UpdateProgressHandle {
-	const el = createDiv({ cls: "pt-updates-progress" });
-	const text = el.createDiv({ cls: "pt-updates-progress-text" });
-	const track = el.createDiv({ cls: "pt-updates-progress-track" });
-	const fill = track.createDiv({ cls: "pt-updates-progress-fill" });
-	const pct = el.createDiv({ cls: "pt-updates-progress-pct" });
+	const el = document.createElement("div");
+	el.className = "pt-updates-progress";
+	const text = document.createElement("div");
+	text.className = "pt-updates-progress-text";
+	el.appendChild(text);
+	const track = document.createElement("div");
+	track.className = "pt-updates-progress-track";
+	el.appendChild(track);
+	const fill = document.createElement("div");
+	fill.className = "pt-updates-progress-fill";
+	track.appendChild(fill);
+	const pct = document.createElement("div");
+	pct.className = "pt-updates-progress-pct";
+	el.appendChild(pct);
 
 	const render = (done: number, total: number, label?: string) => {
 		const ratio = total > 0 ? Math.min(1, Math.max(0, done / total)) : 0;
-		fill.setCssStyles({ width: `${ratio * 100}%` });
-		pct.setText(`${Math.round(ratio * 100)}%`);
-		text.setText(label ? `${label} · ${done}/${total}` : `更新进度 ${done}/${total}`);
+		fill.style.width = `${ratio * 100}%`;
+		pct.textContent = `${Math.round(ratio * 100)}%`;
+		text.textContent = label ? `${label} · ${done}/${total}` : `更新进度 ${done}/${total}`;
 	};
 	render(0, 1);
 
@@ -33,7 +40,7 @@ export function createUpdateProgressLayer(): UpdateProgressHandle {
 		el,
 		set: (done, total, label) => render(done, total, label),
 		finish: () => {
-			el.addClass("pt-updates-progress--done");
+			el.classList.add("pt-updates-progress--done");
 			window.setTimeout(() => el.remove(), 600);
 		},
 	};
