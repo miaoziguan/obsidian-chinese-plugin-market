@@ -4,10 +4,10 @@
  * 主视图顶部「CSS 片段」页签切到本视图时，调用 renderCssSnippetsList 在
  * ctx.cssSnippetListEl 中渲染 vault 的 CSS 片段：
  * - 顶部工具栏：搜索框 + 分组筛选 + 状态筛选 + 新建片段按钮；
- * - 列表：每行复用 renderCssSnippetRow（分组徽标 / 备注 / 启用开关 / 打开 / 重命名），
+ *   选中片段后工具栏切换为批量操作条（批量启 / 批量停 / 批量删除 / 取消选择）。
+ * - 列表：每行复用 renderCssSnippetRow（分组徽标 / 备注 / 启用开关 / 打开目录 / 重命名），
  *   行首加勾选框，行内加删除按钮；
- * - 选中片段后顶部浮现批量工具栏（批量启 / 批量停 / 批量删除）；
- * - 新建：prompt 输入基名 → store.createSnippet；删除：确认 Modal → store.deleteSnippet；
+ * - 新建：PromptModal 输入基名 → store.createSnippet；删除：确认 Modal → store.deleteSnippet；
  * - 搜索 / 分组 / 状态筛选复用 manage-filter 的 matchesFilter（纯函数，可单测）。
  *
  * 数据源是 .obsidian/snippets/*.css + app.customCss，由 CssStorePort 统一管理。
@@ -18,11 +18,12 @@
  */
 
 import { Modal, Notice } from "obsidian";
+import { PromptModal } from "@ui/modals/prompt-modal";
+import { SnippetRenameModal } from "@ui/settings/snippet-rename-modal";
 import type { ViewContext } from "@ui/view/view-context";
 import type { CssStorePort } from "@ui/settings/snippet-manage-store";
 import type { SnippetInfo } from "@data/platform/snippet";
 import { renderCssSnippetRow } from "@ui/settings/css-snippet-row";
-import { SnippetRenameModal } from "@ui/settings/snippet-rename-modal";
 import { matchesFilter, type ManageFilterState } from "@domain/manage/manage-filter";
 import { getMeta } from "@domain/manage/plugin-meta";
 import { GROUP_ALL, type ManageFilterStatus, type ManageRow } from "@domain/manage/types";
@@ -36,27 +37,69 @@ export function renderCssSnippetsList(ctx: ViewContext): void {
 	const selected = new Set<string>();
 	const state: ManageFilterState = { keyword: "", group: GROUP_ALL, status: "all" };
 
-	// ── 顶部工具栏 ──
+	// ── 顶部工具栏：常规区 + 批量区（选中时切换） ──
 	const bar = createDiv({ cls: "pt-css-bar" });
 	el.appendChild(bar);
+
+	const normalBar = createDiv({ cls: "pt-css-normal-bar" });
+	bar.appendChild(normalBar);
+
+	const bulkBar = createDiv({ cls: "pt-css-bulk-bar" });
+	bar.appendChild(bulkBar);
+
 	const search = createEl("input", {
 		cls: "pt-css-search",
 		attr: { "data-cpm-css-search": "", type: "text", placeholder: ctx.t("css.filter.keyword.ph") },
 	});
-	bar.appendChild(search);
+	normalBar.appendChild(search);
 	const countEl = createSpan({ cls: "pt-css-count" });
-	bar.appendChild(countEl);
+	normalBar.appendChild(countEl);
+
 	const listEl = createDiv({ cls: "pt-css-list-inner" });
 	el.appendChild(listEl);
 
-	const rerender = () => rerenderList(ctx, store, listEl, countEl, selected, state);
+	// 批量操作条
+	const bulkLabel = createSpan({ cls: "pt-css-bulk-label" });
+	bulkBar.appendChild(bulkLabel);
+	const bulkEnable = createEl("button", { text: ctx.t("css.bulk.enable"), attr: { type: "button" } });
+	bulkBar.appendChild(bulkEnable);
+	bulkEnable.addEventListener("click", () => bulkApply(ctx, store, [...selected], "enable"));
+	const bulkDisable = createEl("button", { text: ctx.t("css.bulk.disable"), attr: { type: "button" } });
+	bulkBar.appendChild(bulkDisable);
+	bulkDisable.addEventListener("click", () => bulkApply(ctx, store, [...selected], "disable"));
+	const bulkDel = createEl("button", { text: ctx.t("css.bulk.delete"), attr: { type: "button" } });
+	bulkBar.appendChild(bulkDel);
+	bulkDel.addEventListener("click", () => bulkApply(ctx, store, [...selected], "delete"));
+	const bulkClear = createEl("button", { text: ctx.t("action.cancel"), attr: { type: "button" } });
+	bulkBar.appendChild(bulkClear);
+	bulkClear.addEventListener("click", () => {
+		selected.clear();
+		rerender();
+	});
+
+	const updateBulkBar = () => {
+		bulkLabel.textContent = ctx.t("css.bulk.selected", { n: String(selected.size) });
+		if (selected.size > 0) {
+			normalBar.style.display = "none";
+			bulkBar.style.display = "flex";
+		} else {
+			normalBar.style.display = "";
+			bulkBar.style.display = "none";
+		}
+	};
+
+	const rerender = () => {
+		rerenderList(ctx, store, listEl, countEl, selected, state, rerender);
+		updateBulkBar();
+	};
 	search.addEventListener("input", () => {
 		state.keyword = search.value;
 		rerender();
 	});
+
 	// 状态筛选
 	const statusSel = createEl("select", { cls: "pt-css-status" });
-	bar.appendChild(statusSel);
+	normalBar.appendChild(statusSel);
 	for (const [val, key] of [
 		["all", "css.filter.status.all"],
 		["enabled", "css.filter.status.enabled"],
@@ -68,9 +111,10 @@ export function renderCssSnippetsList(ctx: ViewContext): void {
 		state.status = statusSel.value as ManageFilterStatus;
 		rerender();
 	});
+
 	// 分组筛选
 	const groupSel = createEl("select", { cls: "pt-css-group" });
-	bar.appendChild(groupSel);
+	normalBar.appendChild(groupSel);
 	groupSel.appendChild(createEl("option", { text: ctx.t("css.filter.group.all"), attr: { value: GROUP_ALL } }));
 	for (const [key, name] of Object.entries(store.settings.cssGroups)) {
 		groupSel.appendChild(createEl("option", { text: name, attr: { value: key } }));
@@ -79,21 +123,23 @@ export function renderCssSnippetsList(ctx: ViewContext): void {
 		state.group = groupSel.value;
 		rerender();
 	});
+
 	// 新建片段按钮
 	const newBtn = createEl("button", {
 		cls: "pt-css-new clickable-icon",
 		text: ctx.t("css.new"),
 		attr: { "data-cpm-css-new": "", type: "button" },
 	});
-	bar.appendChild(newBtn);
+	normalBar.appendChild(newBtn);
 	newBtn.addEventListener("click", () => requestCreate(ctx, store));
+
 	// 「管理分组」入口：打开与设置页同源的分组管理弹窗（新建 / 重命名 / 删除分组）
 	const groupsBtn = createEl("button", {
 		cls: "pt-css-groups clickable-icon",
 		text: ctx.t("css.manage.groups"),
 		attr: { "data-cpm-css-groups": "", type: "button" },
 	});
-	bar.appendChild(groupsBtn);
+	normalBar.appendChild(groupsBtn);
 	groupsBtn.addEventListener("click", () => store.onManageGroups());
 
 	rerender();
@@ -120,6 +166,7 @@ function rerenderList(
 	countEl: HTMLElement,
 	selected: Set<string>,
 	state: ManageFilterState,
+	rerender: () => void,
 ): void {
 	listEl.innerHTML = "";
 	const snippets = store.listSnippets();
@@ -141,12 +188,12 @@ function rerenderList(
 		check.addEventListener("change", () => {
 			if (check.checked) selected.add(snippet.baseName);
 			else selected.delete(snippet.baseName);
-			updateBulkBar(ctx, ctx.cssSnippetListEl ?? listEl, store, selected);
+			rerender();
 		});
 		renderCssSnippetRow(rowEl, snippet, {
 			store,
-			onRowChange: () => rerenderList(ctx, store, listEl, countEl, selected, state),
-			onFilterChange: () => rerenderList(ctx, store, listEl, countEl, selected, state),
+			onRowChange: (_rowEl, _baseName) => {},
+			onFilterChange: () => rerender(),
 			requestRename: (base) => requestRename(ctx, store, base),
 		});
 		// 行内删除按钮（复用行控件区）
@@ -174,13 +221,21 @@ function rerenderList(
 	}
 }
 
-/** 顶部「新建片段」：prompt 输入基名，校验后写空 .css */
+/** 顶部「新建片段」：PromptModal 输入基名，校验后写空 .css */
 function requestCreate(ctx: ViewContext, store: CssStorePort): void {
-	const raw = window.prompt(ctx.t("css.new.name"));
-	if (raw == null) return;
-	const base = raw.trim().replace(/\.css$/i, "");
-	if (!base) return;
-	void store.createSnippet(base, "").then(() => renderCssSnippetsList(ctx));
+	new PromptModal(
+		ctx.app,
+		ctx.t("css.new"),
+		ctx.t("css.new.name"),
+		"",
+		(raw) => {
+			const base = raw.trim().replace(/\.css$/i, "");
+			if (!base) return;
+			void store.createSnippet(base, "").then(() => renderCssSnippetsList(ctx));
+		},
+		ctx.t("action.ok"),
+		ctx.t("action.cancel"),
+	).open();
 }
 
 /** 重命名：复用与设置页一致的 SnippetRenameModal（弹窗输入基名 → store.renameSnippet） */
@@ -204,31 +259,7 @@ function requestDelete(ctx: ViewContext, store: CssStorePort, snippet: SnippetIn
 	modal.open();
 }
 
-/** 选中集合变化 → 显隐批量工具栏（批量启 / 批量停 / 批量删除） */
-function updateBulkBar(
-	ctx: ViewContext,
-	root: HTMLElement,
-	store: CssStorePort,
-	selected: Set<string>,
-): void {
-	let bulk = root.querySelector<HTMLElement>(".pt-css-bulk");
-	bulk?.remove();
-	if (selected.size === 0) return;
-	bulk = createDiv({ cls: "pt-css-bulk" });
-	root.appendChild(bulk);
-	const label = createSpan({ text: ctx.t("css.bulk.selected", { n: String(selected.size) }) });
-	bulk.appendChild(label);
-	const enable = createEl("button", { text: ctx.t("css.bulk.enable") });
-	bulk.appendChild(enable);
-	enable.addEventListener("click", () => bulkApply(ctx, store, [...selected], "enable"));
-	const disable = createEl("button", { text: ctx.t("css.bulk.disable") });
-	bulk.appendChild(disable);
-	disable.addEventListener("click", () => bulkApply(ctx, store, [...selected], "disable"));
-	const del = createEl("button", { text: ctx.t("css.bulk.delete") });
-	bulk.appendChild(del);
-	del.addEventListener("click", () => bulkApply(ctx, store, [...selected], "delete"));
-}
-
+/** 批量应用：启用 / 停用 / 删除 */
 async function bulkApply(
 	ctx: ViewContext,
 	store: CssStorePort,

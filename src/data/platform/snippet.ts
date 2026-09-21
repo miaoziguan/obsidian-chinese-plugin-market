@@ -219,15 +219,17 @@ export async function renameSnippet(
 	}
 }
 
-/** 用系统默认应用打开片段源文件（桌面端；移动端静默失败） */
+/** 在系统文件管理器中打开片段所在目录（桌面端；移动端静默失败） */
 export function openSnippetInDefaultApp(app: App, path: string): void {
 	try {
+		const dir = path.slice(0, Math.max(0, path.lastIndexOf("/")));
+		if (!dir) return;
 		const open = (app as unknown as {
 			openWithDefaultApp?: (p: string) => void;
 		}).openWithDefaultApp;
-		if (typeof open === "function") open(path);
+		if (typeof open === "function") open(dir);
 	} catch (error) {
-		logger.warn("[Chinese Plugin Market] 系统打开 CSS 片段失败:", error);
+		logger.warn("[Chinese Plugin Market] 系统打开 CSS 片段目录失败:", error);
 	}
 }
 

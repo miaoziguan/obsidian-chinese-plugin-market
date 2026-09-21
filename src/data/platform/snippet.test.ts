@@ -244,11 +244,11 @@ describe("snippet 平台层", () => {
 		expect(listSnippets(app as never).map((s) => s.baseName)).toEqual(["new"]);
 	});
 
-	it("openSnippetInDefaultApp 调 openWithDefaultApp", () => {
+	it("openSnippetInDefaultApp 打开片段所在目录", () => {
 		let opened = "";
 		const app = { openWithDefaultApp: (p: string) => (opened = p) } as never;
-		openSnippetInDefaultApp(app, "x.css");
-		expect(opened).toBe("x.css");
+		openSnippetInDefaultApp(app, ".obsidian/snippets/x.css");
+		expect(opened).toBe(".obsidian/snippets");
 	});
 
 	it("openSnippetInDefaultApp 无 API 时静默失败", () => {

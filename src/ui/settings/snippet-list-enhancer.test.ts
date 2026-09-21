@@ -84,11 +84,8 @@ function rows(root: HTMLElement): HTMLElement[] {
 	return Array.from(root.querySelectorAll<HTMLElement>(".setting-item"));
 }
 
-let lastRename: string | null = null;
-
 beforeEach(() => {
 	Menu.lastShown = null;
-	lastRename = null;
 });
 
 afterEach(() => {
@@ -181,13 +178,11 @@ describe("SnippetListEnhancer", () => {
 		expect(opened).toBe(".obsidian/snippets/alpha.css");
 	});
 
-	it("分组菜单含「重命名片段」项，点击调用 requestRenameSnippet", () => {
+	it("分组菜单不含「重命名片段」项（重命名使用专门的铅笔按钮）", () => {
 		const root = buildDom();
 		const enhancer = new SnippetListEnhancer(createStore(), {
 			onManageGroups: () => {},
-			requestRenameSnippet: (b) => {
-				lastRename = b;
-			},
+			requestRenameSnippet: () => {},
 		});
 		enhancer.enhance(root);
 
@@ -196,9 +191,7 @@ describe("SnippetListEnhancer", () => {
 
 		const menu = Menu.lastShown!;
 		const renameItem = menu.items.find((i) => i.title === "重命名片段");
-		expect(renameItem).toBeTruthy();
-		renameItem!.cb!();
-		expect(lastRename).toBe("alpha");
+		expect(renameItem).toBeFalsy();
 	});
 
 	it("cleanup 后不留任何注入痕迹", () => {
