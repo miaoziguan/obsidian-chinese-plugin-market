@@ -702,6 +702,9 @@ export const STRINGS = {
 	"beta.installed.theme": { zh: "已安装主题 {name}" },
 	// 主视图「直链」页签列表（与设置页同一批数据，但入口在主视图）
 	"betaList.hint": { zh: "只列出「从直链安装」的插件与主题：可更新到来源最新版、冻结（不参与自动更新）、或取消跟踪" },
+	"betaList.install": { zh: "从直链安装" },
+	"betaList.installPlugin": { zh: "安装插件" },
+	"betaList.installTheme": { zh: "安装主题" },
 	"betaList.count": { zh: "共 {n} 项" },
 	"betaList.empty": { zh: "还没有通过直链安装的内容" },
 	"betaList.empty.hint": { zh: "从左侧栏图标菜单或命令面板选「{cmd}」，装过的插件与主题会自动出现在这里" },

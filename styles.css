@@ -6316,6 +6316,18 @@ button.pt-card-install-btn--installed {
 	background: var(--text-accent);
 	border-color: var(--text-accent);
 }
+/* 直链页签顶部「从直链安装」入口按钮 */
+.pt-beta-install {
+	color: var(--text-on-accent);
+	background: var(--text-accent);
+	border: 1px solid var(--text-accent);
+	border-radius: 4px;
+	padding: 2px 10px;
+	cursor: pointer;
+}
+.pt-beta-install:hover {
+	background: color-mix(in srgb, var(--text-accent) 85%, black 15%);
+}
 .pt-updates-empty {
 	display: flex;
 	flex-direction: column;
@@ -6323,6 +6335,20 @@ button.pt-card-install-btn--installed {
 	align-items: center;
 	padding: 40px 12px;
 	color: var(--text-muted);
+}
+/* 空态下更醒目的「从直链安装」按钮 */
+.pt-beta-install-empty {
+	margin-top: 10px;
+	padding: 8px 18px;
+	border-radius: 6px;
+	border: 1px solid var(--text-accent);
+	background: var(--text-accent);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-medium, 15px);
+	cursor: pointer;
+}
+.pt-beta-install-empty:hover {
+	background: color-mix(in srgb, var(--text-accent) 85%, black 15%);
 }
 .pt-updates-empty-title {
 	font-size: var(--font-ui-medium, 15px);

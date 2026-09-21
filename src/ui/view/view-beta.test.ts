@@ -52,6 +52,8 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
 		updateAllBetaPlugins: vi.fn(async () => {}),
 		setBetaFrozen: vi.fn(),
 		removeBetaPlugin: vi.fn(),
+		openDirectInstall: vi.fn(),
+		recordBetaInstall: vi.fn(),
 		...overrides,
 	});
 	ctx.renderBetaList = () => renderBetaList(ctx);
@@ -66,6 +68,8 @@ describe("renderBetaList 「直链」页签列表", () => {
 		expect(container.querySelector(".pt-updates-empty-title")?.textContent).toBe("betaList.empty");
 		expect(container.querySelector(".pt-updates-empty-hint")?.textContent).toContain("directInstall.menu");
 		expect(container.querySelectorAll(".pt-beta-row").length).toBe(0);
+		// 空态提供「从直链安装」入口
+		expect(container.querySelector(".pt-beta-install-empty")).not.toBeNull();
 		// 空态不给「全部更新」按钮
 		expect(container.querySelector(".pt-updates-update-all")).toBeNull();
 	});
@@ -76,6 +80,8 @@ describe("renderBetaList 「直链」页签列表", () => {
 			betaPlugins: [entry({ frozen: true })],
 		});
 		renderBetaList(ctx);
+		// 始终显示「从直链安装」入口按钮
+		expect(container.querySelector(".pt-beta-install")).not.toBeNull();
 		const row = container.querySelector(".pt-beta-row") as HTMLElement;
 		expect(row.querySelector(".pt-beta-kind")?.textContent).toBe("beta.kind.plugin");
 		expect(row.querySelector(".pt-beta-ver")?.textContent).toBe("v1.0.0");

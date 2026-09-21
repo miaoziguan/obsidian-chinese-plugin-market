@@ -12,7 +12,7 @@
  * 只有直链专属的元信息（类型 / 冻结 / 来源地址）用 .pt-beta-* 类。
  */
 
-import { setIcon } from "obsidian";
+import { setIcon, Menu } from "obsidian";
 import type { ViewContext } from "@ui/view/view-context";
 import type { BetaPluginEntry } from "@app/direct-install";
 
@@ -23,6 +23,34 @@ function compareEntry(a: BetaPluginEntry, b: BetaPluginEntry): number {
 }
 
 /** 来源地址压缩展示：去掉协议与末尾斜杠，只留仓库关键段，超长截断 */
+/** 点击后弹出插件/主题选择菜单，再打开对应直链安装模态框 */
+function openDirectInstallMenu(ctx: ViewContext, e: MouseEvent): void {
+	const menu = new Menu();
+	menu.addItem((item) =>
+		item
+			.setTitle(ctx.t("betaList.installPlugin"))
+			.setIcon("package")
+			.onClick(() => {
+				ctx.openDirectInstall("plugin", (info) => {
+					ctx.recordBetaInstall(info);
+					ctx.renderBetaList();
+				});
+			}),
+	);
+	menu.addItem((item) =>
+		item
+			.setTitle(ctx.t("betaList.installTheme"))
+			.setIcon("palette")
+			.onClick(() => {
+				ctx.openDirectInstall("theme", (info) => {
+					ctx.recordBetaInstall(info);
+					ctx.renderBetaList();
+				});
+			}),
+	);
+	menu.showAtMouseEvent(e);
+}
+
 function shortSource(rootUrl: string): string {
 	if (!rootUrl) return "";
 	let s = rootUrl.replace(/^https?:\/\//, "");
@@ -49,6 +77,14 @@ export function renderBetaList(ctx: ViewContext): void {
 	const bar = el.createDiv({ cls: "pt-updates-bar" });
 	bar.createSpan({ cls: "pt-updates-count", text: t("betaList.count", { n: String(entries.length) }) });
 
+	// 始终显示「从直链安装」入口，方便用户在当前页直接安装（无需命令面板 / 左侧菜单）
+	const installBtn = bar.createEl("button", {
+		cls: "pt-beta-install",
+		text: t("betaList.install"),
+		attr: { "aria-label": t("betaList.install"), title: t("betaList.install"), type: "button" },
+	});
+	installBtn.addEventListener("click", (e) => openDirectInstallMenu(ctx, e));
+
 	if (entries.length > 0) {
 		const updateAll = bar.createEl("button", { cls: "pt-updates-update-all", text: t("beta.updateAll") });
 		updateAll.addEventListener("click", () => {
@@ -73,6 +109,12 @@ export function renderBetaList(ctx: ViewContext): void {
 			cls: "pt-updates-empty-hint",
 			text: t("betaList.empty.hint", { cmd: t("directInstall.menu") }),
 		});
+		const installEmpty = empty.createEl("button", {
+			cls: "pt-beta-install-empty",
+			text: t("betaList.install"),
+			attr: { "aria-label": t("betaList.install"), title: t("betaList.install"), type: "button" },
+		});
+		installEmpty.addEventListener("click", (e) => openDirectInstallMenu(ctx, e));
 		return;
 	}
 

@@ -15,7 +15,7 @@ interface AppWithDefaultApp extends App {
 
 /** 模块级 i18n 帮助函数（各方法内也可局部 const t = makeT()） */
 const t = makeT();
-import { DirectInstallModal, type BetaPluginEntry, type InstalledInfo } from "@app/direct-install";
+import { DirectInstallModal, type BetaKind, type BetaPluginEntry, type InstalledInfo } from "@app/direct-install";
 import { updateAllBetaPlugins, updateBetaEntry } from "@app/beta-updater";
 import { logger } from "@shared/logger";
 import { Translator, type PluginInfo, type TranslateResult, type DictEntry } from "@domain/catalog/translator";
@@ -1747,6 +1747,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		}
 		// 主视图「直链」页签即时显示新装的那条（若当前正停留在该页签）
 		this.refreshOpenViews();
+	}
+
+	/** 打开直链安装模态框（插件 / 主题），安装成功回调由调用方提供 */
+	openDirectInstall(kind: BetaKind, onInstalled?: (info: InstalledInfo) => void): void {
+		new DirectInstallModal(this.app, kind, onInstalled).open();
 	}
 
 	/** 从跟踪表移除（仅移除记录，不卸载插件本身） */
