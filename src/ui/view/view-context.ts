@@ -35,7 +35,7 @@ import type { ListState } from "@ui/dom/list-state";
 import type { TrendingEngine } from "@domain/recommend/trending";
 import type { AuthorGroup } from "@translation/lexicon/pinyin-init";
 import type { PluginVersion } from "@data/platform/plugin-versions";
-import type { BetaPluginEntry } from "@app/direct-install";
+import type { BetaKind, BetaPluginEntry, InstalledInfo } from "@app/direct-install";
 import type { DepGraph } from "@domain/deps/graph";
 
 import type { I18nKey, I18nVars } from "@shared/i18n";
@@ -331,6 +331,10 @@ export interface ViewContext {
 	setBetaFrozen: (id: string, frozen: boolean) => void;
 	/** 取消跟踪（仅移除记录，不卸载插件本身） */
 	removeBetaPlugin: (id: string) => void;
+	/** 打开直链安装模态框（插件 / 主题） */
+	openDirectInstall: (kind: BetaKind, onInstalled?: (info: InstalledInfo) => void) => void;
+	/** 记录一次成功直链安装到跟踪表 */
+	recordBetaInstall: (info: InstalledInfo) => void;
 
 	// ── 智能信号 ──
 	smartSignals: Map<string, SignalId[]>;
@@ -803,6 +807,8 @@ get authorFacetList() { return view.authorFacetList; },
 		updateAllBetaPlugins: () => view.plugin.updateAllBetaPlugins(),
 		setBetaFrozen: (id, frozen) => view.plugin.setBetaFrozen(id, frozen),
 		removeBetaPlugin: (id) => view.plugin.removeBetaPlugin(id),
+		openDirectInstall: (kind, onInstalled) => view.plugin.openDirectInstall(kind, onInstalled),
+		recordBetaInstall: (info) => view.plugin.recordBetaInstall(info),
 		get pluginVersionPins() { return view.plugin.settings.pluginVersionPins; },
 		pinPluginVersion: (id, version) => view.pinPluginVersion(id, version),
 		listPluginVersions: (repo, force) => view.listPluginVersions(repo, force),
