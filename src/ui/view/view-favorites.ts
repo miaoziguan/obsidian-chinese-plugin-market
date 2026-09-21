@@ -27,8 +27,8 @@ export function renderFavoritesList(ctx: ViewContext): void {
 	if (!el || ctx.viewTab !== "favorites") return;
 	el.innerHTML = "";
 
-	// 本地会话态（重渲染时重建，不持久化）
-	const state = { keyword: "", group: ctx.favoriteGroupFilter || FAV_GROUP_ALL };
+	// 本地会话态（重渲染时重建，不持久化）；搜索词从 ctx.favKeyword 恢复，避免操作后丢失
+	const state = { keyword: ctx.favKeyword || "", group: ctx.favoriteGroupFilter || FAV_GROUP_ALL };
 
 	// ── 顶部工具栏 ──
 	const bar = createDiv({ cls: "pt-css-bar" });
@@ -38,6 +38,7 @@ export function renderFavoritesList(ctx: ViewContext): void {
 		attr: { "data-cpm-fav-search": "", type: "text", placeholder: ctx.t("fav.filter.keyword.ph") },
 	});
 	bar.appendChild(search);
+	search.value = state.keyword; // 整页重渲后回填搜索词（来自 favKeyword 暂存）
 	const countEl = createSpan({ cls: "pt-css-count" });
 	bar.appendChild(countEl);
 	const listEl = createDiv({ cls: "pt-css-list-inner" });
@@ -45,6 +46,7 @@ export function renderFavoritesList(ctx: ViewContext): void {
 
 	const rerender = () => {
 		ctx.favoriteGroupFilter = state.group;
+		ctx.favKeyword = state.keyword;
 		rerenderList(ctx, listEl, countEl, state);
 	};
 	search.addEventListener("input", () => {
@@ -127,7 +129,8 @@ function rerenderList(ctx: ViewContext, listEl: HTMLElement, countEl: HTMLElemen
 		listEl.appendChild(createDiv({ cls: "pt-css-empty", text: ctx.t("fav.empty") }));
 		return;
 	}
-	if (visible.length === 0 && listGroups(ctx).length === 0) {
+	// 有收藏但当前筛选+搜索无任何可见项（如某具体组内搜索无果）：提示而非空白
+	if (visible.length === 0 && all.length > 0) {
 		listEl.appendChild(createDiv({ cls: "pt-css-empty", text: ctx.t("fav.empty.filtered") }));
 		return;
 	}
@@ -228,7 +231,7 @@ function renderFavRow(ctx: ViewContext, fav: { id: string; name: string }): HTML
 		else map[fav.id] = g;
 		ctx.settings.favoriteGroupOf = map;
 		ctx.saveSettings();
-		renderFavoritesList(ctx); // 组成员变了，整列表重渲（量小，开销可忽略）
+		renderFavoritesList(ctx); // 整页重渲（搜索词经 favKeyword 恢复）
 	});
 
 	// 取消收藏
@@ -240,13 +243,15 @@ function renderFavRow(ctx: ViewContext, fav: { id: string; name: string }): HTML
 	row.appendChild(rmBtn);
 	rmBtn.addEventListener("click", () => {
 		ctx.toggleFavorite(fav.id); // 切换语义：已收藏 → 取消，内部同步 settings + favoritesSet + 落盘
-		renderFavoritesList(ctx);
+		renderFavoritesList(ctx); // 整页重渲（搜索词经 favKeyword 恢复）
 	});
 	return row;
 }
 
 /** 重命名组：替换组名清单项 + 遍历替换成员映射值（收藏量小，O(n) 足够） */
 async function renameGroup(ctx: ViewContext, from: string, to: string): Promise<void> {
+	// 目标名已存在（且非自身）：静默忽略，避免产生重复组名导致合并/渲染重复区块
+	if (listGroups(ctx).some((g) => g !== from && g === to)) return;
 	ctx.settings.favoriteGroupNames = ctx.settings.favoriteGroupNames.map((g) => (g === from ? to : g));
 	const map = ctx.settings.favoriteGroupOf;
 	for (const [id, g] of Object.entries(map)) {

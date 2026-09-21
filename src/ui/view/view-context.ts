@@ -159,6 +159,8 @@ export interface ViewContext {
 	compareMode: boolean;
 	compareSet: Set<string>;
 	favoritesSet: Set<string>;
+	/** 收藏页签搜索词暂存（操作重渲时恢复，避免输入丢失） */
+	favKeyword: string;
 	sortFavoritesFirst: boolean;
 
 	// ── AI 搜索状态 ──
@@ -644,6 +646,8 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set favoritesListEl(v) { view.favoritesListEl = v; },
 		get favoriteGroupFilter() { return view.favoriteGroupFilter; },
 		set favoriteGroupFilter(v) { view.favoriteGroupFilter = v; },
+		get favKeyword() { return view.favKeyword; },
+		set favKeyword(v) { view.favKeyword = v; },
 		renderFavoritesList: () => view.renderFavoritesList(),
 		get resultCountEl() { return view.resultCountEl; },
 		set resultCountEl(v) { view.resultCountEl = v; },
