@@ -83,7 +83,7 @@ export function renderUpdatesList(ctx: ViewContext): void {
 	updateSel.addEventListener("click", () => {
 		const ids = [...ctx.updateSelection];
 		if (ids.length === 0) return;
-		runBatchUpdate(ctx, el, bar, ids, false);
+		runBatchUpdate(ctx, bar, ids, false);
 	});
 
 	const updateAll = bar.createEl("button", { cls: "pt-updates-update-all", text: t("updates.updateAll") });
@@ -93,7 +93,7 @@ export function renderUpdatesList(ctx: ViewContext): void {
 			new Notice(t("action.update.none"));
 			return;
 		}
-		runBatchUpdate(ctx, el, bar, ids, true);
+		runBatchUpdate(ctx, bar, ids, true);
 	});
 
 	// ── 空态 ──
@@ -220,7 +220,6 @@ function renderPinnedSection(ctx: ViewContext, el: HTMLElement): void {
  */
 function runBatchUpdate(
 	ctx: ViewContext,
-	el: HTMLElement,
 	bar: HTMLElement,
 	ids: string[],
 	all: boolean,
