@@ -15,6 +15,7 @@ import { toHTMLElement, q } from "@ui/dom/dom";
 import { renderUpdatesList } from "@ui/view/view-updates";
 import { renderBetaList } from "@ui/view/view-beta";
 import { renderCssSnippetsList } from "@ui/view/view-css-snippets";
+import { renderFavoritesList, FAV_GROUP_ALL } from "@ui/view/view-favorites";
 import type { CssStorePort } from "@ui/settings/snippet-manage-store";
 import { ensureDepsFor } from "@ui/view/deps-lazy";
 import { Translator, type PluginInfo, type TranslateResult, type AISearchResult } from "@domain/catalog/translator";
@@ -96,6 +97,10 @@ export interface ChinesePluginMarketSettings {
 	sortBy: SortBy;
 	// 个人收藏集：用户主动收藏的插件 id（持久化，随使用时间复利）
 	favorites: string[];
+	/** 收藏分组名清单（有序，允许空组存在） */
+	favoriteGroupNames: string[];
+	/** 收藏分组：插件 id → 组名（未出现在表内 = 未分组） */
+	favoriteGroupOf: Record<string, string>;
 	/** 新上线窗口天数：null 表示不过滤（默认），可选 1/3/7/30/90/365 */
 	newWithinDays: number | null;
 	/** 近期更新：非 null 时只保留近 updatedWithinDays 天有版本更新的插件（默认 null = 不过滤） */
@@ -192,6 +197,8 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	selfHostedTranslators: [], // 默认无自托管翻译源，行为完全不变
 	sortBy: "relevance",
 	favorites: [],
+	favoriteGroupNames: [],
+	favoriteGroupOf: {},
 	compare: [],
 	tmFolder: "", // 留空 = 默认藏进 .obsidian 私有目录（不污染 vault、不被其他插件检索）
 	reviewFolder: "", // 留空 = 默认藏进 .obsidian 私有目录下的 reviews/
@@ -484,6 +491,10 @@ export class ChinesePluginMarketView extends ItemView {
 	public betaListEl: HTMLElement | null = null;
 	/** 「CSS 片段」页签列表容器（由 view-chrome 创建并挂到 ctx.cssSnippetListEl） */
 	public cssSnippetListEl: HTMLElement | null = null;
+	/** 「收藏」页签列表容器（由 view-chrome 创建并挂到 ctx.favoritesListEl） */
+	public favoritesListEl: HTMLElement | null = null;
+	/** 收藏页签分组筛选（会话级）：FAV_GROUP_ALL / FAV_GROUP_NONE / 组名 */
+	public favoriteGroupFilter: string = FAV_GROUP_ALL;
 	/** CSS 片段管理数据端口（与设置页同源，复用分组/备注/行 UI）；延迟到插件就绪后创建单实例 */
 	private _cssStore: CssStorePort | null = null;
 	public get cssStore(): CssStorePort {
@@ -613,6 +624,7 @@ export class ChinesePluginMarketView extends ItemView {
 		const updatesEl = this.updatesListEl;
 		const betaEl = this.betaListEl;
 		const cssEl = this.cssSnippetListEl;
+		const favEl = this.favoritesListEl;
 		const featuredEl = q(contentEl, ".pt-featured");
 		const advancedEl = q(contentEl, ".pt-advanced");
 		const scrollPosEl = this._ctx.scrollPosEl;
@@ -643,6 +655,10 @@ export class ChinesePluginMarketView extends ItemView {
 		if (cssEl) {
 			cssEl.setCssStyles({ display: tab === "css" ? "" : "none" });
 			if (tab === "css") this.renderCssSnippetsList();
+		}
+		if (favEl) {
+			favEl.setCssStyles({ display: tab === "favorites" ? "" : "none" });
+			if (tab === "favorites") this.renderFavoritesList();
 		}
 
 		if (isBrowse) this.renderPluginList(true);
@@ -680,6 +696,12 @@ export class ChinesePluginMarketView extends ItemView {
 	public renderCssSnippetsList = () => {
 		if (this.viewTab !== "css") return;
 		renderCssSnippetsList(this._ctx);
+	};
+
+	/** 重渲染「收藏」页签列表（内部委托给 view-favorites 渲染器） */
+	public renderFavoritesList = () => {
+		if (this.viewTab !== "favorites") return;
+		renderFavoritesList(this._ctx);
 	};
 
 	/**

@@ -6582,3 +6582,114 @@ button.pt-card-install-btn--installed {
 	flex-wrap: wrap;
 	gap: 6px;
 }
+
+/* ── 「收藏」页签：分组管理已收藏插件（工具栏复用 pt-css-*，此处只补区块布局） ── */
+.pt-css-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: var(--pt-space-sm);
+	flex-wrap: wrap;
+}
+.pt-css-bar .pt-css-search {
+	flex: 1 1 220px;
+	min-width: 140px;
+	height: 30px;
+	padding: 0 10px;
+	border: 1px solid var(--pt-border);
+	border-radius: var(--pt-radius-input);
+	background: var(--pt-surface);
+	color: var(--pt-text);
+	font-size: var(--pt-text-sm);
+}
+.pt-css-bar .pt-css-status,
+.pt-css-bar .pt-css-group {
+	height: 30px;
+	border: 1px solid var(--pt-border);
+	border-radius: var(--pt-radius-input);
+	background: var(--pt-surface);
+	color: var(--pt-text);
+	font-size: var(--pt-text-sm);
+}
+.pt-css-empty {
+	padding: 32px 0;
+	text-align: center;
+	color: var(--pt-text-muted);
+	font-size: var(--pt-text-md);
+}
+.pt-fav-group {
+	margin-bottom: var(--pt-space-md);
+}
+.pt-fav-group-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 2px;
+	border-bottom: 1px solid var(--pt-border);
+	margin-bottom: 4px;
+}
+.pt-fav-group-name {
+	font-weight: var(--pt-weight-semibold);
+	font-size: var(--pt-text-md);
+	color: var(--pt-text-strong, var(--text-normal));
+}
+.pt-fav-group-count {
+	font-size: var(--pt-text-sm);
+	color: var(--pt-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+.pt-fav-group-btn {
+	font-size: var(--pt-text-xs);
+	color: var(--pt-text-muted);
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	padding: 2px 6px;
+	border-radius: 6px;
+}
+.pt-fav-group-btn:hover {
+	color: var(--pt-text);
+	background: var(--background-secondary);
+}
+.pt-fav-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 4px;
+	border-radius: 8px;
+}
+.pt-fav-row:hover {
+	background: var(--background-secondary);
+}
+.pt-fav-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: left;
+	border: none;
+	background: transparent;
+	color: var(--pt-text);
+	font-size: var(--pt-text-md);
+	cursor: pointer;
+	padding: 2px 4px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.pt-fav-name:hover {
+	color: var(--pt-accent);
+	text-decoration: underline;
+}
+.pt-fav-remove {
+	color: var(--pt-text-muted);
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	font-size: var(--pt-text-sm);
+	padding: 2px 8px;
+	border-radius: 6px;
+	white-space: nowrap;
+}
+.pt-fav-remove:hover {
+	color: var(--pt-color-error, var(--text-error));
+	background: color-mix(in srgb, var(--pt-color-error, var(--text-error)) 10%, transparent);
+}
