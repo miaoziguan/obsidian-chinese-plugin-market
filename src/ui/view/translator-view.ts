@@ -515,7 +515,12 @@ export class ChinesePluginMarketView extends ItemView {
 	 * @param silent   为 true 时不弹单个插件的结果 Notice（批量更新时由 updateAll 汇总）
 	 * @param version  可选：GitHub tag（固定版本安装，严格按该 tag 取三件套）
 	 */
-	public updatePlugin = async (pluginId: string, silent = false, version?: string): Promise<void> => {
+	public updatePlugin = async (
+		pluginId: string,
+		silent = false,
+		version?: string,
+		opts?: { skipListRender?: boolean },
+	): Promise<void> => {
 		if (this.updatingIds.has(pluginId)) return;
 		const info = this.plugins.find((p) => p.id === pluginId);
 		if (!info || !info.repo) {
@@ -537,9 +542,11 @@ export class ChinesePluginMarketView extends ItemView {
 		// 更新后重检该插件是否为最新，并刷新 ribbon 红点计数
 		await refreshOutdated(this._ctx);
 		this.plugin.setRibbonUpdateBadge(this._ctx.outdatedIds?.size ?? 0);
-		// 同步「更新」页签徽标与列表（若当前正停留在该页签）
+		// 同步「更新」页签徽标（若当前正停留在该页签）
 		this._ctx.refreshViewTabsBadge?.();
-		this.renderUpdatesList();
+		// 批量更新模式（skipListRender）下不在此逐条重渲列表，由调用方统一刷新，
+		// 避免清空正在显示的进度条；单插件更新维持原有即时重渲行为。
+		if (!opts?.skipListRender) this.renderUpdatesList();
 	};
 
 	/** 拉取仓库可选版本列表（BRAT 式版本选择弹窗用） */
@@ -583,8 +590,12 @@ export class ChinesePluginMarketView extends ItemView {
 		this.renderUpdatesList();
 	};
 
-	/** 批量更新所有可更新插件（桌面端；遍历 outdatedIds 顺序执行，每条静默后汇总） */
-	public updateAll = async (): Promise<void> => {
+	/** 批量更新所有可更新插件（桌面端；遍历 outdatedIds 顺序执行，每条静默后汇总）。
+	 *  onProgress(done,total,label?) 用于驱动 UI 进度条；批量期间跳过逐条列表重渲，
+	 *  结束后统一刷新，避免清空进度条。 */
+	public updateAll = async (
+		onProgress?: (done: number, total: number, label?: string) => void,
+	): Promise<void> => {
 		const ids = [...(this._ctx.outdatedIds ?? [])];
 		if (ids.length === 0) {
 			new Notice(this.t("action.update.none"));
@@ -593,14 +604,18 @@ export class ChinesePluginMarketView extends ItemView {
 		const total = ids.length;
 		let ok = 0;
 		let fail = 0;
-		for (const id of ids) {
+		for (let i = 0; i < ids.length; i++) {
 			if (this.disposed) break;
-			await this.updatePlugin(id, true);
+			const id = ids[i];
+			const info = this.plugins.find((p) => p.id === id);
+			onProgress?.(i, total, info?.name ?? id);
+			await this.updatePlugin(id, true, undefined, { skipListRender: true });
 			if (this._ctx.outdatedIds?.has(id)) fail++;
 			else ok++;
-			new Notice(this.t("action.update.progress", { done: String(ok + fail), total: String(total) }));
+			onProgress?.(i + 1, total);
 		}
 		new Notice(this.t("action.update.summary", { ok: String(ok), fail: String(fail) }), 6000);
+		this.renderUpdatesList();
 	};
 
 	/** 切换到「更新」页签时，默认勾选当前全部可更新插件 */
@@ -666,16 +681,25 @@ export class ChinesePluginMarketView extends ItemView {
 		if (isBrowse) this.renderPluginList(true);
 	};
 
-	/** 批量更新勾选的插件到最新版，结束后重新检测并刷新更新列表 */
-	public updateSelected = async (ids: string[]) => {
+	/** 批量更新勾选的插件到最新版，结束后重新检测并刷新更新列表。
+	 *  onProgress 同 updateAll，用于驱动 UI 进度条。 */
+	public updateSelected = async (
+		ids: string[],
+		onProgress?: (done: number, total: number, label?: string) => void,
+	) => {
 		if (ids.length === 0) return;
+		const total = ids.length;
 		let ok = 0;
 		let fail = 0;
-		for (const id of ids) {
+		for (let i = 0; i < ids.length; i++) {
 			if (this.disposed) break;
-			await this.updatePlugin(id, true);
+			const id = ids[i];
+			const info = this.plugins.find((p) => p.id === id);
+			onProgress?.(i, total, info?.name ?? id);
+			await this.updatePlugin(id, true, undefined, { skipListRender: true });
 			if (this._ctx.outdatedIds?.has(id)) fail++;
 			else ok++;
+			onProgress?.(i + 1, total);
 		}
 		new Notice(this.t("updates.summary", { ok: String(ok), fail: String(fail) }), 6000);
 		this.syncUpdateSelectionToOutdated();

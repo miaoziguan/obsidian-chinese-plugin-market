@@ -61,6 +61,7 @@ export const STRINGS = {
 	"action.update.none": { zh: "没有可更新的插件" },
 	"action.update.fetchFail": { zh: "{file} 下载失败 HTTP {code}" },
 	"action.update.progress": { zh: "批量更新 {done}/{total}" },
+	"action.update.current": { zh: "正在更新 {name}" },
 	"action.update.summary": { zh: "批量更新完成：成功 {ok} / 失败 {fail}" },
 	// 主视图页签：浏览 / 更新 / 直链
 	"view.tab.browse": { zh: "浏览" },

@@ -6226,6 +6226,52 @@ button.pt-card-install-btn--installed {
 	gap: 8px;
 	padding: 12px;
 }
+
+/* 批量更新进度条（独立层，不被列表重渲染清空）：填充 + 百分比 + 文本 */
+.pt-updates-progress {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	margin-bottom: 8px;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--pt-accent) 10%, var(--background-primary));
+	border: 1px solid color-mix(in srgb, var(--pt-accent) 25%, var(--background-modifier-border));
+	font-size: var(--font-ui-small, 13px);
+	transition: opacity 480ms var(--pt-sys-ease);
+}
+.pt-updates-progress--done {
+	opacity: 0;
+}
+.pt-updates-progress-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-normal);
+}
+.pt-updates-progress-track {
+	flex: 2 1 120px;
+	height: 6px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--pt-accent) 18%, var(--background-modifier-border));
+	overflow: hidden;
+}
+.pt-updates-progress-fill {
+	height: 100%;
+	width: 0;
+	border-radius: 4px;
+	background: linear-gradient(90deg, var(--pt-accent), color-mix(in srgb, var(--pt-accent) 60%, white 40%));
+	box-shadow: 0 0 6px color-mix(in srgb, var(--pt-accent) 50%, transparent);
+	transition: width 320ms var(--pt-sys-ease);
+}
+.pt-updates-progress-pct {
+	flex: 0 0 auto;
+	color: var(--pt-accent);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
 .pt-updates-bar {
 	display: flex;
 	align-items: center;

@@ -14,6 +14,7 @@ import { Notice, setIcon } from "obsidian";
 import type { ViewContext } from "@ui/view/view-context";
 import { refreshOutdated } from "@ui/view/view-data";
 import { openVersionPicker } from "@ui/components/version-picker-modal";
+import { createUpdateProgressLayer } from "@ui/components/update-progress";
 
 /** 打开某插件的版本选择弹窗（更新页签与详情抽屉共用同一交互） */
 function openPickerFor(ctx: ViewContext, id: string, name: string, repo: string): void {
@@ -79,10 +80,21 @@ export function renderUpdatesList(ctx: ViewContext): void {
 		cls: "pt-updates-update-sel",
 		text: t("updates.updateSelected", { n: String(ctx.updateSelection.size) }),
 	});
-	updateSel.addEventListener("click", () => void ctx.updateSelected([...ctx.updateSelection]));
+	updateSel.addEventListener("click", () => {
+		const ids = [...ctx.updateSelection];
+		if (ids.length === 0) return;
+		runBatchUpdate(ctx, el, bar, ids, false);
+	});
 
 	const updateAll = bar.createEl("button", { cls: "pt-updates-update-all", text: t("updates.updateAll") });
-	updateAll.addEventListener("click", () => void ctx.updateAll());
+	updateAll.addEventListener("click", () => {
+		const ids = [...(ctx.outdatedIds ?? [])];
+		if (ids.length === 0) {
+			new Notice(t("action.update.none"));
+			return;
+		}
+		runBatchUpdate(ctx, el, bar, ids, true);
+	});
 
 	// ── 空态 ──
 	if (outdated.length === 0) {
@@ -200,4 +212,24 @@ function renderPinnedSection(ctx: ViewContext, el: HTMLElement): void {
 			ctx.renderUpdatesList();
 		});
 	}
+}
+
+/**
+ * 批量更新并展示进度条：进度条挂在列表容器内、工具条之后；批量期间 updateAll/updateSelected
+ * 跳过逐条列表重渲（skipListRender），由它们在末尾统一刷新，进度条随之自然消失。
+ */
+function runBatchUpdate(
+	ctx: ViewContext,
+	el: HTMLElement,
+	bar: HTMLElement,
+	ids: string[],
+	all: boolean,
+): void {
+	const prog = createUpdateProgressLayer();
+	bar.after(prog.el);
+	ctx.track(all ? "action:updateAll" : "action:updateSelected");
+	const onProgress = (done: number, total: number, label?: string) =>
+		prog.set(done, total, label ? ctx.t("action.update.current", { name: label }) : undefined);
+	const task = all ? ctx.updateAll(onProgress) : ctx.updateSelected(ids, onProgress);
+	void task.finally(() => prog.finish());
 }
