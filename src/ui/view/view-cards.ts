@@ -361,6 +361,12 @@ export function toggleFavorite(ctx: ViewContext, pid: string) : boolean {
 		if (isOn) {
 			// 取消收藏
 			ctx.settings.favorites = ctx.settings.favorites.filter((id) => id !== pid);
+			// 同步清除分组归属，避免遗留孤儿映射（再次收藏会自动回到原组 / 脏数据）
+			if (ctx.settings.favoriteGroupOf && ctx.settings.favoriteGroupOf[pid] !== undefined) {
+				const map = { ...ctx.settings.favoriteGroupOf };
+				delete map[pid];
+				ctx.settings.favoriteGroupOf = map;
+			}
 		} else {
 			// 恢复收藏
 			if (!ctx.settings.favorites.includes(pid)) {

@@ -495,6 +495,8 @@ export class ChinesePluginMarketView extends ItemView {
 	public favoritesListEl: HTMLElement | null = null;
 	/** 收藏页签分组筛选（会话级）：FAV_GROUP_ALL / FAV_GROUP_NONE / 组名 */
 	public favoriteGroupFilter: string = FAV_GROUP_ALL;
+	/** 收藏页签搜索词暂存：换组/取消收藏/建组等操作整页重渲时恢复，避免输入丢失 */
+	public favKeyword: string = "";
 	/** CSS 片段管理数据端口（与设置页同源，复用分组/备注/行 UI）；延迟到插件就绪后创建单实例 */
 	private _cssStore: CssStorePort | null = null;
 	public get cssStore(): CssStorePort {

@@ -150,4 +150,56 @@ describe("view-favorites 渲染器", () => {
 		const rows = Array.from(ctx.favoritesListEl!.querySelectorAll(".pt-fav-row")).map((r) => r.getAttribute("data-cpm-fav-row"));
 		expect(rows).toEqual(["beta"]);
 	});
+
+	it("搜索后取消收藏：搜索框不重建，输入词保留", () => {
+		const ctx = makeCtx({});
+		renderFavoritesList(ctx);
+		const search = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
+		search.value = "bet";
+		search.dispatchEvent(new Event("input"));
+		const row = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
+		row.querySelector<HTMLButtonElement>("[data-cpm-fav-remove]")!.click();
+		const search2 = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
+		expect(search2.value).toBe("bet");
+	});
+
+	it("搜索后换组：搜索框不重建，输入词保留", () => {
+		const ctx = makeCtx();
+		renderFavoritesList(ctx);
+		const search = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
+		search.value = "al";
+		search.dispatchEvent(new Event("input"));
+		const row = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="alpha"]')!;
+		const sel = row.querySelector<HTMLSelectElement>("select")!;
+		sel.value = FAV_GROUP_NONE;
+		sel.dispatchEvent(new Event("change"));
+		const search2 = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
+		expect(search2.value).toBe("al");
+	});
+
+	it("有分组且筛选无匹配时显示『无匹配』提示而非空白", () => {
+		const ctx = makeCtx();
+		ctx.favoriteGroupFilter = FAV_GROUP_ALL;
+		renderFavoritesList(ctx);
+		const search = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
+		search.value = "不存在的关键词zzz";
+		search.dispatchEvent(new Event("input"));
+		expect(ctx.favoritesListEl!.textContent).toContain("无匹配");
+	});
+
+	it("重命名组：目标名已存在则静默忽略，不产生重复组名", () => {
+		const promptMock = vi.fn(() => "写作");
+		(window as { prompt?: unknown }).prompt = promptMock;
+		const ctx = makeCtx({
+			settings: {
+				favoriteGroupNames: ["AI 工具", "写作"],
+				favoriteGroupOf: { alpha: "AI 工具" } as Record<string, string>,
+			},
+		});
+		renderFavoritesList(ctx);
+		const head = ctx.favoritesListEl!.querySelector<HTMLElement>(".pt-fav-group-head")!;
+		const renameBtn = head.querySelector<HTMLButtonElement>(".pt-fav-group-btn")!;
+		renameBtn.click();
+		expect(ctx.settings.favoriteGroupNames.filter((g) => g === "AI 工具").length).toBe(1);
+	});
 });
