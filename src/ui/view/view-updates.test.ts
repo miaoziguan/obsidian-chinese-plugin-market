@@ -49,6 +49,7 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
 		updateAll: vi.fn(async () => {}),
 		updateSelected: vi.fn(async () => {}),
 		refreshViewTabsBadge: vi.fn(),
+		track: vi.fn(),
 		...overrides,
 	});
 	ctx.renderUpdatesList = () => renderUpdatesList(ctx);
@@ -109,7 +110,9 @@ describe("renderUpdatesList 「更新」页签列表", () => {
 		const { ctx, container } = makeCtx({ updateSelection: new Set(["b"]) });
 		renderUpdatesList(ctx);
 		(container.querySelector(".pt-updates-update-sel") as HTMLElement).dispatchEvent(new MouseEvent("click"));
-		expect(ctx.updateSelected).toHaveBeenCalledWith(["b"]);
+		expect(ctx.updateSelected).toHaveBeenCalledWith(["b"], expect.any(Function));
+		// 进度条层被挂载（批量更新期间显示，结束后由 renderUpdatesList 清空）
+		expect(container.querySelector(".pt-updates-progress")).not.toBeNull();
 	});
 
 	it("行内更新按钮触发单插件更新", async () => {

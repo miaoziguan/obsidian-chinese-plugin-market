@@ -286,7 +286,7 @@ export interface ViewContext {
 	/** 切换到指定页签（浏览 / 更新 / 直链），负责显隐列表层并更新 tab 高亮 */
 	switchViewTab: (tab: ViewTab) => void;
 	/** 批量更新指定插件到最新版并刷新更新列表 */
-	updateSelected: (ids: string[]) => Promise<void>;
+	updateSelected: (ids: string[], onProgress?: (done: number, total: number, label?: string) => void) => Promise<void>;
 	/** 重渲染「更新」页签列表（若当前不在该页签则无操作） */
 	renderUpdatesList: () => void;
 	/** 重渲染「直链」页签列表（若当前不在该页签则无操作） */
@@ -298,9 +298,9 @@ export interface ViewContext {
 	/** 正在一键更新的插件 id 集合（更新中按钮显示「更新中…」并防重点） */
 	updatingIds: Set<string>;
 	/** 更新单个已安装插件到官方最新版（桌面端）；version 传入时改为固定安装到该 tag */
-	updatePlugin: (pluginId: string, silent?: boolean, version?: string) => Promise<void>;
+	updatePlugin: (pluginId: string, silent?: boolean, version?: string, opts?: { skipListRender?: boolean }) => Promise<void>;
 	/** 批量更新所有可更新插件（桌面端） */
-	updateAll: () => Promise<void>;
+	updateAll: (onProgress?: (done: number, total: number, label?: string) => void) => Promise<void>;
 	/** 已固定版本的插件表（id → GitHub tag）；不在表内 = 保持最新 */
 	pluginVersionPins: Record<string, string>;
 	/** 固定到指定版本（version=null 表示改回「保持最新」并更新到最新） */
@@ -792,10 +792,10 @@ get authorFacetList() { return view.authorFacetList; },
 		invalidateAndRender: view.invalidateAndRender.bind(view),
 		postRenderSync: view.postRenderSync.bind(view),
 		refreshCardState: view.refreshCardState.bind(view),
-		updatePlugin: (id, silent, version) => view.updatePlugin(id, silent, version),
-		updateAll: () => view.updateAll(),
+		updatePlugin: (id, silent, version, opts) => view.updatePlugin(id, silent, version, opts),
+		updateAll: (onProgress) => view.updateAll(onProgress),
 		switchViewTab: (tab) => view.switchViewTab(tab),
-		updateSelected: (ids) => view.updateSelected(ids),
+		updateSelected: (ids, onProgress) => view.updateSelected(ids, onProgress),
 		renderUpdatesList: () => view.renderUpdatesList(),
 		renderBetaList: () => view.renderBetaList(),
 		get betaPlugins() { return view.plugin.settings.betaPlugins; },

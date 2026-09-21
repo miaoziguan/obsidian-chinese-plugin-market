@@ -18,6 +18,7 @@ import { type SortBy } from "@domain/filter/sort";
 import type { ViewContext, ViewTab } from "@ui/view/view-context";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { refreshOutdated } from "@ui/view/view-data";
+import { createUpdateProgressLayer } from "@ui/components/update-progress";
 
 /**
  * 跨工具栏构建块与 loadAndRender 尾部共享的可变状态。
@@ -46,6 +47,23 @@ export function alignFacetLabels(scope: HTMLElement) {
 	labels.forEach((l) => {
 		l.setCssStyles({ flex: flexVal });
 	});
+}
+
+/** 触发「全部更新」并展示进度条（更新页签工具条与 ⋮ 溢出菜单共用） */
+function triggerUpdateAll(ctx: ViewContext, mountAfter: HTMLElement): void {
+	ctx.track("action:updateAll");
+	const ids = [...(ctx.outdatedIds ?? [])];
+	if (ids.length === 0) {
+		new Notice(ctx.t("action.update.none"));
+		return;
+	}
+	const prog = createUpdateProgressLayer();
+	mountAfter.after(prog.el);
+	void ctx
+		.updateAll((done, total, label) =>
+			prog.set(done, total, label ? ctx.t("action.update.current", { name: label }) : undefined),
+		)
+		.finally(() => prog.finish());
 }
 
 export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInput: HTMLInputElement } {
@@ -527,8 +545,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	});
 	setIcon(updateAllBtn, "arrow-down-to-line");
 	updateAllBtn.addEventListener("click", () => {
-		ctx.track("action:updateAll");
-		void ctx.updateAll();
+		triggerUpdateAll(ctx, header);
 	});
 
 		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 置于搜索行最右
@@ -583,7 +600,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				item
 					.setTitle(ctx.t("action.updateAll"))
 					.setIcon("arrow-down-to-line")
-					.onClick(() => void ctx.updateAll())
+					.onClick(() => triggerUpdateAll(ctx, header))
 			);
 			menu.addItem((item) =>
 				item
