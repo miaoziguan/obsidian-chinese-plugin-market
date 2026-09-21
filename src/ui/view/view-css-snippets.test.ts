@@ -3,6 +3,25 @@ import { renderCssSnippetsList } from "./view-css-snippets";
 import type { CssStorePort } from "@ui/settings/snippet-manage-store";
 import type { ViewContext } from "./view-context";
 
+const promptSubmit = vi.hoisted(() => ({
+	current: null as ((value: string) => void) | null,
+}));
+
+vi.mock("@ui/modals/prompt-modal", () => ({
+	PromptModal: class {
+		constructor(
+			_app: unknown,
+			_title: string,
+			_placeholder: string,
+			_initialValue: string,
+			onSubmit: (value: string) => void,
+		) {
+			promptSubmit.current = onSubmit;
+		}
+		open() {}
+	},
+}));
+
 function makeStore(over: Partial<CssStorePort> = {}): CssStorePort {
 	return {
 		settings: {
@@ -56,13 +75,14 @@ describe("renderCssSnippetsList", () => {
 	it("新建按钮点击调用 createSnippet", () => {
 		const store = makeStore();
 		const ctx = makeCtx(store);
-		const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("newone");
+		promptSubmit.current = null;
 		renderCssSnippetsList(ctx);
 		const btn = ctx.cssSnippetListEl!.querySelector<HTMLButtonElement>('[data-cpm-css-new]')!;
 		expect(btn).toBeTruthy();
 		btn.click();
+		expect(promptSubmit.current).not.toBeNull();
+		promptSubmit.current!("newone");
 		expect(store.createSnippet).toHaveBeenCalledWith("newone", "");
-		promptSpy.mockRestore();
 	});
 	it("按关键词过滤可见行", () => {
 		const store = makeStore({

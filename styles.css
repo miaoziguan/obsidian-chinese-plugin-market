@@ -6616,6 +6616,30 @@ button.pt-card-install-btn--installed {
 	min-width: 80px;
 	white-space: nowrap;
 }
+.pt-css-normal-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	flex: 1 1 auto;
+}
+.pt-css-bulk-bar {
+	display: none;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	flex: 1 1 auto;
+	padding: 4px 8px;
+	background: var(--background-modifier-form-field-highlighted);
+	border-radius: var(--pt-radius-input);
+}
+.pt-css-bulk-bar .pt-css-bulk-label {
+	font-weight: var(--pt-weight-semibold);
+	margin-right: auto;
+}
+.pt-css-bulk-bar button {
+	padding: 4px 10px;
+}
 .pt-css-empty {
 	padding: 32px 0;
 	text-align: center;

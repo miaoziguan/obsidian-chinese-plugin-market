@@ -142,13 +142,6 @@ function openGroupMenu(
 					}),
 			);
 		}
-		menu.addSeparator();
-		menu.addItem((item) =>
-			item
-				.setTitle(pickLang("manage.file.rename"))
-				.setIcon("pencil")
-				.onClick(() => ctx.requestRename(baseName)),
-		);
 		menu.showAtMouseEvent(event);
 	} catch (error) {
 		logger.warn("[Chinese Plugin Market] 打开 CSS 分组菜单失败：", error);
