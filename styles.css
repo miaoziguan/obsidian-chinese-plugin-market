@@ -6611,6 +6611,11 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-text);
 	font-size: var(--pt-text-sm);
 }
+.pt-css-new {
+	padding: 4px 8px;
+	min-width: 80px;
+	white-space: nowrap;
+}
 .pt-css-empty {
 	padding: 32px 0;
 	text-align: center;

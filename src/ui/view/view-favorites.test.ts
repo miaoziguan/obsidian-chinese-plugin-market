@@ -6,6 +6,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderFavoritesList, FAV_GROUP_ALL, FAV_GROUP_NONE } from "./view-favorites";
 import type { ViewContext } from "./view-context";
 
+const promptSubmit = vi.hoisted(() => ({
+	current: null as ((value: string) => void) | null,
+}));
+
+vi.mock("@ui/modals/prompt-modal", () => ({
+	PromptModal: class {
+		constructor(
+			_app: unknown,
+			_title: string,
+			_placeholder: string,
+			_initialValue: string,
+			onSubmit: (value: string) => void,
+		) {
+			promptSubmit.current = onSubmit;
+		}
+		open() {}
+	},
+}));
+
 function makeCtx(over?: Partial<Record<string, unknown>>) {
 	const settings = {
 		favoriteGroupNames: ["AI 工具"] as string[],
@@ -51,7 +70,7 @@ function makeCtx(over?: Partial<Record<string, unknown>>) {
 describe("view-favorites 渲染器", () => {
 	beforeEach(() => {
 		document.body.innerHTML = "";
-		(window as { prompt?: unknown }).prompt = vi.fn(() => null);
+		promptSubmit.current = null;
 		(window as { confirm?: unknown }).confirm = vi.fn(() => false);
 	});
 
@@ -91,12 +110,12 @@ describe("view-favorites 渲染器", () => {
 		expect(ctx.toggleFavorite).toHaveBeenCalledWith("beta");
 	});
 
-	it("新建分组：prompt 输入后组出现在清单与下拉", () => {
-		const promptMock = vi.fn(() => "写作");
-		(window as { prompt?: unknown }).prompt = promptMock;
+	it("新建分组：弹窗输入后组出现在清单与下拉", () => {
 		const ctx = makeCtx();
 		renderFavoritesList(ctx);
 		ctx.favoritesListEl!.querySelector<HTMLButtonElement>('[data-cpm-fav-new-group]')!.click();
+		expect(promptSubmit.current).not.toBeNull();
+		promptSubmit.current!("写作");
 		expect(ctx.settings.favoriteGroupNames).toContain("写作");
 		const groupNames = Array.from(ctx.favoritesListEl!.querySelectorAll(".pt-fav-group-name")).map((g) => g.textContent);
 		expect(groupNames).toContain("写作");
@@ -115,13 +134,13 @@ describe("view-favorites 渲染器", () => {
 	});
 
 	it("重命名分组：清单与成员映射同步替换", () => {
-		const promptMock = vi.fn(() => "智能助手");
-		(window as { prompt?: unknown }).prompt = promptMock;
 		const ctx = makeCtx();
 		renderFavoritesList(ctx);
 		const head = ctx.favoritesListEl!.querySelector<HTMLElement>(".pt-fav-group-head")!;
 		const renameBtn = head.querySelector<HTMLButtonElement>(".pt-fav-group-btn")!;
 		renameBtn.click();
+		expect(promptSubmit.current).not.toBeNull();
+		promptSubmit.current!("智能助手");
 		expect(ctx.settings.favoriteGroupNames).toContain("智能助手");
 		expect(ctx.settings.favoriteGroupOf["alpha"]).toBe("智能助手");
 	});
@@ -188,8 +207,6 @@ describe("view-favorites 渲染器", () => {
 	});
 
 	it("重命名组：目标名已存在则静默忽略，不产生重复组名", () => {
-		const promptMock = vi.fn(() => "写作");
-		(window as { prompt?: unknown }).prompt = promptMock;
 		const ctx = makeCtx({
 			settings: {
 				favoriteGroupNames: ["AI 工具", "写作"],
@@ -200,6 +217,8 @@ describe("view-favorites 渲染器", () => {
 		const head = ctx.favoritesListEl!.querySelector<HTMLElement>(".pt-fav-group-head")!;
 		const renameBtn = head.querySelector<HTMLButtonElement>(".pt-fav-group-btn")!;
 		renameBtn.click();
+		expect(promptSubmit.current).not.toBeNull();
+		promptSubmit.current!("写作");
 		expect(ctx.settings.favoriteGroupNames.filter((g) => g === "AI 工具").length).toBe(1);
 	});
 });
