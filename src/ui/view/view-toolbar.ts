@@ -86,11 +86,19 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 		tabCss.setText(ctx.t("view.tab.css"));
 		tabCss.setAttribute("title", ctx.t("css.tab.hint"));
+		// 「收藏」页签：分组管理已收藏插件（建组 / 换组 / 取消收藏 / 直达详情）
+		const tabFav = viewTabs.createEl("button", {
+			cls: "pt-view-tab",
+			attr: { "data-view-tab": "favorites", "aria-pressed": "false", type: "button" },
+		});
+		tabFav.setText(ctx.t("view.tab.favorites"));
+		tabFav.setAttribute("title", ctx.t("fav.tab.hint"));
 		const onSwitchTab = (tab: ViewTab) => ctx.switchViewTab(tab);
 		tabBrowse.addEventListener("click", () => onSwitchTab("browse"));
 		tabUpdates.addEventListener("click", () => onSwitchTab("updates"));
 		tabBeta.addEventListener("click", () => onSwitchTab("beta"));
 		tabCss.addEventListener("click", () => onSwitchTab("css"));
+		tabFav.addEventListener("click", () => onSwitchTab("favorites"));
 		// 把刷新徽标的回调挂到 ctx，供检测更新后同步
 		ctx.refreshViewTabsBadge = refreshTabsBadge;
 

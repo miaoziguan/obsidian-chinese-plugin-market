@@ -50,7 +50,7 @@ import type { CssStorePort } from "@ui/settings/snippet-manage-store";
 // ──────────────────────────────────────────
 
 /** 主视图页签：浏览（默认）/ 更新（已安装待更新）/ 直链（直链安装的插件与主题）/ CSS 片段（独立片段管理页） */
-export type ViewTab = "browse" | "updates" | "beta" | "css";
+export type ViewTab = "browse" | "updates" | "beta" | "css" | "favorites";
 
 /**
  * ViewContext 是 ChinesePluginMarketView 公共状态的扁平投影。
@@ -229,6 +229,12 @@ export interface ViewContext {
 	cssStore: CssStorePort;
 	/** 重渲染「CSS 片段」页签列表（若当前不在该页签则无操作） */
 	renderCssSnippetsList: () => void;
+	/** 「收藏」页签列表容器（由 view-chrome 创建，渲染收藏分组管理用） */
+	favoritesListEl: HTMLElement | null;
+	/** 收藏页签的分组筛选："__all__" 全部 / "__none__" 未分组 / 其它值为组名（会话级，不持久化） */
+	favoriteGroupFilter: string;
+	/** 重渲染「收藏」页签列表（若当前不在该页签则无操作） */
+	renderFavoritesList: () => void;
 	resultCountEl: HTMLElement | null;
 	aiTranslateBtnEl: HTMLButtonElement | null;
 	aiProgressEl: HTMLElement | null;
@@ -634,6 +640,11 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set cssSnippetListEl(v) { view.cssSnippetListEl = v; },
 		cssStore: view.cssStore,
 		renderCssSnippetsList: () => view.renderCssSnippetsList(),
+		get favoritesListEl() { return view.favoritesListEl; },
+		set favoritesListEl(v) { view.favoritesListEl = v; },
+		get favoriteGroupFilter() { return view.favoriteGroupFilter; },
+		set favoriteGroupFilter(v) { view.favoriteGroupFilter = v; },
+		renderFavoritesList: () => view.renderFavoritesList(),
 		get resultCountEl() { return view.resultCountEl; },
 		set resultCountEl(v) { view.resultCountEl = v; },
 		get aiTranslateBtnEl() { return view.aiTranslateBtnEl; },
