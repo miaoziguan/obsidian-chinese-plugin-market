@@ -15,6 +15,7 @@
  */
 
 import type { ViewContext } from "@ui/view/view-context";
+import { PromptModal } from "@ui/modals/prompt-modal";
 
 /** 分组筛选哨兵值：全部 */
 export const FAV_GROUP_ALL = "__all__";
@@ -80,13 +81,20 @@ export function renderFavoritesList(ctx: ViewContext): void {
 	});
 	bar.appendChild(newGroupBtn);
 	newGroupBtn.addEventListener("click", () => {
-		const raw = window.prompt(ctx.t("fav.group.new.ph"), "");
-		const name = raw?.trim();
-		if (!name) return;
-		if (listGroups(ctx).includes(name)) return; // 同名组已存在：静默忽略
-		ctx.settings.favoriteGroupNames = [...ctx.settings.favoriteGroupNames, name];
-		ctx.saveSettings();
-		renderFavoritesList(ctx);
+		new PromptModal(
+			ctx.app,
+			ctx.t("fav.group.new"),
+			ctx.t("fav.group.new.ph"),
+			"",
+			(name) => {
+				if (listGroups(ctx).includes(name)) return; // 同名组已存在：静默忽略
+				ctx.settings.favoriteGroupNames = [...ctx.settings.favoriteGroupNames, name];
+				ctx.saveSettings();
+				renderFavoritesList(ctx);
+			},
+			ctx.t("action.ok"),
+			ctx.t("action.cancel"),
+		).open();
 	});
 
 	rerender();
@@ -180,10 +188,18 @@ function renderGroupSection(
 		});
 		head.appendChild(renameBtn);
 		renameBtn.addEventListener("click", () => {
-			const raw = window.prompt(ctx.t("fav.group.rename.ph"), group);
-			const next = raw?.trim();
-			if (!next || next === group) return;
-			void renameGroup(ctx, group, next).then(() => renderFavoritesList(ctx));
+			new PromptModal(
+				ctx.app,
+				ctx.t("fav.group.rename"),
+				ctx.t("fav.group.rename.ph"),
+				group,
+				(next) => {
+					if (next === group) return;
+					void renameGroup(ctx, group, next).then(() => renderFavoritesList(ctx));
+				},
+				ctx.t("action.ok"),
+				ctx.t("action.cancel"),
+			).open();
 		});
 
 		const delBtn = createEl("button", {
