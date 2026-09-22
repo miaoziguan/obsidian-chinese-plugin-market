@@ -6441,7 +6441,9 @@ button.pt-card-install-btn--installed {
 }
 .pt-beta-name.is-link {
 	cursor: pointer;
-	text-decoration: underline dotted var(--text-faint);
+	text-decoration-line: underline;
+	text-decoration-style: dotted;
+	text-decoration-color: var(--text-faint);
 	text-underline-offset: 3px;
 }
 .pt-beta-name.is-link:hover {
@@ -6615,7 +6617,9 @@ button.pt-card-install-btn--installed {
 .pt-detail-dep-name.is-link,
 .pt-detail-dependent-chip.is-link {
 	cursor: pointer;
-	text-decoration: underline dotted var(--text-faint);
+	text-decoration-line: underline;
+	text-decoration-style: dotted;
+	text-decoration-color: var(--text-faint);
 	text-underline-offset: 3px;
 }
 .pt-detail-dep-name.is-link:hover,
@@ -6705,6 +6709,9 @@ button.pt-card-install-btn--installed {
 	background: var(--background-modifier-form-field-highlighted);
 	border-radius: var(--pt-radius-input);
 }
+/* 选中片段时切换为批量操作条（替代直接设置 style.display） */
+.pt-css-bar.pt-css-bulk-mode .pt-css-normal-bar { display: none; }
+.pt-css-bar.pt-css-bulk-mode .pt-css-bulk-bar { display: flex; }
 .pt-css-bulk-bar .pt-css-bulk-label {
 	font-weight: var(--pt-weight-semibold);
 	margin-right: auto;

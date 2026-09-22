@@ -24,7 +24,7 @@ import {
 import { isMobileEnvironment, requestIdle } from "@shared/platform";
 import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
-import { makeT, type TFunc, type I18nKey, type I18nVars } from "@shared/i18n";
+import { makeT, type TFunc, type I18nKey } from "@shared/i18n";
 import { cleanChineseSpaces, stripReviewNotice } from "@shared/utils";
 import { ICON_DOWNLOAD } from "@ui/components/card-render";
 import type { JournalEntry } from "@domain/journal/journal-entry";
@@ -868,7 +868,7 @@ export class PluginDetailDrawer {
 		const dc = this.deps;
 		const host = {
 			// this.t 是 TFunc，原生支持带参（同上方的 version.pinned），直接透传
-			t: (k: I18nKey, vars?: Record<string, string>) => this.t(k, vars as I18nVars),
+			t: (k: I18nKey, vars?: Record<string, string>) => this.t(k, vars),
 			statusOf: (dep: DepEdge) => dc.statusOf(dep),
 			canOpen: (id: string) => dc.canOpen(id),
 			nameOf: (id: string) => dc.nameOf(id),

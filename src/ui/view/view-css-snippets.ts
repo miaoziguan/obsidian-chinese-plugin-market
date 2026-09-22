@@ -63,13 +63,13 @@ export function renderCssSnippetsList(ctx: ViewContext): void {
 	bulkBar.appendChild(bulkLabel);
 	const bulkEnable = createEl("button", { text: ctx.t("css.bulk.enable"), attr: { type: "button" } });
 	bulkBar.appendChild(bulkEnable);
-	bulkEnable.addEventListener("click", () => bulkApply(ctx, store, [...selected], "enable"));
+	bulkEnable.addEventListener("click", () => { void bulkApply(ctx, store, [...selected], "enable"); });
 	const bulkDisable = createEl("button", { text: ctx.t("css.bulk.disable"), attr: { type: "button" } });
 	bulkBar.appendChild(bulkDisable);
-	bulkDisable.addEventListener("click", () => bulkApply(ctx, store, [...selected], "disable"));
+	bulkDisable.addEventListener("click", () => { void bulkApply(ctx, store, [...selected], "disable"); });
 	const bulkDel = createEl("button", { text: ctx.t("css.bulk.delete"), attr: { type: "button" } });
 	bulkBar.appendChild(bulkDel);
-	bulkDel.addEventListener("click", () => bulkApply(ctx, store, [...selected], "delete"));
+	bulkDel.addEventListener("click", () => { void bulkApply(ctx, store, [...selected], "delete"); });
 	const bulkClear = createEl("button", { text: ctx.t("action.cancel"), attr: { type: "button" } });
 	bulkBar.appendChild(bulkClear);
 	bulkClear.addEventListener("click", () => {
@@ -79,13 +79,7 @@ export function renderCssSnippetsList(ctx: ViewContext): void {
 
 	const updateBulkBar = () => {
 		bulkLabel.textContent = ctx.t("css.bulk.selected", { n: String(selected.size) });
-		if (selected.size > 0) {
-			normalBar.style.display = "none";
-			bulkBar.style.display = "flex";
-		} else {
-			normalBar.style.display = "";
-			bulkBar.style.display = "none";
-		}
+		bar.classList.toggle("pt-css-bulk-mode", selected.size > 0);
 	};
 
 	const rerender = () => {

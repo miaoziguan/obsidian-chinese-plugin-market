@@ -13,19 +13,14 @@ export interface UpdateProgressHandle {
  * 返回控制器：el 为根元素，set 实时更新填充宽度 + 百分比 + 文本，finish 淡出移除。
  */
 export function createUpdateProgressLayer(): UpdateProgressHandle {
-	const el = document.createElement("div");
-	el.className = "pt-updates-progress";
-	const text = document.createElement("div");
-	text.className = "pt-updates-progress-text";
+	const el = createDiv({ cls: "pt-updates-progress" });
+	const text = createDiv({ cls: "pt-updates-progress-text" });
 	el.appendChild(text);
-	const track = document.createElement("div");
-	track.className = "pt-updates-progress-track";
+	const track = createDiv({ cls: "pt-updates-progress-track" });
 	el.appendChild(track);
-	const fill = document.createElement("div");
-	fill.className = "pt-updates-progress-fill";
+	const fill = createDiv({ cls: "pt-updates-progress-fill" });
 	track.appendChild(fill);
-	const pct = document.createElement("div");
-	pct.className = "pt-updates-progress-pct";
+	const pct = createDiv({ cls: "pt-updates-progress-pct" });
 	el.appendChild(pct);
 
 	const render = (done: number, total: number, label?: string) => {
