@@ -34,7 +34,7 @@ async function readEnabledSnippets(app: App): Promise<Set<string>> {
 	const cc = asAppInternals(app).customCss;
 	if (cc?.enabledSnippets instanceof Set) return cc.enabledSnippets;
 
-	const cfgDir = app.vault?.configDir ?? ".obsidian";
+	const cfgDir = app.vault.configDir;
 	try {
 		const text = await app.vault.adapter.read(`${cfgDir}/appearance.json`);
 		const data = JSON.parse(text) as { enabledCssSnippets?: string[] };

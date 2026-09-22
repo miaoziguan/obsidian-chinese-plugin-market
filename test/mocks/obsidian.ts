@@ -43,8 +43,8 @@ export class Modal {
 		this.app = app;
 		this.contentEl = document.createElement("div");
 	}
-	open(): void { this.onOpen(); }
-	close(): void { this.onClose(); }
+	open(): void { document.body.appendChild(this.contentEl); this.onOpen(); }
+	close(): void { this.contentEl.remove(); this.onClose(); }
 	onOpen(): void {}
 	onClose(): void {}
 }

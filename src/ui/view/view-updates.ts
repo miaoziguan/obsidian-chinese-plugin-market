@@ -151,13 +151,15 @@ export function renderUpdatesList(ctx: ViewContext): void {
 			attr: { "aria-label": t("action.update"), title: t("action.update"), type: "button" },
 		});
 		setIcon(updBtn, "arrow-down-to-line");
-		updBtn.addEventListener("click", async () => {
-			if (updBtn.hasClass("pt-spin")) return;
-			updBtn.addClass("pt-spin");
-			await ctx.updatePlugin(p.id);
-			updBtn.removeClass("pt-spin");
-			ctx.refreshViewTabsBadge?.();
-			ctx.renderUpdatesList();
+		updBtn.addEventListener("click", () => {
+			void (async () => {
+				if (updBtn.hasClass("pt-spin")) return;
+				updBtn.addClass("pt-spin");
+				await ctx.updatePlugin(p.id);
+				updBtn.removeClass("pt-spin");
+				ctx.refreshViewTabsBadge?.();
+				ctx.renderUpdatesList();
+			})();
 		});
 	}
 
@@ -204,12 +206,14 @@ function renderPinnedSection(ctx: ViewContext, el: HTMLElement): void {
 			attr: { "aria-label": t("version.latest"), title: t("version.latest"), type: "button" },
 		});
 		setIcon(unpinBtn, "arrow-down-to-line");
-		unpinBtn.addEventListener("click", async () => {
-			if (unpinBtn.hasClass("pt-spin")) return;
-			unpinBtn.addClass("pt-spin");
-			await ctx.pinPluginVersion(p.id, null);
-			unpinBtn.removeClass("pt-spin");
-			ctx.renderUpdatesList();
+		unpinBtn.addEventListener("click", () => {
+			void (async () => {
+				if (unpinBtn.hasClass("pt-spin")) return;
+				unpinBtn.addClass("pt-spin");
+				await ctx.pinPluginVersion(p.id, null);
+				unpinBtn.removeClass("pt-spin");
+				ctx.renderUpdatesList();
+			})();
 		});
 	}
 }

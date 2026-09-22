@@ -15,6 +15,7 @@
  */
 
 import type { ViewContext } from "@ui/view/view-context";
+import { Modal } from "obsidian";
 import { PromptModal } from "@ui/modals/prompt-modal";
 
 /** 分组筛选哨兵值：全部 */
@@ -209,8 +210,16 @@ function renderGroupSection(
 		});
 		head.appendChild(delBtn);
 		delBtn.addEventListener("click", () => {
-			if (!window.confirm(ctx.t("fav.group.delete.confirm", { name: group }))) return;
-			void deleteGroup(ctx, group).then(() => renderFavoritesList(ctx));
+			const modal = new Modal(ctx.app);
+			const tip = createDiv({ text: ctx.t("fav.group.delete.confirm", { name: group }) });
+			modal.contentEl.appendChild(tip);
+			const ok = createEl("button", { cls: "mod-cta", text: ctx.t("fav.group.delete") });
+			modal.contentEl.appendChild(ok);
+			ok.addEventListener("click", () => {
+				void deleteGroup(ctx, group).then(() => renderFavoritesList(ctx));
+				modal.close();
+			});
+			modal.open();
 		});
 	}
 	section.appendChild(head);

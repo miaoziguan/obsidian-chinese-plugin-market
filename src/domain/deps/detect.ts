@@ -35,7 +35,7 @@ interface Hit {
 /** manifest.dependencies 的 key 列表（兼容对象与数组两种写法） */
 function depKeys(v: unknown): string[] {
 	if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
-	if (v && typeof v === "object") return Object.keys(v as Record<string, unknown>);
+	if (v && typeof v === "object") return Object.keys(v);
 	return [];
 }
 

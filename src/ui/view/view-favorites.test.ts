@@ -121,14 +121,15 @@ describe("view-favorites 渲染器", () => {
 		expect(groupNames).toContain("写作");
 	});
 
-	it("删除分组：成员回到未分组，组名从清单移除", () => {
-		const confirmMock = vi.fn(() => true);
-		(window as { confirm?: unknown }).confirm = confirmMock;
+	it("删除分组：弹窗确认后成员回到未分组，组名从清单移除", () => {
 		const ctx = makeCtx();
 		renderFavoritesList(ctx);
 		const head = ctx.favoritesListEl!.querySelector<HTMLElement>(".pt-fav-group-head")!;
 		const delBtn = Array.from(head.querySelectorAll<HTMLButtonElement>(".pt-fav-group-btn")).at(-1)!;
 		delBtn.click();
+		const okBtn = document.querySelector<HTMLButtonElement>(".mod-cta")!;
+		expect(okBtn).toBeTruthy();
+		okBtn.click();
 		expect(ctx.settings.favoriteGroupNames).not.toContain("AI 工具");
 		expect(ctx.settings.favoriteGroupOf["alpha"]).toBeUndefined();
 	});
