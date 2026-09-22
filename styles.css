@@ -6441,10 +6441,7 @@ button.pt-card-install-btn--installed {
 }
 .pt-beta-name.is-link {
 	cursor: pointer;
-	text-decoration-line: underline;
-	text-decoration-style: dotted;
-	text-decoration-color: var(--text-faint);
-	text-underline-offset: 3px;
+	border-bottom: 1px dotted var(--text-faint);
 }
 .pt-beta-name.is-link:hover {
 	color: var(--text-accent);
@@ -6617,10 +6614,7 @@ button.pt-card-install-btn--installed {
 .pt-detail-dep-name.is-link,
 .pt-detail-dependent-chip.is-link {
 	cursor: pointer;
-	text-decoration-line: underline;
-	text-decoration-style: dotted;
-	text-decoration-color: var(--text-faint);
-	text-underline-offset: 3px;
+	border-bottom: 1px dotted var(--text-faint);
 }
 .pt-detail-dep-name.is-link:hover,
 .pt-detail-dependent-chip.is-link:hover {
