@@ -20,7 +20,33 @@ const ASCII_WORD_RE = /[a-zA-Z0-9_-]/;
  * 分词器版本指纹：进 bm25IndexSig——分词策略变更（n-gram 组合/换 Intl 等）必须 bump，
  * 令 BM25 索引缓存失效重建（P-0055 同族：索引语义变了缓存必须跟着失效）。
  */
-export const BM25_TOKENIZER_VERSION = "cjk-bi23-v1";
+export const BM25_TOKENIZER_VERSION = "cjk-intl-bi23-v1";
+
+// Intl.Segmenter 词层（零依赖零资产：ICU 内置词典）。类型用结构化最小接口 + any 构造，
+// 避免 tsconfig lib 未含 ES2022 Intl 类型时编译失败；运行时特性探测兜底老环境。
+interface SegmentLike {
+	segment(text: string): Iterable<{ segment: string; isWordLike?: boolean }>;
+}
+const IntlRecord: Record<string, unknown> =
+	typeof Intl !== "undefined" ? (Intl as unknown as Record<string, unknown>) : {};
+const SegmenterCtor = IntlRecord.Segmenter as
+	| (new (locale: string, opts: { granularity: string }) => SegmentLike)
+	| undefined;
+const intlSegmenter: SegmentLike | null =
+	typeof SegmenterCtor === "function" ? new SegmenterCtor("zh-Hans", { granularity: "word" }) : null;
+
+/** 当前环境是否有 Intl.Segmenter 词层（进 bm25IndexSig 指纹）。 */
+export function hasIntlSegmenter(): boolean {
+	return intlSegmenter !== null;
+}
+
+/** ICU 词典词（isWordLike 过滤 + 小写）；无词层环境返回空数组。 */
+export function segmentWords(text: string): string[] {
+	if (!intlSegmenter || !text) return [];
+	const out: string[] = [];
+	for (const s of intlSegmenter.segment(text)) if (s.isWordLike) out.push(s.segment.toLowerCase());
+	return out;
+}
 
 function isCJK(ch: string): boolean {
 	return CJK_RE.test(ch);
@@ -72,12 +98,18 @@ export function tokenizeCJK(text: string): string {
 	return tokens.join(" ");
 }
 
-/** 文本 → BM25 token 数组。 */
+/** 文本 → BM25 token 数组 = Intl.Segmenter 词层 ∪ CJK n-gram 层。
+ * 词层（2026-09-20 用户裁决采纳，harness 实测 oov 桶 R@10 0.42→0.64、脑图首金 #14→#3）：
+ * ICU 词典词让 3 字 run 等 n-gram 盲区（run≤3 不产 bigram）获得子词命中；
+ * 代价 = 头部短 query 竞争者变多（日历首金 #1→#4 等，部分系评测窄 gold 放大），
+ * MRR 0.630→0.572——已批准的取舍，基线记录在案。
+ * 环境无 Intl.Segmenter（老 WebView）时词层为空、退化为纯 n-gram，
+ * 由 bm25IndexSig 的可用性指纹区分（索引语义不同不可互用）。 */
 export function tokenizeForBM25(text: string): string[] {
 	if (!text) return [];
 	const s = tokenizeCJK(text);
-	if (!s) return [];
-	return s.split(" ").filter((t) => t.length > 0);
+	const grams = s ? s.split(" ").filter((t) => t.length > 0) : [];
+	return [...segmentWords(text), ...grams];
 }
 
 /** 轻量 BM25 打分：query 与单条文档的相似度（不预构建倒排，搜索时算）。

@@ -225,7 +225,25 @@ export class PluginStorage {
 	 * 写翻译缓存到独立文件（译名/AI 词典/洞察/覆盖率快照/MyMemory 熔断等）。
 	 * 不影响主 data.json，缩小其写盘频率与损坏面。
 	 */
+	/**
+	 * 缩水守卫基准：onload 合并后的译名条数（2026-09-20 事故防线）。
+	 * 事故形态：iCloud 读竞争使某次重载读到截断文件 → 解析失败 → 空缓存 → 写回毁掉
+	 * 7707 条好文件。守卫：写盘条数 < 上次加载 50% 即拒写 + 告警（正常增量翻译只会涨）。
+	 */
+	private loadedTranslatorCacheEntries = 0;
+	noteTranslatorCacheLoaded(entries: number): void {
+		this.loadedTranslatorCacheEntries = entries;
+	}
+
 	async saveTranslatorCache(data: TranslatorPersistedData): Promise<void> {
+		const entries = Object.keys(data.cache ?? {}).length;
+		if (this.loadedTranslatorCacheEntries > 0 && entries < this.loadedTranslatorCacheEntries * 0.5) {
+			logger.warn(
+				`[Chinese Plugin Market] 拒绝写回翻译缓存：${entries} 条 < 上次加载 ${this.loadedTranslatorCacheEntries} 条的 50%` +
+					`（疑似空读/清缓存竞争，2026-09-20 事故防线），跳过本次保存`
+			);
+			return;
+		}
 		try {
 			const adapter = this.storage;
 			const {
@@ -242,6 +260,7 @@ export class PluginStorage {
 					seenPluginIds, lastListFetchAt, firstSeenIds,
 				})
 			);
+			this.loadedTranslatorCacheEntries = entries; // 守卫基准跟随成功写盘推进
 		} catch (e: unknown) {
 			logger.warn("[Chinese Plugin Market] 保存翻译缓存失败：", e);
 		}

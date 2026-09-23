@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tokenizeForBM25, bm25Score } from "@domain/search/bm25";
+import { tokenizeForBM25, bm25Score, segmentWords } from "@domain/search/bm25";
 import { t2sForEmbed, hasCJK } from "@translation/lexicon/t2s";
 
 describe("t2sForEmbed 简繁转换", () => {
@@ -40,9 +40,13 @@ describe("tokenizeForBM25 CJK 三元组", () => {
 		// trigram 保留邻接精度
 		expect(tokens).toContain("门禁系");
 	});
-	it("≤3 字 run 不被 bigram 拆（整词语义不变）", () => {
-		expect(tokenizeForBM25("看板")).toEqual(["看板"]);
-		expect(tokenizeForBM25("番茄钟")).toEqual(["番茄钟"]);
+	it("≤3 字 run 不被 n-gram 层拆（整词语义不变；词层为独立附加层）", () => {
+		const t1 = tokenizeForBM25("看板");
+		expect(t1).toContain("看板");
+		expect(t1).not.toContain("看"); // 任何层都不产单字
+		// 3 字 run 不产 bigram（「茄钟」只可能来自 n-gram 层，词层不会切出跨词界碎片）
+		expect(tokenizeForBM25("番茄钟")).not.toContain("茄钟");
+		expect(tokenizeForBM25("番茄钟")).toContain("番茄钟");
 	});
 });
 
@@ -55,12 +59,13 @@ describe("bm25Score", () => {
 		expect(bm25Score(queryTokens, docTokens, df, 10, 10)).toBeGreaterThan(0);
 		expect(bm25Score(queryTokens, [], df, 10, 10)).toBe(0);
 	});
-	it("高频词 IDF 低（df 大 → 得分低）", () => {
+	it("高频词 IDF 低（df 大 → 得分低于低频 df）", () => {
 		const q = tokenizeForBM25("插件");
 		const doc = tokenizeForBM25("插件 插件");
-		// df=N（所有文档都含）→ IDF≈0
-		const df = new Map([[q[0], 100]]);
-		expect(bm25Score(q, doc, df, 100, 5)).toBeLessThan(0.01);
+		// df=N（所有文档都含）→ IDF≈0；与 df=1 对照验证单调性（对 qtf 缩放鲁棒）
+		const highDf = new Map([[q[0], 100]]);
+		const lowDf = new Map([[q[0], 1]]);
+		expect(bm25Score(q, doc, highDf, 100, 5)).toBeLessThan(bm25Score(q, doc, lowDf, 100, 5));
 	});
 	it("长度归一：等长命中文档得分应高于更长文档（避免长描述恒被压低）", () => {
 		const q = tokenizeForBM25("笔记");
@@ -73,5 +78,28 @@ describe("bm25Score", () => {
 		const shortScore = bm25Score(q, shortDoc, df, 10, avgdl);
 		const longScore = bm25Score(q, longDoc, df, 10, avgdl);
 		expect(shortScore).toBeGreaterThan(longScore);
+	});
+});
+
+describe("Intl.Segmenter 词层（④ 2026-09-20 用户裁决采纳）", () => {
+	it.runIf(typeof (Intl as unknown as Record<string, unknown>).Segmenter === "function")(
+		"词层产 ICU 词典词且拼接不变式成立（不丢字）",
+		() => {
+			const w = segmentWords("门禁系统管理工具");
+			expect(w).toContain("门禁");
+			expect(w.join("")).toBe("门禁系统管理工具");
+		}
+	);
+	it.runIf(typeof (Intl as unknown as Record<string, unknown>).Segmenter === "function")(
+		"tokenizeForBM25 = 词层 ∪ n-gram 层",
+		() => {
+			const t = tokenizeForBM25("门禁系统管理工具");
+			expect(t).toContain("门禁系"); // trigram 层仍在
+			expect(t).toContain("管理"); // 词层（ICU 词）
+		}
+	);
+	it("空输入不抛错（fallback 环境契约）", () => {
+		expect(segmentWords("")).toEqual([]);
+		expect(tokenizeForBM25("")).toEqual([]);
 	});
 });

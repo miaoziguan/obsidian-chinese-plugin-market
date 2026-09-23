@@ -69,6 +69,41 @@ describe("PluginStorage · StoragePort 端口注入", () => {
 	});
 });
 
+describe("PluginStorage · 翻译缓存缩水守卫（2026-09-20 空写回事故防线）", () => {
+	const mkCache = (n: number) => {
+		const cache: Record<string, unknown> = {};
+		for (let i = 0; i < n; i++) cache["p" + i] = { translatedName: "t" + i, translatedDesc: "d", source: "ai" };
+		return cache;
+	};
+	const save = (storage: PluginStorage, n: number) =>
+		storage.saveTranslatorCache({ cache: mkCache(n) } as any);
+	const FILE = `.obsidian/plugins/${PID}/translator-cache.json`;
+
+	it("写回缩水 >50% 拒写：文件不落地（空读竞争模拟）", async () => {
+		const { port, storage } = make();
+		storage.noteTranslatorCacheLoaded(100);
+		await save(storage, 10);
+		expect(await port.exists(FILE)).toBe(false);
+	});
+
+	it("正常写盘通过且基准随成功写盘推进", async () => {
+		const { port, storage } = make();
+		storage.noteTranslatorCacheLoaded(100);
+		await save(storage, 120);
+		expect(await port.exists(FILE)).toBe(true);
+		await save(storage, 60); // =50% 不触发（阈值是 <50%）
+		await save(storage, 20); // <60 的 50% → 拒写，文件保留 60 条版本
+		const last = JSON.parse((await port.read(FILE))!);
+		expect(Object.keys(last.cache).length).toBe(60);
+	});
+
+	it("无加载基准（首装/空环境）不触发守卫", async () => {
+		const { port, storage } = make();
+		await save(storage, 3);
+		expect(await port.exists(FILE)).toBe(true);
+	});
+});
+
 describe("PluginStorage · 安装历史索引（评测台账）", () => {
 	it("缺失时返回空索引，不抛错、不阻断首屏", async () => {
 		const { storage } = make();
