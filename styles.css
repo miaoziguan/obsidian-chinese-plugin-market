@@ -5839,6 +5839,17 @@ button.pt-card-install-btn--installed {
 	}
 }
 
+@container pt-header (max-width: 760px) {
+	/* 平板/窄桌面：搜索框独占一行，结果计数隐藏，工具按钮自然落到第二行，
+	   保留全部按钮可见，避免中等宽度下一行挤爆导致显示不全。 */
+	.pt-header-row { flex-wrap: wrap; }
+	.pt-header-row .pt-search {
+		flex: 0 0 100%;
+		min-width: 0;
+	}
+	.pt-header-row .pt-result-count { display: none; }
+}
+
 /*
  * 纯 CSS 兜底（不依赖 JS 的 pt-mobile 类）：窄屏（≤480px，如 iPhone SE 375px）
  * 强制卡片单列满宽，避免纯数学列数推导挤出 1.5 列导致横向撕裂。
