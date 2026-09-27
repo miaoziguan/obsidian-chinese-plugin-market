@@ -288,8 +288,11 @@
 	height: 32px;
 }
 
-/* 溢出菜单按钮：默认在宽屏隐藏，窄容器（≤760px）由断点显示 */
-.pt-overflow-btn {
+/* 溢出菜单按钮：默认在宽屏隐藏，窄容器（≤760px）由断点显示。
+   由于上方统一工具栏样式用 .pt-header-actions > .pt-overflow-btn 设了 display:inline-flex，
+   这里用同等 specificity 的后续规则把宽屏 display 改回 none，确保不会与展开的图标按钮同时出现。 */
+.pt-overflow-btn,
+.pt-header-actions > .pt-overflow-btn {
 	display: none;
 }
 
@@ -5922,6 +5925,7 @@ button.pt-card-install-btn--installed {
 
 /* 移动端溢出菜单按钮（收起 刷新/AI翻译 等次要操作） */
 .pt-mobile .pt-overflow-btn {
+	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	min-height: 44px;
@@ -5984,7 +5988,7 @@ button.pt-card-install-btn--installed {
 	.pt-header-actions .pt-header-footprint {
 		display: none;
 	}
-	.pt-overflow-btn {
+	.pt-header-actions > .pt-overflow-btn {
 		display: inline-flex;
 		min-height: 32px;
 		min-width: 32px;
@@ -5996,7 +6000,7 @@ button.pt-card-install-btn--installed {
 		cursor: pointer;
 		border-radius: var(--pt-radius);
 	}
-	.pt-overflow-btn:hover {
+	.pt-header-actions > .pt-overflow-btn:hover {
 		color: var(--pt-text-strong, var(--text-normal));
 		background: var(--pt-surface-3, var(--background-modifier-hover));
 	}
