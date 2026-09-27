@@ -301,12 +301,6 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	const originalName = nameBlock.createSpan({ cls: "pt-card-original-name" });
 	originalName.setCssStyles({ display: "none" });
 
-	// 羽鳞精选徽标（金色，紧贴插件名，常驻隐藏，applyCardState 控制显隐）
-	const yulinBadge = nameBlock.createSpan({ cls: "pt-card-yulin-badge" });
-	yulinBadge.textContent = ctx.t("yulin.badge");
-	yulinBadge.setAttribute("title", ctx.t("yulin.badge"));
-	yulinBadge.setCssStyles({ display: "none" });
-
 	// 安装按钮占位（applyCardState 按状态重建并 replaceWith，保持 head Row 的 flex 顺序）
 	const installBtn = createSpan();
 	installBtn.className = "pt-card-install-btn pt-card-install-btn--enabled";
@@ -316,6 +310,13 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	// ── 底部脚注：元信息 chip 化（作者在前） ──
 	const meta = card.createDiv({ cls: "pt-card-meta" });
 	const metaInfo = meta.createDiv({ cls: "pt-card-meta-info" });
+
+	// 羽鳞精选徽标：放在底部元信息行最前，不压安装按钮，也不占标题行空间
+	const yulinBadge = metaInfo.createSpan({ cls: "pt-card-yulin-badge" });
+	yulinBadge.textContent = ctx.t("yulin.badge");
+	yulinBadge.setAttribute("title", ctx.t("yulin.badge"));
+	yulinBadge.setCssStyles({ display: "none" });
+
 	const authorSpan = metaInfo.createSpan({
 		cls: "pt-meta-chip pt-meta-chip--author",
 		attr: { "data-action": "author" },
