@@ -191,39 +191,36 @@
 	stroke-width: 2px;
 }
 
-/* .pt-chip：填充胶囊（来源/分类/作者筛选、统计、排序选项等）。
-   surface-2 底 + 细边框，hover 加深；按下(pressed)/选中态见各业务类的 [aria-pressed] 规则。
-   .pt-filter 直接复用此原语，保证所有筛选胶囊视觉统一。 */
+/* .pt-chip：纯文字筛选项（来源/分类/作者筛选、统计、排序选项等）。
+   无背景、无边框、无悬浮底色——与字母索引一致的「文字即控件」语言；
+   选中态只用强调色文字 + 加粗区分（见各业务类的 [aria-pressed] 规则）。
+   .pt-filter 直接复用此原语，保证所有筛选行视觉统一。 */
 .pt-chip,
 .pt-filter {
 	appearance: none;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	padding: 6px 14px;
+	padding: 4px 8px;
 	font-family: inherit;
 	font-size: var(--pt-text-sm);
 	font-weight: var(--pt-weight-medium);
 	color: var(--pt-text-muted);
-	background: var(--pt-surface-2);
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-pill);
+	background: transparent;
+	border: none;
+	border-radius: 0;
 	cursor: pointer;
-	transition: color var(--pt-duration-fast) var(--pt-ease),
-		background-color var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease);
+	transition: color var(--pt-duration-fast) var(--pt-ease);
 }
 .pt-chip:hover,
 .pt-filter:hover {
 	color: var(--pt-text);
-	border-color: var(--pt-border-strong);
-	background: var(--pt-surface-3);
 }
 .pt-chip:focus-visible,
 .pt-filter:focus-visible {
 	outline: none;
-	border-color: var(--pt-accent);
-	box-shadow: var(--pt-focus-ring);
+	color: var(--pt-accent);
+	box-shadow: none;
 }
 .pt-chip svg.svg-icon,
 .pt-filter svg.svg-icon {
@@ -741,28 +738,28 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 }
 .pt-filter[aria-pressed="true"] {
 	color: var(--pt-accent);
-	background: color-mix(in srgb, var(--pt-accent) 12%, transparent);
-	border-color: color-mix(in srgb, var(--pt-accent) 40%, transparent);
+	background: transparent;
+	border-color: transparent;
 	font-weight: var(--pt-weight-semibold);
 }
-/* 「推荐」胶囊：金色高亮态（与来源筛选同构但语义独立） */
+/* 「推荐」胶囊：金色高亮态（与来源筛选同构但语义独立），同样纯文字 */
 .pt-filter.pt-filter-recommended[aria-pressed="true"] {
 	color: var(--pt-gold-muted);
-	background: rgba(217, 154, 28, 0.16);
-	border-color: rgba(217, 154, 28, 0.5);
+	background: transparent;
+	border-color: transparent;
 }
 /* 主题下用 .pt-view 前缀提升到 (0,2,1)，压过上面的 .pt-view .pt-filter 默认态断言，
-   保证选中态的 accent 填充不被默认 surface-2 背景覆盖（分类/作者/来源筛选统一）。 */
+   保证选中态的 accent 文字不被覆盖（分类/作者/来源筛选统一）。 */
 .pt-view .pt-filter[aria-pressed="true"] {
 	color: var(--pt-accent);
-	background: color-mix(in srgb, var(--pt-accent) 12%, transparent);
-	border-color: color-mix(in srgb, var(--pt-accent) 40%, transparent);
+	background: transparent;
+	border-color: transparent;
 	font-weight: var(--pt-weight-semibold);
 }
 .pt-view .pt-filter.pt-filter-recommended[aria-pressed="true"] {
 	color: var(--pt-gold-muted);
-	background: rgba(217, 154, 28, 0.16);
-	border-color: rgba(217, 154, 28, 0.5);
+	background: transparent;
+	border-color: transparent;
 }
 
 /* AI 一键翻译按钮（纯图标，32px，与 ↕↻ 同尺寸节奏） */
@@ -999,22 +996,22 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 .pt-journal-detail-verdict,
 .pt-journal-detail-rating { margin-bottom: 4px; }
 .pt-journal-detail-note { white-space: pre-wrap; }
-/* 分类过多时的「更多 ▾ / 收起 ▴」折叠按钮：轻量虚线胶囊，区别于实体分类 chip */
+/* 分类过多时的「更多 ▾ / 收起 ▴」折叠按钮：纯文字 + accent 色，与其他筛选项同语言 */
 .pt-facet-more {
 	font-size: var(--pt-text-sm);
 	font-weight: var(--pt-weight-medium);
 	color: var(--pt-accent, var(--interactive-accent));
 	background: transparent;
-	border: 1px dashed var(--pt-border-strong);
-	border-radius: var(--pt-radius-pill);
-	padding: 6px 14px;
+	border: none;
+	border-radius: 0;
+	padding: 4px 8px;
 	cursor: pointer;
 	white-space: nowrap;
 	flex: none;
-	transition: background var(--pt-duration-fast) var(--pt-ease);
+	transition: color var(--pt-duration-fast) var(--pt-ease);
 }
 .pt-facet-more:hover {
-	background: color-mix(in srgb, var(--pt-accent) 8%, transparent);
+	color: var(--pt-text-strong, var(--text-normal));
 }
 /* 面板内字号统一降一号（sm→xs）+ chip 垂直 padding 略收，进一步压缩面板高度。
    限定 .pt-advanced 作用域，避免影响顶部工具条的同款 .pt-filter 胶囊。 */
@@ -1152,11 +1149,11 @@ button.pt-facet-letter-btn.is-active {
 }
 /* 用 .pt-view 前缀把具体性从 (0,1,0) 提到 (0,2,0)，压过主题 .theme-xx button 的默认
    背景/边框/阴影——否则筛选胶囊（来源/分类/作者/推荐）默认态会回落成主题原生按钮外观。
-   配方与 .pt-chip 原语一致（surface-2 底 + 细边框），确保主题下也维持统一填充胶囊外观。 */
+   配方与 .pt-chip 原语一致（纯文字、无底纹），确保主题下也维持统一文字外观。 */
 .pt-view .pt-filter {
-	background: var(--pt-surface-2);
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-pill);
+	background: transparent;
+	border: none;
+	border-radius: 0;
 	box-shadow: none;
 }
 
@@ -5060,23 +5057,22 @@ button.pt-card-install-btn--installed {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--pt-space-2xs);
-	padding: 1px 2px 1px var(--pt-space-sm);
+	padding: 1px 2px;
 	font-size: var(--pt-text-xs);
 	line-height: 1.35;
-	color: var(--pt-text-strong, var(--text-normal));
-	background: color-mix(in srgb, var(--pt-accent) 9%, var(--background-primary));
-	border: 1px solid color-mix(in srgb, var(--pt-accent) 22%, transparent);
-	border-radius: var(--pt-radius-pill);
-	box-shadow: 0 1px 2px color-mix(in srgb, var(--pt-accent) 6%, transparent);
+	color: var(--pt-text-muted, var(--text-muted));
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
 	animation: pt-chip-in 160ms var(--pt-ease);
-	transition: background var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease),
-		box-shadow var(--pt-duration-fast) var(--pt-ease);
+	transition: color var(--pt-duration-fast) var(--pt-ease);
 }
 .pt-active-chip:hover {
-	background: color-mix(in srgb, var(--pt-accent) 14%, var(--background-primary));
-	border-color: color-mix(in srgb, var(--pt-accent) 32%, transparent);
-	box-shadow: 0 1px 3px color-mix(in srgb, var(--pt-accent) 10%, transparent);
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+	color: var(--pt-text-strong, var(--text-normal));
 }
 .pt-active-chip-key {
 	color: var(--pt-text-muted, var(--text-muted));
@@ -5088,7 +5084,7 @@ button.pt-card-install-btn--installed {
 	transform: translateY(-0.5px);
 }
 .pt-active-chip-value {
-	color: var(--pt-text-strong, var(--text-normal));
+	color: var(--pt-accent, var(--interactive-accent));
 	font-weight: var(--pt-weight-semibold);
 }
 .pt-active-chip-clear {
@@ -5111,7 +5107,7 @@ button.pt-card-install-btn--installed {
 /* 文字 × 偏移修正：CSS line-height 在 inline-flex 容器里仍可能略偏，-2px 上移让它视觉居中。
    同时去掉 SVG 子选择器（按钮改用文字后 svg-icon 规则失效）。 */
 .pt-active-chip-clear:hover {
-	background: color-mix(in srgb, var(--pt-accent) 20%, transparent);
+	background: transparent;
 	color: var(--pt-accent, var(--interactive-accent));
 }
 .pt-active-chip-clear:focus-visible {
