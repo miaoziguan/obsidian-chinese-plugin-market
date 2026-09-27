@@ -368,6 +368,23 @@
 	background: transparent;
 	background-color: transparent;
 }
+
+/* 某些主题用 ::before / ::after 给 button 画悬浮/焦点圆底，一并清除。
+   工具栏图标按钮只保留其内部的 svg 图标，不要任何装饰性伪元素。 */
+.pt-view .pt-header-actions > .pt-btn::before,
+.theme-light .pt-view .pt-header-actions > .pt-btn::before,
+.theme-dark .pt-view .pt-header-actions > .pt-btn::before,
+.pt-view .pt-header-actions > .pt-btn::after,
+.theme-light .pt-view .pt-header-actions > .pt-btn::after,
+.theme-dark .pt-view .pt-header-actions > .pt-btn::after {
+	content: none !important;
+	background: transparent !important;
+	background-color: transparent !important;
+	background-image: none !important;
+	border: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+}
 /* 搜索结果计数：放在搜索框右侧，作为搜索态的元信息，不再混在动作图标行里 */
 .pt-search .pt-search-meta {
 	display: inline-flex;
