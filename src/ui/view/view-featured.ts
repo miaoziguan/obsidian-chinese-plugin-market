@@ -39,7 +39,10 @@ export function renderFeaturedSection(ctx: ViewContext) {
 	// 避免推荐插件混入其他维度的列表造成重复曝光、干扰用户筛选意图。
 	// 关键词模式、无搜索词（默认落地页）时强曝光。
 	// 仅在主动搜索、按作者钻取、开「推荐」筛选、或非「全部」安装维度时隐藏。
+	// 关键：仅「浏览」页签展示，避免重渲染（数据刷新/装态变化）时把推荐区泄漏到
+	// 更新 / 直链 / CSS 片段 / 收藏等页签，导致「羽鳞君出品」误现在其它板块。
 	const show =
+		ctx.viewTab === "browse" &&
 		!ctx.searchQuery.trim() &&
 		!ctx.authorFilter &&
 		!ctx.recommendedOnly &&

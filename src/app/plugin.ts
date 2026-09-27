@@ -344,7 +344,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 				const view = leaf.view;
 				if (view instanceof ChinesePluginMarketView) {
-					view.invalidateAndRender(false);
+					// 重跑管线：评测/装过维度（verdict/tried 筛选）依赖这些集合
+					view.renderPluginList(false);
 				}
 			}
 		} catch {
@@ -2282,7 +2283,9 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					const view = leaf.view;
 					if (view instanceof ChinesePluginMarketView) {
 						view.releaseDatesMap = map;
-						view.invalidateAndRender(false);
+						// 必须重跑排序/筛选管线，否则「上线/更新」维度对列表的过滤排序不会生效
+						// （invalidateAndRender 只重绘既有 visibleList，不重算）。
+						view.renderPluginList(false);
 					}
 				}
 				logger.debug(`[Chinese Plugin Market] 已加载 ${map.size} 个插件上线日期`);
@@ -2313,7 +2316,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					const view = leaf.view;
 					if (view instanceof ChinesePluginMarketView) {
 						view.chineseEcoSet = set;
-						view.invalidateAndRender(false);
+						// 必须重跑管线：中文生态筛选/排序依赖此集合（见 filter.ts）
+						view.renderPluginList(false);
 					}
 				}
 				logger.debug(`[Chinese Plugin Market] 已加载 ${set.size} 个中文生态插件`);
@@ -2367,7 +2371,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					const view = leaf.view;
 					if (view instanceof ChinesePluginMarketView) {
 						view.bambooSeriesSet = set;
-						view.invalidateAndRender(false);
+						// 必须重跑管线：系列筛选/羽鳞精选置顶都依赖这些集合（见 filter.ts）
+						view.renderPluginList(false);
 					}
 				}
 				logger.debug(`[Chinese Plugin Market] 已加载 ${set.size} 个竹林系列插件`);
@@ -2397,7 +2402,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					const view = leaf.view;
 					if (view instanceof ChinesePluginMarketView) {
 						view.yulinPicksSet = set;
-						view.invalidateAndRender(false);
+						// 关键修复：羽鳞精选置顶排序在 filter.ts 的管线里，
+						// invalidateAndRender 只重绘既有 visibleList，不重跑管线，
+						// 导致清单晚于首屏加载时精选插件无法置顶（偶发）。改重跑管线。
+						view.renderPluginList(false);
 					}
 				}
 				logger.debug(`[Chinese Plugin Market] 已加载 ${set.size} 个羽鳞精选插件`);
