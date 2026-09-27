@@ -6238,6 +6238,7 @@ button.pt-card-install-btn--installed {
 /* 主视图顶部页签栏：浏览 / 更新 */
 .pt-view-tabs {
 	display: flex;
+	justify-content: center;
 	gap: 4px;
 	padding: 6px 8px 0;
 }
