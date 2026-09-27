@@ -348,21 +348,14 @@
 	margin: 0;
 	padding: 0 26px 0 12px;
 	color: var(--pt-text-muted);
-	/* 模式段作为「内嵌 chip」承担模式切换入口，需有视觉区分让用户一眼发现可切换。
-	   整框 .pt-search 仍是 --pt-surface 白底（无灰块），这里单独给左段加 --pt-surface-2
-	   浅灰底 + border-right 细分隔线，构成经典 segmented input 形态。
-	   背景用显式 token 而非 inherit，避免 WebKit 露出原生灰渐变导致两色差。 */
-	/* 搜索框通体白：左段与整框同为 --pt-surface，去掉浅灰背景块，
-	   仅保留右侧细分割线 + 下拉箭头区分模式段。 */
-	background: var(--pt-surface);
+	/* 与 header 表面融为一体：无背景、无圆角、无右侧分隔线，仅靠下拉箭头 + 文字区分模式段。 */
+	background: transparent;
 	border: 0;
-	border-right: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-input) 0 0 var(--pt-radius-input);
+	border-radius: 0;
 	cursor: pointer;
 	white-space: nowrap;
 	flex-shrink: 0;
-	box-shadow: none; /* 去掉 <select> 在 WebKit/macOS 的 native drop shadow（模拟 native 弹出箭头按钮的硬阴影），
-	                    保持 segmented 整框视觉干净；聚焦时阴影由 .pt-search:focus-within 统一承担 */
+	box-shadow: none; /* 去掉 <select> 在 WebKit/macOS 的 native drop shadow */
 }
 /* caret 是真实 DOM 节点（<select> 在 WebKit 不渲染 ::after 伪元素）；
    绝对定位于 .pt-mode-wrap 内右侧，select 已预留 26px 右内边距，箭头浮于文字与分隔线之间；
@@ -1235,33 +1228,25 @@ button.pt-facet-letter-btn.is-active {
 	flex-shrink: 0;
 }
 
-/* ── 搜索框（组合输入 segmented：左段=模式选择器｜右段=内容输入 + AI badge） ──
+/* ── 搜索框（组合输入：左段=模式选择器｜右段=内容输入 + AI badge） ──
    第二行独占整行，宽度自动撑满 header，不被工具按钮挤压。
-   外框、聚焦光环由 .pt-search 统一承担，左右两段共享一个边框、视觉连体。 */
+   去掉底纹、圆角与外框，让搜索区与 header 表面融为一体，仅保留极淡下划线作为控件边界。 */
 .pt-search {
 	position: relative;
 	display: flex;
 	align-items: stretch;
 	width: 100%;
-	/* 背景与内容区主表面一致（白），不再用 --pt-surface-2 灰填充，
-	   消除「搜索框灰块浮在白页面上」的割裂感；仅保留边框 + 聚焦光环定义控件。
-	   select 段同样显式取 --pt-surface，杜绝 WebKit 原生灰渐变导致的两色差。 */
-	background: var(--pt-surface);
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-input);
-	transition: border-color var(--pt-duration-normal) var(--pt-ease), box-shadow var(--pt-duration-normal) var(--pt-ease);
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--pt-border);
+	border-radius: 0;
+	transition: border-color var(--pt-duration-normal) var(--pt-ease);
 }
-.pt-search:hover { border-color: var(--pt-border-strong); }
-/* 输入/模式/排序/刷新获得焦点时，整个组合框统一高亮（唯一焦点指示：
-   边框加深 + 光环，无第二条框）。焦点色跟随 Obsidian 主题（interactive-accent），
-   不再使用浏览器默认紫色 outline。
-   注意：不切换 background，避免 <select> 因 UA 原生绘画而无法跟随父级色变。 */
-/* 焦点表现：只用一道柔和光晕表达（无实心环，避免与 border 叠成双框；内框来自 Obsidian 全局
-   input 焦点环，已由下方 .pt-search input:focus 的 box-shadow:none !important 压掉）。
-   聚焦时隐藏默认灰 border，box-shadow 用模糊扩散——视觉上只有一道绿色光晕。 */
+.pt-search:hover { border-bottom-color: var(--pt-border-strong); }
+/* 焦点表现：下划线改为强调色，无实心环、无光晕框，保持扁平。 */
 .pt-search:focus-within {
-	border-color: transparent;
-	box-shadow: 0 0 8px 2px color-mix(in srgb, var(--pt-accent) 25%, transparent);
+	border-bottom-color: var(--pt-accent);
+	box-shadow: none;
 }
 /* 彻底干掉主题 / UA 加在搜索框内部元素上的独立边框、轮廓、光环、外边距——
    这是聚焦时「左灰右绿」脱节，以及子元素间残留 2px 缝隙（UA 默认 margin）的根因。
@@ -1309,7 +1294,7 @@ button.pt-facet-letter-btn.is-active {
 	color: var(--pt-text);
 	background: transparent;
 	border: 0;
-	border-radius: 0 var(--pt-radius-input) var(--pt-radius-input) 0;
+	border-radius: 0;
 	outline: none;
 }
 .pt-search-input::placeholder { color: var(--pt-text-faint); }
@@ -1349,11 +1334,12 @@ button.pt-facet-letter-btn.is-active {
 /* 语义模式（AI）下 badge 占据最右，清除按钮左移让位；本地语义 badge 已隐藏，无需让位 */
 .pt-search.pt-search-ai .pt-search-clear { right: 44px; }
 
-/* AI 搜索进行时：整个组合框边框高亮 + 输入区流光反馈 */
+/* AI 搜索进行时：下划线高亮 + 输入区流光反馈，保持扁平无框 */
 .pt-search.pt-search--ai-loading {
-	border-color: var(--pt-accent);
-	background: var(--pt-surface);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--pt-accent) 14%, transparent);
+	border-color: transparent;
+	border-bottom-color: var(--pt-accent);
+	background: transparent;
+	box-shadow: none;
 }
 .pt-search-input.ai-loading {
 	background-image: linear-gradient(
@@ -5924,8 +5910,11 @@ button.pt-card-install-btn--installed {
 		border-radius: 0;
 	}
 	.pt-search {
-		overflow: hidden;
-		border-radius: var(--pt-radius-input);
+		overflow: visible;
+		border-radius: 0;
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid var(--pt-border);
 	}
 	.pt-search-field,
 	.pt-mode-wrap {
