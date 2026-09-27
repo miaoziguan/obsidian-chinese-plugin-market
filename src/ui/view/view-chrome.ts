@@ -6,7 +6,7 @@
  */
 
 import { type I18nKey } from "@shared/i18n";
-import { isMobileEnvironment } from "@shared/platform";
+import { isMobileEnvironment, isTouchEnvironment } from "@shared/platform";
 import { isAISearchUsable } from "@shared/utils";
 import { logger } from "@shared/logger";
 import { setListState } from "@ui/dom/list-state";
@@ -448,8 +448,10 @@ export async function loadAndRender(ctx: ViewContext) {
 		const container = ctx.contentEl;
 		container.empty();
 		container.addClass("pt-view");
-		// #5: 移动端触摸适配 —— 给视图根加 pt-mobile 类，供 CSS 放大触控热区（按钮 min-height 44px 等）
-		if (isMobileEnvironment()) container.addClass("pt-mobile");
+		// #5: 移动端触摸适配 —— 给视图根加 pt-mobile 类，供 CSS 放大触控热区（按钮 min-height 44px 等）。
+		// 不仅限手机：平板（iPad 等）Platform.isMobile 为 false，但同样是触摸设备，
+		// 故叠加 isTouchEnvironment()（(hover:none) and (pointer:coarse)），消除平板响应式盲区。
+		if (isMobileEnvironment() || isTouchEnvironment()) container.addClass("pt-mobile");
 
 		// 从持久化设置恢复筛选状态
 		ctx.sourceFilter = ctx.settings.sourceFilter ?? "all";

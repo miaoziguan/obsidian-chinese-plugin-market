@@ -21,7 +21,7 @@ import {
 	Menu,
 	setIcon,
 } from "obsidian";
-import { isMobileEnvironment, requestIdle } from "@shared/platform";
+import { isMobileEnvironment, isTouchEnvironment, requestIdle } from "@shared/platform";
 import type { PluginInfo, TranslateResult, Translator } from "@domain/catalog/translator";
 import type { ChinesePluginMarketSettings } from "@ui/view/translator-view";
 import { makeT, type TFunc, type I18nKey } from "@shared/i18n";
@@ -748,7 +748,7 @@ export class PluginDetailDrawer {
 		// #5: 移动端右滑关闭手势（仅浮层模式 + 移动端）。
 		// 监听 drawerEl 的 touch 系列事件：记录起点，move 时实时跟手平移，
 		// 松手时若右移超过 100px 且速度够快则关闭（参考 Obsidian 原生抽屉交互）。
-		if (overlay && isMobileEnvironment() && this.drawerEl) {
+		if (overlay && (isMobileEnvironment() || isTouchEnvironment()) && this.drawerEl) {
 			this.bindSwipeClose(this.drawerEl);
 		}
 

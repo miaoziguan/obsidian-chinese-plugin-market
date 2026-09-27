@@ -15,6 +15,29 @@ export function isMobileEnvironment(): boolean {
 	}
 }
 
+/**
+ * 触摸环境判定（平板响应式盲区修复）。
+ *
+ * `Platform.isMobile` 在 iPad / Android 平板上返回 false（iPadOS 被识别为桌面类），
+ * 导致 `view-chrome` 不会给视图根加 `pt-mobile` 类 —— 所有移动端触控适配（按钮热区
+ * 放大、溢出按钮、抽屉滑动关闭等）在平板上整体失效，平板成为「响应式盲区」。
+ *
+ * 触摸适配不应依赖「是否手机」，而应依赖「是否触摸设备」。CSS 用
+ * `(hover: none) and (pointer: coarse)` 可靠命中手机 + 平板 + 触屏本，这里提供等价的
+ * JS 判定，用于给视图根加 `pt-mobile` 类、以及抽屉滑动关闭等需要 JS 分支的场景。
+ */
+export function isTouchEnvironment(): boolean {
+	try {
+		return (
+			typeof window !== "undefined" &&
+			typeof window.matchMedia === "function" &&
+			window.matchMedia("(hover: none) and (pointer: coarse)").matches === true
+		);
+	} catch {
+		return false;
+	}
+}
+
 type IdleHandle = number;
 
 /** 原生的 requestIdleCallback / cancelIdleCallback（可能缺失，如旧版移动端 WebView） */

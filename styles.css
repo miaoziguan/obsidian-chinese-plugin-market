@@ -5680,7 +5680,6 @@ button.pt-card-install-btn--installed {
 
 /* 移动端溢出菜单按钮（收起 刷新/AI翻译 等次要操作） */
 .pt-mobile .pt-overflow-btn {
-	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	min-height: 44px;
