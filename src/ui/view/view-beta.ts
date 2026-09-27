@@ -101,23 +101,6 @@ export function renderBetaList(ctx: ViewContext): void {
 	// ── 说明（这个列表是什么、能干什么）──
 	el.createDiv({ cls: "pt-beta-hint", text: t("betaList.hint") });
 
-	// ── 空态 ──
-	if (entries.length === 0) {
-		const empty = el.createDiv({ cls: "pt-updates-empty" });
-		empty.createDiv({ cls: "pt-updates-empty-title", text: t("betaList.empty") });
-		empty.createDiv({
-			cls: "pt-updates-empty-hint",
-			text: t("betaList.empty.hint", { cmd: t("directInstall.menu") }),
-		});
-		const installEmpty = empty.createEl("button", {
-			cls: "pt-beta-install-empty",
-			text: t("betaList.install"),
-			attr: { "aria-label": t("betaList.install"), title: t("betaList.install"), type: "button" },
-		});
-		installEmpty.addEventListener("click", (e) => openDirectInstallMenu(ctx, e));
-		return;
-	}
-
 	// ── 行列表 ──
 	const rows = el.createDiv({ cls: "pt-updates-rows" });
 	for (const e of entries) {

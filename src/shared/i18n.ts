@@ -706,8 +706,6 @@ export const STRINGS = {
 	"betaList.installPlugin": { zh: "安装插件" },
 	"betaList.installTheme": { zh: "安装主题" },
 	"betaList.count": { zh: "共 {n} 项" },
-	"betaList.empty": { zh: "还没有通过直链安装的内容" },
-	"betaList.empty.hint": { zh: "从左侧栏图标菜单或命令面板选「{cmd}」，装过的插件与主题会自动出现在这里" },
 	"betaList.source": { zh: "来源" },
 	"betaList.release": { zh: "Release" },
 	"betaList.untracked": { zh: "已取消跟踪" },

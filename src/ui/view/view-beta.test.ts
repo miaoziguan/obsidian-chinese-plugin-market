@@ -61,16 +61,16 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
 }
 
 describe("renderBetaList 「直链」页签列表", () => {
-	it("无直链记录时渲染空态（并提示入口命令）", () => {
+	it("无直链记录时不渲染行，也不渲染重复的空态面板", () => {
 		patchDomHelpers();
 		const { ctx, container } = makeCtx({ betaPlugins: [] });
 		renderBetaList(ctx);
-		expect(container.querySelector(".pt-updates-empty-title")?.textContent).toBe("betaList.empty");
-		expect(container.querySelector(".pt-updates-empty-hint")?.textContent).toContain("directInstall.menu");
 		expect(container.querySelectorAll(".pt-beta-row").length).toBe(0);
-		// 空态提供「从直链安装」入口
-		expect(container.querySelector(".pt-beta-install-empty")).not.toBeNull();
-		// 空态不给「全部更新」按钮
+		// 重复空态面板已移除，入口保留在顶部工具条
+		expect(container.querySelector(".pt-updates-empty-title")).toBeNull();
+		expect(container.querySelector(".pt-beta-install-empty")).toBeNull();
+		expect(container.querySelector(".pt-beta-install")).not.toBeNull();
+		// 空记录时不给「全部更新」按钮
 		expect(container.querySelector(".pt-updates-update-all")).toBeNull();
 	});
 
