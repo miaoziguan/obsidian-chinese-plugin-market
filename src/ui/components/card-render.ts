@@ -294,20 +294,18 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	recommendBadge.setCssStyles({ display: "none" });
 	card.appendChild(recommendBadge);
 
-	// 羽鳞精选徽标（紫色，常驻隐藏，applyCardState 控制显隐）
-	const yulinBadge = createSpan();
-	yulinBadge.className = "pt-card-yulin-badge";
-	yulinBadge.textContent = ctx.t("yulin.badge");
-	yulinBadge.setAttribute("title", ctx.t("yulin.badge"));
-	yulinBadge.setCssStyles({ display: "none" });
-	card.appendChild(yulinBadge);
-
 	// ── 头行：标题区 + 安装按钮 ──
 	const headRow = card.createDiv({ cls: "pt-card-head-row" });
 	const nameBlock = headRow.createDiv({ cls: "pt-card-name-block" });
 	const nameSpan = nameBlock.createSpan({ cls: "pt-card-name" });
 	const originalName = nameBlock.createSpan({ cls: "pt-card-original-name" });
 	originalName.setCssStyles({ display: "none" });
+
+	// 羽鳞精选徽标（金色，紧贴插件名，常驻隐藏，applyCardState 控制显隐）
+	const yulinBadge = nameBlock.createSpan({ cls: "pt-card-yulin-badge" });
+	yulinBadge.textContent = ctx.t("yulin.badge");
+	yulinBadge.setAttribute("title", ctx.t("yulin.badge"));
+	yulinBadge.setCssStyles({ display: "none" });
 
 	// 安装按钮占位（applyCardState 按状态重建并 replaceWith，保持 head Row 的 flex 顺序）
 	const installBtn = createSpan();

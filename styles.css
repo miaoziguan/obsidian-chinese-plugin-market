@@ -1805,34 +1805,33 @@ button.pt-card-install-btn--installed {
 }
 
 /* ── 羽鳞精选徽标：紫色系，绝对定位右上角，与左上推荐角标区分、不挤占布局 ── */
+/* ── 羽鳞精选徽标：金色系，紧贴插件名（位于名称行内，不挡右侧安装按钮）── */
 .pt-card-yulin-badge {
-	position: absolute;
-	top: 8px;
-	right: 8px;
 	display: inline-flex;
 	align-items: center;
-	gap: var(--pt-space-2xs);
-	padding: var(--pt-space-2xs) var(--pt-space-sm);
+	vertical-align: middle;
+	gap: 2px;
+	margin-left: var(--pt-space-xs);
+	padding: 1px var(--pt-space-sm);
 	border-radius: 999px;
 	font-size: var(--pt-text-xs);
 	font-weight: var(--pt-weight-bold);
 	letter-spacing: 0.02em;
 	color: var(--text-on-accent, #fff);
 	background: linear-gradient(135deg,
-		color-mix(in srgb, var(--pt-purple, #8b5cf6) 85%, #fff),
-		var(--pt-purple, #8b5cf6));
-	box-shadow: 0 1px 4px color-mix(in srgb, var(--pt-purple, #8b5cf6) 40%, transparent);
+		color-mix(in srgb, var(--pt-gold) 85%, #fff),
+		var(--pt-gold));
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--pt-gold) 40%, transparent);
 	pointer-events: none;
-	z-index: 2;
 }
 .theme-dark .pt-card-yulin-badge {
 	color: var(--text-on-accent, #fff);
 	background: linear-gradient(135deg,
-		color-mix(in srgb, var(--pt-purple, #8b5cf6) 55%, var(--pt-surface-2, var(--background-secondary))),
-		color-mix(in srgb, var(--pt-purple, #8b5cf6) 55%, var(--pt-surface-2, var(--background-secondary)))
+		color-mix(in srgb, var(--pt-gold) 50%, var(--pt-surface-2, var(--background-secondary))),
+		color-mix(in srgb, var(--pt-gold) 50%, var(--pt-surface-2, var(--background-secondary)))
 	);
-	box-shadow: 0 1px 4px color-mix(in srgb, var(--pt-purple, #8b5cf6) 25%, transparent);
-	border: 1px solid color-mix(in srgb, var(--pt-purple, #8b5cf6) 40%, transparent);
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--pt-gold) 25%, transparent);
+	border: 1px solid color-mix(in srgb, var(--pt-gold) 40%, transparent);
 }
 
 /* ── 「可更新」徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口 ──
