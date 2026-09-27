@@ -252,6 +252,9 @@
 	margin-bottom: var(--pt-space-sm);
 	container-type: inline-size;
 	container-name: pt-header;
+	background: transparent;
+	border: none;
+	box-shadow: none;
 }
 
 /* 头部：搜索框与工具按钮各占一行，均水平居中 */
@@ -260,6 +263,9 @@
 	flex-direction: column;
 	align-items: stretch;
 	gap: var(--pt-space-sm);
+	background: transparent;
+	border: none;
+	box-shadow: none;
 }
 
 /* 搜索框：独立第一行并居中，限制最大宽度，不占满整行 */
@@ -269,7 +275,8 @@
 	margin: 0 auto;
 }
 
-/* 工具栏按钮组：独立第二行并居中，flex 换行不溢出 */
+/* 工具栏按钮组：独立第二行并居中，flex 换行不溢出。
+   容器本身也强制透明，避免第三方主题给 div 加灰底。 */
 .pt-header-actions {
 	display: flex;
 	align-items: center;
@@ -277,80 +284,89 @@
 	justify-content: center;
 	gap: var(--pt-space-2xs);
 	width: 100%;
+	background: transparent;
+	border: none;
+	box-shadow: none;
 }
 
 /* 工具栏分组竖线：用左边框把「列表控制 / 数据操作 / 个人配置」语义组隔开。
-   边框挂在每组的第一个元素上，随元素一起隐藏，避免响应式折叠后留下 orphan 分隔线。
-   颜色用 border-strong，比上次的 border 更可见，但仍保持低对比度不抢眼。 */
+   边框挂在每组的第一个元素上，随元素一起隐藏，避免响应式折叠后留下 orphan 分隔线。 */
 .pt-header-actions > .pt-header-actions-group-start {
-	border-left: 1px solid var(--pt-border-strong);
+	border-left: 1px solid var(--pt-border);
 	margin-left: 8px;
 	padding-left: 8px;
 }
 
-/* 工具栏按钮统一挂 .pt-btn 原语，但工具栏要求更扁平：不要任何圆角背景，只保留图标。
-   此处用 (0,1,1) specificity 覆盖 .pt-btn 原语的 pill/hover-bg，以及主题对 button 的默认样式。 */
-.pt-header-actions > .pt-btn {
+/* 工具栏按钮：彻底扁平。不要任何圆角背景 / 悬浮背景 / 焦点背景，只保留图标本身。
+   用 .pt-view 前缀把优先级提到 (0,3,1) 以上，压过 .theme-light/.theme-dark button 默认/悬浮样式。
+   这里显式把背景、边框、圆角、阴影全部清空，并把背景移出 transition。 */
+.pt-view .pt-header-actions > .pt-btn,
+.theme-light .pt-view .pt-header-actions > .pt-btn,
+.theme-dark .pt-view .pt-header-actions > .pt-btn,
+.pt-view .pt-header-actions > .pt-btn:hover,
+.theme-light .pt-view .pt-header-actions > .pt-btn:hover,
+.theme-dark .pt-view .pt-header-actions > .pt-btn:hover,
+.pt-view .pt-header-actions > .pt-btn:focus-visible,
+.theme-light .pt-view .pt-header-actions > .pt-btn:focus-visible,
+.theme-dark .pt-view .pt-header-actions > .pt-btn:focus-visible,
+.pt-view .pt-header-actions > .pt-btn:active,
+.theme-light .pt-view .pt-header-actions > .pt-btn:active,
+.theme-dark .pt-view .pt-header-actions > .pt-btn:active {
 	flex: 0 0 auto;
+	appearance: none;
 	background: transparent;
-	border: none;
+	background-color: transparent;
+	border-top: none;
+	border-right: none;
+	border-bottom: none;
 	border-radius: 0;
 	box-shadow: none;
+	color: var(--pt-text-muted);
+	transition: color var(--pt-duration-fast) var(--pt-ease),
+		transform var(--pt-duration-fast) var(--pt-ease-spring);
+	transform: none;
 }
-.pt-header-actions > .pt-btn:hover,
-.pt-header-actions > .pt-btn:focus-visible {
-	background: transparent;
-	border-radius: 0;
-	box-shadow: none;
-	color: var(--pt-text);
-}
-.pt-header-actions > .pt-btn:focus-visible {
-	outline: none;
-	color: var(--pt-accent);
-}
-.pt-header-actions > .pt-btn:active { transform: none; }
 
-/* 覆盖 .pt-refresh/.pt-toggle-filters 全局 focus ring，工具栏内不需要圆角光环 */
-.pt-header-actions > .pt-refresh:focus-visible,
-.pt-header-actions > .pt-toggle-filters:focus-visible {
-	box-shadow: none;
-	border-radius: 0;
+/* 分组首元素保留左边框；其余边框已在上方清空。 */
+.pt-view .pt-header-actions > .pt-header-actions-group-start,
+.theme-light .pt-view .pt-header-actions > .pt-header-actions-group-start,
+.theme-dark .pt-view .pt-header-actions > .pt-header-actions-group-start {
+	border-left: 1px solid var(--pt-border);
+}
+
+/* 悬浮 / 焦点：只变色，不加灰底 */
+.pt-view .pt-header-actions > .pt-btn:hover,
+.theme-light .pt-view .pt-header-actions > .pt-btn:hover,
+.theme-dark .pt-view .pt-header-actions > .pt-btn:hover {
+	color: var(--pt-text-strong);
+}
+.pt-view .pt-header-actions > .pt-btn:focus-visible,
+.theme-light .pt-view .pt-header-actions > .pt-btn:focus-visible,
+.theme-dark .pt-view .pt-header-actions > .pt-btn:focus-visible {
+	color: var(--pt-accent);
 }
 
 /* 溢出按钮宽屏隐藏，窄屏由容器查询显示（避免与展开图标重复，见 2.64.4） */
 .pt-header-actions > .pt-overflow-btn { display: none; }
 
-/* 筛选/AI 激活态：仅图标变色，不要圆角背景 */
-.pt-header-actions > .pt-toggle-filters[aria-expanded="true"] {
+/* 筛选 / AI 激活态：只变色，不要背景块 */
+.pt-view .pt-header-actions > .pt-toggle-filters[aria-expanded="true"],
+.theme-light .pt-view .pt-header-actions > .pt-toggle-filters[aria-expanded="true"],
+.theme-dark .pt-view .pt-header-actions > .pt-toggle-filters[aria-expanded="true"] {
 	color: var(--pt-accent);
 	background: transparent;
+	background-color: transparent;
 	border-color: transparent;
 }
-.pt-header-actions > .pt-ai-icon-btn--ready,
-.pt-header-actions > .pt-ai-icon-btn--ready:hover {
+.pt-view .pt-header-actions > .pt-ai-icon-btn--ready,
+.theme-light .pt-view .pt-header-actions > .pt-ai-icon-btn--ready,
+.theme-dark .pt-view .pt-header-actions > .pt-ai-icon-btn--ready,
+.pt-view .pt-header-actions > .pt-ai-icon-btn--ready:hover,
+.theme-light .pt-view .pt-header-actions > .pt-ai-icon-btn--ready:hover,
+.theme-dark .pt-view .pt-header-actions > .pt-ai-icon-btn--ready:hover {
 	color: var(--pt-accent, var(--interactive-accent));
 	background: transparent;
-}
-
-/* 暗色主题强制扁平：防止主题 button 默认背景/圆角回归 */
-.theme-dark .pt-header-actions > .pt-btn,
-.theme-dark .pt-header-actions > .pt-btn:hover,
-.theme-dark .pt-header-actions > .pt-btn:focus-visible,
-.theme-dark .pt-header-actions > .pt-btn:active {
-	background: transparent;
-	border: none;
-	border-radius: 0;
-	box-shadow: none;
-}
-.theme-dark .pt-header-actions > .pt-toggle-filters[aria-expanded="true"],
-.theme-dark .pt-header-actions > .pt-ai-icon-btn--ready,
-.theme-dark .pt-header-actions > .pt-ai-icon-btn--ready:hover {
-	background: transparent;
-	border-color: transparent;
-}
-/* 暗色下分组左边框显式恢复，覆盖上方 .pt-btn 的 border: none */
-.theme-dark .pt-header-actions > .pt-header-actions-group-start {
-	border-left: 1px solid var(--pt-border-strong);
+	background-color: transparent;
 }
 /* 搜索结果计数：放在搜索框右侧，作为搜索态的元信息，不再混在动作图标行里 */
 .pt-search .pt-search-meta {
