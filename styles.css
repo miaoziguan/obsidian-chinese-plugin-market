@@ -282,6 +282,15 @@
 	width: 100%;
 }
 
+/* 工具栏分组竖线：用左边框把「信息/视图/操作/配置」语义组隔开。
+   边框挂在每组的第一个元素上，当该元素被容器查询隐藏时，竖线会一并消失，
+   避免响应式折叠后留下 orphan 分隔线。 */
+.pt-header-actions > .pt-header-actions-group-start {
+	border-left: 1px solid var(--pt-border);
+	margin-left: 4px;
+	padding-left: 4px;
+}
+
 /* 工具栏按钮统一挂 .pt-btn 原语，但工具栏要求更扁平：不要任何圆角背景，只保留图标。
    此处用 (0,1,1) specificity 覆盖 .pt-btn 原语的 pill/hover-bg，以及主题对 button 的默认样式。 */
 .pt-header-actions > .pt-btn {
@@ -343,6 +352,10 @@
 .theme-dark .pt-header-actions > .pt-ai-icon-btn--ready:hover {
 	background: transparent;
 	border-color: transparent;
+}
+/* 暗色下分组左边框显式恢复，覆盖上方 .pt-btn 的 border: none */
+.theme-dark .pt-header-actions > .pt-header-actions-group-start {
+	border-left: 1px solid var(--pt-border);
 }
 /* 结果计数与按钮同高对齐 */
 .pt-header-actions > .pt-result-count {

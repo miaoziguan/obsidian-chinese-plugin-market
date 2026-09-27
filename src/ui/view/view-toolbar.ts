@@ -320,7 +320,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 
 		// ── 排序按钮（仅图标，点击展开排序菜单） ──
-		const sortWrap = actions.createDiv({ cls: "pt-sort-wrap" });
+		const sortWrap = actions.createDiv({ cls: "pt-sort-wrap pt-header-actions-group-start" });
 
 		// ── 组合下拉（场景切换，非筛选：点击弹 Menu 列出 profile 一键应用） ──
 		const profileBtn = actions.createEl("button", {
@@ -482,7 +482,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// AI 一键翻译（纯图标按钮，置于排序↕与刷新↻之间；无待翻译项时自动隐藏）
 		ctx.aiTranslateBtnEl = actions.createEl("button", {
-			cls: "pt-btn pt-ai-icon-btn",
+			cls: "pt-btn pt-ai-icon-btn pt-header-actions-group-start",
 			attr: { "aria-label": ctx.t("action.aiTranslate"), type: "button" },
 		});
 		setIcon(ctx.aiTranslateBtnEl, "sparkles");
@@ -554,7 +554,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 置于搜索行最右
 		const toggleBtn = actions.createEl("button", {
-			cls: "pt-btn pt-toggle-filters pt-toggle-filters--text",
+			cls: "pt-btn pt-toggle-filters pt-toggle-filters--text pt-header-actions-group-start",
 			attr: { "aria-label": "展开高级筛选", "aria-expanded": "false" },
 		});
 		const filterIcon = toggleBtn.createSpan({ cls: "pt-toggle-filters-icon" });
