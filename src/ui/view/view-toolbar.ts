@@ -49,6 +49,63 @@ export function alignFacetLabels(scope: HTMLElement) {
 	});
 }
 
+/** 筛选下拉选项（官方「全部（79）」select 风格）：value + 展示文案 + 计数 */
+export interface FilterSelectOption {
+	value: string;
+	label: string;
+	count: number;
+}
+
+/**
+ * 官方设计一致的筛选下拉（对齐 Obsidian 设置页「已安装插件」的 select 控件）：
+ * 按钮 = 当前项文案（计数），点击弹原生 Menu（官方勾选/分隔线样式，无需自绘）。
+ * register 用于把「按钮文案刷新」挂到统一的筛选同步入口（updateFacetVisibility 钩子），
+ * 保证任意路径（模式切换/清空筛选/活跃 chips ✕）改状态后按钮文案都跟着变。
+ */
+function createFilterSelect(
+	parent: HTMLElement,
+	register: (fn: () => void) => void,
+	opts: {
+		getActive: () => string;
+		getOptions: () => FilterSelectOption[];
+		onPick: (value: string) => void;
+	}
+): HTMLElement {
+	const wrap = parent.createDiv({ cls: "pt-select" });
+	const btn = wrap.createEl("button", {
+		cls: "pt-select-btn",
+		attr: { type: "button", "aria-haspopup": "menu" },
+	});
+	const labelEl = btn.createSpan({ cls: "pt-select-label" });
+	// 官方同款 ⇕ 双箭头（chevrons-up-down），与原生 select 视觉一致
+	const caret = btn.createSpan({ cls: "pt-select-caret" });
+	setIcon(caret, "chevrons-up-down");
+
+	const render = () => {
+		const options = opts.getOptions();
+		const cur = options.find((o) => o.value === opts.getActive()) ?? options[0];
+		if (cur) labelEl.setText(`${cur.label}（${cur.count}）`);
+	};
+	render();
+	register(render);
+
+	btn.addEventListener("click", (e) => {
+		const menu = new Menu();
+		for (const option of opts.getOptions()) {
+			menu.addItem((item) =>
+				item
+					.setTitle(`${option.label}（${option.count}）`)
+					.setChecked(option.value === opts.getActive())
+					.onClick(() => {
+						if (option.value !== opts.getActive()) opts.onPick(option.value);
+					}),
+			);
+		}
+		menu.showAtMouseEvent(e as MouseEvent);
+	});
+	return wrap;
+}
+
 /** 触发「全部更新」并展示进度条（更新页签工具条与 ⋮ 溢出菜单共用） */
 function triggerUpdateAll(ctx: ViewContext, mountAfter: HTMLElement): void {
 	ctx.track("action:updateAll");
@@ -231,6 +288,17 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		searchBar.toggleClass("pt-search-ai", isAIMode(ctx));
 		searchBar.toggleClass("pt-search-local", isLocalMode(ctx));
 		
+	// ── 官方 select 风格筛选下拉的文案同步 ──
+	// 所有筛选状态变化路径（模式切换/清空筛选/活跃 chips ✕/面板内点选）最终都会调
+	// ctx.updateFacetVisibility；在其上挂一层刷新，下拉按钮文案即可始终与状态一致。
+	const filterSelectSyncers: Array<() => void> = [];
+	const syncFilterSelects = () => filterSelectSyncers.forEach((fn) => fn());
+	const baseUpdateFacetVisibility = ctx.updateFacetVisibility.bind(ctx);
+	ctx.updateFacetVisibility = () => {
+		baseUpdateFacetVisibility();
+		syncFilterSelects();
+	};
+
 		// 模式切换处理（自绘菜单项点击 → applySearchMode）
 		const applySearchMode = (newMode: SearchMode) => {
 			if (ctx.searchMode === newMode) return;
@@ -245,18 +313,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.installFilter = "all";
 			ctx.favoriteFilter = "all";
 			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
-			// 「已安装/已启动/已安装未启动」按钮：aria-pressed 与文案复位
-			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-uninstalled")?.setText("已安装");
-			q(ctx.contentEl, ".pt-toggle-enabled")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-enabled")?.setText("已启动");
-			q(ctx.contentEl, ".pt-toggle-installed-off")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-installed-off")?.setText("已安装未启动");
-			// 「已收藏/未收藏」按钮：aria-pressed 与文案复位
-			q(ctx.contentEl, ".pt-toggle-favorites")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-favorites")?.setText("已收藏");
-			q(ctx.contentEl, ".pt-toggle-unfavorites")?.setAttribute("aria-pressed", "false");
-			q(ctx.contentEl, ".pt-toggle-unfavorites")?.setText("未收藏");
+			// 安装/收藏已改为官方 select 下拉，状态在上方统一复位，这里只刷新下拉文案
+			syncFilterSelects();
 			// 排序菜单「收藏优先」项 active 态复位
 			const favItemEl = q(ctx.contentEl, ".pt-sort-menu-item--fav");
 			if (favItemEl) favItemEl.classList.remove("pt-sort-menu-item--active");
@@ -271,10 +329,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			if (aiBtn) aiBtn.setCssStyles({ display: "" });
 				facetContainer?.querySelectorAll(".pt-filter").forEach((el) => {
 					el.setAttribute("aria-pressed", "false");
-				});
-				// 重新同步来源筛选高亮（上方循环会误伤来源筛选按钮）
-				ctx.contentEl.querySelectorAll(".pt-source-filters .pt-filter").forEach((el) => {
-					el.setAttribute("aria-pressed", (el as HTMLElement).dataset.value === ctx.sourceFilter ? "true" : "false");
 				});
 			} else {
 			if (newMode === "local") {
@@ -536,9 +590,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.sourceFilter = "original";
 				ctx.settings.sourceFilter = "original";
 				void ctx.saveSettings();
-				ctx.contentEl.querySelectorAll(".pt-source-filters .pt-filter").forEach((el) => {
-					el.setAttribute("aria-pressed", el.getAttribute("data-value") === "original" ? "true" : "false");
-				});
+				// 来源筛选已是官方 select 下拉，updateFacetVisibility 钩子会刷新其文案
 				ctx.scheduleRender();
 			}
 			ctx.updateFacetVisibility();
@@ -837,41 +889,34 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		const stats = titleGroup.createSpan({ cls: "pt-stats" });
 		stats.createSpan({ cls: "pt-stat", text: ctx.t("app.loading") + "..." });
 
-		// ── 来源筛选胶囊（随高级区收起，点「筛选 ▾」展开） ──
+		// ── 来源筛选（官方 select 下拉：按钮显示当前项（计数），点开原生 Menu 勾选） ──
 		const sourceRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		sourceRow.createSpan({ cls: "pt-facet-label", text: "翻译" });
-		const sourceFilters = sourceRow.createDiv({ cls: "pt-source-filters" });
-		const filterDefs: [string, string][] = [
-			["all", "全部"],
-			["translated", "已翻译"],
-			["original", "未翻译"],
-		];
-		for (const [value, label] of filterDefs) {
-			const btn = sourceFilters.createEl("button", {
-				cls: "pt-filter",
-				text: label,
-			});
-			btn.setAttribute("data-value", value);
-			btn.setAttribute("aria-pressed", value === ctx.sourceFilter ? "true" : "false");
-			// AI 语义模式下，「由AI译」来源筛选无意义（结果集非逐个 AI 翻译），隐藏该选项
-			if (value === "ai" && isAIMode(ctx)) {
-				btn.setCssStyles({ display: "none" });
-			}
-			btn.addEventListener("click", () => {
+		const sourceCell = sourceRow.createDiv({ cls: "pt-facet-chips" });
+		createFilterSelect(sourceCell, (fn) => filterSelectSyncers.push(fn), {
+			getActive: () => ctx.sourceFilter,
+			getOptions: () => {
+				const total = ctx.plugins.length;
+				const translated = ctx.plugins.filter((p) => {
+					const r = ctx.translatedResults[p.id];
+					return !!r && r.source !== "original";
+				}).length;
+				return [
+					{ value: "all", label: "全部", count: total },
+					{ value: "translated", label: "已翻译", count: translated },
+					{ value: "original", label: "未翻译", count: Math.max(0, total - translated) },
+				];
+			},
+			onPick: (value) => {
 				ctx.sourceFilter = value as typeof ctx.sourceFilter;
-				sourceFilters.querySelectorAll(".pt-filter").forEach((el) => {
-					el.setAttribute(
-						"aria-pressed",
-						(el as HTMLElement) === btn ? "true" : "false"
-					);
-				});
-			ctx.settings.sourceFilter = ctx.sourceFilter;
-			ctx.track(`filter:source_${ctx.sourceFilter}`);
-			ctx.saveSettings();
-			// rAF 延迟渲染：点击立即响应（aria-pressed 已更新），全量过滤+渲染移出点击帧，避免筛选卡顿
-			ctx.scheduleRender(true);
+				ctx.settings.sourceFilter = ctx.sourceFilter;
+				ctx.track(`filter:source_${ctx.sourceFilter}`);
+				void ctx.saveSettings();
+				ctx.updateFacetVisibility();
+				// rAF 延迟渲染：点击立即响应，全量过滤+渲染移出点击帧，避免筛选卡顿
+				ctx.scheduleRender(true);
+			},
 		});
-		}
 
 
 	// 用法 B：分类 facet 筛选器（多选分类，支持 AI/关键字模式全局发现维度）
@@ -938,75 +983,62 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 
-		// ── 安装筛选（已安装 / 已启动 / 已安装未启动），收进面板统一筛选入口 ──
+		// ── 安装筛选（官方 select 下拉，对齐设置页「全部（79）」控件） ──
 		const installRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		installRow.createSpan({ cls: "pt-facet-label", text: "安装" });
-		const installChips = installRow.createDiv({ cls: "pt-facet-chips" });
-
-		const installToggleDefs: { cls: string; on: InstallFilter; label: string; track: string }[] = [
-			{ cls: "pt-toggle-uninstalled", on: "installed", label: "已安装", track: "filter:installed" },
-			{ cls: "pt-toggle-enabled", on: "enabled", label: "已启动", track: "filter:enabled" },
-			{ cls: "pt-toggle-installed-off", on: "installedNotEnabled", label: "已安装未启动", track: "filter:installedNotEnabled" },
-		];
-		const installToggles = installToggleDefs.map((def) =>
-			installChips.createEl("button", { cls: `pt-filter ${def.cls}`, text: def.label })
-		);
-
-		const updateInstallToggles = () => {
-			installToggles.forEach((el, i) => {
-				const def = installToggleDefs[i];
-				const active = ctx.installFilter === def.on;
-				el.setAttribute("aria-pressed", active ? "true" : "false");
-				el.textContent = active ? "显示全部" : def.label;
-			});
+		const installCell = installRow.createDiv({ cls: "pt-facet-chips" });
+		const installTrackMap: Record<InstallFilter, string> = {
+			all: "",
+			installed: "filter:installed",
+			enabled: "filter:enabled",
+			installedNotEnabled: "filter:installedNotEnabled",
 		};
-		updateInstallToggles();
-
-		installToggles.forEach((el, i) => {
-			const def = installToggleDefs[i];
-			el.addEventListener("click", () => {
-				ctx.installFilter = ctx.installFilter === def.on ? "all" : def.on;
-				updateInstallToggles();
+		createFilterSelect(installCell, (fn) => filterSelectSyncers.push(fn), {
+			getActive: () => ctx.installFilter,
+			getOptions: () => {
+				const total = ctx.plugins.length;
+				let installedNotEnabled = 0;
+				for (const id of ctx.installedIds) if (!ctx.enabledIds.has(id)) installedNotEnabled++;
+				return [
+					{ value: "all", label: "全部", count: total },
+					{ value: "installed", label: "已安装", count: ctx.installedIds.size },
+					{ value: "enabled", label: "已启动", count: ctx.enabledIds.size },
+					{ value: "installedNotEnabled", label: "已安装未启动", count: installedNotEnabled },
+				];
+			},
+			onPick: (value) => {
+				ctx.installFilter = value as InstallFilter;
 				ctx.updateFacetVisibility();
-				ctx.track(ctx.installFilter === def.on ? def.track : `${def.track}_off`);
+				const track = installTrackMap[ctx.installFilter];
+				if (track) ctx.track(track);
 				ctx.scheduleRender(true);
-			});
+			},
 		});
 
-		// ── 收藏筛选（已收藏 / 未收藏），与安装筛选同组 ──
+		// ── 收藏筛选（官方 select 下拉，与安装筛选同组） ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		favRow.createSpan({ cls: "pt-facet-label", text: "收藏" });
-		const favChips = favRow.createDiv({ cls: "pt-facet-chips" });
-
-		const favToggleDefs: { cls: string; on: FavoriteFilter; label: string; track: string }[] = [
-			{ cls: "pt-toggle-favorites", on: "favorited", label: "已收藏", track: "filter:favorites" },
-			{ cls: "pt-toggle-unfavorites", on: "unfavorited", label: "未收藏", track: "filter:unfavorites" },
-		];
-		const favToggles = favToggleDefs.map((def) =>
-			favChips.createEl("button", { cls: `pt-filter ${def.cls}`, text: def.label })
-		);
-
-		const updateFavToggles = () => {
-			favToggles.forEach((el, i) => {
-				const def = favToggleDefs[i];
-				const active = ctx.favoriteFilter === def.on;
-				el.setAttribute("aria-pressed", active ? "true" : "false");
-				el.textContent = active ? "显示全部" : def.label;
-			});
-		};
-		updateFavToggles();
-
-		favToggles.forEach((el, i) => {
-		const def = favToggleDefs[i];
-		el.addEventListener("click", () => {
-			ctx.favoriteFilter = ctx.favoriteFilter === def.on ? "all" : def.on;
-			updateFavToggles();
-			// 收藏筛选为会话级（不持久化）：每次打开插件重置为「全部」，
-			// 避免用户误以为默认筛选到「已收藏」（收藏集 favorites 仍持久化）
-			ctx.track(ctx.favoriteFilter === def.on ? def.track : `${def.track}_off`);
-			ctx.scheduleRender(true);
+		const favCell = favRow.createDiv({ cls: "pt-facet-chips" });
+		createFilterSelect(favCell, (fn) => filterSelectSyncers.push(fn), {
+			getActive: () => ctx.favoriteFilter,
+			getOptions: () => {
+				const total = ctx.plugins.length;
+				const favorited = ctx.favoritesSet.size;
+				return [
+					{ value: "all", label: "全部", count: total },
+					{ value: "favorited", label: "已收藏", count: favorited },
+					{ value: "unfavorited", label: "未收藏", count: Math.max(0, total - favorited) },
+				];
+			},
+			onPick: (value) => {
+				ctx.favoriteFilter = value as FavoriteFilter;
+				ctx.updateFacetVisibility();
+				// 收藏筛选为会话级（不持久化）：每次打开插件重置为「全部」，
+				// 避免用户误以为默认筛选到「已收藏」（收藏集 favorites 仍持久化）
+				if (ctx.favoriteFilter !== "all") ctx.track(`filter:${ctx.favoriteFilter}`);
+				ctx.scheduleRender(true);
+			},
 		});
-	});
 
 	// ── 生态筛选（当前实现 = 中文生态；维度可扩展为其它生态） ──
 	// 标题用通用词「生态」（维度标签），激活按钮用具体语义「中文生态」（用户看到的是「我在筛什么」）。
@@ -1119,18 +1151,11 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.sourceFilter = "all";
 			ctx.settings.sourceFilter = "all";
 			void ctx.saveSettings();
-			sourceFilters.querySelectorAll(".pt-filter").forEach((el) => {
-				el.setAttribute("aria-pressed",
-					el.getAttribute("data-value") === "all" ? "true" : "false"
-				);
-			});
 			ctx.selectedCategories = [];
 			renderChips();
 			ctx.authorFilter = null;
 			ctx.installFilter = "all";
-			updateInstallToggles();
 			ctx.favoriteFilter = "all";
-			updateFavToggles();
 			// 重置中文生态筛选
 			ctx.chineseEcoFilter = "all";
 			updateEcoToggle();
@@ -1147,7 +1172,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			updateNewToggle();
 			updateUpdToggle();
 			ctx.renderAuthorFacet();
-			// 同步顶部「筛选中」chips 与重置按钮高亮态（仅 scheduleRender 不会触发）
+			// 同步顶部「筛选中」chips、select 下拉文案与重置按钮高亮态（仅 scheduleRender 不会触发）
 			ctx.updateFacetVisibility();
 			ctx.scheduleRender();
 		});

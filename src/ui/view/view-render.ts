@@ -459,13 +459,8 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 					ctx.contentEl.querySelectorAll(".pt-filter").forEach((el) => {
 						el.setAttribute("aria-pressed", "false");
 					});
-					const allBtn = q(ctx.contentEl, ".pt-source-filters .pt-filter[data-value='all']");
-					if (allBtn) allBtn.setAttribute("aria-pressed", "true");
-				const toggle = q(ctx.contentEl, ".pt-toggle-uninstalled");
-				if (toggle) {
-					toggle.setAttribute("aria-pressed", "false");
-					toggle.textContent = "已安装";
-				}
+					// 来源/安装/收藏已是官方 select 下拉：经 updateFacetVisibility 钩子刷新按钮文案
+					ctx.updateFacetVisibility();
 					const clearBtn = q(ctx.contentEl, ".pt-search-clear");
 					if (clearBtn) clearBtn.setCssStyles({ display: "none" });
 					ctx.scheduleRender();

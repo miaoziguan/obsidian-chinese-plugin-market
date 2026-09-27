@@ -1365,6 +1365,46 @@ button.pt-facet-letter-btn.is-active {
 	box-shadow: none;
 }
 
+/* ── 官方 select 风格筛选下拉（对齐设置页「已安装插件」的「全部（79）」控件） ──
+   按钮 = 当前项文案（计数）+ ⇕ 双箭头；点击弹原生 Menu（勾选/分隔线由官方渲染）。
+   .pt-view 前缀提权，压过主题对 button 的默认灰底/圆角/阴影。 */
+.pt-view .pt-select {
+	display: inline-flex;
+	align-items: center;
+}
+.pt-view .pt-select-btn {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	font-size: var(--pt-text-sm, var(--font-ui-small));
+	color: var(--pt-text, var(--text-normal));
+	background: var(--pt-surface, var(--background-secondary));
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	box-shadow: none;
+	cursor: pointer;
+	transition: background var(--pt-duration-fast, 120ms) var(--pt-ease, ease),
+		border-color var(--pt-duration-fast, 120ms) var(--pt-ease, ease);
+}
+.pt-view .pt-select-btn:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
+}
+.pt-view .pt-select-label {
+	white-space: nowrap;
+}
+.pt-view .pt-select-caret {
+	display: inline-flex;
+	align-items: center;
+	color: var(--pt-text-muted, var(--text-muted));
+}
+.pt-view .pt-select-caret svg {
+	width: 12px;
+	height: 12px;
+}
+
 /* 面板底部常驻的重置按钮：内容宽度 + 顶部分隔，避免拉伸成整行重块 */
 .pt-toolbar-reset {
 	align-self: flex-start;
