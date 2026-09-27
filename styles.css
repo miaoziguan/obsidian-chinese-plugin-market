@@ -258,6 +258,9 @@
 	top: calc(100% + 6px);
 	right: 0;
 	min-width: 180px;
+	/* 防横向溢出：长本地化文本（如排序项）撑宽菜单时，限制最大宽度并允许换行，
+	   避免在窄屏向左展开超出视口左边界。 */
+	max-width: min(280px, calc(100vw - 16px));
 	background: var(--pt-surface);
 	border: 1px solid var(--pt-border);
 	border-radius: var(--pt-radius-card);
@@ -1404,6 +1407,23 @@ button.pt-facet-letter-btn.is-active {
 	container-type: inline-size;
 }
 
+/* ══ 响应式断点体系：统一基于「容器宽度」，不依赖视口 ══
+ * 插件视图在 Obsidian 分屏 / 侧栏中运行时容器宽 ≠ 视口宽，因此所有「宽度」断点一律用
+ * @container（相对最近 container-type 祖先），禁止再用 @media(width)。
+ * 现有 container-type 上下文：
+ *   .pt-list.pt-list-viewport（卡片/列表共用滚动容器）→ 卡片信息密度断点
+ *   .pt-header（container-name: pt-header）→ 顶部工具栏断点
+ *   .pt-drawer → 详情双栏 / 内容窄化断点
+ * 语义断点（像素阈值，全项目统一约定）：
+ *   BP-XS 420  卡片极窄：隐藏信号行 + AI 理由，描述 3 行
+ *   BP-SM 480  手机竖屏：强制卡片单列满宽
+ *   BP-MD 520  工具栏完全折叠（搜索框换行 + 次要按钮收进 ⋮）
+ *   BP-LD 600  卡片中等：隐藏信号行，描述 4 行
+ *   BP-LG 640  详情双栏（正文 + 右栏常驻）/ 抽屉全屏阈值
+ *   BP-TAB 760 平板竖向：工具栏折行（搜索框独占一行）
+ *   BP-XL 1200 详情页内容窄化（max-width 760）
+ * 交互媒体（保留 @media）：(hover: none) 触摸设备、(prefers-reduced-motion) 无障碍。
+ * ───────────────────────────────────────────────────── */
 /* ── 容器查询自适应：根据容器宽度动态调整卡片信息密度 ── */
 /* 窄屏（侧栏 ~400px）：隐藏信号和 AI 理由，描述截断 3 行 */
 @container (max-width: 420px) {
@@ -1420,8 +1440,10 @@ button.pt-facet-letter-btn.is-active {
 		max-height: calc(var(--pt-text-sm, 0.72rem) * 1.5 * 3);
 	}
 }
-/* 中等宽度（420-600px）：隐藏信号行，保留统计和 AI 理由，描述截断 4 行 */
-@container (min-width: 421px) and (max-width: 600px) {
+/* 中等宽度（421-640px）：隐藏信号行，保留统计和 AI 理由，描述截断 4 行。
+ * 上限由 600 延至 640，使手机横屏 / iPad 分屏（481-640px）统一收敛密度，
+ * 避免 601px 处突然从「隐藏信号」切回「显示信号」造成密度跳变。 */
+@container (min-width: 421px) and (max-width: 640px) {
 	.pt-card-signals {
 		display: none;
 	}
@@ -2985,6 +3007,19 @@ button.pt-card-install-btn--installed {
 	display: none;
 }
 
+/* 触摸设备（手机 + 平板）：抽屉全屏覆盖，提升阅读 / 操作空间。
+ * 注：.pt-drawer 自身是 container-type，无法用 @container 响应「自身」宽度，
+ * 故用 (hover: none) and (pointer: coarse) 命中所有触摸设备。
+ * 桌面端的窄分屏仍保留右侧抽屉（占 85%）以便对照列表。 */
+@media (hover: none) and (pointer: coarse) {
+	.pt-drawer {
+		width: 100%;
+		max-width: 100%;
+		border-left: none;
+		box-shadow: none;
+	}
+}
+
 /* ── 整页滚动容器 ── */
 .pt-detail-page-scroll {
 	height: 100%;
@@ -3027,8 +3062,9 @@ button.pt-card-install-btn--installed {
 	padding: var(--pt-space-xl) var(--pt-space-lg) 0;
 }
 
-/* 宽屏下缩小内容宽度，让 README 更易阅读 */
-@media (min-width: 1200px) {
+/* 宽容器（抽屉/pane ≥1200px，相对 .pt-drawer）下缩小内容宽度，让 README 更易阅读。
+ * 改用 @container：窄侧栏中抽屉本身 <1200px 时不会误触发窄化（旧 @media 基于视口会误判）。 */
+@container (min-width: 1200px) {
 	.pt-detail-page-inner {
 		max-width: 760px;
 	}
@@ -5850,12 +5886,14 @@ button.pt-card-install-btn--installed {
 }
 
 /*
- * 纯 CSS 兜底（不依赖 JS 的 pt-mobile 类）：窄屏（≤480px，如 iPhone SE 375px）
+ * 纯 CSS 兜底（不依赖 JS 的 pt-mobile 类）：窄容器（≤480px，如 iPhone SE 375px）
  * 强制卡片单列满宽，避免纯数学列数推导挤出 1.5 列导致横向撕裂。
+ * 改用 @container（相对 .pt-list.pt-list-viewport），分屏 / 侧栏下基于实际视图宽判断，
+ * 不再依赖视口宽度。
  */
-@media (max-width: 480px) {
+@container (max-width: 480px) {
 	.pt-view .pt-card {
-		/* 单列满宽：窄屏（≤480px，如 iPhone SE 375px）强制卡片占满一行，
+		/* 单列满宽：窄容器（≤480px，如 iPhone SE 375px）强制卡片占满一行，
 		   避免纯数学列数推导挤出 1.5 列导致横向撕裂。
 		   .pt-card 基础定义未设 min-width，此处为其唯一声明，无需 !important。 */
 		min-width: 100%;
