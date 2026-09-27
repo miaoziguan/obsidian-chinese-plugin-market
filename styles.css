@@ -1775,6 +1775,21 @@ button.pt-card-install-btn--installed {
 	border-color: color-mix(in srgb, var(--pt-gold) 45%, var(--pt-border));
 	box-shadow: 0 0 0 1px color-mix(in srgb, var(--pt-gold) 20%, transparent);
 }
+/* 羽鳞精选态卡片：整体金色主题，与普通/推荐/收藏卡片明显区分 */
+.pt-card.is-yulin {
+	border-color: color-mix(in srgb, var(--pt-gold) 72%, var(--pt-border));
+	background: color-mix(in srgb, var(--pt-gold) 5%, var(--pt-surface));
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--pt-gold) 18%, transparent),
+		0 4px 14px color-mix(in srgb, var(--pt-gold) 10%, transparent);
+}
+.pt-card.is-yulin:hover {
+	border-color: color-mix(in srgb, var(--pt-gold) 90%, var(--pt-border-strong));
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--pt-gold) 28%, transparent),
+		0 6px 20px color-mix(in srgb, var(--pt-gold) 16%, transparent);
+}
+.theme-dark .pt-card.is-yulin {
+	background: color-mix(in srgb, var(--pt-gold) 7%, var(--pt-surface));
+}
 .pt-card-recommend-badge {
 	position: static;
 	align-self: flex-start;
