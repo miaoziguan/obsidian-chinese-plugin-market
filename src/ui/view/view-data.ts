@@ -692,9 +692,15 @@ export async function refreshOutdated(ctx: ViewContext): Promise<void> {
 					if (manifest.version && compareVersion(manifest.version, local) > 0) {
 						ctx.outdatedIds.add(id);
 						ctx.outdatedInfo.set(id, { local, latest: manifest.version });
+					} else {
+						// 已不落后（含刚更新到最新）：必须撤销旧标记。
+						// 修复「更新成功却报失败」：outdatedIds 只增不减，批量更新的
+						// 成败判定（!outdatedIds.has(id)）会永远判负，且更新页签残留旧态。
+						ctx.outdatedIds.delete(id);
+						ctx.outdatedInfo.delete(id);
 					}
 				} catch {
-					/* 单插件失败容错：跳过，不影响整体 */
+					/* 单插件失败容错：跳过，不影响整体（标记保持原状：不确定就不动） */
 				}
 			}
 		};

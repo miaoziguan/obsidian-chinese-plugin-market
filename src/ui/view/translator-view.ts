@@ -537,6 +537,10 @@ export class ChinesePluginMarketView extends ItemView {
 			new Notice(this.t("action.update.failed", { msg: e instanceof Error ? e.message : String(e) }), 8000);
 		} finally {
 			this.updatingIds.delete(pluginId);
+			// 更新会覆盖 manifest 并 loadManifests 重载：必须先快照最新本地版本号，
+			// 否则 refreshOutdated 仍拿旧版本对比，把刚更新成功的插件再次判为「可更新」，
+			// 批量更新计数随之误报失败。
+			this._ctx.snapshotInstalled?.();
 			this._ctx.refreshCardState?.(pluginId);
 		}
 		// 更新后重检该插件是否为最新，并刷新 ribbon 红点计数
