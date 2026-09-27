@@ -249,6 +249,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--pt-space-sm);
+	margin-top: 80px;
 	margin-bottom: var(--pt-space-sm);
 	container-type: inline-size;
 	container-name: pt-header;
@@ -289,29 +290,43 @@
 	box-shadow: none;
 }
 
-/* 工具栏分组竖线：用左边框把「列表控制 / 数据操作 / 个人配置」语义组隔开。
-   边框挂在每组的第一个元素上，随元素一起隐藏，避免响应式折叠后留下 orphan 分隔线。 */
+/* 工具栏分组竖线：用 ::before 画一条上下留白的短竖线，把「列表控制 / 数据操作 / 个人配置」语义组隔开。
+   用伪元素而非 border-left，才能单独控制竖线高度（短于按钮本身，与图标节奏一致）。
+   颜色取图标同系的 muted 灰并压淡到 ~45%，让竖线像图标的一部分而非硬结构线。 */
 .pt-header-actions > .pt-header-actions-group-start {
-	border-left: 1px solid var(--pt-border);
+	position: relative;
+	border-left: none;
 	margin-left: 8px;
 	padding-left: 8px;
+}
+.pt-header-actions > .pt-header-actions-group-start::before {
+	content: "";
+	position: absolute;
+	left: -4px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 2px;
+	height: 16px;
+	border-radius: 1px;
+	background: color-mix(in srgb, var(--pt-text-muted) 45%, transparent);
+	pointer-events: none;
 }
 
 /* 工具栏按钮：彻底扁平。不要任何圆角背景 / 悬浮背景 / 焦点背景，只保留图标本身。
    用 .pt-view 前缀把优先级提到 (0,3,1) 以上，压过 .theme-light/.theme-dark button 默认/悬浮样式。
    这里显式把背景、边框、圆角、阴影全部清空，并把背景移出 transition。 */
-.pt-view .pt-header-actions > .pt-btn,
-.theme-light .pt-view .pt-header-actions > .pt-btn,
-.theme-dark .pt-view .pt-header-actions > .pt-btn,
-.pt-view .pt-header-actions > .pt-btn:hover,
-.theme-light .pt-view .pt-header-actions > .pt-btn:hover,
-.theme-dark .pt-view .pt-header-actions > .pt-btn:hover,
-.pt-view .pt-header-actions > .pt-btn:focus-visible,
-.theme-light .pt-view .pt-header-actions > .pt-btn:focus-visible,
-.theme-dark .pt-view .pt-header-actions > .pt-btn:focus-visible,
-.pt-view .pt-header-actions > .pt-btn:active,
-.theme-light .pt-view .pt-header-actions > .pt-btn:active,
-.theme-dark .pt-view .pt-header-actions > .pt-btn:active {
+.pt-view .pt-header-actions .pt-btn,
+.theme-light .pt-view .pt-header-actions .pt-btn,
+.theme-dark .pt-view .pt-header-actions .pt-btn,
+.pt-view .pt-header-actions .pt-btn:hover,
+.theme-light .pt-view .pt-header-actions .pt-btn:hover,
+.theme-dark .pt-view .pt-header-actions .pt-btn:hover,
+.pt-view .pt-header-actions .pt-btn:focus-visible,
+.theme-light .pt-view .pt-header-actions .pt-btn:focus-visible,
+.theme-dark .pt-view .pt-header-actions .pt-btn:focus-visible,
+.pt-view .pt-header-actions .pt-btn:active,
+.theme-light .pt-view .pt-header-actions .pt-btn:active,
+.theme-dark .pt-view .pt-header-actions .pt-btn:active {
 	flex: 0 0 auto;
 	appearance: none;
 	background: transparent;
@@ -328,21 +343,23 @@
 }
 
 /* 分组首元素保留左边框；其余边框已在上方清空。 */
-.pt-view .pt-header-actions > .pt-header-actions-group-start,
-.theme-light .pt-view .pt-header-actions > .pt-header-actions-group-start,
-.theme-dark .pt-view .pt-header-actions > .pt-header-actions-group-start {
-	border-left: 1px solid var(--pt-border);
+/* 主题下显式恢复分组短竖线（伪元素背景色），覆盖上方 .pt-btn 的伪元素清理 */
+.pt-view .pt-header-actions > .pt-header-actions-group-start::before,
+.theme-light .pt-view .pt-header-actions > .pt-header-actions-group-start::before,
+.theme-dark .pt-view .pt-header-actions > .pt-header-actions-group-start::before {
+	content: "";
+	background: color-mix(in srgb, var(--pt-text-muted) 45%, transparent);
 }
 
 /* 悬浮 / 焦点：只变色，不加灰底 */
-.pt-view .pt-header-actions > .pt-btn:hover,
-.theme-light .pt-view .pt-header-actions > .pt-btn:hover,
-.theme-dark .pt-view .pt-header-actions > .pt-btn:hover {
+.pt-view .pt-header-actions .pt-btn:hover,
+.theme-light .pt-view .pt-header-actions .pt-btn:hover,
+.theme-dark .pt-view .pt-header-actions .pt-btn:hover {
 	color: var(--pt-text-strong);
 }
-.pt-view .pt-header-actions > .pt-btn:focus-visible,
-.theme-light .pt-view .pt-header-actions > .pt-btn:focus-visible,
-.theme-dark .pt-view .pt-header-actions > .pt-btn:focus-visible {
+.pt-view .pt-header-actions .pt-btn:focus-visible,
+.theme-light .pt-view .pt-header-actions .pt-btn:focus-visible,
+.theme-dark .pt-view .pt-header-actions .pt-btn:focus-visible {
 	color: var(--pt-accent);
 }
 
@@ -364,19 +381,20 @@
 .pt-view .pt-header-actions > .pt-ai-icon-btn--ready:hover,
 .theme-light .pt-view .pt-header-actions > .pt-ai-icon-btn--ready:hover,
 .theme-dark .pt-view .pt-header-actions > .pt-ai-icon-btn--ready:hover {
-	color: var(--pt-accent, var(--interactive-accent));
+	color: var(--pt-text-muted);
 	background: transparent;
 	background-color: transparent;
 }
 
 /* 某些主题用 ::before / ::after 给 button 画悬浮/焦点圆底，一并清除。
-   工具栏图标按钮只保留其内部的 svg 图标，不要任何装饰性伪元素。 */
-.pt-view .pt-header-actions > .pt-btn::before,
-.theme-light .pt-view .pt-header-actions > .pt-btn::before,
-.theme-dark .pt-view .pt-header-actions > .pt-btn::before,
-.pt-view .pt-header-actions > .pt-btn::after,
-.theme-light .pt-view .pt-header-actions > .pt-btn::after,
-.theme-dark .pt-view .pt-header-actions > .pt-btn::after {
+   工具栏图标按钮只保留其内部的 svg 图标，不要任何装饰性伪元素。
+   但分组首元素的 ::before 是我们的短竖线，用 :not(.pt-header-actions-group-start) 排除。 */
+.pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::before,
+.theme-light .pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::before,
+.theme-dark .pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::before,
+.pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::after,
+.theme-light .pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::after,
+.theme-dark .pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::after {
 	content: none !important;
 	background: transparent !important;
 	background-color: transparent !important;
@@ -481,7 +499,7 @@
 	color: var(--pt-text);
 	background: transparent;
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--pt-radius-sm);
 	text-align: left;
 	cursor: pointer;
 	transition: background-color var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease);
@@ -509,6 +527,44 @@
 }
 .pt-sort-menu-item--fav:hover {
 	color: var(--pt-text);
+}
+
+/* 压过主题 button 默认/悬浮/激活背景，保证排序菜单项与模式菜单视觉一致
+   （之前漏了这项，导致主题把每个菜单项渲染成灰色圆角块，整列看着像玻璃面板）。 */
+.pt-view .pt-sort-menu .pt-sort-menu-item,
+.theme-light .pt-view .pt-sort-menu .pt-sort-menu-item,
+.theme-dark .pt-view .pt-sort-menu .pt-sort-menu-item,
+.pt-view .pt-sort-menu .pt-sort-menu-item:hover,
+.theme-light .pt-view .pt-sort-menu .pt-sort-menu-item:hover,
+.theme-dark .pt-view .pt-sort-menu .pt-sort-menu-item:hover,
+.pt-view .pt-sort-menu .pt-sort-menu-item--active,
+.theme-light .pt-view .pt-sort-menu .pt-sort-menu-item--active,
+.theme-dark .pt-view .pt-sort-menu .pt-sort-menu-item--active {
+	background: transparent;
+	background-color: transparent;
+	border-top: none;
+	border-right: none;
+	border-bottom: none;
+	border-radius: var(--pt-radius-sm);
+	box-shadow: none;
+}
+.pt-view .pt-sort-menu .pt-sort-menu-item:hover,
+.theme-light .pt-view .pt-sort-menu .pt-sort-menu-item:hover,
+.theme-dark .pt-view .pt-sort-menu .pt-sort-menu-item:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+}
+.pt-view .pt-sort-menu .pt-sort-menu-item--active,
+.theme-light .pt-view .pt-sort-menu .pt-sort-menu-item--active,
+.theme-dark .pt-view .pt-sort-menu .pt-sort-menu-item--active {
+	color: var(--pt-accent);
+	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+	font-weight: var(--pt-weight-semibold);
+}
+/* 收藏优先项保留顶部分隔线（不被上方的 border:none 清掉） */
+.pt-view .pt-sort-menu .pt-sort-menu-item--fav,
+.theme-light .pt-view .pt-sort-menu .pt-sort-menu-item--fav,
+.theme-dark .pt-view .pt-sort-menu .pt-sort-menu-item--fav {
+	border-top: 1px solid var(--pt-border);
 }
 
 
@@ -590,7 +646,7 @@
 	position: absolute;
 	top: calc(100% + 6px);
 	left: 0;
-	min-width: 160px;
+	min-width: 180px;
 	max-width: min(280px, calc(100vw - 16px));
 	background: var(--pt-surface);
 	border: 1px solid var(--pt-border);
@@ -604,6 +660,23 @@
 .pt-mode-wrap--open .pt-mode-menu {
 	display: block;
 }
+
+/* 强制两个下拉菜单都用实色 surface 背景、同款边框阴影，并禁用 glass / 半透明 / 主题覆盖。
+   用 .pt-view 前缀提权 + !important 兜底，避免第三方主题把菜单改成毛玻璃。 */
+.pt-view .pt-sort-menu,
+.theme-light .pt-view .pt-sort-menu,
+.theme-dark .pt-view .pt-sort-menu,
+.pt-view .pt-mode-menu,
+.theme-light .pt-view .pt-mode-menu,
+.theme-dark .pt-view .pt-mode-menu {
+	background: var(--pt-surface) !important;
+	background-color: var(--pt-surface) !important;
+	border: 1px solid var(--pt-border) !important;
+	box-shadow: var(--pt-shadow-lg) !important;
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+}
+
 .pt-mode-menu-item {
 	appearance: none;
 	display: flex;
@@ -624,18 +697,26 @@
 	background: var(--pt-surface-hover, var(--background-modifier-hover));
 	color: var(--pt-text-strong, var(--text-normal));
 }
-/* 压过主题 button 的默认/悬浮/激活背景 */
+/* 压过主题 button 的默认/悬浮背景（激活态保留强调色淡底，与排序菜单一致） */
 .pt-view .pt-search .pt-mode-menu-item,
 .theme-light .pt-view .pt-search .pt-mode-menu-item,
 .theme-dark .pt-view .pt-search .pt-mode-menu-item,
 .pt-view .pt-search .pt-mode-menu-item:hover,
 .theme-light .pt-view .pt-search .pt-mode-menu-item:hover,
-.theme-dark .pt-view .pt-search .pt-mode-menu-item:hover,
+.theme-dark .pt-view .pt-search .pt-mode-menu-item:hover {
+	background: transparent;
+	background-color: transparent;
+	border: none;
+	border-radius: var(--pt-radius-sm);
+	box-shadow: none;
+}
+/* 激活态：与排序菜单对齐——强调色文字 + 淡底 + 加粗 + ✓ 前导 */
 .pt-view .pt-search .pt-mode-menu-item--active,
 .theme-light .pt-view .pt-search .pt-mode-menu-item--active,
 .theme-dark .pt-view .pt-search .pt-mode-menu-item--active {
-	background: transparent;
-	background-color: transparent;
+	color: var(--pt-accent);
+	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+	font-weight: var(--pt-weight-semibold);
 	border: none;
 	border-radius: var(--pt-radius-sm);
 	box-shadow: none;
@@ -918,13 +999,14 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	color: var(--pt-text-faint, var(--text-faint));
 	cursor: not-allowed;
 }
-/* 有待翻译：图标染主题色，暗示「有事可做」 */
+/* 有待翻译：不再染主题色，保持工具栏图标视觉统一；
+   仅通过 title/tooltip 提示未翻译数量，hover 与其他图标一致只变色。 */
 .pt-ai-icon-btn--ready {
-	color: var(--pt-accent, var(--interactive-accent));
+	color: var(--pt-text-muted);
 }
 .pt-ai-icon-btn--ready:hover {
-	color: var(--pt-accent, var(--interactive-accent));
-	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+	color: var(--pt-text);
+	background: transparent;
 }
 .pt-ai-progress {
 	font-size: var(--pt-text-sm);
