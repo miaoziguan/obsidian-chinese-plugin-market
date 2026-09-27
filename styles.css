@@ -502,6 +502,14 @@
 	flex-shrink: 0;
 	box-shadow: none; /* 去掉 <select> 在 WebKit/macOS 的 native drop shadow */
 }
+/* hover 同样保持纯文字：主题 select:hover 的灰底用 (0,2,1) 提权压掉，亮暗主题统一 */
+.pt-search-mode:hover,
+.pt-view .pt-search-mode:hover,
+.theme-dark .pt-view .pt-search-mode:hover {
+	background: transparent;
+	box-shadow: none;
+	color: var(--pt-text);
+}
 /* caret 是真实 DOM 节点（<select> 在 WebKit 不渲染 ::after 伪元素）；
    绝对定位于 .pt-mode-wrap 内右侧，select 已预留 26px 右内边距，箭头浮于文字与分隔线之间；
    pointer-events:none 让点击穿透到下方 select 以正常触发下拉。 */

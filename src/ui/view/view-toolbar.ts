@@ -133,8 +133,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	// ::after 伪元素（mask SVG 与 "▾" 文字均不显示），箭头必须是真实 DOM 节点。
 	const modeWrap = searchBar.createDiv({ cls: "pt-mode-wrap" });
 	const modeSelect = modeWrap.createEl("select", { cls: "pt-mode-select pt-search-mode" });
-	modeSelect.setAttribute("aria-label", "搜索模式");
-	modeSelect.setAttribute("title", "切换搜索模式：关键词 / AI 语义");
+	// 只保留一个 tooltip：Obsidian 依据 aria-label 弹 tooltip；再设 title 会叠加浏览器原生 tooltip，出现双气泡
+	modeSelect.setAttribute("aria-label", "切换搜索模式：关键词 / AI 语义");
 	for (const mode of SEARCH_MODES) {
 		const opt = modeSelect.createEl("option", { text: ctx.t(mode.label) });
 		opt.value = mode.id;
@@ -155,7 +155,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 一键清除按钮
 		const clearBtn = searchField.createEl("button", {
 			cls: "pt-search-clear",
-			attr: { "aria-label": "清除搜索", title: "清除", type: "button" },
+			attr: { "aria-label": "清除搜索", type: "button" },
 		});
 		setIcon(clearBtn, "x");
 		clearBtn.setCssStyles({ display: "none" });
@@ -338,8 +338,9 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		setIcon(footprintBtn, "list-ordered");
 		// 数量反映「已写评测笔记」条数（与足迹视图一致）；永远可点，不做置灰禁用
 		const reviewCount = ctx.journalEntryIds?.size ?? 0;
+		// 用 aria-label 携带完整提示（Obsidian tooltip），避免 title 叠加出双气泡
 		footprintBtn.setAttribute(
-			"title",
+			"aria-label",
 			`${ctx.t("journal.footprint")} · 共 ${reviewCount} 条评测`,
 		);
 		if (reviewCount > 0) {
@@ -512,7 +513,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 手动刷新按钮（↻）：全局动作，与排序同组置于搜索行右上角
 		const refreshBtn = actions.createEl("button", {
 			cls: "pt-btn pt-refresh",
-			attr: { "aria-label": ctx.t("action.refresh"), title: ctx.t("action.refresh"), type: "button" },
+			attr: { "aria-label": ctx.t("action.refresh"), type: "button" },
 		});
 		setIcon(refreshBtn, "refresh-cw");
 		ctx.refreshBtn = refreshBtn;
@@ -523,7 +524,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 一键检查已安装插件更新（独立于「刷新列表」：只检测已装插件是否有新版，不拉市场数据）
 		const checkUpdateBtn = actions.createEl("button", {
 			cls: "pt-btn pt-check-update",
-			attr: { "aria-label": ctx.t("action.checkUpdate"), title: ctx.t("action.checkUpdate"), type: "button" },
+			attr: { "aria-label": ctx.t("action.checkUpdate"), type: "button" },
 		});
 		setIcon(checkUpdateBtn, "download-cloud");
 		const onCheckUpdate = () => {
@@ -544,7 +545,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	// 一键更新全部可更新插件（桌面端；遍历 outdatedIds 顺序执行，每条静默后汇总）
 	const updateAllBtn = actions.createEl("button", {
 		cls: "pt-btn pt-check-update pt-update-all",
-		attr: { "aria-label": ctx.t("action.updateAll"), title: ctx.t("action.updateAll"), type: "button" },
+		attr: { "aria-label": ctx.t("action.updateAll"), type: "button" },
 	});
 	setIcon(updateAllBtn, "arrow-down-to-line");
 	updateAllBtn.addEventListener("click", () => {
@@ -562,7 +563,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 免去找 Obsidian 设置面板的层级。先 open 再 openTabById（设置未弹出时后者不生效）。
 		const settingsBtn = actions.createEl("button", {
 			cls: "pt-btn pt-open-settings",
-			attr: { "aria-label": ctx.t("card.openSettings"), title: ctx.t("card.openSettings"), type: "button" },
+			attr: { "aria-label": ctx.t("card.openSettings"), type: "button" },
 		});
 		setIcon(settingsBtn, "gear");
 		settingsBtn.addEventListener("click", (e: MouseEvent) => {
@@ -1075,7 +1076,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		const resetBtn = advancedHeading.createEl("button", {
 			cls: "pt-toolbar-reset pt-toolbar-reset--inline",
 			text: ctx.t("filter.reset"),
-			attr: { "aria-label": "重置所有筛选条件", title: "重置筛选" },
+			attr: { "aria-label": "重置所有筛选条件" },
 		});
 		resetBtn.addEventListener("click", () => {
 			ctx.sourceFilter = "all";
