@@ -508,6 +508,23 @@
 	outline: none;
 	color: var(--pt-text);
 }
+/* 压过主题 .theme-xxx button 的默认/悬浮灰底（主题常见 (0,1,1) 或 (0,2,1)，这里用 (0,3,0) 提权） */
+.pt-view .pt-search .pt-mode-btn,
+.theme-light .pt-view .pt-search .pt-mode-btn,
+.theme-dark .pt-view .pt-search .pt-mode-btn,
+.pt-view .pt-search .pt-mode-btn:hover,
+.theme-light .pt-view .pt-search .pt-mode-btn:hover,
+.theme-dark .pt-view .pt-search .pt-mode-btn:hover,
+.pt-view .pt-search .pt-mode-btn:focus,
+.theme-light .pt-view .pt-search .pt-mode-btn:focus,
+.theme-dark .pt-view .pt-search .pt-mode-btn:focus {
+	appearance: none;
+	background: transparent;
+	background-color: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
 .pt-mode-wrap--open .pt-mode-caret {
 	transform: translateY(-50%) rotate(180deg);
 }
@@ -573,6 +590,27 @@
 .pt-mode-menu-item:hover {
 	background: var(--pt-surface-hover, var(--background-modifier-hover));
 	color: var(--pt-text-strong, var(--text-normal));
+}
+/* 压过主题 button 的默认/悬浮/激活背景 */
+.pt-view .pt-search .pt-mode-menu-item,
+.theme-light .pt-view .pt-search .pt-mode-menu-item,
+.theme-dark .pt-view .pt-search .pt-mode-menu-item,
+.pt-view .pt-search .pt-mode-menu-item:hover,
+.theme-light .pt-view .pt-search .pt-mode-menu-item:hover,
+.theme-dark .pt-view .pt-search .pt-mode-menu-item:hover,
+.pt-view .pt-search .pt-mode-menu-item--active,
+.theme-light .pt-view .pt-search .pt-mode-menu-item--active,
+.theme-dark .pt-view .pt-search .pt-mode-menu-item--active {
+	background: transparent;
+	background-color: transparent;
+	border: none;
+	border-radius: var(--pt-radius-sm);
+	box-shadow: none;
+}
+.pt-view .pt-search .pt-mode-menu-item:hover,
+.theme-light .pt-view .pt-search .pt-mode-menu-item:hover,
+.theme-dark .pt-view .pt-search .pt-mode-menu-item:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
 }
 .pt-mode-menu-item--active {
 	color: var(--pt-accent);
