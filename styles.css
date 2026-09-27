@@ -472,7 +472,9 @@
 	position: absolute;
 	top: calc(100% + 6px);
 	right: 0;
-	min-width: 180px;
+	/* 宽度随内容收敛（同 .pt-mode-menu）：短标签不留右侧空白 */
+	width: max-content;
+	min-width: 0;
 	/* 防横向溢出：长本地化文本（如排序项）撑宽菜单时，限制最大宽度并允许换行，
 	   避免在窄屏向左展开超出视口左边界。 */
 	max-width: min(280px, calc(100vw - 16px));
@@ -513,10 +515,17 @@
 	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
 	font-weight: var(--pt-weight-semibold);
 }
-.pt-sort-menu-item--active::before {
+/* ✓ 列所有项占位、仅选中项可见（与 .pt-mode-menu 同款对齐） */
+.pt-sort-menu-item::before {
 	content: "✓";
+	flex: 0 0 auto;
+	width: 1em;
 	margin-right: 6px;
 	color: var(--pt-accent);
+	visibility: hidden;
+}
+.pt-sort-menu-item--active::before {
+	visibility: visible;
 }
 /* 「收藏优先」是置顶叠层（非重排），用分隔线 + 弱化色与常规排序区分 */
 .pt-sort-menu-item--fav {
@@ -646,7 +655,10 @@
 	position: absolute;
 	top: calc(100% + 6px);
 	left: 0;
-	min-width: 180px;
+	/* 宽度随内容收敛：原 min-width:180px 在短标签（关键词/AI 语义）时
+	会强行撑宽菜单，右侧留出大片无意义空白（官方菜单即内容宽） */
+	width: max-content;
+	min-width: 0;
 	max-width: min(280px, calc(100vw - 16px));
 	background: var(--pt-surface);
 	border: 1px solid var(--pt-border);
@@ -730,10 +742,18 @@
 	color: var(--pt-accent);
 	font-weight: var(--pt-weight-semibold);
 }
-.pt-mode-menu-item--active::before {
+/* ✓ 列所有项占位、仅选中项可见：未选中项文字与选中项对齐（官方菜单同款），
+   消除「选中项被 ✓ 顶右、未选中项靠左」的参差观感 */
+.pt-mode-menu-item::before {
 	content: "✓";
+	flex: 0 0 auto;
+	width: 1em;
 	margin-right: 6px;
 	color: var(--pt-accent);
+	visibility: hidden;
+}
+.pt-mode-menu-item--active::before {
+	visibility: visible;
 }
 
 /* 工具栏「仅已安装」/「仅已启动」/「仅已安装未启动」 toggle */
@@ -3371,8 +3391,9 @@ button.pt-card-install-btn--installed {
 	overflow-y: auto;
 	overflow-x: hidden;
 	/* 顶部 padding = 头部固定块高度（JS 写入 --pt-detail-head-h），让 README
-	   正文从头部下方开始滚动；头部是 absolute 脱离文档流，需此占位避免遮挡。 */
-	padding-top: var(--pt-detail-head-h, 0px);
+	   正文从头部下方开始滚动；头部是 absolute 脱离文档流，需此占位避免遮挡。
+	   +40px 与 .pt-detail-head-block 的 top:40px 顶部留白对齐。 */
+	padding-top: calc(var(--pt-detail-head-h, 0px) + 40px);
 	padding-bottom: var(--pt-space-2xl);
 	animation: pt-detail-fadein 0.25s var(--pt-ease);
 }
@@ -3495,11 +3516,14 @@ button.pt-card-install-btn--installed {
  */
 .pt-detail-head-block {
 	position: absolute;
-	top: 0;
+	/* 顶部预留 40px 留白（避免详情页贴顶）：
+	   头部整块下移，滚动容器 padding-top 同步 +40 占位（见 .pt-detail-page-scroll） */
+	top: 40px;
 	left: 0;
 	right: 0;
 	z-index: 5;
-	padding: var(--pt-space-lg);
+	/* 左右留白 60px：避免头部标题/按钮贴着抽屉两侧边缘 */
+	padding: var(--pt-space-lg) 60px;
 	background: var(--background-primary);
 	border-bottom: 1px solid var(--background-modifier-border);
 	box-shadow: 0 1px 0 color-mix(in srgb, var(--background-modifier-border) 50%, transparent);
@@ -3552,6 +3576,7 @@ button.pt-card-install-btn--installed {
 	font-family: var(--font-monospace, monospace);
 }
 .pt-drawer-close {
+	position: relative; /* 供 ::before 扩大命中区 */
 	flex-shrink: 0;
 	display: flex;
 	align-items: center;
@@ -3559,21 +3584,38 @@ button.pt-card-install-btn--installed {
 	width: 32px;
 	height: 32px;
 	padding: 0;
-	border: 1px solid var(--background-modifier-border);
+	border: none;
 	border-radius: var(--pt-radius);
 	background: transparent;
 	color: var(--pt-text-muted, var(--text-muted));
 	cursor: pointer;
-	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease);
+	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease);
 	margin-top: var(--pt-space-2xs);
 	/* 覆写 Obsidian 默认 button 自带的 box-shadow */
 	box-shadow: none;
 }
+/* 命中区外扩 8px：× 视觉 32px 但四周是大片空白，稍微点偏就落空（"不灵敏"）。
+   纯透明命中扩展，不改变外观。 */
+.pt-drawer-close::before {
+	content: "";
+	position: absolute;
+	inset: -8px;
+}
+/* 主题 .theme-xxx button（(0,1,1)）会把上面 (0,1,0) 的透明底盖成灰底方块；
+   用 .pt-view 前缀提权强制扁平——关闭按钮只保留 × 图形本身 */
+.pt-view .pt-drawer-close,
+.theme-light .pt-view .pt-drawer-close,
+.theme-dark .pt-view .pt-drawer-close,
+.pt-view .pt-drawer-close:hover,
+.theme-light .pt-view .pt-drawer-close:hover,
+.theme-dark .pt-view .pt-drawer-close:hover {
+	background: transparent;
+	background-color: transparent;
+	border: none;
+	box-shadow: none;
+}
 .pt-drawer-close:hover {
-	background: var(--pt-surface-hover, var(--background-modifier-hover));
 	color: var(--pt-text-strong, var(--text-normal));
-	border-color: var(--pt-border, var(--background-modifier-border-hover));
 }
 .pt-drawer-close:focus-visible {
 	outline: none;
@@ -3662,10 +3704,11 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-md);
 	line-height: 1.65;
 	color: var(--pt-text-strong, var(--text-normal));
-	padding: 14px 16px;
-	background: var(--background-secondary);
-	border-left: 3px solid var(--pt-accent);
-	border-radius: 0 12px 12px 0;
+	/* 按需求去掉背景块：无底色、无左侧强调边、无圆角，纯文字融入页面 */
+	padding: 0;
+	background: transparent;
+	border: none;
+	border-radius: 0;
 }
 /* ── 操作按钮栏 ── */
 .pt-detail-actions {
@@ -3683,7 +3726,7 @@ button.pt-card-install-btn--installed {
 	padding: 7px 14px;
 	font-size: var(--pt-text-md);
 	font-weight: 500;
-	border-radius: var(--pt-radius-sm);
+	border-radius: var(--pt-radius-pill, 999px); /* 胶囊形：全圆角，与操作行/顶栏控件统一 */
 	text-decoration: none;
 	color: var(--pt-text-strong, var(--text-normal));
 	background: var(--background-primary, var(--background));
@@ -3713,17 +3756,27 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-on-accent, var(--text-on-accent));
 	box-shadow: 0 2px 8px color-mix(in srgb, var(--pt-accent) 40%, transparent);
 }
-/* 已启用状态 badge */
+/* 已启用状态 badge（纯文字、无图标）
+   元素类型已是 <button>，与相邻控件同一条样式分支，故这里【不再声明字号/字重/内边距/行高】
+   ——让徽标与旁边按钮落到完全相同的计算值（此前自定 600 + 6px 就是"大一号"的根因）。 */
 .pt-detail-btn--enabled {
 	color: var(--pt-color-success);
 	background: color-mix(in srgb, var(--pt-color-success) 12%, transparent);
 	border: none;
-	border-radius: 20px;
-	padding: 6px 14px;
+	border-radius: var(--pt-radius-pill, 999px);
 	cursor: default;
 	pointer-events: none;
-	font-weight: 600;
-	font-size: var(--pt-text-md);
+}
+/* 徽标改成 <button> 后，主题的 .theme-xxx button（(0,1,1)）会把上面 (0,1,0) 的
+   绿色文字与淡绿底盖成主题按钮配色；用 .pt-view 前缀提权把绿色抢回来。 */
+.pt-view .pt-detail-btn--enabled,
+.theme-light .pt-view .pt-detail-btn--enabled,
+.theme-dark .pt-view .pt-detail-btn--enabled {
+	color: var(--pt-color-success);
+	background: color-mix(in srgb, var(--pt-color-success) 12%, transparent);
+	background-color: color-mix(in srgb, var(--pt-color-success) 12%, transparent);
+	border: none;
+	box-shadow: none;
 }
 /* 卸载按钮：红色描边，hover 淡红底 */
 .pt-detail-btn--danger {
@@ -3734,6 +3787,7 @@ button.pt-card-install-btn--installed {
 .pt-detail-btn--danger:hover {
 	background: color-mix(in srgb, var(--pt-color-error, var(--text-error)) 10%, transparent);
 }
+
 
 /* ── 区段标题公共（README / 相似推荐） ── */
 .pt-detail-section-head {
@@ -3846,6 +3900,49 @@ button.pt-card-install-btn--installed {
 .pt-detail-btn--readme-back:hover {
 	background: color-mix(in srgb, var(--pt-accent) 14%, transparent);
 }
+
+/* ── README 标题行操作按钮统一成胶囊按钮（与详情页操作行「安装/打开仓库/收藏」同款） ──
+   此前「了解功能 / 翻译通道 / 复制 README」走 accent 文字链接风，与上方描边胶囊割裂。
+   这里统一回归 .pt-detail-btn 基础的描边胶囊 + 中性文字，尺寸也对齐操作行；
+   仅保留布局语义（insight 的 margin-left:auto、翻译主/▼ 分段 padding）。 */
+.pt-detail-section-head--readme .pt-detail-btn {
+	padding: 7px 14px;
+	font-size: var(--pt-text-md);
+	color: var(--pt-text-strong, var(--text-normal));
+}
+.pt-detail-section-head--readme .pt-detail-btn:hover {
+	background: var(--background-secondary);
+	color: var(--pt-text-strong, var(--text-normal));
+}
+/* 翻译进行中的加载态仍走 accent 高亮（弧扫光 + 进度线），不被上面的中性化覆盖 */
+.pt-detail-section-head--readme .pt-detail-btn--loading {
+	color: var(--pt-accent);
+}
+
+/* 「通道名 + ▼」合并成一颗胶囊（分段式）：外壳只持边框/圆角/裁切，
+   内部分段【不覆写背景】——与相邻按钮吃到同一份主题 button 底色/悬浮态，
+   否则外壳自配白底会与两边主题灰底按钮不一致（上次的问题）。
+   中缝用细分隔线，形态与操作行单胶囊一致。 */
+.pt-detail-section-head--readme .pt-detail-readme-translate {
+	gap: 0;
+	background: transparent;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--pt-radius-pill, 999px); /* 胶囊形外壳 */
+	overflow: hidden;
+}
+.pt-detail-section-head--readme .pt-detail-readme-translate .pt-detail-btn {
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+}
+.pt-detail-section-head--readme .pt-detail-readme-translate .pt-detail-btn--caret {
+	padding: 7px 8px;
+	border-left: 1px solid var(--background-modifier-border);
+}
+/* 加载态分段底色：半透明 accent 微光，叠在主题按钮底上，不与主题底色冲突 */
+.pt-detail-section-head--readme .pt-detail-readme-translate .pt-detail-btn--loading {
+	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+}
 .pt-detail-readme-body {
 	font-size: var(--pt-text-md);
 	line-height: 1.7;
@@ -3892,7 +3989,7 @@ button.pt-card-install-btn--installed {
 	background: var(--pt-surface-2, var(--background-secondary));
 	color: var(--pt-text-strong, var(--text-normal));
 	cursor: pointer;
-	border-radius: var(--pt-radius);
+	border-radius: var(--pt-radius-pill, 999px);
 	transition: background var(--pt-duration-fast) var(--pt-ease), border-color var(--pt-duration-fast) var(--pt-ease);
 }
 .pt-detail-readme-error-actions .pt-detail-btn:hover {
@@ -5271,11 +5368,11 @@ button.pt-card-install-btn--installed {
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 	transition: transform var(--pt-duration-fast) var(--pt-ease);
 }
-/* 已启用：主题色淡雅绿轨道 + 微光 */
+/* 已启用：主题色淡雅绿轨道（无阴影/微光） */
 .pt-card-toggle-switch.is-on .pt-card-toggle-track {
 	background: var(--pt-accent, var(--pt-accent-green, #2ecc71));
 	border-color: transparent;
-	box-shadow: 0 0 6px 1px color-mix(in srgb, var(--pt-accent, var(--pt-accent-green, #2ecc71)) 30%, transparent);
+	box-shadow: none;
 }
 .pt-card-toggle-switch.is-on .pt-card-toggle-knob {
 	transform: translateX(16px);

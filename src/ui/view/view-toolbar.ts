@@ -89,7 +89,7 @@ function createFilterSelect(
 	render();
 	register(render);
 
-	btn.addEventListener("click", (e) => {
+	btn.addEventListener("click", () => {
 		const menu = new Menu();
 		for (const option of opts.getOptions()) {
 			menu.addItem((item) =>
@@ -101,7 +101,10 @@ function createFilterSelect(
 					}),
 			);
 		}
-		menu.showAtMouseEvent(e as MouseEvent);
+		// 不用 showAtMouseEvent（锚定鼠标指针处，点按钮偏右时菜单整体外飘）；
+		// 改为按按钮矩形定位——左对齐按钮、从下缘展开，与官方 select 下拉一致。
+		const rect = btn.getBoundingClientRect();
+		menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 	});
 	return wrap;
 }

@@ -363,7 +363,18 @@ export class PluginDetailDrawer {
 			renderComp?.unload();
 			drawerEl?.remove();
 			backdropEl?.remove();
+			document.removeEventListener("click", swallowNextClick, true);
 		};
+
+		// 修复「关闭不灵敏」：关闭后列表瞬时恢复显示，双击 × 的第二击会落在
+		// 光标下的卡片上并经卡片点击委托【立即重开详情】，体验上等于没关掉。
+		// 这里在捕获阶段一次性吞掉紧随关闭的下一个 click。
+		const swallowNextClick = (ev: MouseEvent) => {
+			ev.stopPropagation();
+			document.removeEventListener("click", swallowNextClick, true);
+		};
+		document.addEventListener("click", swallowNextClick, true);
+
 		requestIdle(teardown, 1000);
 	}
 
@@ -922,9 +933,14 @@ export class PluginDetailDrawer {
 		} catch { /* 半官方 API，容错忽略 */ }
 
 		if (isEnabled) {
-			actions.createSpan({
+			// 启用态徽标：纯文字、无图标。
+			// 必须用 <button> 而非 <span>：主题对 button 的字号/字体规则只命中 button，
+			// 用 span 会拿到插件自己的字号，看起来比相邻按钮大一号（与之前 <a> 同源）。
+			// tabindex=-1 + CSS pointer-events:none 保持纯展示、不可聚焦不可点。
+			actions.createEl("button", {
 				cls: "pt-detail-btn pt-detail-btn--enabled",
-				text: `✓ ${this.t("card.installed.on")}`,
+				text: this.t("card.installed.on"),
+				attr: { type: "button", tabindex: "-1" },
 			});
 			// 直达该插件的设置选项面板（替代手动去 Obsidian 设置翻找）：
 			// 必须先 open 再 openTabById，否则设置面板未弹出时后者不生效（与 toolbar 齿轮一致）。
@@ -940,16 +956,17 @@ export class PluginDetailDrawer {
 				setting?.openTabById?.(p.id);
 			});
 		} else if (isInstalled) {
-			const enableBtn = actions.createEl("a", {
+			// 用 <button> 而非 <a>：操作行其余控件都是 button，主题对链接元素（a）
+			// 的底色/文字色/visited 样式只命中 a，会让这一颗和相邻按钮不一致。
+			const enableBtn = actions.createEl("button", {
 				cls: "pt-detail-btn",
 				text: this.t("card.installed.off"),
-				attr: {
-					href: `obsidian://show-plugin?id=${p.id}`,
-					rel: "noopener noreferrer",
-					title: this.t("card.enable"),
-				},
+				attr: { type: "button", title: this.t("card.enable") },
 			});
 			enableBtn.addEventListener("click", () => {
+				const setting = asAppInternals(this.app).setting;
+				setting?.open?.();
+				setting?.openTabById?.(p.id);
 				new Notice(this.t("notice.market.opened"));
 			});
 		} else {
@@ -1003,15 +1020,15 @@ export class PluginDetailDrawer {
 		// 仓库
 		if (p.repo) {
 			const repoSvg = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>`;
-			const repoBtn = actions.createEl("a", {
+			// 同「打开插件设置」等相邻控件：一律 <button>，避免主题链接样式造成底色差异
+			const repoBtn = actions.createEl("button", {
 				cls: "pt-detail-btn",
-				attr: {
-					href: `https://github.com/${p.repo}`,
-					target: "_blank",
-					rel: "noopener noreferrer",
-				},
+				attr: { type: "button", title: this.t("card.repo") },
 			});
 			appendIconText(repoBtn, repoSvg, this.t("card.repo"));
+			repoBtn.addEventListener("click", () => {
+				window.open(`https://github.com/${p.repo}`, "_blank", "noopener,noreferrer");
+			});
 		}
 
 		// 收藏切换
@@ -1103,10 +1120,15 @@ export class PluginDetailDrawer {
 		});
 
 		// 「了解功能」按钮（替代「翻译 README」：基于仓库 manifest 元数据让 AI 概述，不读 README）
+		// 与操作行按钮同构：icon + 文字（灯泡图标，与卡片端 ICON_INSIGHT 同款）
 		const insightBtn = readmeHeader.createEl("button", {
 			cls: "pt-detail-btn pt-detail-btn--insight",
-			text: this.t("detail.insight"),
 		});
+		appendIconText(
+			insightBtn,
+			`<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>`,
+			this.t("detail.insight"),
+		);
 		insightBtn.addEventListener("click", () => {
 			const hostPlugin = this.plugin;
 			openInsightModal(
@@ -1132,6 +1154,11 @@ export class PluginDetailDrawer {
 		const sysBtn = translateWrap.createEl("button", {
 			cls: "pt-detail-btn pt-detail-btn--sys-translate",
 		});
+		// 与操作行按钮同构：icon（languages 翻译图标）+ 文字
+		appendSVG(
+			sysBtn,
+			`<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>`,
+		);
 		sysBtn.createSpan({ cls: "pt-detail-btn-label" });
 		this.readmeSysBtnEl = sysBtn;
 		this.updateChannelBtn();
@@ -1152,7 +1179,7 @@ export class PluginDetailDrawer {
 				},
 			});
 			setIcon(caretBtn, "chevron-down");
-			caretBtn.addEventListener("click", (e: MouseEvent) => {
+			caretBtn.addEventListener("click", () => {
 				const menu = new Menu();
 				const current = this.getCurrentReadmeChannel();
 				for (const ch of channels) {
@@ -1166,7 +1193,12 @@ export class PluginDetailDrawer {
 							})
 					);
 				}
-				menu.showAtMouseEvent(e);
+				// 锚点必须是「整个胶囊」(.pt-detail-readme-translate)，不能是右侧那个小 ⌄：
+			// 后者左缘在胶囊右端，菜单会整体偏右并向右溢出。
+			// 也不用 showAtMouseEvent（锚定鼠标指针处，点哪飘哪）。
+			// 按胶囊矩形定位：左对齐胶囊、从下缘展开，与官方 select 下拉一致。
+			const rect = translateWrap.getBoundingClientRect();
+			menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 			});
 		}
 
@@ -1468,14 +1500,14 @@ export class PluginDetailDrawer {
 				void this.loadReadme(container);
 			});
 			if (p.repo) {
-				actions.createEl("a", {
+				// 与上方「重试 / 切换镜像源」同款：统一 <button>
+				const repoLinkBtn = actions.createEl("button", {
 					cls: "pt-detail-btn",
 					text: this.t("card.repo"),
-					attr: {
-						href: `https://github.com/${p.repo}`,
-						target: "_blank",
-						rel: "noopener noreferrer",
-					},
+					attr: { type: "button" },
+				});
+				repoLinkBtn.addEventListener("click", () => {
+					window.open(`https://github.com/${p.repo}`, "_blank", "noopener,noreferrer");
 				});
 			}
 			const mirrorBtn = actions.createEl("button", {
