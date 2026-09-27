@@ -6484,53 +6484,37 @@ button.pt-card-install-btn--installed {
 	font-size: var(--font-ui-smaller, 12px);
 	line-height: 1.5;
 }
-.pt-beta-row {
-	flex-wrap: wrap;
+/* 直链卡片网格：视觉级复用浏览页 .pt-card 资产；响应式 auto-fill 多列，
+ * container-type 让浏览页的卡片密度容器查询（420 / 421-640）对直链卡片同样生效。 */
+.pt-beta-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+	gap: var(--pt-space-md);
+	padding: var(--pt-space-sm) var(--pt-space-xs);
+	container-type: inline-size;
 }
-.pt-beta-name.is-link {
-	cursor: pointer;
-	border-bottom: 1px dotted var(--text-faint);
-}
-.pt-beta-name.is-link:hover {
-	color: var(--text-accent);
-}
-.pt-beta-meta {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex-wrap: wrap;
-}
-.pt-beta-kind,
-.pt-beta-ver,
-.pt-beta-tag,
-.pt-beta-frozen {
-	padding: 0 6px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller, 12px);
+
+/* 来源 chip（短地址，悬停看完整 URL） */
+.pt-beta-source {
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
+	color: var(--text-muted);
 }
-.pt-beta-ver {
-	color: var(--text-normal);
-}
+
+/* 冻结态强调（在 .pt-meta-chip 基础上高亮） */
 .pt-beta-frozen {
 	color: var(--text-accent);
 	border-color: var(--text-accent);
 }
-.pt-beta-source {
-	flex: 1 1 auto;
-	min-width: 0;
-	max-width: 42ch;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller, 12px);
-}
+
+/* 操作图标：冻结激活态高亮 */
 .pt-beta-action.is-on {
 	color: var(--text-accent);
 }
+
+/* 取消跟踪：hover 危险色提示 */
 .pt-beta-untrack:hover {
 	color: var(--text-error);
 }

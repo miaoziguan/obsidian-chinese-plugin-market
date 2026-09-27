@@ -60,12 +60,12 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
 	return { ctx, container };
 }
 
-describe("renderBetaList 「直链」页签列表", () => {
-	it("无直链记录时不渲染行，也不渲染重复的空态面板", () => {
+describe("renderBetaList 「直链」页签卡片", () => {
+	it("无直链记录时不渲染卡片，也不渲染重复的空态面板", () => {
 		patchDomHelpers();
 		const { ctx, container } = makeCtx({ betaPlugins: [] });
 		renderBetaList(ctx);
-		expect(container.querySelectorAll(".pt-beta-row").length).toBe(0);
+		expect(container.querySelectorAll(".pt-card").length).toBe(0);
 		// 重复空态面板已移除，入口保留在顶部工具条
 		expect(container.querySelector(".pt-updates-empty-title")).toBeNull();
 		expect(container.querySelector(".pt-beta-install-empty")).toBeNull();
@@ -74,7 +74,7 @@ describe("renderBetaList 「直链」页签列表", () => {
 		expect(container.querySelector(".pt-updates-update-all")).toBeNull();
 	});
 
-	it("列出类型 / 版本 / 冻结标记，并把来源地址压缩展示", () => {
+	it("卡片展示类型 / 版本 / 冻结标记，并把来源地址压缩展示", () => {
 		patchDomHelpers();
 		const { ctx, container } = makeCtx({
 			betaPlugins: [entry({ frozen: true })],
@@ -82,13 +82,17 @@ describe("renderBetaList 「直链」页签列表", () => {
 		renderBetaList(ctx);
 		// 始终显示「从直链安装」入口按钮
 		expect(container.querySelector(".pt-beta-install")).not.toBeNull();
-		const row = container.querySelector(".pt-beta-row") as HTMLElement;
-		expect(row.querySelector(".pt-beta-kind")?.textContent).toBe("beta.kind.plugin");
-		expect(row.querySelector(".pt-beta-ver")?.textContent).toBe("v1.0.0");
-		expect(row.querySelector(".pt-beta-frozen")?.textContent).toBe("beta.frozen");
-		// 完整地址仍在 title 里，展示的是压缩形态
-		expect(row.querySelector(".pt-beta-source")?.textContent).toBe("owner/demo@main");
-		expect(row.querySelector(".pt-beta-source")?.getAttribute("title")).toContain("raw.githubusercontent.com");
+		const card = container.querySelector(".pt-card") as HTMLElement;
+		// 类型标签复用「已安装」按钮外观
+		expect(card.querySelector(".pt-card-install-btn--enabled")?.textContent).toBe("beta.kind.plugin");
+		// 版本 / 冻结 chip
+		const chips = Array.from(card.querySelectorAll(".pt-meta-chip")).map((c) => c.textContent);
+		expect(chips).toContain("v1.0.0");
+		expect(chips).toContain("beta.frozen");
+		// 来源 chip：完整地址仍在 title，展示压缩形态
+		const src = card.querySelector(".pt-beta-source") as HTMLElement;
+		expect(src.textContent).toBe("owner/demo@main");
+		expect(src.getAttribute("title")).toContain("raw.githubusercontent.com");
 	});
 
 	it("插件排在主题之前", () => {
@@ -100,52 +104,57 @@ describe("renderBetaList 「直链」页签列表", () => {
 			],
 		});
 		renderBetaList(ctx);
-		const names = Array.from(container.querySelectorAll(".pt-beta-name")).map((el) => el.textContent);
+		const names = Array.from(container.querySelectorAll(".pt-card-name")).map((el) => el.textContent);
 		expect(names).toEqual(["Plugin", "Theme"]);
 	});
 
-	it("名称在官方列表里有记录时可点开详情", () => {
+	it("卡片在官方列表里有记录时可点开详情（点操作按钮不触发）", () => {
 		patchDomHelpers();
 		const { ctx, container } = makeCtx();
 		renderBetaList(ctx);
-		const name = container.querySelector(".pt-beta-name") as HTMLElement;
-		expect(name.classList.contains("is-link")).toBe(true);
-		name.dispatchEvent(new MouseEvent("click"));
+		const card = container.querySelector(".pt-card") as HTMLElement;
+		card.dispatchEvent(new MouseEvent("click"));
 		expect(ctx.openDetailDrawer).toHaveBeenCalledWith("demo");
+		// 操作按钮已 stopPropagation，不会冒泡触发整卡
+		const freeze = container.querySelector('.pt-beta-action[data-action="freeze"]') as HTMLElement;
+		freeze.dispatchEvent(new MouseEvent("click"));
+		expect(ctx.openDetailDrawer).toHaveBeenCalledTimes(1);
 	});
 
-	it("直链插件不在官方列表时名称不可点（避免点了没反应）", () => {
+	it("直链插件不在官方列表时整卡不可点（避免点了没反应）", () => {
 		patchDomHelpers();
 		const { ctx, container } = makeCtx({ allPlugins: [] });
 		renderBetaList(ctx);
-		const name = container.querySelector(".pt-beta-name") as HTMLElement;
-		expect(name.classList.contains("is-link")).toBe(false);
-		name.dispatchEvent(new MouseEvent("click"));
+		const card = container.querySelector(".pt-card") as HTMLElement;
+		card.dispatchEvent(new MouseEvent("click"));
 		expect(ctx.openDetailDrawer).not.toHaveBeenCalled();
 	});
 
-	it("行内「更新」按 id 更新单条", async () => {
+	it("卡片内「更新」按 id 更新单条", async () => {
 		patchDomHelpers();
 		const { ctx, container } = makeCtx();
 		renderBetaList(ctx);
-		(container.querySelectorAll(".pt-beta-action")[0] as HTMLElement).dispatchEvent(new MouseEvent("click"));
+		(container.querySelector('.pt-beta-action[data-action="update"]') as HTMLElement).dispatchEvent(new MouseEvent("click"));
 		await vi.waitFor(() => expect(ctx.updateBetaPluginById).toHaveBeenCalledWith("demo"));
 	});
 
-	it("行内「冻结」切换冻结态（已冻结时点它=取消冻结）", () => {
+	it("卡片内「冻结」切换冻结态（已冻结时点它=取消冻结），按钮高亮同步", () => {
 		patchDomHelpers();
 		const { ctx, container } = makeCtx({ betaPlugins: [entry({ frozen: false })] });
 		renderBetaList(ctx);
-		(container.querySelectorAll(".pt-beta-action")[1] as HTMLElement).dispatchEvent(new MouseEvent("click"));
+		const freeze = container.querySelector('.pt-beta-action[data-action="freeze"]') as HTMLElement;
+		freeze.dispatchEvent(new MouseEvent("click"));
 		expect(ctx.setBetaFrozen).toHaveBeenCalledWith("demo", true);
 
 		const frozen = makeCtx({ betaPlugins: [entry({ frozen: true })] });
 		renderBetaList(frozen.ctx);
-		(frozen.container.querySelectorAll(".pt-beta-action")[1] as HTMLElement).dispatchEvent(new MouseEvent("click"));
+		const freezeOn = frozen.container.querySelector('.pt-beta-action[data-action="freeze"]') as HTMLElement;
+		expect(freezeOn.classList.contains("is-on")).toBe(true);
+		freezeOn.dispatchEvent(new MouseEvent("click"));
 		expect(frozen.ctx.setBetaFrozen).toHaveBeenCalledWith("demo", false);
 	});
 
-	it("行内「移除」只取消跟踪（不卸载插件本身）", () => {
+	it("卡片内「移除」只取消跟踪（不卸载插件本身）", () => {
 		patchDomHelpers();
 		const { ctx, container } = makeCtx();
 		renderBetaList(ctx);

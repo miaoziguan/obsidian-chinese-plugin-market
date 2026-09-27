@@ -101,81 +101,94 @@ export function renderBetaList(ctx: ViewContext): void {
 	// ── 说明（这个列表是什么、能干什么）──
 	el.createDiv({ cls: "pt-beta-hint", text: t("betaList.hint") });
 
-	// ── 行列表 ──
-	const rows = el.createDiv({ cls: "pt-updates-rows" });
+	// ── 卡片网格（视觉级复用浏览页 .pt-card 资产；操作整体替换为直链语义）──
+	const cards = el.createDiv({ cls: "pt-beta-cards" });
 	for (const e of entries) {
-		const id = e.id;
-		const name = e.name || id;
-		const row = rows.createDiv({ cls: "pt-updates-row pt-beta-row" });
-
-		// 名称：在官方插件列表里有记录时可点开详情（直链插件往往并不在官方列表里）
-		const nameEl = row.createDiv({ cls: "pt-updates-name pt-beta-name" });
-		nameEl.setText(name);
-		if (ctx.allPlugins.some((p) => p.id === id)) {
-			nameEl.addClass("is-link");
-			nameEl.setAttribute("title", t("betaList.open"));
-			nameEl.addEventListener("click", () => ctx.openDetailDrawer(id));
-		}
-
-		// 元信息：类型 / 版本 / 钉选 tag / 冻结标记
-		const meta = row.createDiv({ cls: "pt-updates-diff pt-beta-meta" });
-		meta.createSpan({
-			cls: "pt-beta-kind",
-			text: (e.kind ?? "plugin") === "theme" ? t("beta.kind.theme") : t("beta.kind.plugin"),
-		});
-		if (e.installedVersion) meta.createSpan({ cls: "pt-beta-ver", text: `v${e.installedVersion}` });
-		if (e.releaseTag) meta.createSpan({ cls: "pt-beta-tag", text: `#${e.releaseTag}` });
-		else if (e.release) meta.createSpan({ cls: "pt-beta-tag", text: t("betaList.release") });
-		if (e.frozen) meta.createSpan({ cls: "pt-beta-frozen", text: t("beta.frozen") });
-
-		// 来源（rootUrl）：告诉用户它是从哪儿装的，悬停看完整地址
-		const src = row.createDiv({ cls: "pt-beta-source", text: shortSource(e.rootUrl) });
-		if (e.rootUrl) src.setAttribute("title", e.rootUrl);
-
-		// 操作 1：更新到来源最新版
-		const updBtn = row.createEl("button", {
-			cls: "pt-updates-row-update pt-beta-action clickable-icon",
-			attr: { "aria-label": t("beta.update"), title: t("beta.update"), type: "button" },
-		});
-		setIcon(updBtn, "arrow-down-to-line");
-		updBtn.addEventListener("click", () => {
-			if (updBtn.hasClass("pt-spin")) return;
-			updBtn.addClass("pt-spin");
-			void ctx
-				.updateBetaPluginById(id)
-				.catch(() => undefined)
-				.finally(() => {
-					updBtn.removeClass("pt-spin");
-					ctx.renderBetaList();
-				});
-		});
-
-		// 操作 2：冻结 / 取消冻结
-		const frozen = e.frozen === true;
-		const freezeBtn = row.createEl("button", {
-			cls: "pt-updates-row-update pt-beta-action clickable-icon",
-			attr: {
-				"aria-label": frozen ? t("beta.unfreeze") : t("beta.freeze"),
-				title: frozen ? t("beta.unfreeze") : t("beta.freeze"),
-				type: "button",
-			},
-		});
-		setIcon(freezeBtn, "snowflake");
-		if (frozen) freezeBtn.addClass("is-on");
-		freezeBtn.addEventListener("click", () => {
-			ctx.setBetaFrozen(id, !frozen);
-			ctx.renderBetaList();
-		});
-
-		// 操作 3：取消跟踪（只删记录，不动已装文件）
-		const rmBtn = row.createEl("button", {
-			cls: "pt-updates-row-update pt-beta-action pt-beta-untrack clickable-icon",
-			attr: { "aria-label": t("beta.remove"), title: t("beta.remove"), type: "button" },
-		});
-		setIcon(rmBtn, "x");
-		rmBtn.addEventListener("click", () => {
-			ctx.removeBetaPlugin(id);
-			ctx.renderBetaList();
-		});
+		cards.appendChild(createBetaCard(ctx, e));
 	}
+}
+
+/**
+ * 直链卡片：视觉级复用浏览页卡片资产（.pt-card 结构 / .pt-card-* 类 / .pt-meta-chip /
+ * .pt-icon-btn），操作按钮整体替换为直链语义（更新到来源 / 冻结 / 取消跟踪）。
+ * 不在官方列表的直链条目用来源仓库作为来源 chip 占位，悬停看完整地址。
+ */
+function createBetaCard(ctx: ViewContext, e: BetaPluginEntry): HTMLElement {
+	const t = ctx.t;
+	const info = ctx.allPlugins.find((p) => p.id === e.id);
+	const isKnown = Boolean(info);
+	const displayName = info?.name ?? e.name ?? e.id;
+	const desc = info?.description ?? "";
+	const shortSrc = shortSource(e.rootUrl);
+	const frozen = e.frozen === true;
+
+	const card = createDiv({ cls: "pt-card pt-card--clickable" });
+	card.setAttribute("data-plugin-id", e.id);
+
+	// 头行：名称 + 类型标签（复用「已安装」按钮外观，直链项必然已装）
+	const headRow = card.createDiv({ cls: "pt-card-head-row" });
+	const nameBlock = headRow.createDiv({ cls: "pt-card-name-block" });
+	nameBlock.createSpan({ cls: "pt-card-name", text: displayName });
+	headRow.createSpan({
+		cls: "pt-card-install-btn pt-card-install-btn--enabled",
+		text: (e.kind ?? "plugin") === "theme" ? t("beta.kind.theme") : t("beta.kind.plugin"),
+	});
+
+	// 元信息：版本 / 冻结 / 来源
+	const meta = card.createDiv({ cls: "pt-card-meta" });
+	const metaInfo = meta.createDiv({ cls: "pt-card-meta-info" });
+	if (e.installedVersion) metaInfo.createSpan({ cls: "pt-meta-chip", text: `v${e.installedVersion}` });
+	if (frozen) metaInfo.createSpan({ cls: "pt-meta-chip pt-beta-frozen", text: t("beta.frozen") });
+	const srcChip = metaInfo.createSpan({ cls: "pt-meta-chip pt-beta-source", text: shortSrc });
+	if (e.rootUrl) srcChip.setAttribute("title", e.rootUrl);
+
+	// 描述（无官方描述时为空，由来源 chip 提供上下文）
+	card.createDiv({ cls: "pt-card-desc pt-card-desc--clamped", text: desc });
+
+	// 操作行：更新到来源 / 冻结 / 取消跟踪（视觉复用 .pt-icon-btn）
+	const actionsRow = card.createDiv({ cls: "pt-card-actions-row" });
+
+	const updBtn = actionsRow.createEl("button", {
+		cls: "pt-icon-btn pt-beta-action",
+		attr: { "aria-label": t("beta.update"), title: t("beta.update"), type: "button", "data-action": "update" },
+	});
+	setIcon(updBtn, "arrow-down-to-line");
+	updBtn.addEventListener("click", (ev) => {
+		ev.stopPropagation();
+		if (updBtn.hasClass("pt-spin")) return;
+		updBtn.addClass("pt-spin");
+		void ctx.updateBetaPluginById(e.id).catch(() => undefined).finally(() => ctx.renderBetaList());
+	});
+
+	const freezeBtn = actionsRow.createEl("button", {
+		cls: "pt-icon-btn pt-beta-action",
+		attr: {
+			"aria-label": frozen ? t("beta.unfreeze") : t("beta.freeze"),
+			title: frozen ? t("beta.unfreeze") : t("beta.freeze"),
+			type: "button",
+			"data-action": "freeze",
+		},
+	});
+	setIcon(freezeBtn, "snowflake");
+	if (frozen) freezeBtn.classList.add("is-on");
+	freezeBtn.addEventListener("click", (ev) => {
+		ev.stopPropagation();
+		ctx.setBetaFrozen(e.id, !frozen);
+		ctx.renderBetaList();
+	});
+
+	const rmBtn = actionsRow.createEl("button", {
+		cls: "pt-icon-btn pt-beta-action pt-beta-untrack",
+		attr: { "aria-label": t("beta.remove"), title: t("beta.remove"), type: "button", "data-action": "untrack" },
+	});
+	setIcon(rmBtn, "x");
+	rmBtn.addEventListener("click", (ev) => {
+		ev.stopPropagation();
+		ctx.removeBetaPlugin(e.id);
+		ctx.renderBetaList();
+	});
+
+	// 整卡点击：官方有记录时打开详情（操作按钮已 stopPropagation 拦截）
+	if (isKnown) card.addEventListener("click", () => ctx.openDetailDrawer(e.id));
+	return card;
 }
