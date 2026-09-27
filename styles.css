@@ -167,11 +167,26 @@
 .pt-header-row {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: var(--pt-space-sm);
 }
+
+/* 工具栏右侧按钮组：默认 flex 换行，任何宽度下都不溢出 */
+.pt-header-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--pt-space-2xs);
+}
+
+/* 溢出菜单按钮：默认在宽屏隐藏，窄容器（≤760px）由断点显示 */
+.pt-overflow-btn {
+	display: none;
+}
+
 .pt-header-row .pt-search {
 	flex: 1 1 auto;
-	min-width: 0;
+	min-width: 180px;
 }
 
 /* 结果计数（独立文本，不混入排序按钮） */
@@ -1453,6 +1468,22 @@ button.pt-facet-letter-btn.is-active {
 	}
 }
 
+/* 中宽（641-760px，平板竖向 / 分屏 2 列）：信号行仍隐藏，描述收敛到 3 行，
+ * 避免 meta chip 过多换行时把操作按钮/开关挤出卡片固定高度。 */
+@container (min-width: 641px) and (max-width: 760px) {
+	.pt-card-signals {
+		display: none;
+	}
+	.pt-card-desc.pt-card-desc--clamped {
+		-webkit-line-clamp: 3;
+		max-height: calc(var(--pt-text-sm, 0.72rem) * 1.5 * 3);
+	}
+	.pt-card-statline {
+		flex-wrap: wrap;
+		gap: 2px;
+	}
+}
+
 /* 架构重构：原生滚动 + content-visibility 接管窗口化，不再需要 spacer 撑高层。 */
 .pt-list-layer {
 	/* 正常流 grid：浏览器原生接管滚动位移，无绝对定位 / transform / offsets */
@@ -1671,6 +1702,7 @@ button.pt-card-install-btn--installed {
 	justify-content: flex-start;
 	gap: 2px;
 	flex-wrap: wrap;
+	flex-shrink: 0;
 	opacity: 1;
 	transform: translateY(0);
 	transition: opacity var(--pt-duration-normal) var(--pt-ease), transform var(--pt-duration-normal) var(--pt-ease);
@@ -1917,6 +1949,14 @@ button.pt-card-install-btn--installed {
 }
 .pt-featured--collapsed .pt-featured-grid {
 	display: none;
+}
+
+/* 推荐区卡片允许按内容撑高（非虚拟滚动），避免中文环境下操作按钮/开关被固定 200px 高度截断。
+ * 虚拟滚动列表仍保持 .pt-card 固定高度。 */
+.pt-featured .pt-card {
+	height: auto;
+	min-height: var(--pt-card-h, 200px);
+	contain-intrinsic-size: auto var(--pt-card-h, 200px);
 }
 
 /* 官方推荐区卡片描述字号缩小，适配窄列宽 */
@@ -5743,14 +5783,41 @@ button.pt-card-install-btn--installed {
  *      排序/组合/筛选/设置/溢出自然落到第二行，移动端输入更舒适。
  * 与既有 .pt-mobile 选段不冲突，二者并集生效（设备是移动端 + 容器窄，都折叠）。
  */
-@container pt-header (max-width: 520px) {
-	/* 次要按钮进 ⋮：桌面与窄屏容器都隐藏 */
+@container pt-header (max-width: 960px) {
+	/* 平板/窄桌面（覆盖华为平板横屏常见 800-960px）：搜索框独占一行，
+	   结果计数隐藏，工具按钮落到第二行并允许内部换行，避免单行挤爆。 */
+	.pt-header-row { flex-wrap: wrap; }
+	.pt-header-row .pt-search {
+		flex: 0 0 100%;
+		min-width: 0;
+	}
+	.pt-header-row .pt-result-count { display: none; }
+	.pt-header-actions {
+		justify-content: flex-end;
+		width: 100%;
+		flex-wrap: wrap;
+	}
+	/* 第二行直接子项不拉伸 */
+	.pt-header-row .pt-sort-wrap,
+	.pt-header-row .pt-profile-dropdown,
+	.pt-header-row .pt-toggle-filters,
+	.pt-header-row .pt-open-settings,
+	.pt-header-row .pt-overflow-btn {
+		flex: 0 0 auto;
+	}
+}
+
+@container pt-header (max-width: 760px) {
+	/* 进一步把次要按钮收进 ⋮ 菜单，避免 520-760 之间按钮过多仍换行 */
 	.pt-header-row .pt-refresh,
 	.pt-header-row .pt-check-update,
-	.pt-header-row .pt-ai-icon-btn {
+	.pt-header-row .pt-update-all,
+	.pt-header-row .pt-ai-icon-btn,
+	.pt-header-row .pt-ai-progress,
+	.pt-header-row .pt-profile-dropdown,
+	.pt-header-row .pt-header-footprint {
 		display: none;
 	}
-	/* ⋮ 溢出：默认隐藏，窄屏下显示 */
 	.pt-overflow-btn {
 		display: inline-flex;
 		min-height: 32px;
@@ -5767,8 +5834,10 @@ button.pt-card-install-btn--installed {
 		color: var(--pt-text-strong, var(--text-normal));
 		background: var(--pt-surface-3, var(--background-modifier-hover));
 	}
-	/* 「筛选」按钮只显示图标：隐藏 "筛选" 文字，保留 lucide icon + caret，
-	   并缩 padding 到图标按钮尺寸，与同排排序/组合/设置/溢出视觉一致 */
+}
+
+@container pt-header (max-width: 520px) {
+	/* 筛选只显示图标；模式段紧凑；搜索框独占一行（960 已覆盖，保留提权） */
 	.pt-toggle-filters--text .pt-toggle-filters-label {
 		display: none;
 	}
@@ -5776,9 +5845,6 @@ button.pt-card-install-btn--installed {
 		padding: 0 10px;
 		min-height: 32px;
 	}
-	/* 模式段窄屏紧凑化：只缩 padding 保留宽度，不缩字号（字号继承基础 --pt-text-sm），
-	   防止 select 内文字与 input placeholder 因字号不同出现 baseline 视觉错位。
-	   同步去掉右 border 让 select 与输入段视觉连贯，避免窄屏下两段紧贴产生的挤压感。 */
 	.pt-search-mode {
 		padding: 0 14px 0 10px;
 		min-width: 0;
@@ -5794,19 +5860,11 @@ button.pt-card-install-btn--installed {
 		display: inline-flex;
 		align-items: center;
 	}
-	/* 模式段 caret 在窄 padding 下贴更近，避免与右分隔线撞车 */
 	.pt-mode-caret {
 		right: 6px;
 	}
-	/* 提升特异性（.pt-header 祖先前缀）压过 UA/主题对 <input> 的内置控件层，
-	   替代原 !important，避免 iOS WebView 圆角胶囊回归（container query 内特异性不变，靠祖先类提权）。 */
 	.pt-header .pt-search-input {
-		/* 无放大镜图标（已全局移除），左侧 padding 用常规值即可 */
 		padding: 0 44px 0 12px;
-		/* 内嵌子元素不重复画圆角，由外框 .pt-search 独自负责视觉圆角 + overflow 裁剪，
-		   避免窄屏下「内部 input 圆角与外框圆角错位 1px」造成的尖角瑕疵。
-		   appearance:none 清空 iOS WebView 给 <input> 独立渲染的"控件胶囊"
-		   （即使 transparent / border:0 仍可能保留内嵌 visual layer）。 */
 		appearance: none;
 		-webkit-appearance: none;
 		background: transparent;
@@ -5817,30 +5875,15 @@ button.pt-card-install-btn--installed {
 	.pt-search-mode {
 		border-radius: 0;
 	}
-	/* 外框加 overflow:hidden 让 input/select 在视觉上彻底裁到外框圆角之内；
-	   rounded-end 改为方形（border-radius:0 是为了和 input/select 严格圆角统一）。 */
 	.pt-search {
 		overflow: hidden;
 		border-radius: var(--pt-radius-input);
 	}
-	/* 关键：「视觉语言不统一」原是因为 select / input 都各自被 UA 画了一个圆角胶囊（即使切了
-	   border-radius 也清不掉 iOS / Chromium 上的部分 user-agent stylesheet 控件视觉层），
-	   让 select / input 区段视觉上"碎在"外框里像拼贴块。
-	   解法：在窄屏下将 segmented 内部分两段，分别由 .pt-mode-wrap 和 .pt-search-field 显式担纲：
-	   • 模式段：本身和 select 一起保留独立浅色 chip（已有"关键词▾"视觉块，已存在合理），
-	   • 输入段：让 .pt-search-field 干脆取消自己的几何形，让 input 彻底融合进外框——
-	     直接让 .pt-search-field 自己不画任何独立视觉，几何跟随外框。
-	   实现：.pt-search-field 的 overflow clip 把内部 input 渲染限制在它自身边界内，
-	   并强制 input 与 field 几何与父级 .pt-search 完全一致（同色透明，无 own border-radius 绘制）。 */
 	.pt-search-field,
 	.pt-mode-wrap {
-		/* 让这两个 wrapper 不再创建独立视觉块；几何边界完全依靠外框 border + overflow 切圆角。 */
 		background: transparent;
 		box-shadow: none;
 	}
-	/* 模式段：select 即使被 appearance:none 仍可能在 UA 层画一个圆角胶囊（iOS WebView 上 select
-	   永远带 box-shadow / 边框）。让 select 进一步全透明并彻底融进 .pt-mode-wrap： */
-	/* 提升特异性（.pt-header 祖先前缀）压过 UA/主题对 select 的内置控件层，替代原 !important */
 	.pt-header .pt-search-mode,
 	.pt-mode-wrap select {
 		appearance: none;
@@ -5849,40 +5892,6 @@ button.pt-card-install-btn--installed {
 		border: 0;
 		box-shadow: none;
 	}
-	/* 结果计数给搜索让位 */
-	.pt-result-count {
-		display: none;
-	}
-
-	/* 搜索栏单独成行：header-row 改换行，搜索框占满第一行，
-	   排序/组合/筛选/设置/溢出自动落到第二行（flex 容器自然换行）。
-	   搜索框 100% 宽度保证不被右侧图标挤窄，移动端输入更舒适。 */
-	.pt-header-row {
-		flex-wrap: wrap;
-	}
-	.pt-header-row .pt-search {
-		flex: 0 0 100%;
-		min-width: 0;
-	}
-	/* 第二行（工具簇）左对齐排布，与搜索框左缘对齐 */
-	.pt-header-row .pt-sort-wrap,
-	.pt-header-row .pt-profile-dropdown,
-	.pt-header-row .pt-toggle-filters,
-	.pt-header-row .pt-open-settings,
-	.pt-header-row .pt-overflow-btn {
-		flex: 0 0 auto;
-	}
-}
-
-@container pt-header (max-width: 760px) {
-	/* 平板/窄桌面：搜索框独占一行，结果计数隐藏，工具按钮自然落到第二行，
-	   保留全部按钮可见，避免中等宽度下一行挤爆导致显示不全。 */
-	.pt-header-row { flex-wrap: wrap; }
-	.pt-header-row .pt-search {
-		flex: 0 0 100%;
-		min-width: 0;
-	}
-	.pt-header-row .pt-result-count { display: none; }
 }
 
 /*
