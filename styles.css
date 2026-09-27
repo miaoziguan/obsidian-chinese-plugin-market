@@ -163,34 +163,34 @@
 	container-name: pt-header;
 }
 
-/* 单行头部：搜索框 + 模式下拉 + 工具按钮（工具按钮整体居中） */
+/* 头部：搜索框与工具按钮各占一行，均水平居中 */
 .pt-header-row {
-	display: grid;
-	grid-template-columns: 1fr auto 1fr;
-	align-items: center;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
 	gap: var(--pt-space-sm);
 }
 
-/* 工具栏右侧按钮组：默认 flex 换行，任何宽度下都不溢出，整体居中 */
+/* 搜索框：独立第一行并居中，限制最大宽度，不占满整行 */
+.pt-header-row .pt-search {
+	flex: 0 0 auto;
+	width: min(100%, 640px);
+	margin: 0 auto;
+}
+
+/* 工具栏按钮组：独立第二行并居中，flex 换行不溢出 */
 .pt-header-actions {
-	grid-column: 2;
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
 	justify-content: center;
 	gap: var(--pt-space-2xs);
+	width: 100%;
 }
 
-/* 溢出菜单按钮：默认在宽屏隐藏，窄容器（≤760px）由断点显示，始终靠最右 */
+/* 溢出菜单按钮：默认在宽屏隐藏，窄容器（≤760px）由断点显示 */
 .pt-overflow-btn {
 	display: none;
-	grid-column: 3;
-	justify-self: end;
-}
-
-.pt-header-row .pt-search {
-	grid-column: 1;
-	width: 100%;
 }
 
 /* 结果计数（独立文本，不混入排序按钮） */
@@ -5788,9 +5788,9 @@ button.pt-card-install-btn--installed {
  * 与既有 .pt-mobile 选段不冲突，二者并集生效（设备是移动端 + 容器窄，都折叠）。
  */
 @container pt-header (max-width: 960px) {
-	/* 平板/窄桌面（覆盖华为平板横屏常见 800-960px）：搜索框独占一行，
-	   结果计数隐藏，工具按钮落到第二行并允许内部换行，避免单行挤爆。 */
-	.pt-header-row { display: flex; flex-wrap: wrap; }
+	/* 平板/窄桌面（覆盖华为平板横屏常见 800-960px）：搜索框独占第一行（满宽），
+	   结果计数隐藏，工具按钮落到第二行并允许内部换行，均保持居中。 */
+	.pt-header-row { display: flex; flex-direction: column; }
 	.pt-header-row .pt-search {
 		flex: 0 0 100%;
 		min-width: 0;

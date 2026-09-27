@@ -581,7 +581,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 在窄 viewport 下（容器查询 @container pt-header ≤520px）收进右上角 ⋮ 溢出菜单，
 		// 避免与搜索框/排序/筛选挤在同一行导致换行或溢出。始终挂载 ⋮ 按钮本身，
 		// 由 CSS 容器查询控制其显隐，确保窄屏状态切换（或 DevTools 模拟窄屏）都能可靠折叠。
-		const overflowBtn = headerRow.createEl("button", {
+		const overflowBtn = actions.createEl("button", {
 			cls: "pt-overflow-btn",
 			attr: { "aria-label": "更多操作", "aria-haspopup": "menu", type: "button" },
 		});
