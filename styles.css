@@ -188,6 +188,106 @@
 	width: 100%;
 }
 
+/* 工具栏按钮统一视觉语言：透明背景、无边框、同高、同 hover 高亮。
+   覆盖排序/刷新/检查更新/组合/AI/足迹/设置/筛选等历史异构样式。 */
+.pt-header-actions > .pt-sort-wrap .pt-sort-btn,
+.pt-header-actions > button.pt-check-update,
+.pt-header-actions > button.pt-profile-dropdown,
+.pt-header-actions > .pt-refresh,
+.pt-header-actions > .pt-ai-icon-btn,
+.pt-header-actions > .pt-header-footprint,
+.pt-header-actions > .pt-icon-btn.pt-open-settings,
+.pt-header-actions > .pt-toggle-filters,
+.pt-header-actions > .pt-overflow-btn {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	min-width: 32px;
+	height: 32px;
+	padding: 0 7px;
+	margin: 0;
+	font-family: inherit;
+	font-size: var(--pt-text-sm);
+	font-weight: var(--pt-weight-medium);
+	color: var(--pt-text-muted);
+	background: transparent;
+	border: none;
+	border-radius: var(--pt-radius-btn);
+	box-shadow: none;
+	cursor: pointer;
+	transition: color var(--pt-duration-fast) var(--pt-ease),
+		background var(--pt-duration-fast) var(--pt-ease),
+		transform var(--pt-duration-fast) var(--pt-ease-spring);
+}
+.pt-header-actions > .pt-sort-wrap .pt-sort-btn:hover,
+.pt-header-actions > button.pt-check-update:hover,
+.pt-header-actions > button.pt-profile-dropdown:hover,
+.pt-header-actions > .pt-refresh:hover,
+.pt-header-actions > .pt-ai-icon-btn:hover,
+.pt-header-actions > .pt-header-footprint:hover,
+.pt-header-actions > .pt-icon-btn.pt-open-settings:hover,
+.pt-header-actions > .pt-toggle-filters:hover,
+.pt-header-actions > .pt-overflow-btn:hover {
+	color: var(--pt-text);
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+}
+.pt-header-actions > .pt-sort-wrap .pt-sort-btn:active,
+.pt-header-actions > button.pt-check-update:active,
+.pt-header-actions > button.pt-profile-dropdown:active,
+.pt-header-actions > .pt-refresh:active,
+.pt-header-actions > .pt-ai-icon-btn:active,
+.pt-header-actions > .pt-header-footprint:active,
+.pt-header-actions > .pt-icon-btn.pt-open-settings:active,
+.pt-header-actions > .pt-toggle-filters:active,
+.pt-header-actions > .pt-overflow-btn:active {
+	transform: scale(0.94);
+}
+.pt-header-actions > .pt-sort-wrap .pt-sort-btn:focus-visible,
+.pt-header-actions > button.pt-check-update:focus-visible,
+.pt-header-actions > button.pt-profile-dropdown:focus-visible,
+.pt-header-actions > .pt-refresh:focus-visible,
+.pt-header-actions > .pt-ai-icon-btn:focus-visible,
+.pt-header-actions > .pt-header-footprint:focus-visible,
+.pt-header-actions > .pt-icon-btn.pt-open-settings:focus-visible,
+.pt-header-actions > .pt-toggle-filters:focus-visible,
+.pt-header-actions > .pt-overflow-btn:focus-visible {
+	outline: none;
+	box-shadow: var(--pt-focus-ring);
+}
+.pt-header-actions > .pt-sort-wrap .pt-sort-btn svg.svg-icon,
+.pt-header-actions > button.pt-check-update svg.svg-icon,
+.pt-header-actions > button.pt-profile-dropdown svg.svg-icon,
+.pt-header-actions > .pt-refresh svg.svg-icon,
+.pt-header-actions > .pt-ai-icon-btn svg.svg-icon,
+.pt-header-actions > .pt-header-footprint svg.svg-icon,
+.pt-header-actions > .pt-icon-btn.pt-open-settings svg.svg-icon,
+.pt-header-actions > .pt-toggle-filters svg.svg-icon,
+.pt-header-actions > .pt-overflow-btn svg.svg-icon {
+	width: 16px;
+	height: 16px;
+	stroke-width: 2px;
+}
+/* 激活态统一 */
+.pt-header-actions > .pt-toggle-filters[aria-expanded="true"] {
+	color: var(--pt-accent);
+	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+}
+.pt-header-actions > .pt-ai-icon-btn--ready {
+	color: var(--pt-accent, var(--interactive-accent));
+}
+.pt-header-actions > .pt-ai-icon-btn--ready:hover {
+	color: var(--pt-accent, var(--interactive-accent));
+	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+}
+/* 结果计数与按钮同高对齐 */
+.pt-header-actions > .pt-result-count {
+	display: inline-flex;
+	align-items: center;
+	height: 32px;
+}
+
 /* 溢出菜单按钮：默认在宽屏隐藏，窄容器（≤760px）由断点显示 */
 .pt-overflow-btn {
 	display: none;
