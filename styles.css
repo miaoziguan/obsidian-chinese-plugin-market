@@ -192,8 +192,10 @@
 }
 
 /* .pt-chip：填充胶囊（来源/分类/作者筛选、统计、排序选项等）。
-   surface-2 底 + 细边框，hover 加深；按下(pressed)/选中态见各业务类的 [aria-pressed] 规则。 */
-.pt-chip {
+   surface-2 底 + 细边框，hover 加深；按下(pressed)/选中态见各业务类的 [aria-pressed] 规则。
+   .pt-filter 直接复用此原语，保证所有筛选胶囊视觉统一。 */
+.pt-chip,
+.pt-filter {
 	appearance: none;
 	display: inline-flex;
 	align-items: center;
@@ -211,17 +213,20 @@
 		background-color var(--pt-duration-fast) var(--pt-ease),
 		border-color var(--pt-duration-fast) var(--pt-ease);
 }
-.pt-chip:hover {
+.pt-chip:hover,
+.pt-filter:hover {
 	color: var(--pt-text);
 	border-color: var(--pt-border-strong);
 	background: var(--pt-surface-3);
 }
-.pt-chip:focus-visible {
+.pt-chip:focus-visible,
+.pt-filter:focus-visible {
 	outline: none;
 	border-color: var(--pt-accent);
 	box-shadow: var(--pt-focus-ring);
 }
-.pt-chip svg.svg-icon {
+.pt-chip svg.svg-icon,
+.pt-filter svg.svg-icon {
 	width: 14px;
 	height: 14px;
 }
@@ -692,30 +697,6 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	flex-wrap: wrap;
 	gap: var(--pt-space-xs);
 }
-.pt-filter {
-	appearance: none;
-	font: inherit;
-	font-size: var(--pt-text-sm);
-	font-weight: var(--pt-weight-medium);
-	padding: 6px 14px;
-	color: var(--pt-text-muted);
-	background: var(--pt-surface);
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-pill);
-	cursor: pointer;
-	transition: background-color var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease), box-shadow var(--pt-duration-fast) var(--pt-ease);
-}
-.pt-filter:hover {
-	color: var(--pt-text);
-	border-color: var(--pt-border-strong);
-	background: var(--pt-surface-2);
-}
-.pt-filter:focus-visible {
-	outline: none;
-	border-color: var(--pt-accent);
-	box-shadow: var(--pt-focus-ring);
-}
 .pt-filter[aria-pressed="true"] {
 	color: var(--pt-accent);
 	background: color-mix(in srgb, var(--pt-accent) 12%, transparent);
@@ -724,6 +705,19 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 }
 /* 「推荐」胶囊：金色高亮态（与来源筛选同构但语义独立） */
 .pt-filter.pt-filter-recommended[aria-pressed="true"] {
+	color: var(--pt-gold-muted);
+	background: rgba(217, 154, 28, 0.16);
+	border-color: rgba(217, 154, 28, 0.5);
+}
+/* 主题下用 .pt-view 前缀提升到 (0,2,1)，压过上面的 .pt-view .pt-filter 默认态断言，
+   保证选中态的 accent 填充不被默认 surface-2 背景覆盖（分类/作者/来源筛选统一）。 */
+.pt-view .pt-filter[aria-pressed="true"] {
+	color: var(--pt-accent);
+	background: color-mix(in srgb, var(--pt-accent) 12%, transparent);
+	border-color: color-mix(in srgb, var(--pt-accent) 40%, transparent);
+	font-weight: var(--pt-weight-semibold);
+}
+.pt-view .pt-filter.pt-filter-recommended[aria-pressed="true"] {
 	color: var(--pt-gold-muted);
 	background: rgba(217, 154, 28, 0.16);
 	border-color: rgba(217, 154, 28, 0.5);
@@ -890,7 +884,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	margin-top: var(--pt-space-m, 12px);
 	padding: var(--pt-space-s, 10px) var(--pt-space-m, 12px);
 	background: var(--background-secondary);
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 	font-size: var(--pt-text-sm, 13px);
 	color: var(--text-muted);
 }
@@ -908,7 +902,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	min-width: 140px;
 	padding: 4px 8px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	background: var(--background-primary);
 	color: var(--text-normal);
 }
@@ -918,8 +912,8 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	color: var(--text-on-accent);
 	border-color: var(--interactive-accent);
 }
-.pt-journal-verdict { padding: 3px 6px; border: 1px solid var(--background-modifier-border); border-radius: 6px; }
-.pt-journal-copy { padding: 3px 10px; border: 1px solid var(--background-modifier-border); border-radius: 6px; cursor: pointer; }
+.pt-journal-verdict { padding: 3px 6px; border: 1px solid var(--background-modifier-border); border-radius: var(--pt-radius); }
+.pt-journal-copy { padding: 3px 10px; border: 1px solid var(--background-modifier-border); border-radius: var(--pt-radius); cursor: pointer; }
 .pt-journal-copy:hover { background: var(--background-modifier-hover); }
 
 /* 表格本体 */
@@ -1115,35 +1109,13 @@ button.pt-facet-letter-btn.is-active {
 	min-width: 0;
 }
 /* 用 .pt-view 前缀把具体性从 (0,1,0) 提到 (0,2,0)，压过主题 .theme-xx button 的默认
-   背景/边框/阴影——否则筛选胶囊（来源/分类/作者/推荐）默认态会回落成主题原生按钮外观。 */
+   背景/边框/阴影——否则筛选胶囊（来源/分类/作者/推荐）默认态会回落成主题原生按钮外观。
+   配方与 .pt-chip 原语一致（surface-2 底 + 细边框），确保主题下也维持统一填充胶囊外观。 */
 .pt-view .pt-filter {
-	background: var(--pt-surface);
+	background: var(--pt-surface-2);
 	border: 1px solid var(--pt-border);
 	border-radius: var(--pt-radius-pill);
 	box-shadow: none;
-}
-.pt-source-filters .pt-filter {
-	font-size: var(--pt-text-sm);
-	font-weight: var(--pt-weight-medium);
-	padding: 6px 14px;
-	color: var(--pt-text-muted);
-	background: transparent;
-	border: none;
-	border-radius: 0;
-	cursor: pointer;
-	appearance: none;
-	transition: color var(--pt-duration-fast) var(--pt-ease);
-}
-.pt-source-filters .pt-filter:hover {
-	color: var(--pt-text);
-}
-.pt-source-filters .pt-filter[aria-pressed="true"] {
-	color: var(--pt-accent);
-	font-weight: var(--pt-weight-semibold);
-}
-/* 来源胶囊刻意用透明背景（非填充胶囊），用更高具体性确保不被上面的 .pt-view .pt-filter 覆盖 */
-.pt-view .pt-source-filters .pt-filter {
-	background: transparent;
 }
 
 /* 面板底部常驻的重置按钮：内容宽度 + 顶部分隔，避免拉伸成整行重块 */
@@ -1177,71 +1149,15 @@ button.pt-facet-letter-btn.is-active {
 	border-color: var(--pt-accent, var(--interactive-accent));
 }
 
-/* 工具条/筛选区按钮无边框无背景（覆盖以上所有 hover/focus/active/aria-pressed 态） */
-.pt-view .pt-sort-btn,
-.pt-view .pt-refresh,
-.pt-view .pt-toggle-filters,
-.pt-view .pt-toggle-filters--text,
-.pt-view .pt-filter,
+/* 面板重置按钮（未迁移到原语）：保持无边框无背景，压过主题 button 默认外观。
+   工具栏按钮已由 .pt-btn 原语统一、筛选胶囊已由 .pt-chip 原语统一，故此处仅保留此一项。 */
 .pt-view .pt-toolbar-reset {
 	border: none;
 	box-shadow: none;
 	background: transparent;
 }
-/* 顶部右侧三个图标按钮（排序 ↑↓ / 刷新 / 筛选）去掉背景，纯图标 */
-.pt-view .pt-sort-btn,
-.pt-view .pt-refresh,
-.pt-view .pt-toggle-filters {
-	background: transparent;
-}
-.pt-view .pt-sort-btn:hover,
-.pt-view .pt-refresh:hover,
-.pt-view .pt-toggle-filters:hover {
-	background: var(--pt-surface-hover, var(--background-modifier-hover));
-}
-.pt-view .pt-toggle-filters[aria-expanded="true"] {
-	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
-}
 
-/* AI 一键翻译按钮（sparkles 图标）默认就透明，但 hover/--ready-hover 会显灰底，
-   统一改为纯图标（hover 仅靠轻微颜色变化反馈） */
-.pt-view .pt-ai-icon-btn,
-.pt-view .pt-ai-icon-btn:hover,
-.pt-view .pt-ai-icon-btn--ready:hover {
-	background: transparent;
-	border: none;
-	box-shadow: none;
-}
-/* 禁用态（无待翻译时也常驻显示）：弱化但保留图标可识别 */
-.pt-view .pt-ai-icon-btn:disabled {
-	opacity: 0.45;
-	cursor: not-allowed;
-	background: transparent;
-	border: none;
-	box-shadow: none;
-}
-.pt-view .pt-sort-btn:hover,
-.pt-view .pt-refresh:hover,
-.pt-view .pt-toggle-filters:hover,
-.pt-view .pt-toggle-filters--text:hover,
-.pt-view .pt-filter:hover,
-.pt-view .pt-toolbar-reset:hover,
-.pt-view .pt-sort-btn:focus-visible,
-.pt-view .pt-refresh:focus-visible,
-.pt-view .pt-toggle-filters:focus-visible,
-.pt-view .pt-toggle-filters--text:focus-visible,
-.pt-view .pt-filter:focus-visible,
-.pt-view .pt-toolbar-reset:focus-visible,
-.pt-view .pt-toggle-filters[aria-expanded="true"],
-.pt-view .pt-toggle-filters--text[aria-expanded="true"],
-/* 工具条/筛选区按钮（来源/安装/收藏等 .pt-filter）选中时去边框去背景；分类 facet chip 走方案 B（accent 字+加粗+保留细边框），不在此覆盖 */
-.pt-view .pt-filter[aria-pressed="true"],
-.pt-view .pt-filter.pt-filter-recommended[aria-pressed="true"] {
-	border: none;
-	box-shadow: none;
-	background: transparent;
-}
-/* 字母索引 active态：与分类/翻译维度统一（accent 色文字 + 加粗，无背景填充） */
+/* 字母索引 active 态：accent 文字 + 加粗，无背景填充 */
 .pt-view button.pt-facet-letter-btn.is-active {
 	color: var(--pt-accent, var(--interactive-accent));
 	font-weight: var(--pt-weight-semibold);
@@ -2760,7 +2676,7 @@ button.pt-card-install-btn--installed {
 }
 
 /* 设置面板（复用宿主 Setting 样式，仅微调间距） */
-.pt-dict-input { height: 32px; font-size: var(--pt-text-sm); padding: 0 8px; border-radius: 6px; }
+.pt-dict-input { height: 32px; font-size: var(--pt-text-sm); padding: 0 8px; border-radius: var(--pt-radius); }
 .pt-dict-row { margin: 0; }
 .pt-dict-del { min-height: 28px; }
 
@@ -2778,7 +2694,7 @@ button.pt-card-install-btn--installed {
 	height: 32px;
 	background: var(--background-primary, var(--color-base-00));
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	padding: 0 10px;
 	font-size: var(--pt-text-base);
 	transition: border-color 200ms ease;
@@ -2790,7 +2706,7 @@ button.pt-card-install-btn--installed {
 .pt-dict-add-row button {
 	height: 32px;
 	padding: 0 16px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	font-size: var(--pt-text-base);
 	font-weight: 500;
 	white-space: nowrap;
@@ -3024,7 +2940,7 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-xs);
 	color: var(--pt-text-error, var(--text-error));
 	border: 1px solid var(--pt-text-error, var(--text-error));
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 	padding: 0 6px;
 	margin-left: 4px;
 	white-space: nowrap;
@@ -3472,7 +3388,7 @@ button.pt-card-install-btn--installed {
 	padding: 7px 14px;
 	font-size: var(--pt-text-md);
 	font-weight: 500;
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 	text-decoration: none;
 	color: var(--pt-text-strong, var(--text-normal));
 	background: var(--background-primary, var(--background));
@@ -3817,7 +3733,7 @@ button.pt-card-install-btn--installed {
 .pt-settings-details {
 	margin: 10px 0 0;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 	background: var(--background-secondary, var(--color-base-10));
 	overflow: hidden;
 	transition: border-color 200ms ease;
@@ -3933,7 +3849,7 @@ button.pt-card-install-btn--installed {
 	height: 30px;
 	font-size: var(--pt-text-base);
 	padding: 0 8px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	border: 1px solid var(--background-modifier-border);
 	background: var(--background-primary);
 	color: var(--text-normal);
@@ -3942,7 +3858,7 @@ button.pt-card-install-btn--installed {
 	flex: 0 0 auto;
 	width: 30px;
 	height: 30px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	border: 1px solid var(--background-modifier-border);
 	background: transparent;
 	cursor: pointer;
@@ -3958,7 +3874,7 @@ button.pt-card-install-btn--installed {
 	height: 30px;
 	font-size: var(--font-small, 13px);
 	padding: 0 14px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	transition: all 150ms ease;
 }
 .pt-settings-section .setting-item button:hover {
@@ -3974,7 +3890,7 @@ button.pt-card-install-btn--installed {
 .pt-settings-section .setting-item select,
 .pt-settings-section .setting-item input[type="text"] {
 	height: 30px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	font-size: var(--font-small, 13px);
 }
 .pt-settings-section .setting-item input[type="text"] {
@@ -6176,7 +6092,7 @@ button.pt-card-install-btn--installed {
 .cpm-group-badge {
 	margin-left: 6px;
 	padding: 1px 6px;
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 	font-size: var(--font-ui-smaller, 11px);
 	line-height: 1.4;
 	white-space: nowrap;
@@ -6347,7 +6263,7 @@ button.pt-card-install-btn--installed {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small, 13px);
 	padding: 4px 12px;
-	border-radius: 6px 6px 0 0;
+	border-radius: var(--pt-radius) 6px 0 0;
 	cursor: pointer;
 	transition: background-color 0.15s ease, color 0.15s ease;
 }
@@ -6368,7 +6284,7 @@ button.pt-card-install-btn--installed {
 	height: 16px;
 	line-height: 16px;
 	padding: 0 4px;
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 	background: var(--text-accent);
 	color: var(--text-on-accent);
 	font-size: 10px;
@@ -6390,7 +6306,7 @@ button.pt-card-install-btn--installed {
 	gap: 10px;
 	padding: 8px 10px;
 	margin-bottom: 8px;
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 	background: color-mix(in srgb, var(--pt-accent) 10%, var(--background-primary));
 	border: 1px solid color-mix(in srgb, var(--pt-accent) 25%, var(--background-modifier-border));
 	font-size: var(--font-ui-small, 13px);
@@ -6496,7 +6412,7 @@ button.pt-card-install-btn--installed {
 .pt-beta-install-empty {
 	margin-top: 10px;
 	padding: 8px 18px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	border: 1px solid var(--text-accent);
 	background: var(--text-accent);
 	color: var(--text-on-accent);
@@ -6520,7 +6436,7 @@ button.pt-card-install-btn--installed {
 	align-items: center;
 	gap: 10px;
 	padding: 6px 8px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	background: var(--background-secondary);
 }
 .pt-updates-row:hover {
@@ -6655,7 +6571,7 @@ button.pt-card-install-btn--installed {
 	width: 100%;
 	padding: 6px 8px;
 	border: 1px solid transparent;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	background: var(--background-secondary);
 	color: var(--text-normal);
 	text-align: left;
@@ -6766,7 +6682,7 @@ button.pt-card-install-btn--installed {
 .pt-detail-dependent-chip {
 	padding: 0 6px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 	color: var(--text-muted);
 }
 .pt-detail-dep-status {
@@ -6887,7 +6803,7 @@ button.pt-card-install-btn--installed {
 	background: transparent;
 	cursor: pointer;
 	padding: 2px 6px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 }
 .pt-fav-group-btn:hover {
 	color: var(--pt-text);
@@ -6898,7 +6814,7 @@ button.pt-card-install-btn--installed {
 	align-items: center;
 	gap: 8px;
 	padding: 6px 4px;
-	border-radius: 8px;
+	border-radius: var(--pt-radius-sm);
 }
 .pt-fav-row:hover {
 	background: var(--background-secondary);
@@ -6928,7 +6844,7 @@ button.pt-card-install-btn--installed {
 	cursor: pointer;
 	font-size: var(--pt-text-sm);
 	padding: 2px 8px;
-	border-radius: 6px;
+	border-radius: var(--pt-radius);
 	white-space: nowrap;
 }
 .pt-fav-remove:hover {
