@@ -523,7 +523,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// 一键检查已安装插件更新（独立于「刷新列表」：只检测已装插件是否有新版，不拉市场数据）
 		const checkUpdateBtn = actions.createEl("button", {
-			cls: "pt-check-update",
+			cls: "pt-btn pt-check-update",
 			attr: { "aria-label": ctx.t("action.checkUpdate"), title: ctx.t("action.checkUpdate"), type: "button" },
 		});
 		setIcon(checkUpdateBtn, "download-cloud");
