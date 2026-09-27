@@ -479,49 +479,52 @@
 }
 
 
-/* 搜索模式选择器：作为搜索框的内嵌左段（segmented input）。
-   去掉独立边框（无 border-right），与右侧输入区完全靠紧无缝；仅靠下拉箭头 + 留白
-   区分模式段，整框焦点表现统一由 .pt-search:focus-within 提供。 */
-.pt-search-mode {
-	-webkit-appearance: none;
+/* 搜索模式选择器：自绘下拉（button + menu），与排序菜单同款视觉。
+   原生 <select> 的弹出列表由 OS 渲染无法定制，已弃用。 */
+.pt-mode-btn {
 	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	height: 36px;
+	margin: 0;
+	padding: 0 24px 0 12px;
 	font: inherit;
 	font-size: var(--pt-text-sm);
 	font-weight: var(--pt-weight-medium);
-	height: 36px;
-	line-height: 36px;
-	margin: 0;
-	padding: 0 26px 0 12px;
 	color: var(--pt-text-muted);
-	/* 与 header 表面融为一体：无背景、无圆角、无右侧分隔线，仅靠下拉箭头 + 文字区分模式段。 */
 	background: transparent;
 	border: 0;
 	border-radius: 0;
 	cursor: pointer;
 	white-space: nowrap;
 	flex-shrink: 0;
-	box-shadow: none; /* 去掉 <select> 在 WebKit/macOS 的 native drop shadow */
+	box-shadow: none;
 }
-/* hover 同样保持纯文字：主题 select:hover 的灰底用 (0,2,1) 提权压掉，亮暗主题统一 */
-.pt-search-mode:hover,
-.pt-view .pt-search-mode:hover,
-.theme-dark .pt-view .pt-search-mode:hover {
+.pt-mode-btn:hover,
+.pt-mode-btn:focus {
 	background: transparent;
 	box-shadow: none;
+	outline: none;
 	color: var(--pt-text);
 }
-/* caret 是真实 DOM 节点（<select> 在 WebKit 不渲染 ::after 伪元素）；
-   绝对定位于 .pt-mode-wrap 内右侧，select 已预留 26px 右内边距，箭头浮于文字与分隔线之间；
-   pointer-events:none 让点击穿透到下方 select 以正常触发下拉。 */
+.pt-mode-wrap--open .pt-mode-caret {
+	transform: translateY(-50%) rotate(180deg);
+}
+/* caret 是真实 DOM 节点；绝对定位于 .pt-mode-wrap 内右侧，按钮已预留 24px 右内边距。
+   pointer-events:none 让点击穿透到下方按钮。 */
 .pt-mode-wrap {
 	position: relative;
 	flex-shrink: 0;
+	/* 与 .pt-sort-wrap 相同的 stacking context，保证菜单不被卡片列表遮挡 */
+	z-index: var(--pt-z-dropdown);
+	isolation: isolate;
 }
 /* CSS border 三角（替代 9px "▾" 字符）：6px 高 × 10px 腰，比字符更明显、
    跨平台渲染一致、形状干净；颜色继承主题 muted 与模式文字同色调。 */
 .pt-mode-caret {
 	position: absolute;
-	right: 9px;
+	right: 8px;
 	top: 50%;
 	transform: translateY(-50%);
 	width: 0;
@@ -530,11 +533,55 @@
 	border-right: 5px solid transparent;
 	border-top: 6px solid var(--pt-text-muted);
 	pointer-events: none;
+	transition: transform var(--pt-duration-fast) var(--pt-ease);
 }
-/* 无独立 hover 反馈（避免左段出现独立底色块），主 hover 由 .pt-search:hover 外框统一承担；
-   鼠标点击下拉后焦点态兜底去掉 UA 默认环，统一交给 .pt-search:focus-within 的整框光环 */
-.pt-search-mode:focus {
-	outline: none;
+/* 模式下拉菜单：配方与 .pt-sort-menu 一致（surface 底 + 细边框 + 卡片圆角 + 大阴影） */
+.pt-mode-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	min-width: 160px;
+	max-width: min(280px, calc(100vw - 16px));
+	background: var(--pt-surface);
+	border: 1px solid var(--pt-border);
+	border-radius: var(--pt-radius-card);
+	box-shadow: var(--pt-shadow-lg);
+	padding: 4px;
+	z-index: 50;
+	display: none;
+	overflow: hidden;
+}
+.pt-mode-wrap--open .pt-mode-menu {
+	display: block;
+}
+.pt-mode-menu-item {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	width: 100%;
+	padding: 7px 12px;
+	margin: 0;
+	font-size: var(--pt-text-sm);
+	color: var(--pt-text);
+	background: transparent;
+	border: none;
+	border-radius: var(--pt-radius-sm);
+	cursor: pointer;
+	text-align: left;
+	white-space: nowrap;
+}
+.pt-mode-menu-item:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	color: var(--pt-text-strong, var(--text-normal));
+}
+.pt-mode-menu-item--active {
+	color: var(--pt-accent);
+	font-weight: var(--pt-weight-semibold);
+}
+.pt-mode-menu-item--active::before {
+	content: "✓";
+	margin-right: 6px;
+	color: var(--pt-accent);
 }
 
 /* 工具栏「仅已安装」/「仅已启动」/「仅已安装未启动」 toggle */
@@ -1258,35 +1305,13 @@ button.pt-facet-letter-btn.is-active {
 	background: transparent;
 	box-shadow: none;
 }
-.theme-dark .pt-view .pt-search-mode,
 .theme-dark .pt-view .pt-search-input {
 	background: transparent;
 	border: 0;
 	border-radius: 0;
 	box-shadow: none;
 }
-/* 亮/暗主题统一强制模式选择器纯文字化：主题给 select 的常驻表单灰底
-   （--background-modifier-form-field）、背景图箭头、边框、阴影全部清空。
-   用 (0,3,0) 特异度压过主题 .theme-xx select (0,1,1)；hover/focus 同样强制透明。 */
-.pt-view .pt-search-mode,
-.theme-light .pt-view .pt-search-mode,
-.theme-dark .pt-view .pt-search-mode,
-.pt-view .pt-search-mode:hover,
-.theme-light .pt-view .pt-search-mode:hover,
-.theme-dark .pt-view .pt-search-mode:hover,
-.pt-view .pt-search-mode:focus,
-.theme-light .pt-view .pt-search-mode:focus,
-.theme-dark .pt-view .pt-search-mode:focus {
-	-webkit-appearance: none;
-	appearance: none;
-	background: none;
-	background-color: transparent;
-	border: 0;
-	border-radius: 0;
-	box-shadow: none;
-	outline: none;
-}
-/* 包裹层也不能有底色：部分主题给 .dropdown 容器/包裹层加灰底，这里一并压掉 */
+/* 包裹层也不能有底色：部分主题给容器加灰底，这里一并压掉 */
 .pt-view .pt-mode-wrap,
 .theme-light .pt-view .pt-mode-wrap,
 .theme-dark .pt-view .pt-mode-wrap {
@@ -5925,13 +5950,10 @@ button.pt-card-install-btn--installed {
 
 @container pt-header (max-width: 520px) {
 	/* 模式段紧凑；搜索框独占一行（960 已覆盖，保留提权） */
-	.pt-search-mode {
-		padding: 0 14px 0 10px;
+	.pt-mode-btn {
+		padding: 0 18px 0 10px;
 		min-width: 0;
-		vertical-align: middle;
-		line-height: 36px;
 		height: 36px;
-		border-right: 0;
 		background: transparent;
 	}
 	.pt-mode-wrap {
@@ -5941,7 +5963,7 @@ button.pt-card-install-btn--installed {
 		align-items: center;
 	}
 	.pt-mode-caret {
-		right: 6px;
+		right: 5px;
 	}
 	.pt-header .pt-search-input {
 		padding: 0 44px 0 12px;
@@ -5951,9 +5973,6 @@ button.pt-card-install-btn--installed {
 		border: 0;
 		border-radius: 0;
 		box-shadow: none;
-	}
-	.pt-search-mode {
-		border-radius: 0;
 	}
 	.pt-search {
 		overflow: visible;
@@ -5965,14 +5984,6 @@ button.pt-card-install-btn--installed {
 	.pt-search-field,
 	.pt-mode-wrap {
 		background: transparent;
-		box-shadow: none;
-	}
-	.pt-header .pt-search-mode,
-	.pt-mode-wrap select {
-		appearance: none;
-		-webkit-appearance: none;
-		background: transparent;
-		border: 0;
 		box-shadow: none;
 	}
 }

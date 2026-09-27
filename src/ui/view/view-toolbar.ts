@@ -128,21 +128,33 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 二者共享一个外框并以竖分隔线连体，让用户一眼看出「选模式 + 输入内容」而非误认作排序标签。
 		const searchBar = headerRow.createDiv({ cls: "pt-search" });
 
-	// ── 左段：搜索模式选择器（内嵌于搜索框，替代原孤立的右侧下拉，强化可发现性）──
-	// 用 .pt-mode-wrap 包裹 select + 真实 caret 节点：<select> 在 WebKit 下不渲染
-	// ::after 伪元素（mask SVG 与 "▾" 文字均不显示），箭头必须是真实 DOM 节点。
+	// ── 左段：搜索模式选择器（自绘下拉，与排序菜单同款视觉）──
+	// 原生 <select> 的弹出列表是 OS 级渲染（macOS 深色圆角面板），CSS 无法控制，
+	// 与插件自绘菜单风格割裂；改为 button + 自绘 .pt-mode-menu，交互对齐 .pt-sort-wrap。
 	const modeWrap = searchBar.createDiv({ cls: "pt-mode-wrap" });
-	const modeSelect = modeWrap.createEl("select", { cls: "pt-mode-select pt-search-mode" });
-	// 只保留一个 tooltip：Obsidian 依据 aria-label 弹 tooltip；再设 title 会叠加浏览器原生 tooltip，出现双气泡
-	modeSelect.setAttribute("aria-label", "切换搜索模式：关键词 / AI 语义");
-	for (const mode of SEARCH_MODES) {
-		const opt = modeSelect.createEl("option", { text: ctx.t(mode.label) });
-		opt.value = mode.id;
-	}
-	modeSelect.value = ctx.searchMode;
-	// 真实 DOM 箭头元素（绝不用伪元素，WebKit 不渲染 <select> 伪元素）；
-	// span 不放文本，箭头由 CSS border 画（一致、清晰、可控大小）。
+	const modeBtn = modeWrap.createEl("button", {
+		cls: "pt-btn pt-mode-btn",
+		attr: {
+			type: "button",
+			"aria-label": "切换搜索模式：关键词 / AI 语义",
+			"aria-haspopup": "menu",
+			"aria-expanded": "false",
+		},
+	});
+	const modeBtnLabel = modeBtn.createSpan({ cls: "pt-mode-btn-label" });
+	modeBtnLabel.setText(ctx.t(SEARCH_MODES.find((m) => m.id === ctx.searchMode)!.label));
+	// 真实 DOM 箭头元素；span 不放文本，箭头由 CSS border 画（一致、清晰、可控大小）。
 	modeWrap.createSpan({ cls: "pt-mode-caret" });
+	const modeMenu = modeWrap.createDiv({ cls: "pt-mode-menu" });
+	for (const mode of SEARCH_MODES) {
+		const item = modeMenu.createEl("button", {
+			cls: "pt-mode-menu-item",
+			text: ctx.t(mode.label),
+			attr: { type: "button" },
+		});
+		item.setAttribute("data-mode", mode.id);
+		if (mode.id === ctx.searchMode) item.classList.add("pt-mode-menu-item--active");
+	}
 
 		// ── 右段：内容输入区（放大镜 + 输入框 + 清除 + AI 徽章，独立定位上下文）──
 		const searchField = searchBar.createDiv({ cls: "pt-search-field" });
@@ -219,9 +231,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		searchBar.toggleClass("pt-search-ai", isAIMode(ctx));
 		searchBar.toggleClass("pt-search-local", isLocalMode(ctx));
 		
-		// 模式切换处理（下拉已内嵌于搜索框左段，见上方 searchBar 构建）
-		modeSelect.addEventListener("change", () => {
-			const newMode = modeSelect.value as SearchMode;
+		// 模式切换处理（自绘菜单项点击 → applySearchMode）
+		const applySearchMode = (newMode: SearchMode) => {
 			if (ctx.searchMode === newMode) return;
 			ctx.searchMode = newMode;
 			// H1 双保险：模式切换即失效前缀缓存（filter.ts 的 lastFilterMode 判定为第一道防线）
@@ -293,8 +304,34 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			}
 			ctx.updateGuidance();
 			ctx.scheduleRender();
+			// 同步自绘菜单视觉：按钮文案、菜单项选中态、收起菜单
+			modeBtnLabel.setText(ctx.t(modeDef.label));
+			modeMenu.querySelectorAll(".pt-mode-menu-item").forEach((el) =>
+				el.classList.toggle("pt-mode-menu-item--active", el.getAttribute("data-mode") === newMode)
+			);
+			modeWrap.classList.remove("pt-mode-wrap--open");
+			modeBtn.setAttribute("aria-expanded", "false");
 			searchInput.focus();
+		};
+
+		// 菜单交互：按钮开合 + 点击外部关闭 + 菜单项点击应用模式（与排序菜单同款交互）
+		modeBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const open = modeWrap.classList.toggle("pt-mode-wrap--open");
+			modeBtn.setAttribute("aria-expanded", open ? "true" : "false");
 		});
+		modeMenu.addEventListener("click", (e) => {
+			const item = (e.target as HTMLElement).closest<HTMLElement>(".pt-mode-menu-item");
+			if (!item) return;
+			e.stopPropagation();
+			applySearchMode(item.getAttribute("data-mode") as SearchMode);
+		});
+		const closeModeMenu = () => {
+			modeWrap.classList.remove("pt-mode-wrap--open");
+			modeBtn.setAttribute("aria-expanded", "false");
+		};
+		document.addEventListener("click", closeModeMenu);
+		ctx.register(() => document.removeEventListener("click", closeModeMenu));
 		
 		// 根据搜索框内容同步清除按钮可见性
 		const syncClearBtn = () => {
