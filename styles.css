@@ -1248,6 +1248,38 @@ button.pt-facet-letter-btn.is-active {
 	border-bottom-color: var(--pt-accent);
 	box-shadow: none;
 }
+/* 暗色主题强制与亮色统一：不允许主题/UA 给搜索框加回背景、实线边框或圆角。
+   用 .theme-dark .pt-view .pt-search 把 specificity 提到 (0,3,0)，覆盖常见主题对 input/select 的全局样式。 */
+.theme-dark .pt-view .pt-search,
+.theme-dark .pt-view .pt-search:hover,
+.theme-dark .pt-view .pt-search:focus-within {
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--pt-border);
+	border-radius: 0;
+	box-shadow: none;
+}
+.theme-dark .pt-view .pt-search:hover { border-bottom-color: var(--pt-border-strong); }
+.theme-dark .pt-view .pt-search:focus-within { border-bottom-color: var(--pt-accent); }
+.theme-dark .pt-view .pt-search.pt-search--ai-loading {
+	border-color: transparent;
+	border-bottom-color: var(--pt-accent);
+	background: transparent;
+	box-shadow: none;
+}
+.theme-dark .pt-view .pt-search-mode,
+.theme-dark .pt-view .pt-search-input {
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+.theme-dark .pt-view .pt-search input:focus,
+.theme-dark .pt-view .pt-search input:focus-visible {
+	border: none;
+	outline: none;
+	box-shadow: none;
+}
 /* 彻底干掉主题 / UA 加在搜索框内部元素上的独立边框、轮廓、光环、外边距——
    这是聚焦时「左灰右绿」脱节，以及子元素间残留 2px 缝隙（UA 默认 margin）的根因。
    焦点表现统一交给父容器 .pt-search:focus-within；margin:0 让组合控件真正无缝。
