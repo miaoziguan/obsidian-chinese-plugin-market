@@ -39,7 +39,6 @@
 	/* 圆角（Apple DS 对标：pill/bm/card/input 四档） */
 	--pt-radius-pill: 999px;
 	--pt-radius-card: 14px;
-	--pt-radius-btn: 999px;
 	--pt-radius-input: 12px;
 	--pt-radius-sm: 8px;
 	--pt-radius: var(--radius-s, 6px);   /* 保留兼容 */
@@ -139,6 +138,96 @@
 	gap: var(--pt-space-sm);
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   视觉原语（单一事实来源）
+   规则：所有控件的基础配方集中在此，业务类只挂原语 + 必要的状态/尺寸微调，
+   绝不再手写 background / border / border-radius / hover 配方。
+   新增按钮 → 只加一个 class，不再诞生新的视觉变体（这是消除重复劳动的根治点）。
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* .pt-btn：统一动作控件（图标或文字）。透明无框，hover/focus 用主题 hover 色 + 焦点环。
+   —— 工具栏所有图标按钮、筛选开关、组合下拉都应是它；卡片内小图标请用 .pt-icon-btn。 */
+.pt-btn {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	min-width: 32px;
+	height: 32px;
+	padding: 0 8px;
+	margin: 0;
+	font-family: inherit;
+	font-size: var(--pt-text-sm);
+	font-weight: var(--pt-weight-medium);
+	line-height: 1;
+	color: var(--pt-text-muted);
+	background: transparent;
+	border: none;
+	border-radius: var(--pt-radius-pill);
+	box-shadow: none;
+	cursor: pointer;
+	transition: color var(--pt-duration-fast) var(--pt-ease),
+		background var(--pt-duration-fast) var(--pt-ease),
+		transform var(--pt-duration-fast) var(--pt-ease-spring);
+}
+.pt-btn:hover {
+	color: var(--pt-text);
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+}
+.pt-btn:active { transform: scale(0.94); }
+.pt-btn:focus-visible {
+	outline: none;
+	box-shadow: var(--pt-focus-ring);
+}
+.pt-btn[disabled], .pt-btn.is-disabled {
+	opacity: 0.5;
+	cursor: default;
+	pointer-events: none;
+}
+.pt-btn svg.svg-icon {
+	width: 16px;
+	height: 16px;
+	stroke-width: 2px;
+}
+
+/* .pt-chip：填充胶囊（来源/分类/作者筛选、统计、排序选项等）。
+   surface-2 底 + 细边框，hover 加深；按下(pressed)/选中态见各业务类的 [aria-pressed] 规则。 */
+.pt-chip {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 14px;
+	font-family: inherit;
+	font-size: var(--pt-text-sm);
+	font-weight: var(--pt-weight-medium);
+	color: var(--pt-text-muted);
+	background: var(--pt-surface-2);
+	border: 1px solid var(--pt-border);
+	border-radius: var(--pt-radius-pill);
+	cursor: pointer;
+	transition: color var(--pt-duration-fast) var(--pt-ease),
+		background-color var(--pt-duration-fast) var(--pt-ease),
+		border-color var(--pt-duration-fast) var(--pt-ease);
+}
+.pt-chip:hover {
+	color: var(--pt-text);
+	border-color: var(--pt-border-strong);
+	background: var(--pt-surface-3);
+}
+.pt-chip:focus-visible {
+	outline: none;
+	border-color: var(--pt-accent);
+	box-shadow: var(--pt-focus-ring);
+}
+.pt-chip svg.svg-icon {
+	width: 14px;
+	height: 14px;
+}
+
+/* 暗色主题：原语配色自动跟随 token，无需单独重写（surface/hover 已适配）。 */
+
 /* 暗色主题：降低推荐金色亮度，避免过于刺眼 */
 .theme-dark .pt-view {
 	--pt-gold: #b8841a;
@@ -188,87 +277,11 @@
 	width: 100%;
 }
 
-/* 工具栏按钮统一视觉语言：透明背景、无边框、同高、同 hover 高亮。
-   覆盖排序/刷新/检查更新/组合/AI/足迹/设置/筛选等历史异构样式。 */
-.pt-header-actions > .pt-sort-wrap .pt-sort-btn,
-.pt-header-actions > button.pt-check-update,
-.pt-header-actions > button.pt-profile-dropdown,
-.pt-header-actions > .pt-refresh,
-.pt-header-actions > .pt-ai-icon-btn,
-.pt-header-actions > .pt-header-footprint,
-.pt-header-actions > .pt-icon-btn.pt-open-settings,
-.pt-header-actions > .pt-toggle-filters,
-.pt-header-actions > .pt-overflow-btn {
-	appearance: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 4px;
-	min-width: 32px;
-	height: 32px;
-	padding: 0 7px;
-	margin: 0;
-	font-family: inherit;
-	font-size: var(--pt-text-sm);
-	font-weight: var(--pt-weight-medium);
-	color: var(--pt-text-muted);
-	background: transparent;
-	border: none;
-	border-radius: var(--pt-radius-btn);
-	box-shadow: none;
-	cursor: pointer;
-	transition: color var(--pt-duration-fast) var(--pt-ease),
-		background var(--pt-duration-fast) var(--pt-ease),
-		transform var(--pt-duration-fast) var(--pt-ease-spring);
-}
-.pt-header-actions > .pt-sort-wrap .pt-sort-btn:hover,
-.pt-header-actions > button.pt-check-update:hover,
-.pt-header-actions > button.pt-profile-dropdown:hover,
-.pt-header-actions > .pt-refresh:hover,
-.pt-header-actions > .pt-ai-icon-btn:hover,
-.pt-header-actions > .pt-header-footprint:hover,
-.pt-header-actions > .pt-icon-btn.pt-open-settings:hover,
-.pt-header-actions > .pt-toggle-filters:hover,
-.pt-header-actions > .pt-overflow-btn:hover {
-	color: var(--pt-text);
-	background: var(--pt-surface-hover, var(--background-modifier-hover));
-}
-.pt-header-actions > .pt-sort-wrap .pt-sort-btn:active,
-.pt-header-actions > button.pt-check-update:active,
-.pt-header-actions > button.pt-profile-dropdown:active,
-.pt-header-actions > .pt-refresh:active,
-.pt-header-actions > .pt-ai-icon-btn:active,
-.pt-header-actions > .pt-header-footprint:active,
-.pt-header-actions > .pt-icon-btn.pt-open-settings:active,
-.pt-header-actions > .pt-toggle-filters:active,
-.pt-header-actions > .pt-overflow-btn:active {
-	transform: scale(0.94);
-}
-.pt-header-actions > .pt-sort-wrap .pt-sort-btn:focus-visible,
-.pt-header-actions > button.pt-check-update:focus-visible,
-.pt-header-actions > button.pt-profile-dropdown:focus-visible,
-.pt-header-actions > .pt-refresh:focus-visible,
-.pt-header-actions > .pt-ai-icon-btn:focus-visible,
-.pt-header-actions > .pt-header-footprint:focus-visible,
-.pt-header-actions > .pt-icon-btn.pt-open-settings:focus-visible,
-.pt-header-actions > .pt-toggle-filters:focus-visible,
-.pt-header-actions > .pt-overflow-btn:focus-visible {
-	outline: none;
-	box-shadow: var(--pt-focus-ring);
-}
-.pt-header-actions > .pt-sort-wrap .pt-sort-btn svg.svg-icon,
-.pt-header-actions > button.pt-check-update svg.svg-icon,
-.pt-header-actions > button.pt-profile-dropdown svg.svg-icon,
-.pt-header-actions > .pt-refresh svg.svg-icon,
-.pt-header-actions > .pt-ai-icon-btn svg.svg-icon,
-.pt-header-actions > .pt-header-footprint svg.svg-icon,
-.pt-header-actions > .pt-icon-btn.pt-open-settings svg.svg-icon,
-.pt-header-actions > .pt-toggle-filters svg.svg-icon,
-.pt-header-actions > .pt-overflow-btn svg.svg-icon {
-	width: 16px;
-	height: 16px;
-	stroke-width: 2px;
-}
+/* 工具栏按钮统一挂 .pt-btn 原语（透明无框、32px、hover/focus 主题色），
+   无需在此重复配方；仅保留 header 上下文布局与少量状态微调。 */
+.pt-header-actions > .pt-btn { flex: 0 0 auto; }
+/* 溢出按钮宽屏隐藏，窄屏由容器查询显示（避免与展开图标重复，见 2.64.4） */
+.pt-header-actions > .pt-overflow-btn { display: none; }
 /* 激活态统一 */
 .pt-header-actions > .pt-toggle-filters[aria-expanded="true"] {
 	color: var(--pt-accent);
@@ -337,39 +350,8 @@
 	flex-shrink: 0;
 }
 
-/* 排序按钮（仅图标，点击展开排序菜单） */
-.pt-sort-btn {
-	appearance: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	padding: 0;
-	margin: 0;
-	color: var(--pt-text-muted);
-	background: var(--pt-surface-2);
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-btn);
-	cursor: pointer;
-	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease), transform var(--pt-duration-normal) var(--pt-ease);
-}
-.pt-sort-btn:hover {
-	background: var(--pt-surface-3);
-	border-color: var(--pt-border-strong);
-	color: var(--pt-text);
-}
-.pt-sort-btn:focus-visible {
-	border-color: var(--pt-accent);
-	box-shadow: var(--pt-focus-ring);
-	outline: none;
-}
-.pt-sort-btn svg.svg-icon {
-	width: 16px;
-	height: 16px;
-	stroke-width: 2px;
-}
+/* 排序按钮（仅图标，点击展开排序菜单）；视觉由 .pt-btn 原语统一提供 */
+.pt-sort-btn { width: 32px; padding: 0; }
 .pt-sort-wrap--open .pt-sort-btn svg.svg-icon {
 	transform: rotate(180deg);
 }
@@ -496,54 +478,13 @@
 	flex-shrink: 0;
 }
 
-.pt-toggle-filters {
-	appearance: none;
-	flex: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	padding: 0;
-	color: var(--pt-text-muted);
-	background: var(--pt-surface-2);
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-btn);
-	cursor: pointer;
-	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease), transform var(--pt-duration-fast) var(--pt-ease-spring);
-}
-.pt-toggle-filters:hover {
-	background: var(--pt-surface-3);
-	border-color: var(--pt-border-strong);
-	color: var(--pt-text);
-}
-.pt-toggle-filters:active { transform: scale(0.94); }
+/* 筛选开关；视觉由 .pt-btn 原语统一提供 */
+.pt-toggle-filters { width: 32px; padding: 0; }
+/* 筛选开关（文字版）；视觉由 .pt-btn 原语统一提供，仅保留文字按钮差异 */
 .pt-toggle-filters--text {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
 	gap: 6px;
-	width: auto;
-	height: auto;
-	padding: 6px 14px;
-	font-size: var(--pt-text-sm, var(--font-ui-small));
-	font-weight: var(--pt-weight-medium);
-	background: var(--pt-surface-2, var(--background-secondary));
-	border: 1px solid var(--pt-border, var(--background-modifier-border));
-	border-radius: var(--pt-radius-pill);
-	color: var(--pt-text-muted, var(--text-muted));
-	cursor: pointer;
 	white-space: nowrap;
-	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease), box-shadow var(--pt-duration-fast) var(--pt-ease);
 }
-.pt-toggle-filters--text:hover {
-	color: var(--pt-text-strong, var(--text-normal));
-	background: var(--pt-surface-3, var(--background-secondary-alt));
-	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
-}
-.pt-toggle-filters--text:active { transform: scale(0.96); }
 .pt-toggle-filters--text[aria-expanded="true"] {
 	color: var(--pt-accent);
 	border-color: color-mix(in srgb, var(--pt-accent) 45%, transparent);
@@ -558,24 +499,8 @@
 	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
 }
 
-/* 手动刷新按钮（产品改进 #15）：与折叠开关同尺寸、视觉一致 */
-.pt-refresh {
-	appearance: none;
-	flex: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	padding: 0;
-	color: var(--pt-text-muted);
-	background: var(--pt-surface-2);
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-btn);
-	cursor: pointer;
-	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
-		border-color var(--pt-duration-fast) var(--pt-ease), transform var(--pt-duration-fast) var(--pt-ease-spring);
-}
+/* 手动刷新按钮（产品改进 #15）：与折叠开关同尺寸、视觉一致；视觉由 .pt-btn 原语统一提供 */
+.pt-refresh { width: 32px; padding: 0; }
 /* Obsidian 线性图标：统一描边风格、随主题色（currentColor） */
 .pt-toggle-filters svg.svg-icon,
 .pt-refresh svg.svg-icon {
@@ -612,7 +537,7 @@ button.pt-check-update {
 	background: transparent;
 	border: none;
 	box-shadow: none;
-	border-radius: var(--pt-radius-btn);
+	border-radius: var(--pt-radius-pill);
 	cursor: pointer;
 	font-family: inherit;
 	transition: color var(--pt-duration-fast) var(--pt-ease),
@@ -649,7 +574,7 @@ button.pt-profile-dropdown {
 	background: transparent;
 	border: none;
 	box-shadow: none;
-	border-radius: var(--pt-radius-btn);
+	border-radius: var(--pt-radius-pill);
 	cursor: pointer;
 	font-family: inherit;
 	transition: color var(--pt-duration-fast) var(--pt-ease),
@@ -749,7 +674,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	padding: var(--pt-space-xs) var(--pt-space-md);
 	background: var(--pt-surface-2);
 	border: 1px solid var(--pt-border);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	font-size: var(--pt-text-sm);
 	color: var(--pt-text-muted);
 	line-height: 1.2;
@@ -776,7 +701,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	color: var(--pt-text-muted);
 	background: var(--pt-surface);
 	border: 1px solid var(--pt-border);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	cursor: pointer;
 	transition: background-color var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
 		border-color var(--pt-duration-fast) var(--pt-ease), box-shadow var(--pt-duration-fast) var(--pt-ease);
@@ -817,7 +742,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	color: var(--pt-text-muted);
 	background: transparent;
 	border: none;
-	border-radius: var(--pt-radius-btn, var(--radius-s));
+	border-radius: var(--pt-radius-pill, var(--radius-s));
 	cursor: pointer;
 	transition: color var(--pt-duration-fast) var(--pt-ease), background var(--pt-duration-fast) var(--pt-ease);
 }
@@ -912,7 +837,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 .pt-insight-tag {
 	margin-left: 4px;
 	padding: 0 6px;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
 	border: 1px solid color-mix(in srgb, var(--pt-accent) 30%, transparent);
 	color: var(--pt-accent);
@@ -1045,7 +970,7 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	color: var(--pt-accent, var(--interactive-accent));
 	background: transparent;
 	border: 1px dashed var(--pt-border-strong);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	padding: 6px 14px;
 	cursor: pointer;
 	white-space: nowrap;
@@ -1161,7 +1086,7 @@ button.pt-facet-letter-btn.is-active {
 	color: var(--pt-text-muted);
 	background: var(--pt-surface-2);
 	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-btn);
+	border-radius: var(--pt-radius-pill);
 	cursor: pointer;
 	white-space: nowrap;
 	flex-shrink: 0;
@@ -1194,7 +1119,7 @@ button.pt-facet-letter-btn.is-active {
 .pt-view .pt-filter {
 	background: var(--pt-surface);
 	border: 1px solid var(--pt-border);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	box-shadow: none;
 }
 .pt-source-filters .pt-filter {
@@ -1450,7 +1375,7 @@ button.pt-facet-letter-btn.is-active {
 	color: var(--pt-text-faint);
 	background: transparent;
 	border: none;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	cursor: pointer;
 	transition: background var(--pt-duration-fast) var(--pt-ease), color var(--pt-duration-fast) var(--pt-ease),
 		transform var(--pt-duration-fast) var(--pt-ease-spring);
@@ -1504,7 +1429,7 @@ button.pt-facet-letter-btn.is-active {
 	font-weight: var(--pt-weight-bold);
 	letter-spacing: 0.04em;
 	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	cursor: help;
 	transition: background-color var(--pt-duration-normal) var(--pt-ease), color var(--pt-duration-normal) var(--pt-ease);
 }
@@ -1740,7 +1665,7 @@ button.pt-facet-letter-btn.is-active {
 	background: color-mix(in srgb, var(--pt-text-muted) 12%, transparent);
 	color: var(--pt-text-muted, var(--text-muted));
 	border: none;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	box-shadow: none;
 	appearance: none;
 	cursor: pointer;
@@ -1918,7 +1843,7 @@ button.pt-card-install-btn--installed {
 	align-items: center;
 	gap: var(--pt-space-2xs);
 	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	font-size: var(--pt-text-xs);
 	font-weight: var(--pt-weight-bold);
 	letter-spacing: 0.02em;
@@ -1948,7 +1873,7 @@ button.pt-card-install-btn--installed {
 	flex: 0 0 auto;
 	gap: 2px;
 	padding: 1px var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	font-size: var(--pt-text-xs);
 	font-weight: var(--pt-weight-bold);
 	letter-spacing: 0.02em;
@@ -1978,7 +1903,7 @@ button.pt-card-install-btn--installed {
 	align-items: center;
 	gap: var(--pt-space-2xs);
 	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	font-size: var(--pt-text-xs);
 	font-weight: var(--pt-weight-bold);
 	letter-spacing: 0.02em;
@@ -2199,7 +2124,7 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-sm);
 	font-weight: var(--pt-weight-medium);
 	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	white-space: nowrap;
 	background: var(--pt-surface-2);
 	color: var(--pt-text-muted);
@@ -2285,7 +2210,7 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-2xs);
 	line-height: 1.4;
 	padding: 1px 7px;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	border: 1px solid color-mix(in srgb, var(--pt-accent) 30%, transparent);
 	color: var(--pt-accent);
 	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
@@ -2329,7 +2254,7 @@ button.pt-card-install-btn--installed {
 .pt-meta-chip {
 	font-size: var(--pt-text-xs);
 	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	white-space: nowrap;
 	background: var(--pt-surface-2);
 	color: var(--pt-text-muted);
@@ -2740,7 +2665,7 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-accent);
 	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
 	border: 1px solid color-mix(in srgb, var(--pt-accent) 32%, transparent);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	cursor: pointer;
 	transition: background var(--pt-duration-fast) var(--pt-ease), transform var(--pt-duration-fast) var(--pt-ease-spring);
 }
@@ -3043,7 +2968,7 @@ button.pt-card-install-btn--installed {
 .pt-journal-chip {
 	font-size: var(--pt-text-sm);
 	padding: 2px 10px;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	border: 1px solid var(--background-modifier-border);
 	background: var(--background-secondary);
 	color: var(--text-normal);
@@ -3609,7 +3534,7 @@ button.pt-card-install-btn--installed {
 .pt-detail-section-dot {
 	width: 7px;
 	height: 7px;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	background: var(--pt-accent);
 	flex-shrink: 0;
 }
@@ -4206,7 +4131,7 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-text-muted);
 	background: var(--pt-surface-2, var(--background-secondary));
 	border: 1px solid var(--pt-border, var(--background-modifier-border));
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	box-shadow: none;
 	cursor: pointer;
 	opacity: 0;
@@ -4251,7 +4176,7 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-text-muted);
 	background: var(--pt-surface-2, var(--background-secondary));
 	border: 1px solid var(--pt-border, var(--background-modifier-border));
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	box-shadow: none;
 	cursor: pointer;
 	opacity: 0;
@@ -4581,7 +4506,7 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-2xs);
 	font-weight: var(--pt-weight-semibold);
 	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	letter-spacing: 0.3px;
 }
 .pt-compare-badge--on  { background: var(--pt-color-success-bg); color: var(--pt-color-success); }
@@ -4626,7 +4551,7 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-xs);
 	font-weight: var(--pt-weight-medium);
 	padding: 1px 8px;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	color: var(--pt-accent, var(--text-accent));
 	background: var(--pt-surface-3, var(--background-secondary-alt));
 	border: 1px solid var(--pt-border, var(--background-modifier-border));
@@ -4671,7 +4596,7 @@ button.pt-card-install-btn--installed {
 	display: inline-block;
 	font-size: var(--pt-text-sm);
 	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	line-height: 1.5;
 	color: var(--pt-text-muted, var(--text-muted));
 	background: var(--pt-surface-2, var(--background-secondary));
@@ -4728,7 +4653,7 @@ button.pt-card-install-btn--installed {
 	display: inline-block;
 	font-size: var(--pt-text-sm);
 	padding: var(--pt-space-2xs) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	line-height: 1.5;
 	color: var(--pt-accent, var(--text-accent));
 	background: var(--pt-surface-3, var(--background-secondary-alt));
@@ -4970,7 +4895,7 @@ button.pt-card-install-btn--installed {
 	padding: var(--pt-space-sm) var(--pt-space-md);
 	background: var(--pt-surface);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	box-shadow: 0 6px 24px color-mix(in srgb, var(--pt-text-strong, var(--text-normal)) 18%, transparent);
 }
 .pt-compare-tray-title {
@@ -4987,7 +4912,7 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-sm);
 	font-weight: var(--pt-weight-semibold);
 	padding: var(--pt-space-sm) var(--pt-space-lg);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	cursor: pointer;
 	transition: background var(--pt-duration-fast) var(--pt-ease);
 }
@@ -5005,7 +4930,7 @@ button.pt-card-install-btn--installed {
 	color: var(--text-muted);
 	font-size: var(--pt-text-sm);
 	padding: var(--pt-space-sm) var(--pt-space-sm);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	cursor: pointer;
 	transition: color var(--pt-duration-fast) var(--pt-ease), background var(--pt-duration-fast) var(--pt-ease);
 }
@@ -5119,7 +5044,7 @@ button.pt-card-install-btn--installed {
 	position: relative;
 	width: 34px;
 	height: 18px;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	background: var(--pt-border-strong);
 	border: 1px solid color-mix(in srgb, var(--pt-border-strong) 60%, transparent);
 	transition: background var(--pt-duration-fast) var(--pt-ease), box-shadow var(--pt-duration-fast) var(--pt-ease), border-color var(--pt-duration-fast) var(--pt-ease);
@@ -5637,15 +5562,15 @@ button.pt-card-install-btn--installed {
 .pt-index-progress {
 	accent-color: var(--interactive-accent, var(--pt-accent, #7b6cff));
 	height: 6px;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 }
 .pt-index-progress::-webkit-progress-bar {
 	background: var(--background-modifier-border);
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 }
 .pt-index-progress::-webkit-progress-value {
 	background: var(--interactive-accent, var(--pt-accent, #7b6cff));
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 }
 
 /* ── S7 滚动位置指示徽标 ── */
@@ -5655,7 +5580,7 @@ button.pt-card-install-btn--installed {
 	right: 16px;
 	z-index: 30;
 	padding: 3px 10px;
-	border-radius: 999px;
+	border-radius: var(--pt-radius-pill);
 	font-size: var(--pt-text-xs);
 	font-variant-numeric: tabular-nums;
 	background: var(--background-secondary);

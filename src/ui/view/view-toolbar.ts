@@ -324,7 +324,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// ── 组合下拉（场景切换，非筛选：点击弹 Menu 列出 profile 一键应用） ──
 		const profileBtn = actions.createEl("button", {
-			cls: "pt-profile-dropdown",
+			cls: "pt-btn pt-profile-dropdown",
 			attr: { "aria-label": "切换启用组合", type: "button" },
 		});
 		// 图标用「图层 layers」而非「切换 switch」：组合表达的是「一组启用方案/场景预设」，
@@ -333,7 +333,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// ── 我的足迹入口（常驻图标按钮 + 数量徽标；永远可点，0 条时引导去写评测） ──
 		const footprintBtn = actions.createEl("button", {
-			cls: "clickable-icon pt-header-footprint",
+			cls: "pt-btn clickable-icon pt-header-footprint",
 			attr: { type: "button", "aria-label": ctx.t("journal.footprint") },
 		});
 		setIcon(footprintBtn, "list-ordered");
@@ -482,7 +482,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// AI 一键翻译（纯图标按钮，置于排序↕与刷新↻之间；无待翻译项时自动隐藏）
 		ctx.aiTranslateBtnEl = actions.createEl("button", {
-			cls: "pt-ai-icon-btn",
+			cls: "pt-btn pt-ai-icon-btn",
 			attr: { "aria-label": ctx.t("action.aiTranslate"), type: "button" },
 		});
 		setIcon(ctx.aiTranslateBtnEl, "sparkles");
@@ -512,7 +512,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// 手动刷新按钮（↻）：全局动作，与排序同组置于搜索行右上角
 		const refreshBtn = actions.createEl("button", {
-			cls: "pt-refresh",
+			cls: "pt-btn pt-refresh",
 			attr: { "aria-label": ctx.t("action.refresh"), title: ctx.t("action.refresh"), type: "button" },
 		});
 		setIcon(refreshBtn, "refresh-cw");
@@ -544,7 +544,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 	// 一键更新全部可更新插件（桌面端；遍历 outdatedIds 顺序执行，每条静默后汇总）
 	const updateAllBtn = actions.createEl("button", {
-		cls: "pt-check-update pt-update-all",
+		cls: "pt-btn pt-check-update pt-update-all",
 		attr: { "aria-label": ctx.t("action.updateAll"), title: ctx.t("action.updateAll"), type: "button" },
 	});
 	setIcon(updateAllBtn, "arrow-down-to-line");
@@ -554,7 +554,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 置于搜索行最右
 		const toggleBtn = actions.createEl("button", {
-			cls: "pt-toggle-filters pt-toggle-filters--text",
+			cls: "pt-btn pt-toggle-filters pt-toggle-filters--text",
 			attr: { "aria-label": "展开高级筛选", "aria-expanded": "false" },
 		});
 		const filterIcon = toggleBtn.createSpan({ cls: "pt-toggle-filters-icon" });
@@ -565,7 +565,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 一键直达本插件设置页（齿轮，置于搜索行最右端）：低频操作，从前端面板直接进设置，
 		// 免去找 Obsidian 设置面板的层级。先 open 再 openTabById（设置未弹出时后者不生效）。
 		const settingsBtn = actions.createEl("button", {
-			cls: "pt-icon-btn pt-open-settings",
+			cls: "pt-btn pt-open-settings",
 			attr: { "aria-label": ctx.t("card.openSettings"), title: ctx.t("card.openSettings"), type: "button" },
 		});
 		setIcon(settingsBtn, "gear");
@@ -582,7 +582,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 避免与搜索框/排序/筛选挤在同一行导致换行或溢出。始终挂载 ⋮ 按钮本身，
 		// 由 CSS 容器查询控制其显隐，确保窄屏状态切换（或 DevTools 模拟窄屏）都能可靠折叠。
 		const overflowBtn = actions.createEl("button", {
-			cls: "pt-overflow-btn",
+			cls: "pt-btn pt-overflow-btn",
 			attr: { "aria-label": "更多操作", "aria-haspopup": "menu", type: "button" },
 		});
 		setIcon(overflowBtn, "more-vertical");
@@ -616,7 +616,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 
 		const sortBtn = sortWrap.createEl("button", {
-			cls: "pt-sort-btn",
+			cls: "pt-btn pt-sort-btn",
 			attr: { "aria-label": "排序方式", type: "button" },
 		});
 		setIcon(sortBtn, "arrow-up-down");
