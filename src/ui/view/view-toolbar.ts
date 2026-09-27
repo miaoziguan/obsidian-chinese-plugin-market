@@ -309,17 +309,21 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.scheduleRender();
 		});
 
-		// ── 结果计数（margin-left:auto 推到右侧，与排序/筛选组成搜索行右侧簇） ──
-		const resultCountText = headerRow.createSpan({ cls: "pt-result-count" });
+		// ── 结果计数与右侧工具按钮容器（在搜索行内居中） ──
+		const actions = headerRow.createDiv({ cls: "pt-header-actions" });
+
+		// ── 结果计数（与排序/筛选组成搜索行右侧簇） ──
+		const resultCountText = actions.createSpan({ cls: "pt-result-count" });
 		ctx.resultCountEl = resultCountText;
 		// 挂载后立即按当前 listState 同步可见性（仅 list 态显示）
 		setListState(ctx, ctx.listState);
 
+
 		// ── 排序按钮（仅图标，点击展开排序菜单） ──
-		const sortWrap = headerRow.createDiv({ cls: "pt-sort-wrap" });
+		const sortWrap = actions.createDiv({ cls: "pt-sort-wrap" });
 
 		// ── 组合下拉（场景切换，非筛选：点击弹 Menu 列出 profile 一键应用） ──
-		const profileBtn = headerRow.createEl("button", {
+		const profileBtn = actions.createEl("button", {
 			cls: "pt-profile-dropdown",
 			attr: { "aria-label": "切换启用组合", type: "button" },
 		});
@@ -328,7 +332,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		setIcon(profileBtn, "layers");
 
 		// ── 我的足迹入口（常驻图标按钮 + 数量徽标；永远可点，0 条时引导去写评测） ──
-		const footprintBtn = headerRow.createEl("button", {
+		const footprintBtn = actions.createEl("button", {
 			cls: "clickable-icon pt-header-footprint",
 			attr: { type: "button", "aria-label": ctx.t("journal.footprint") },
 		});
@@ -477,12 +481,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 
 		// AI 一键翻译（纯图标按钮，置于排序↕与刷新↻之间；无待翻译项时自动隐藏）
-		ctx.aiTranslateBtnEl = headerRow.createEl("button", {
+		ctx.aiTranslateBtnEl = actions.createEl("button", {
 			cls: "pt-ai-icon-btn",
 			attr: { "aria-label": ctx.t("action.aiTranslate"), type: "button" },
 		});
 		setIcon(ctx.aiTranslateBtnEl, "sparkles");
-		ctx.aiProgressEl = headerRow.createSpan({ cls: "pt-ai-progress" });
+		ctx.aiProgressEl = actions.createSpan({ cls: "pt-ai-progress" });
 		ctx.aiProgressEl.setCssStyles({ display: "none" });
 		// 抽取为命名处理器：移动端溢出菜单与图标按钮共用同一动作
 		const onAiTranslate = () => {
@@ -507,7 +511,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.updateAiTranslateButton();
 
 		// 手动刷新按钮（↻）：全局动作，与排序同组置于搜索行右上角
-		const refreshBtn = headerRow.createEl("button", {
+		const refreshBtn = actions.createEl("button", {
 			cls: "pt-refresh",
 			attr: { "aria-label": ctx.t("action.refresh"), title: ctx.t("action.refresh"), type: "button" },
 		});
@@ -518,7 +522,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		refreshBtn.addEventListener("click", onRefresh);
 
 		// 一键检查已安装插件更新（独立于「刷新列表」：只检测已装插件是否有新版，不拉市场数据）
-		const checkUpdateBtn = headerRow.createEl("button", {
+		const checkUpdateBtn = actions.createEl("button", {
 			cls: "pt-check-update",
 			attr: { "aria-label": ctx.t("action.checkUpdate"), title: ctx.t("action.checkUpdate"), type: "button" },
 		});
@@ -539,7 +543,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		checkUpdateBtn.addEventListener("click", onCheckUpdate);
 
 	// 一键更新全部可更新插件（桌面端；遍历 outdatedIds 顺序执行，每条静默后汇总）
-	const updateAllBtn = headerRow.createEl("button", {
+	const updateAllBtn = actions.createEl("button", {
 		cls: "pt-check-update pt-update-all",
 		attr: { "aria-label": ctx.t("action.updateAll"), title: ctx.t("action.updateAll"), type: "button" },
 	});
@@ -549,7 +553,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 	});
 
 		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 置于搜索行最右
-		const toggleBtn = headerRow.createEl("button", {
+		const toggleBtn = actions.createEl("button", {
 			cls: "pt-toggle-filters pt-toggle-filters--text",
 			attr: { "aria-label": "展开高级筛选", "aria-expanded": "false" },
 		});
@@ -560,7 +564,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// 一键直达本插件设置页（齿轮，置于搜索行最右端）：低频操作，从前端面板直接进设置，
 		// 免去找 Obsidian 设置面板的层级。先 open 再 openTabById（设置未弹出时后者不生效）。
-		const settingsBtn = headerRow.createEl("button", {
+		const settingsBtn = actions.createEl("button", {
 			cls: "pt-icon-btn pt-open-settings",
 			attr: { "aria-label": ctx.t("card.openSettings"), title: ctx.t("card.openSettings"), type: "button" },
 		});
