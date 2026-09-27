@@ -140,6 +140,8 @@ export interface CardRenderContext {
 	isRecommended?: boolean;
 	/** 官方推荐 id 集合（用于 applyCardState 原地更新时判定，避免依赖一次性 isRecommended 字段） */
 	recommendedIds?: Set<string>;
+	/** 羽鳞精选 id 集合：命中则在卡片上打「羽鳞精选」徽标，并随全局排序置顶曝光 */
+	yulinPicksSet?: Set<string>;
 	/** 收藏：用户收藏插件 id 集合（用于卡片初始收藏高亮态） */
 	favoritesSet?: Set<string>;
 	/** 离线智能信号：插件 id → 信号列表（下载量分位 / 近期活跃等，无需 AI Key） */
@@ -240,6 +242,8 @@ interface CardRefs {
 	authorName: HTMLElement;
 
 	recommendBadge: HTMLElement;
+	/** 羽鳞精选徽标（紫色，常驻隐藏，applyCardState 填充） */
+	yulinBadge: HTMLElement;
 	/** 排序可解释性：召回信号徽标行（向量/关键词/标题/AI 精排） */
 	matchSignals: HTMLElement;
 	/** 可更新徽标：官方版本领先本地（仅已装插件），点击跳社区插件更新入口 */
@@ -289,6 +293,14 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	recommendBadge.setAttribute("title", ctx.t("recommend.badge"));
 	recommendBadge.setCssStyles({ display: "none" });
 	card.appendChild(recommendBadge);
+
+	// 羽鳞精选徽标（紫色，常驻隐藏，applyCardState 控制显隐）
+	const yulinBadge = createSpan();
+	yulinBadge.className = "pt-card-yulin-badge";
+	yulinBadge.textContent = ctx.t("yulin.badge");
+	yulinBadge.setAttribute("title", ctx.t("yulin.badge"));
+	yulinBadge.setCssStyles({ display: "none" });
+	card.appendChild(yulinBadge);
 
 	// ── 头行：标题区 + 安装按钮 ──
 	const headRow = card.createDiv({ cls: "pt-card-head-row" });
@@ -489,7 +501,7 @@ export function createCardElement(ctx: CardRenderContext): HTMLElement {
 	cardRefsMap.set(card, {
 		nameSpan, originalName, installBtn, insightBtn, compareBtn, reviewBtn, favBtn, macosBtn, toggleSwitch, uninstallBtn,
 		descEl, statline, spark, sparkPath, dlChip, dlText, clkChip, clkText,
-		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, recommendBadge, matchSignals,
+		signalsRow, aiReason, aiReasonText, 		authorSpan, authorName, recommendBadge, yulinBadge, matchSignals,
 		updateBadge, healthBadge, newBadge, triedBadge, depBadge, updateBtn,
 	});
 	cardCtxMap.set(card, ctx);
@@ -686,6 +698,11 @@ export function applyCardState(
 	cardEl.classList.toggle("is-favorited", isFav);
 	cardEl.classList.toggle("is-recommended", rec);
 	refs.recommendBadge.setCssStyles({ display: rec ? "" : "none" });
+
+	// 羽鳞精选态：命中清单则打紫色徽标（与推荐金色角标区分）
+	const isYulin = ctx.yulinPicksSet?.has(plugin.id) ?? false;
+	cardEl.classList.toggle("is-yulin", isYulin);
+	refs.yulinBadge.setCssStyles({ display: isYulin ? "" : "none" });
 
 	// 名称 + 原名（点击标题切换中/英）/ 未翻译说明
 	refs.nameSpan.dataset.originalName = plugin.name;

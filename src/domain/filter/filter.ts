@@ -640,6 +640,14 @@ export function filterAndSortPlugins(params: FilterParams): FilterResult {
 		});
 	}
 
+	// 羽鳞精选置顶：运营精选优先曝光，无论任何筛选/排序维度都把精选插件排到最前。
+	// 精选集合内部保持上一阶段的排序（sortBy / 收藏优先 / 召回序），仅做「整体前置」。
+	// V8 的 Array.sort 稳定，同组内相对顺序得以保留。
+	if (yulinPicksSet && yulinPicksSet.size > 0 && filtered.length > 0) {
+		const isYulin = (p: PluginInfo) => (yulinPicksSet.has(p.id) ? 0 : 1);
+		filtered = [...filtered].sort((a, b) => isYulin(a) - isYulin(b));
+	}
+
 	return {
 		list: filtered,
 		nextFiltered,

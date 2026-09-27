@@ -189,6 +189,7 @@ export const STRINGS = {
 
 	// 官方推荐（羽鳞君策划，随包发布的 plugin-recommend.json）
 	"recommend.badge": { zh: "推荐" },
+	"yulin.badge": { zh: "羽鳞精选" },
 	"recommend.filter": { zh: "推荐" },
 	"recommend.title": { zh: "官方推荐" },
 	"recommend.section.collapse": { zh: "收起" },

@@ -649,6 +649,7 @@ function makeCardRenderCtx(ctx: ViewContext): CardRenderContext {
 		app: ctx.app,
 		installingIds: ctx.installingIds,
 		recommendedIds: ctx.getRecommendedIds(),
+		yulinPicksSet: ctx.yulinPicksSet,
 		// 固定卡片高度：描述展开不改变行高，无需重排整列 → 空实现
 		onDescToggle: () => {},
 		// 「🍎 系统翻译」成功 → 落库沉淀（cache + tmApproved），下次直接命中复用
