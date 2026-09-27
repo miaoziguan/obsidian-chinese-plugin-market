@@ -282,22 +282,67 @@
 	width: 100%;
 }
 
-/* 工具栏按钮统一挂 .pt-btn 原语（透明无框、32px、hover/focus 主题色），
-   无需在此重复配方；仅保留 header 上下文布局与少量状态微调。 */
-.pt-header-actions > .pt-btn { flex: 0 0 auto; }
+/* 工具栏按钮统一挂 .pt-btn 原语，但工具栏要求更扁平：不要任何圆角背景，只保留图标。
+   此处用 (0,1,1) specificity 覆盖 .pt-btn 原语的 pill/hover-bg，以及主题对 button 的默认样式。 */
+.pt-header-actions > .pt-btn {
+	flex: 0 0 auto;
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+}
+.pt-header-actions > .pt-btn:hover,
+.pt-header-actions > .pt-btn:focus-visible {
+	background: transparent;
+	border-radius: 0;
+	box-shadow: none;
+	color: var(--pt-text);
+}
+.pt-header-actions > .pt-btn:focus-visible {
+	outline: none;
+	color: var(--pt-accent);
+}
+.pt-header-actions > .pt-btn:active { transform: none; }
+
+/* 覆盖 .pt-refresh/.pt-toggle-filters 全局 focus ring，工具栏内不需要圆角光环 */
+.pt-header-actions > .pt-refresh:focus-visible,
+.pt-header-actions > .pt-toggle-filters:focus-visible {
+	box-shadow: none;
+	border-radius: 0;
+}
+
 /* 溢出按钮宽屏隐藏，窄屏由容器查询显示（避免与展开图标重复，见 2.64.4） */
 .pt-header-actions > .pt-overflow-btn { display: none; }
-/* 激活态统一 */
-.pt-header-actions > .pt-toggle-filters[aria-expanded="true"] {
+
+/* 筛选/AI 激活态：仅文字变色，不要圆角背景 */
+.pt-header-actions > .pt-toggle-filters[aria-expanded="true"],
+.pt-header-actions > .pt-toggle-filters--text[aria-expanded="true"] {
 	color: var(--pt-accent);
-	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+	background: transparent;
+	border-color: transparent;
 }
-.pt-header-actions > .pt-ai-icon-btn--ready {
-	color: var(--pt-accent, var(--interactive-accent));
-}
+.pt-header-actions > .pt-ai-icon-btn--ready,
 .pt-header-actions > .pt-ai-icon-btn--ready:hover {
 	color: var(--pt-accent, var(--interactive-accent));
-	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
+	background: transparent;
+}
+
+/* 暗色主题强制扁平：防止主题 button 默认背景/圆角回归 */
+.theme-dark .pt-header-actions > .pt-btn,
+.theme-dark .pt-header-actions > .pt-btn:hover,
+.theme-dark .pt-header-actions > .pt-btn:focus-visible,
+.theme-dark .pt-header-actions > .pt-btn:active {
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+}
+.theme-dark .pt-header-actions > .pt-toggle-filters[aria-expanded="true"],
+.theme-dark .pt-header-actions > .pt-toggle-filters--text[aria-expanded="true"],
+.theme-dark .pt-header-actions > .pt-ai-icon-btn--ready,
+.theme-dark .pt-header-actions > .pt-ai-icon-btn--ready:hover {
+	background: transparent;
+	border-color: transparent;
 }
 /* 结果计数与按钮同高对齐 */
 .pt-header-actions > .pt-result-count {
@@ -490,19 +535,9 @@
 	gap: 6px;
 	white-space: nowrap;
 }
-.pt-toggle-filters--text[aria-expanded="true"] {
-	color: var(--pt-accent);
-	border-color: color-mix(in srgb, var(--pt-accent) 45%, transparent);
-	background: color-mix(in srgb, var(--pt-accent) 12%, transparent);
-}
 .pt-toggle-filters-icon { display: inline-flex; }
 .pt-toggle-filters-icon svg.svg-icon { width: 14px; height: 14px; stroke-width: 2.2px; }
 .pt-toggle-filters-caret { font-size: var(--pt-text-xs); line-height: 1; opacity: 0.65; }
-.pt-toggle-filters[aria-expanded="true"] {
-	color: var(--pt-accent);
-	border-color: color-mix(in srgb, var(--pt-accent) 40%, transparent);
-	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
-}
 
 /* 手动刷新按钮（产品改进 #15）：与折叠开关同尺寸、视觉一致；视觉由 .pt-btn 原语统一提供 */
 .pt-refresh { width: 32px; padding: 0; }
@@ -5836,14 +5871,14 @@ button.pt-card-install-btn--installed {
 		padding: 0 6px;
 		margin: 0;
 		border: none;
-		background: none;
+		background: transparent;
 		color: var(--pt-text-muted, var(--text-muted));
 		cursor: pointer;
-		border-radius: var(--pt-radius);
+		border-radius: 0;
 	}
 	.pt-header-actions > .pt-overflow-btn:hover {
 		color: var(--pt-text-strong, var(--text-normal));
-		background: var(--pt-surface-3, var(--background-modifier-hover));
+		background: transparent;
 	}
 }
 
