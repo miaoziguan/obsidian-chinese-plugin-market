@@ -160,6 +160,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		setIcon(clearBtn, "x");
 		clearBtn.setCssStyles({ display: "none" });
 		
+		// 结果计数：从工具栏移入搜索行右侧，作为搜索态的元信息，不再和动作图标混排。
+		const resultCountText = searchBar.createSpan({ cls: "pt-result-count pt-search-meta" });
+		ctx.resultCountEl = resultCountText;
+		// 挂载后立即按当前 listState 同步可见性
+		setListState(ctx, ctx.listState);
+
 		// AI 搜索状态徽章（仅语义模式显示）：展示「按 Enter 触发」契约 + 未配置 Key 引导。
 		// 关键词模式隐藏；语义模式下文案直接告知用户需按 Enter，避免「输入即搜」习惯导致以为搜索失效。
 		const aiBadge = searchField.createSpan({ cls: "pt-ai-badge pt-ai-off" });
@@ -312,19 +318,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// ── 结果计数与右侧工具按钮容器（在搜索行内居中） ──
 		const actions = headerRow.createDiv({ cls: "pt-header-actions" });
 
-		// ── 结果计数（与排序/筛选组成搜索行右侧簇） ──
-		const resultCountText = actions.createSpan({ cls: "pt-result-count" });
-		ctx.resultCountEl = resultCountText;
-		// 挂载后立即按当前 listState 同步可见性（仅 list 态显示）
-		setListState(ctx, ctx.listState);
-
-
 		// ── 排序按钮（仅图标，点击展开排序菜单） ──
-		const sortWrap = actions.createDiv({ cls: "pt-sort-wrap pt-header-actions-group-start" });
+		const sortWrap = actions.createDiv({ cls: "pt-sort-wrap" });
 
 		// ── 组合下拉（场景切换，非筛选：点击弹 Menu 列出 profile 一键应用） ──
 		const profileBtn = actions.createEl("button", {
-			cls: "pt-btn pt-profile-dropdown",
+			cls: "pt-btn pt-profile-dropdown pt-header-actions-group-start",
 			attr: { "aria-label": "切换启用组合", type: "button" },
 		});
 		// 图标用「图层 layers」而非「切换 switch」：组合表达的是「一组启用方案/场景预设」，
@@ -552,15 +551,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		triggerUpdateAll(ctx, header);
 	});
 
-		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 置于搜索行最右
+		// 折叠开关（筛选总入口，点 ▾ 展开来源 / 分类 / 作者 / 安装）— 与排序同为列表控制，纯图标。
 		const toggleBtn = actions.createEl("button", {
-			cls: "pt-btn pt-toggle-filters pt-toggle-filters--text pt-header-actions-group-start",
+			cls: "pt-btn pt-toggle-filters",
 			attr: { "aria-label": "展开高级筛选", "aria-expanded": "false" },
 		});
-		const filterIcon = toggleBtn.createSpan({ cls: "pt-toggle-filters-icon" });
-		setIcon(filterIcon, "filter");
-		toggleBtn.createSpan({ cls: "pt-toggle-filters-label", text: "筛选" });
-		const filterCaret = toggleBtn.createSpan({ cls: "pt-toggle-filters-caret", text: "▾" });
+		setIcon(toggleBtn, "filter");
 
 		// 一键直达本插件设置页（齿轮，置于搜索行最右端）：低频操作，从前端面板直接进设置，
 		// 免去找 Obsidian 设置面板的层级。先 open 再 openTabById（设置未弹出时后者不生效）。
@@ -622,6 +618,20 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		setIcon(sortBtn, "arrow-up-down");
 
 		const sortMenu = sortWrap.createDiv({ cls: "pt-sort-menu" });
+
+		// 重排工具栏顺序并明确语义分组：列表控制 → 数据操作 → 个人/配置。
+		// 用 appendChild 移动已有节点，避免改动大量事件绑定代码。
+		actions.appendChild(sortWrap);
+		actions.appendChild(toggleBtn);
+		actions.appendChild(ctx.aiTranslateBtnEl);
+		actions.appendChild(ctx.aiProgressEl);
+		actions.appendChild(refreshBtn);
+		actions.appendChild(checkUpdateBtn);
+		actions.appendChild(updateAllBtn);
+		actions.appendChild(profileBtn);
+		actions.appendChild(footprintBtn);
+		actions.appendChild(settingsBtn);
+		actions.appendChild(overflowBtn);
 
 		const sortDefs: [SortBy, string][] = [
 			["relevance", "按相关度"],
@@ -1107,7 +1117,6 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 折叠交互
 		toggleBtn.addEventListener("click", () => {
 			const open = advanced.classList.toggle("pt-open");
-			filterCaret.textContent = open ? "▴" : "▾";
 			toggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
 			toggleBtn.setAttribute(
 				"aria-label",

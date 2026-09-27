@@ -282,13 +282,13 @@
 	width: 100%;
 }
 
-/* 工具栏分组竖线：用左边框把「信息/视图/操作/配置」语义组隔开。
-   边框挂在每组的第一个元素上，当该元素被容器查询隐藏时，竖线会一并消失，
-   避免响应式折叠后留下 orphan 分隔线。 */
+/* 工具栏分组竖线：用左边框把「列表控制 / 数据操作 / 个人配置」语义组隔开。
+   边框挂在每组的第一个元素上，随元素一起隐藏，避免响应式折叠后留下 orphan 分隔线。
+   颜色用 border-strong，比上次的 border 更可见，但仍保持低对比度不抢眼。 */
 .pt-header-actions > .pt-header-actions-group-start {
-	border-left: 1px solid var(--pt-border);
-	margin-left: 4px;
-	padding-left: 4px;
+	border-left: 1px solid var(--pt-border-strong);
+	margin-left: 8px;
+	padding-left: 8px;
 }
 
 /* 工具栏按钮统一挂 .pt-btn 原语，但工具栏要求更扁平：不要任何圆角背景，只保留图标。
@@ -323,9 +323,8 @@
 /* 溢出按钮宽屏隐藏，窄屏由容器查询显示（避免与展开图标重复，见 2.64.4） */
 .pt-header-actions > .pt-overflow-btn { display: none; }
 
-/* 筛选/AI 激活态：仅文字变色，不要圆角背景 */
-.pt-header-actions > .pt-toggle-filters[aria-expanded="true"],
-.pt-header-actions > .pt-toggle-filters--text[aria-expanded="true"] {
+/* 筛选/AI 激活态：仅图标变色，不要圆角背景 */
+.pt-header-actions > .pt-toggle-filters[aria-expanded="true"] {
 	color: var(--pt-accent);
 	background: transparent;
 	border-color: transparent;
@@ -347,7 +346,6 @@
 	box-shadow: none;
 }
 .theme-dark .pt-header-actions > .pt-toggle-filters[aria-expanded="true"],
-.theme-dark .pt-header-actions > .pt-toggle-filters--text[aria-expanded="true"],
 .theme-dark .pt-header-actions > .pt-ai-icon-btn--ready,
 .theme-dark .pt-header-actions > .pt-ai-icon-btn--ready:hover {
 	background: transparent;
@@ -355,13 +353,19 @@
 }
 /* 暗色下分组左边框显式恢复，覆盖上方 .pt-btn 的 border: none */
 .theme-dark .pt-header-actions > .pt-header-actions-group-start {
-	border-left: 1px solid var(--pt-border);
+	border-left: 1px solid var(--pt-border-strong);
 }
-/* 结果计数与按钮同高对齐 */
-.pt-header-actions > .pt-result-count {
+/* 搜索结果计数：放在搜索框右侧，作为搜索态的元信息，不再混在动作图标行里 */
+.pt-search .pt-search-meta {
 	display: inline-flex;
 	align-items: center;
-	height: 32px;
+	flex-shrink: 0;
+	height: 36px;
+	padding-left: 12px;
+	font-size: var(--pt-text-sm);
+	font-variant-numeric: tabular-nums;
+	color: var(--pt-text-muted);
+	white-space: nowrap;
 }
 
 /* 溢出菜单按钮：默认在宽屏隐藏，窄容器（≤760px）由断点显示。
@@ -396,10 +400,6 @@
 	align-items: center;
 	gap: var(--pt-space-sm);
 	justify-content: flex-start;
-}
-/* 结果计数随工具按钮组居中，不再单独 margin-left:auto */
-.pt-header-row .pt-result-count {
-	margin-left: 0;
 }
 
 /* 排序按钮容器（定位上下文，下拉菜单挂在此容器下） */
@@ -541,16 +541,10 @@
 	flex-shrink: 0;
 }
 
-/* 筛选开关；视觉由 .pt-btn 原语统一提供 */
+/* 筛选开关：纯图标，与排序等列表控制按钮视觉一致 */
 .pt-toggle-filters { width: 32px; padding: 0; }
-/* 筛选开关（文字版）；视觉由 .pt-btn 原语统一提供，仅保留文字按钮差异 */
-.pt-toggle-filters--text {
-	gap: 6px;
-	white-space: nowrap;
-}
-.pt-toggle-filters-icon { display: inline-flex; }
-.pt-toggle-filters-icon svg.svg-icon { width: 14px; height: 14px; stroke-width: 2.2px; }
-.pt-toggle-filters-caret { font-size: var(--pt-text-xs); line-height: 1; opacity: 0.65; }
+.pt-toggle-filters svg.svg-icon { width: 16px; height: 16px; stroke-width: 2px; }
+
 
 /* 手动刷新按钮（产品改进 #15）：与折叠开关同尺寸、视觉一致；视觉由 .pt-btn 原语统一提供 */
 .pt-refresh { width: 32px; padding: 0; }
@@ -5850,7 +5844,7 @@ button.pt-card-install-btn--installed {
 		flex: 0 0 100%;
 		min-width: 0;
 	}
-	.pt-header-row .pt-result-count { display: none; }
+	.pt-search .pt-search-meta { display: none; }
 	.pt-header-actions {
 		justify-content: center;
 		width: 100%;
@@ -5896,14 +5890,7 @@ button.pt-card-install-btn--installed {
 }
 
 @container pt-header (max-width: 520px) {
-	/* 筛选只显示图标；模式段紧凑；搜索框独占一行（960 已覆盖，保留提权） */
-	.pt-toggle-filters--text .pt-toggle-filters-label {
-		display: none;
-	}
-	.pt-toggle-filters--text {
-		padding: 0 10px;
-		min-height: 32px;
-	}
+	/* 模式段紧凑；搜索框独占一行（960 已覆盖，保留提权） */
 	.pt-search-mode {
 		padding: 0 14px 0 10px;
 		min-width: 0;
