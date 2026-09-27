@@ -1265,6 +1265,36 @@ button.pt-facet-letter-btn.is-active {
 	border-radius: 0;
 	box-shadow: none;
 }
+/* 亮/暗主题统一强制模式选择器纯文字化：主题给 select 的常驻表单灰底
+   （--background-modifier-form-field）、背景图箭头、边框、阴影全部清空。
+   用 (0,3,0) 特异度压过主题 .theme-xx select (0,1,1)；hover/focus 同样强制透明。 */
+.pt-view .pt-search-mode,
+.theme-light .pt-view .pt-search-mode,
+.theme-dark .pt-view .pt-search-mode,
+.pt-view .pt-search-mode:hover,
+.theme-light .pt-view .pt-search-mode:hover,
+.theme-dark .pt-view .pt-search-mode:hover,
+.pt-view .pt-search-mode:focus,
+.theme-light .pt-view .pt-search-mode:focus,
+.theme-dark .pt-view .pt-search-mode:focus {
+	-webkit-appearance: none;
+	appearance: none;
+	background: none;
+	background-color: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+	outline: none;
+}
+/* 包裹层也不能有底色：部分主题给 .dropdown 容器/包裹层加灰底，这里一并压掉 */
+.pt-view .pt-mode-wrap,
+.theme-light .pt-view .pt-mode-wrap,
+.theme-dark .pt-view .pt-mode-wrap {
+	background: none;
+	background-color: transparent;
+	box-shadow: none;
+	border: 0;
+}
 .theme-dark .pt-view .pt-search input:focus,
 .theme-dark .pt-view .pt-search input:focus-visible {
 	border: none;
