@@ -395,13 +395,13 @@
 .pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::after,
 .theme-light .pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::after,
 .theme-dark .pt-view .pt-header-actions .pt-btn:not(.pt-header-actions-group-start)::after {
-	content: none !important;
-	background: transparent !important;
-	background-color: transparent !important;
-	background-image: none !important;
-	border: none !important;
-	border-radius: 0 !important;
-	box-shadow: none !important;
+	content: none;
+	background: transparent;
+	background-color: transparent;
+	background-image: none;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
 }
 /* 搜索结果计数：放在搜索框右侧，作为搜索态的元信息，不再混在动作图标行里 */
 .pt-search .pt-search-meta {
@@ -663,19 +663,19 @@
 }
 
 /* 强制两个下拉菜单都用实色 surface 背景、同款边框阴影，并禁用 glass / 半透明 / 主题覆盖。
-   用 .pt-view 前缀提权 + !important 兜底，避免第三方主题把菜单改成毛玻璃。 */
+   选择器已带 .pt-view（及 .theme-*）前缀，特异性高于主题 .menu（0,1~2,0），且插件样式后于
+   主题加载——同/更高特异性下插件胜出，无需 !important。 */
 .pt-view .pt-sort-menu,
 .theme-light .pt-view .pt-sort-menu,
 .theme-dark .pt-view .pt-sort-menu,
 .pt-view .pt-mode-menu,
 .theme-light .pt-view .pt-mode-menu,
 .theme-dark .pt-view .pt-mode-menu {
-	background: var(--pt-surface) !important;
-	background-color: var(--pt-surface) !important;
-	border: 1px solid var(--pt-border) !important;
-	box-shadow: var(--pt-shadow-lg) !important;
-	backdrop-filter: none !important;
-	-webkit-backdrop-filter: none !important;
+	background: var(--pt-surface);
+	border: 1px solid var(--pt-border);
+	box-shadow: var(--pt-shadow-lg);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
 }
 
 .pt-mode-menu-item {

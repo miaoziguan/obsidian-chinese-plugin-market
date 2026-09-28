@@ -46,6 +46,7 @@
 3. **提交前自检**(对齐 [DEVELOPMENT.md §九](docs/DEVELOPMENT.md)):
    - [ ] `npm run build` —— tsc 零错误 + esbuild 成功产出
    - [ ] `npm test` —— vitest 全绿
+   - [ ] `npm run lint` —— eslint + stylelint 零报错（含样式 `!important` 拦截）
    - [ ] import 全部走 `@layer/` 别名,无跨层相对路径
    - [ ] 新增代码归属层正确,依赖方向未反向
    - [ ] 新平台耦合已尽量收口到 `data/` 或 `app/`
@@ -72,7 +73,18 @@
 
 ---
 
-## 六、行为准则
+## 六、CSS / 样式约定（避免 !important）
+
+本项目样式集中在根目录 `styles.css`，构建时原样拷贝进插件分发（不经过 postcss 等处理）。
+为避免「用 `!important` 压主题」这类难维护、易回归的写法死灰复燃，做如下约定：
+
+- **命名空间**：所有插件 UI 都挂在 `.pt-view` 根容器下，设计变量一律使用 `--pt-*`（如 `--pt-surface` / `--pt-border` / `--pt-text`），不直接引用 Obsidian 原生 `--background-*` 等变量，以免主题改原生变量后被迫用 `!important` 去覆盖。
+- **覆盖主题靠特异性，绝不靠 `!important`**：需要压过主题默认样式时，提高选择器特异性即可——给选择器加 `.pt-view` / `.theme-light` / `.theme-dark` 前缀，或重复类名（如 `.pt-card.pt-card`）。Obsidian 插件样式本身后于主题加载，同/更高特异性下插件稳定胜出。
+- **强制拦截**：`stylelint` 的 `declaration-no-important` 规则已在 `npm run lint` 中启用，任何新增 `!important` 都会直接报错。
+- **唯一豁免**：无障碍 `prefers-reduced-motion` 的「无条件禁用动画」语义允许使用 `!important`（如 `animation: none !important`），但必须紧邻加 `/* stylelint-disable declaration-no-important */` 注释说明原因。
+- **不要引入 postcss 自动前缀**：构建链里不存在 postcss；若日后加 `postcss-prefix-selector` 自动给选择器加 `.pt-view`，会和现有手写的 `.pt-view` 前缀叠加成 `.pt-view .pt-view …`，而 DOM 里只有一个 `.pt-view`，选择器直接失效、UI 崩。现有前缀 + 后加载已足够，无需此机制。
+
+## 七、行为准则
 
 - 讨论对事不对人,保持友善与尊重。
 - 提前在 issue 里对齐技术方案,避免闭门造车后 PR 被拒。
