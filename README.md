@@ -1,10 +1,11 @@
-# 🀄 Chinese Market —— 推倒 Obsidian 生态的语言巴别塔
+# 🀄 Chinese Market —— 重建 Obsidian 生态的巴别塔，实现天下大同
 
-> 传说里，人类因为语言不通而被拆散，工具与知识从此只在高塔顶端流转。
-> Obsidian 社区插件市场有数千个插件，名字、描述、README 几乎全是英文——对中文用户，这就是一座新的巴别塔。
-> **Chinese Market 要做的，不是给这座塔贴一层翻译皮，而是把塔拆掉：用中文找、用中文读、用中文判断，让语言不再决定你能用上什么工具。**
+> 传说里，人类曾想共建一座通天的高塔，却因为语言变乱而停工、四散——工具与知识从此只在高处流转。
+> Obsidian 社区插件市场有数千个插件，名字、描述、README 几乎全是英文：对中文用户，这就是又一座没能建成的巴别塔。
+> **Chinese Market 要做的，是把这座塔接着建起来：用中文找、用中文读、用中文判断，让语言不再决定你能用上什么工具。**
+> **天下大同，不是让所有人说同一种语言，而是让说不同语言的人，用得上同一座塔。**
 
-[English](#english) · [快速上手](#二、快速上手) · [功能总览](#三、功能总览) · [架构](#六、架构与开发者指南) · [参与共建](#七、参与共建（把塔拆得更快）)
+[English](#english) · [快速上手](#二、快速上手) · [功能总览](#三、功能总览) · [架构](#六、架构与开发者指南) · [参与共建](#七、参与共建（一起把塔建起来）)
 
 ---
 
@@ -18,7 +19,7 @@ Obsidian 的社区插件市场是个巨大的宝库，但对中文用户存在�
 | **看不懂** | 插件名 `templater-obsidian`、`obsidian-linter`，描述是几百字英文 | 只能靠截图和口碑盲选，装了才发现不是自己要的 |
 | **不敢装** | README 是英文长文，依赖、版本、兼容性看不明白 | 不敢启用、不敢更新，最终只敢用别人推荐的少数几个 |
 
-Chinese Market 把这三层分别拆掉：
+Chinese Market 把这三层逐一打通：
 
 - **找不到** → 中文检索，含离线本地语义与可选的 AI 语义（[3.1](#31-三种搜索模式)）
 - **看不懂** → 多层翻译通道 + 可沉淀的翻译记忆（[3.2](#32-翻译体系（本项目的地基）)）
@@ -353,9 +354,9 @@ npm run sync      # 构建并同步到本机 vault
 
 ---
 
-## 七、参与共建（把塔拆得更快）
+## 七、参与共建（一起把塔建起来）
 
-巴别塔不是一个人能推倒的。这个项目里，「拆塔」的最小单位不是代码，而是**一条译名、一份清单、一次修正**。
+巴别塔不是一个人能重建的。这个项目里，「建塔」的最小单位不是代码，而是**一条译名、一份清单、一次修正**。
 
 ### 报告问题与提建议
 
@@ -390,7 +391,7 @@ npm run sync      # 构建并同步到本机 vault
 
 ### 鸣谢
 
-设置页「鸣谢」列出了所有贡献者的 GitHub 账号。每一条译名、每一次修正都会被记在这里——**世界大同不是一家之言，而是众人各添一块砖**。
+设置页「鸣谢」列出了所有贡献者的 GitHub 账号。每一条译名、每一次修正都会被记在这里——**天下大同不是一家之言，而是众人各添一块砖**。
 
 ---
 
@@ -403,6 +404,8 @@ MIT —— 自由使用，自由改造。
 ## English
 
 **Chinese Market** is an Obsidian community-plugin browser built for Chinese-speaking users. The official plugin directory lists thousands of plugins with English names and English READMEs; Chinese Market removes that barrier so you can **search in Chinese, read in Chinese, and decide with confidence**.
+
+Its goal is not to make everyone speak one language, but to **rebuild the tower** — so that people using different languages can reach the same tools.
 
 Highlights:
 
