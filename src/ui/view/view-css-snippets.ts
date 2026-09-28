@@ -19,6 +19,7 @@
 
 import { Modal, Notice } from "obsidian";
 import { PromptModal } from "@ui/modals/prompt-modal";
+import { createMenuSelect } from "@ui/components/menu-select";
 import { SnippetRenameModal } from "@ui/settings/snippet-rename-modal";
 import type { ViewContext } from "@ui/view/view-context";
 import type { CssStorePort } from "@ui/settings/snippet-manage-store";
@@ -91,31 +92,31 @@ export function renderCssSnippetsList(ctx: ViewContext): void {
 		rerender();
 	});
 
-	// 状态筛选
-	const statusSel = createEl("select", { cls: "pt-css-status" });
-	normalBar.appendChild(statusSel);
-	for (const [val, key] of [
-		["all", "css.filter.status.all"],
-		["enabled", "css.filter.status.enabled"],
-		["disabled", "css.filter.status.disabled"],
-	] as const) {
-		statusSel.appendChild(createEl("option", { text: ctx.t(key), attr: { value: val } }));
-	}
-	statusSel.addEventListener("change", () => {
-		state.status = statusSel.value as ManageFilterStatus;
-		rerender();
+	// 状态筛选：搜索模式同款下拉（button + 原生 Menu），替换原生 <select>
+	createMenuSelect(normalBar, {
+		getOptions: () => [
+			{ value: "all", label: ctx.t("css.filter.status.all") },
+			{ value: "enabled", label: ctx.t("css.filter.status.enabled") },
+			{ value: "disabled", label: ctx.t("css.filter.status.disabled") },
+		],
+		getValue: () => state.status,
+		onPick: (v) => {
+			state.status = v as ManageFilterStatus;
+			rerender();
+		},
 	});
 
-	// 分组筛选
-	const groupSel = createEl("select", { cls: "pt-css-group" });
-	normalBar.appendChild(groupSel);
-	groupSel.appendChild(createEl("option", { text: ctx.t("css.filter.group.all"), attr: { value: GROUP_ALL } }));
-	for (const [key, name] of Object.entries(store.settings.cssGroups)) {
-		groupSel.appendChild(createEl("option", { text: name, attr: { value: key } }));
-	}
-	groupSel.addEventListener("change", () => {
-		state.group = groupSel.value;
-		rerender();
+	// 分组筛选：同款下拉
+	createMenuSelect(normalBar, {
+		getOptions: () => [
+			{ value: GROUP_ALL, label: ctx.t("css.filter.group.all") },
+			...Object.entries(store.settings.cssGroups).map(([key, name]) => ({ value: key, label: name })),
+		],
+		getValue: () => state.group,
+		onPick: (v) => {
+			state.group = v;
+			rerender();
+		},
 	});
 
 	// 新建片段按钮

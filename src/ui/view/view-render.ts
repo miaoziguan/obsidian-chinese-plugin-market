@@ -459,7 +459,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 					ctx.contentEl.querySelectorAll(".pt-filter").forEach((el) => {
 						el.setAttribute("aria-pressed", "false");
 					});
-					// 来源/安装/收藏已是官方 select 下拉：经 updateFacetVisibility 钩子刷新按钮文案
+					// 来源/安装/收藏已是胶囊：先全部复位 .pt-filter，再由 updateFacetVisibility 钩子按真实状态刷新选中态
 					ctx.updateFacetVisibility();
 					const clearBtn = q(ctx.contentEl, ".pt-search-clear");
 					if (clearBtn) clearBtn.setCssStyles({ display: "none" });

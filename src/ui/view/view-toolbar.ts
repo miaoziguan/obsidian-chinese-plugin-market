@@ -49,66 +49,6 @@ export function alignFacetLabels(scope: HTMLElement) {
 	});
 }
 
-/** 筛选下拉选项（官方「全部（79）」select 风格）：value + 展示文案 + 计数 */
-export interface FilterSelectOption {
-	value: string;
-	label: string;
-	count: number;
-}
-
-/**
- * 官方设计一致的筛选下拉（对齐 Obsidian 设置页「已安装插件」的 select 控件）：
- * 按钮 = 当前项文案（计数），点击弹原生 Menu（官方勾选/分隔线样式，无需自绘）。
- * register 用于把「按钮文案刷新」挂到统一的筛选同步入口（updateFacetVisibility 钩子），
- * 保证任意路径（模式切换/清空筛选/活跃 chips ✕）改状态后按钮文案都跟着变。
- */
-function createFilterSelect(
-	parent: HTMLElement,
-	register: (fn: () => void) => void,
-	opts: {
-		getActive: () => string;
-		getOptions: () => FilterSelectOption[];
-		onPick: (value: string) => void;
-	}
-): HTMLElement {
-	const wrap = parent.createDiv({ cls: "pt-select" });
-	const btn = wrap.createEl("button", {
-		cls: "pt-select-btn",
-		attr: { type: "button", "aria-haspopup": "menu" },
-	});
-	const labelEl = btn.createSpan({ cls: "pt-select-label" });
-	// 官方同款 ⇕ 双箭头（chevrons-up-down），与原生 select 视觉一致
-	const caret = btn.createSpan({ cls: "pt-select-caret" });
-	setIcon(caret, "chevrons-up-down");
-
-	const render = () => {
-		const options = opts.getOptions();
-		const cur = options.find((o) => o.value === opts.getActive()) ?? options[0];
-		if (cur) labelEl.setText(`${cur.label}（${cur.count}）`);
-	};
-	render();
-	register(render);
-
-	btn.addEventListener("click", () => {
-		const menu = new Menu();
-		for (const option of opts.getOptions()) {
-			menu.addItem((item) =>
-				item
-					.setTitle(`${option.label}（${option.count}）`)
-					.setChecked(option.value === opts.getActive())
-					.onClick(() => {
-						if (option.value !== opts.getActive()) opts.onPick(option.value);
-					}),
-			);
-		}
-		// 不用 showAtMouseEvent（锚定鼠标指针处，点按钮偏右时菜单整体外飘）；
-		// 改为按按钮矩形定位——左对齐按钮、从下缘展开，与官方 select 下拉一致。
-		const rect = btn.getBoundingClientRect();
-		menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
-	});
-	return wrap;
-}
-
 /** 触发「全部更新」并展示进度条（更新页签工具条与 ⋮ 溢出菜单共用） */
 function triggerUpdateAll(ctx: ViewContext, mountAfter: HTMLElement): void {
 	ctx.track("action:updateAll");
@@ -291,15 +231,15 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		searchBar.toggleClass("pt-search-ai", isAIMode(ctx));
 		searchBar.toggleClass("pt-search-local", isLocalMode(ctx));
 		
-	// ── 官方 select 风格筛选下拉的文案同步 ──
+	// ── 筛选胶囊（来源/安装/收藏）视觉态同步 ──
+	// 三者为互斥 .pt-filter 胶囊（aria-pressed 表选中），与面板其余 chips 行同范式。
 	// 所有筛选状态变化路径（模式切换/清空筛选/活跃 chips ✕/面板内点选）最终都会调
-	// ctx.updateFacetVisibility；在其上挂一层刷新，下拉按钮文案即可始终与状态一致。
-	const filterSelectSyncers: Array<() => void> = [];
-	const syncFilterSelects = () => filterSelectSyncers.forEach((fn) => fn());
+	// ctx.updateFacetVisibility；在其上挂一层刷新，胶囊选中态即可始终与状态一致。
+	let syncFilterChips: () => void = () => {};
 	const baseUpdateFacetVisibility = ctx.updateFacetVisibility.bind(ctx);
 	ctx.updateFacetVisibility = () => {
 		baseUpdateFacetVisibility();
-		syncFilterSelects();
+		syncFilterChips();
 	};
 
 		// 模式切换处理（自绘菜单项点击 → applySearchMode）
@@ -316,8 +256,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.installFilter = "all";
 			ctx.favoriteFilter = "all";
 			// 同步对应 UI 控件视觉态，避免「按钮仍按下但筛选已失效」的困惑（#30）
-			// 安装/收藏已改为官方 select 下拉，状态在上方统一复位，这里只刷新下拉文案
-			syncFilterSelects();
+			// 来源/安装/收藏为胶囊，状态在上方统一复位，这里只刷新胶囊选中态
+			syncFilterChips();
 			// 排序菜单「收藏优先」项 active 态复位
 			const favItemEl = q(ctx.contentEl, ".pt-sort-menu-item--fav");
 			if (favItemEl) favItemEl.classList.remove("pt-sort-menu-item--active");
@@ -593,7 +533,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.sourceFilter = "original";
 				ctx.settings.sourceFilter = "original";
 				void ctx.saveSettings();
-				// 来源筛选已是官方 select 下拉，updateFacetVisibility 钩子会刷新其文案
+				// 来源筛选是胶囊，updateFacetVisibility 钩子会刷新其选中态
 				ctx.scheduleRender();
 			}
 			ctx.updateFacetVisibility();
@@ -892,34 +832,34 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		const stats = titleGroup.createSpan({ cls: "pt-stats" });
 		stats.createSpan({ cls: "pt-stat", text: ctx.t("app.loading") + "..." });
 
-		// ── 来源筛选（官方 select 下拉：按钮显示当前项（计数），点开原生 Menu 勾选） ──
+		// ── 来源筛选胶囊（随高级区收起，点「筛选 ▾」展开） ──
 		const sourceRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		sourceRow.createSpan({ cls: "pt-facet-label", text: "翻译" });
-		const sourceCell = sourceRow.createDiv({ cls: "pt-facet-chips" });
-		createFilterSelect(sourceCell, (fn) => filterSelectSyncers.push(fn), {
-			getActive: () => ctx.sourceFilter,
-			getOptions: () => {
-				const total = ctx.plugins.length;
-				const translated = ctx.plugins.filter((p) => {
-					const r = ctx.translatedResults[p.id];
-					return !!r && r.source !== "original";
-				}).length;
-				return [
-					{ value: "all", label: "全部", count: total },
-					{ value: "translated", label: "已翻译", count: translated },
-					{ value: "original", label: "未翻译", count: Math.max(0, total - translated) },
-				];
-			},
-			onPick: (value) => {
+		const sourceFilters = sourceRow.createDiv({ cls: "pt-facet-chips" });
+		const sourceDefs: [string, string][] = [
+			["all", "全部"],
+			["translated", "已翻译"],
+			["original", "未翻译"],
+		];
+		const sourceBtns = sourceDefs.map(([value, label]) => {
+			const btn = sourceFilters.createEl("button", { cls: "pt-filter", text: label });
+			btn.setAttribute("data-value", value);
+			btn.setAttribute("aria-pressed", value === ctx.sourceFilter ? "true" : "false");
+			btn.addEventListener("click", () => {
 				ctx.sourceFilter = value as typeof ctx.sourceFilter;
+				sourceBtns.forEach((b) => b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
 				ctx.settings.sourceFilter = ctx.sourceFilter;
 				ctx.track(`filter:source_${ctx.sourceFilter}`);
 				void ctx.saveSettings();
-				ctx.updateFacetVisibility();
-				// rAF 延迟渲染：点击立即响应，全量过滤+渲染移出点击帧，避免筛选卡顿
+				// rAF 延迟渲染：点击立即响应（aria-pressed 已更新），全量过滤+渲染移出点击帧，避免筛选卡顿
 				ctx.scheduleRender(true);
-			},
+			});
+			return btn;
 		});
+		const updateSourceToggles = () => {
+			sourceBtns.forEach((b) =>
+				b.setAttribute("aria-pressed", b.getAttribute("data-value") === ctx.sourceFilter ? "true" : "false"));
+		};
 
 
 	// 用法 B：分类 facet 筛选器（多选分类，支持 AI/关键字模式全局发现维度）
@@ -986,62 +926,75 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.updateFacetVisibility();
 		ctx.updateGuidance(); // 初始渲染模式引导（无查询时显示）
 
-		// ── 安装筛选（官方 select 下拉，对齐设置页「全部（79）」控件） ──
+		// ── 安装筛选胶囊（已安装 / 已启动 / 已安装未启动），收进面板统一筛选入口 ──
 		const installRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		installRow.createSpan({ cls: "pt-facet-label", text: "安装" });
-		const installCell = installRow.createDiv({ cls: "pt-facet-chips" });
+		const installFilters = installRow.createDiv({ cls: "pt-facet-chips" });
+		const installDefs: [InstallFilter, string][] = [
+			["all", "全部"],
+			["installed", "已安装"],
+			["enabled", "已启动"],
+			["installedNotEnabled", "已安装未启动"],
+		];
 		const installTrackMap: Record<InstallFilter, string> = {
 			all: "",
 			installed: "filter:installed",
 			enabled: "filter:enabled",
 			installedNotEnabled: "filter:installedNotEnabled",
 		};
-		createFilterSelect(installCell, (fn) => filterSelectSyncers.push(fn), {
-			getActive: () => ctx.installFilter,
-			getOptions: () => {
-				const total = ctx.plugins.length;
-				let installedNotEnabled = 0;
-				for (const id of ctx.installedIds) if (!ctx.enabledIds.has(id)) installedNotEnabled++;
-				return [
-					{ value: "all", label: "全部", count: total },
-					{ value: "installed", label: "已安装", count: ctx.installedIds.size },
-					{ value: "enabled", label: "已启动", count: ctx.enabledIds.size },
-					{ value: "installedNotEnabled", label: "已安装未启动", count: installedNotEnabled },
-				];
-			},
-			onPick: (value) => {
-				ctx.installFilter = value as InstallFilter;
-				ctx.updateFacetVisibility();
-				const track = installTrackMap[ctx.installFilter];
+		const installBtns = installDefs.map(([value, label]) => {
+			const btn = installFilters.createEl("button", { cls: "pt-filter", text: label });
+			btn.setAttribute("data-value", value);
+			btn.setAttribute("aria-pressed", value === ctx.installFilter ? "true" : "false");
+			btn.addEventListener("click", () => {
+				ctx.installFilter = value;
+				installBtns.forEach((b) => b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+				const track = installTrackMap[value];
 				if (track) ctx.track(track);
 				ctx.scheduleRender(true);
-			},
+			});
+			return btn;
 		});
+		const updateInstallToggles = () => {
+			installBtns.forEach((b) =>
+				b.setAttribute("aria-pressed", b.getAttribute("data-value") === ctx.installFilter ? "true" : "false"));
+		};
 
-		// ── 收藏筛选（官方 select 下拉，与安装筛选同组） ──
+		// ── 收藏筛选胶囊（已收藏 / 未收藏），收进面板统一筛选入口 ──
 		const favRow = advancedInner.createDiv({ cls: "pt-facet-row" });
 		favRow.createSpan({ cls: "pt-facet-label", text: "收藏" });
-		const favCell = favRow.createDiv({ cls: "pt-facet-chips" });
-		createFilterSelect(favCell, (fn) => filterSelectSyncers.push(fn), {
-			getActive: () => ctx.favoriteFilter,
-			getOptions: () => {
-				const total = ctx.plugins.length;
-				const favorited = ctx.favoritesSet.size;
-				return [
-					{ value: "all", label: "全部", count: total },
-					{ value: "favorited", label: "已收藏", count: favorited },
-					{ value: "unfavorited", label: "未收藏", count: Math.max(0, total - favorited) },
-				];
-			},
-			onPick: (value) => {
-				ctx.favoriteFilter = value as FavoriteFilter;
-				ctx.updateFacetVisibility();
+		const favFilters = favRow.createDiv({ cls: "pt-facet-chips" });
+		const favDefs: [FavoriteFilter, string][] = [
+			["all", "全部"],
+			["favorited", "已收藏"],
+			["unfavorited", "未收藏"],
+		];
+		const favBtns = favDefs.map(([value, label]) => {
+			const btn = favFilters.createEl("button", { cls: "pt-filter", text: label });
+			btn.setAttribute("data-value", value);
+			btn.setAttribute("aria-pressed", value === ctx.favoriteFilter ? "true" : "false");
+			btn.addEventListener("click", () => {
+				ctx.favoriteFilter = value;
+				favBtns.forEach((b) => b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
 				// 收藏筛选为会话级（不持久化）：每次打开插件重置为「全部」，
 				// 避免用户误以为默认筛选到「已收藏」（收藏集 favorites 仍持久化）
-				if (ctx.favoriteFilter !== "all") ctx.track(`filter:${ctx.favoriteFilter}`);
+				if (value !== "all") ctx.track(`filter:${value}`);
 				ctx.scheduleRender(true);
-			},
+			});
+			return btn;
 		});
+		const updateFavToggles = () => {
+			favBtns.forEach((b) =>
+				b.setAttribute("aria-pressed", b.getAttribute("data-value") === ctx.favoriteFilter ? "true" : "false"));
+		};
+
+		// 统一刷新入口：清空 / 模式切换 / 活跃 chips ✕ 等任意筛选状态变化后，
+		// 由 updateFacetVisibility 钩子调用，保证三行胶囊选中态与状态始终一致。
+		syncFilterChips = () => {
+			updateSourceToggles();
+			updateInstallToggles();
+			updateFavToggles();
+		};
 
 	// ── 生态筛选（当前实现 = 中文生态；维度可扩展为其它生态） ──
 	// 标题用通用词「生态」（维度标签），激活按钮用具体语义「中文生态」（用户看到的是「我在筛什么」）。

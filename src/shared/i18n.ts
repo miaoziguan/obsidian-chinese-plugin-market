@@ -238,7 +238,6 @@ export const STRINGS = {
 	"detail.id": { zh: "ID" },
 	"detail.downloads": { zh: "下载量" },
 	"detail.updated": { zh: "最近更新" },
-	"detail.status": { zh: "状态" },
 	"detail.readme": { zh: "README" },
 	"detail.readme.loading": { zh: "正在加载 README…" },
 	"detail.readme.empty": { zh: "README 内容为空。" },

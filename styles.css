@@ -515,18 +515,7 @@
 	background: color-mix(in srgb, var(--pt-accent) 10%, transparent);
 	font-weight: var(--pt-weight-semibold);
 }
-/* ✓ 列所有项占位、仅选中项可见（与 .pt-mode-menu 同款对齐） */
-.pt-sort-menu-item::before {
-	content: "✓";
-	flex: 0 0 auto;
-	width: 1em;
-	margin-right: 6px;
-	color: var(--pt-accent);
-	visibility: hidden;
-}
-.pt-sort-menu-item--active::before {
-	visibility: visible;
-}
+/* 选中态已有淡底 + 强调色文字，不再叠加 ✓（与模式菜单同步去掉） */
 /* 「收藏优先」是置顶叠层（非重排），用分隔线 + 弱化色与常规排序区分 */
 .pt-sort-menu-item--fav {
 	margin-top: 6px;
@@ -742,19 +731,7 @@
 	color: var(--pt-accent);
 	font-weight: var(--pt-weight-semibold);
 }
-/* ✓ 列所有项占位、仅选中项可见：未选中项文字与选中项对齐（官方菜单同款），
-   消除「选中项被 ✓ 顶右、未选中项靠左」的参差观感 */
-.pt-mode-menu-item::before {
-	content: "✓";
-	flex: 0 0 auto;
-	width: 1em;
-	margin-right: 6px;
-	color: var(--pt-accent);
-	visibility: hidden;
-}
-.pt-mode-menu-item--active::before {
-	visibility: visible;
-}
+/* 选中态已有淡绿底 + 强调色文字，不再叠加 ✓（视觉冗余） */
 
 /* 工具栏「仅已安装」/「仅已启动」/「仅已安装未启动」 toggle */
 .pt-toggle-uninstalled,
@@ -3655,28 +3632,28 @@ button.pt-card-install-btn--installed {
 	font-size: var(--pt-text-md);
 	color: var(--pt-text-muted, var(--text-muted));
 }
-/* ── 元数据区（图标 + 标签 + 值 stat chips） ── */
+/* ── 元数据区（图标 + 标签 + 值）：纯文本排布，不用胶囊底色 ──
+   去掉 stat chips 的背景/圆角/内边距——图标 + 文字已足够表意，
+   分组靠列间距（18px）而非底色块，头部更轻、去「按钮感」。 */
 .pt-detail-meta {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: 4px 18px;
 	margin-bottom: 20px;
 }
 .pt-detail-meta-row {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
-	padding: 5px 12px;
-	border-radius: 20px;
-	background: var(--background-secondary);
 	font-size: var(--pt-text-md);
-	line-height: 1;
+	line-height: 1.6;
 }
 .pt-detail-meta-icon {
 	display: flex;
 	align-items: center;
 	color: var(--pt-text-muted);
-	opacity: 0.6;
+	/* 无底色承载后图标需稍提对比，避免纯文本排布下过淡 */
+	opacity: 0.75;
 	flex-shrink: 0;
 }
 .pt-detail-meta-label {
@@ -3778,14 +3755,18 @@ button.pt-card-install-btn--installed {
 	border: none;
 	box-shadow: none;
 }
-/* 卸载按钮：红色描边，hover 淡红底 */
+/* 卸载按钮：与相邻普通按钮同款描边/配色。
+   之前的红色描边是唯一残留的 danger 视觉——红色文字会被主题 button 规则
+   （(0,1,1)）盖掉而红边不会，结果只剩红边，观感像样式出错。 */
 .pt-detail-btn--danger {
-	color: var(--pt-color-error, var(--text-error));
+	color: var(--pt-text-strong, var(--text-normal));
 	background: transparent;
-	border: 1px solid color-mix(in srgb, var(--pt-color-error, var(--text-error)) 40%, transparent);
+	border: 1px solid var(--background-modifier-border);
 }
 .pt-detail-btn--danger:hover {
-	background: color-mix(in srgb, var(--pt-color-error, var(--text-error)) 10%, transparent);
+	background: var(--background-secondary);
+	border-color: var(--background-modifier-border);
+	color: var(--pt-text-strong, var(--text-normal));
 }
 
 
@@ -6730,45 +6711,50 @@ button.pt-card-install-btn--installed {
 .pt-updates-bar button {
 	margin: 0;
 }
+/* 更新页签工具条按钮：统一为 .pt-select-btn 官方 select 配方
+   （8px 小圆角 + 2px 8px 内边距 + 次级底），与浏览页筛选下拉完全同款 */
 .pt-updates-selectall,
-.pt-updates-deselect {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	background: transparent;
-	color: var(--text-muted);
-	padding: 2px 8px;
-	cursor: pointer;
-}
-.pt-updates-selectall:hover,
-.pt-updates-deselect:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
-}
+.pt-updates-deselect,
 .pt-updates-update-sel,
 .pt-updates-update-all {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
-	padding: 2px 10px;
+	appearance: none;
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	background: var(--pt-surface, var(--background-secondary));
+	color: var(--pt-text, var(--text-normal));
+	padding: 2px 8px;
+	font-size: var(--font-ui-small, 13px);
 	cursor: pointer;
+	transition: background var(--pt-duration-fast, 120ms) ease, border-color var(--pt-duration-fast, 120ms) ease;
 }
-.pt-updates-update-all {
-	color: var(--text-on-accent);
-	background: var(--text-accent);
-	border-color: var(--text-accent);
+.pt-updates-selectall:hover,
+.pt-updates-deselect:hover,
+.pt-updates-update-sel:hover,
+.pt-updates-update-all:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
+	color: var(--pt-text-strong, var(--text-normal));
 }
-/* 直链页签顶部「从直链安装」入口按钮 */
+.pt-updates-update-all:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+/* 直链页签顶部「从直链安装」入口按钮：与全局统一的次级胶囊一致
+   （旧样式是强调色实底 + 4px 小圆角，与详情页/工具栏的描边胶囊割裂） */
 .pt-beta-install {
-	color: var(--text-on-accent);
-	background: var(--text-accent);
-	border: 1px solid var(--text-accent);
-	border-radius: 4px;
-	padding: 2px 10px;
+	appearance: none;
+	color: var(--pt-text-strong, var(--text-normal));
+	background: var(--pt-surface, var(--background-secondary));
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	padding: 2px 8px;
+	font-size: var(--font-ui-small, 13px);
 	cursor: pointer;
+	transition: background var(--pt-duration-fast, 120ms) ease, border-color var(--pt-duration-fast, 120ms) ease;
 }
 .pt-beta-install:hover {
-	background: color-mix(in srgb, var(--text-accent) 85%, black 15%);
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
 }
 .pt-updates-empty {
 	display: flex;
@@ -6778,19 +6764,21 @@ button.pt-card-install-btn--installed {
 	padding: 40px 12px;
 	color: var(--text-muted);
 }
-/* 空态下更醒目的「从直链安装」按钮 */
+/* 空态下更醒目的「从直链安装」按钮：同款次级胶囊，仅尺寸放大 */
 .pt-beta-install-empty {
 	margin-top: 10px;
-	padding: 8px 18px;
-	border-radius: var(--pt-radius);
-	border: 1px solid var(--text-accent);
-	background: var(--text-accent);
-	color: var(--text-on-accent);
+	padding: 7px 18px;
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	background: var(--pt-surface, var(--background-secondary));
+	color: var(--pt-text-strong, var(--text-normal));
 	font-size: var(--font-ui-medium, 15px);
 	cursor: pointer;
+	transition: background var(--pt-duration-fast, 120ms) ease, border-color var(--pt-duration-fast, 120ms) ease;
 }
 .pt-beta-install-empty:hover {
-	background: color-mix(in srgb, var(--text-accent) 85%, black 15%);
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
 }
 .pt-updates-empty-title {
 	font-size: var(--font-ui-medium, 15px);
@@ -7087,30 +7075,83 @@ button.pt-card-install-btn--installed {
 	margin-bottom: var(--pt-space-sm);
 	flex-wrap: wrap;
 }
+/* CSS 片段 / 收藏页签搜索框：与右侧「全部状态 / 分组 / 新建」按钮同款次级盒式输入框。
+   不再用「无边框 + 长下划线」配方——它在工具栏内 flex 撑满后变成一条横贯的悬空线，
+   激活后变强调色更显突兀（即红框里那条「多余的视觉元素」）。盒式 + appearance:none
+   同时干掉 macOS 原生焦点环，激活态只让描边变强调色。 */
 .pt-css-bar .pt-css-search {
+	appearance: none;
+	-webkit-appearance: none;
 	flex: 1 1 220px;
 	min-width: 140px;
-	height: 30px;
+	box-sizing: border-box;
+	height: 28px;
 	padding: 0 10px;
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-input);
-	background: var(--pt-surface);
-	color: var(--pt-text);
-	font-size: var(--pt-text-sm);
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	background: var(--pt-surface, var(--background-secondary));
+	color: var(--pt-text, var(--text-normal));
+	font-size: var(--pt-text-md);
+	transition: border-color var(--pt-duration-fast) var(--pt-ease), background var(--pt-duration-fast) var(--pt-ease);
 }
+.pt-css-bar .pt-css-search:hover {
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
+}
+.pt-css-bar .pt-css-search:focus,
+.pt-css-bar .pt-css-search:focus-visible {
+	outline: none;
+	box-shadow: none;
+	border-color: var(--pt-accent);
+}
+/* 提权压过主题对 input 的 focus 视觉（如 Bamboo China 的 focus ring），避免叠加 */
+.pt-view .pt-css-bar .pt-css-search:focus,
+.pt-view .pt-css-bar .pt-css-search:focus-visible {
+	outline: none;
+	box-shadow: none;
+	border-color: var(--pt-accent);
+}
+.pt-css-bar .pt-css-search::placeholder {
+	color: var(--pt-text-faint);
+}
+/* 状态/分组下拉：与浏览页官方 select 同款次级样式（次级底 + 描边 + 小圆角），
+   保留原生下拉箭头 */
 .pt-css-bar .pt-css-status,
 .pt-css-bar .pt-css-group {
-	height: 30px;
-	border: 1px solid var(--pt-border);
-	border-radius: var(--pt-radius-input);
-	background: var(--pt-surface);
-	color: var(--pt-text);
-	font-size: var(--pt-text-sm);
+	box-sizing: border-box;
+	height: 28px;
+	padding: 0 8px;
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	background: var(--pt-surface, var(--background-secondary));
+	color: var(--pt-text, var(--text-normal));
+	font-size: var(--font-ui-small, 13px);
+	cursor: pointer;
+	transition: background var(--pt-duration-fast, 120ms) ease, border-color var(--pt-duration-fast, 120ms) ease;
 }
-.pt-css-new {
-	padding: 4px 8px;
-	min-width: 80px;
+.pt-css-bar .pt-css-status:hover,
+.pt-css-bar .pt-css-group:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
+}
+/* 新建片段 / 管理分组：统一为 .pt-select-btn 配方（替换 clickable-icon 幽灵样式） */
+.pt-css-bar .pt-css-new,
+.pt-css-bar .pt-css-groups {
+	appearance: none;
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	background: var(--pt-surface, var(--background-secondary));
+	color: var(--pt-text, var(--text-normal));
+	padding: 2px 8px;
+	font-size: var(--font-ui-small, 13px);
+	cursor: pointer;
 	white-space: nowrap;
+	transition: background var(--pt-duration-fast, 120ms) ease, border-color var(--pt-duration-fast, 120ms) ease;
+}
+.pt-css-bar .pt-css-new:hover,
+.pt-css-bar .pt-css-groups:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
+	color: var(--pt-text-strong, var(--text-normal));
 }
 .pt-css-normal-bar {
 	display: flex;
@@ -7136,8 +7177,23 @@ button.pt-card-install-btn--installed {
 	font-weight: var(--pt-weight-semibold);
 	margin-right: auto;
 }
+/* 批量操作条按钮：统一为 .pt-select-btn 配方 */
 .pt-css-bulk-bar button {
-	padding: 4px 10px;
+	appearance: none;
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	background: var(--pt-surface, var(--background-secondary));
+	color: var(--pt-text, var(--text-normal));
+	padding: 2px 8px;
+	font-size: var(--font-ui-small, 13px);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background var(--pt-duration-fast, 120ms) ease, border-color var(--pt-duration-fast, 120ms) ease;
+}
+.pt-css-bulk-bar button:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
+	color: var(--pt-text-strong, var(--text-normal));
 }
 .pt-css-empty {
 	padding: 32px 0;
@@ -7179,15 +7235,38 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-text);
 	background: var(--background-secondary);
 }
-.pt-fav-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 6px 4px;
-	border-radius: var(--pt-radius-sm);
+/* 收藏页卡片包装 */
+.pt-fav-card-wrap {
+	position: relative;
+	min-width: 0;
 }
-.pt-fav-row:hover {
-	background: var(--background-secondary);
+/* 收藏卡片头行内的「换组」按钮：紧跟插件名右侧、安装按钮左侧，
+   始终可见，不与内容/安装胶囊打架 */
+.pt-card-group-btn {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	margin: 0 0 0 var(--pt-space-2xs);
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--pt-radius-sm, var(--radius-s));
+	background: transparent;
+	color: var(--pt-text-muted);
+	cursor: pointer;
+	transition: background var(--pt-duration-fast, 120ms) ease,
+		border-color var(--pt-duration-fast, 120ms) ease, color var(--pt-duration-fast, 120ms) ease;
+}
+.pt-card-group-btn:hover {
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border, var(--background-modifier-border));
+	color: var(--pt-text);
+}
+.pt-card-group-btn svg {
+	width: 14px;
+	height: 14px;
 }
 .pt-fav-name {
 	flex: 1 1 auto;
@@ -7207,17 +7286,65 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-accent);
 	text-decoration: underline;
 }
+/* 取消收藏：统一为 .pt-select-btn 配方（与各页签按钮同语言） */
 .pt-fav-remove {
-	color: var(--pt-text-muted);
-	border: none;
-	background: transparent;
+	appearance: none;
+	color: var(--pt-text, var(--text-normal));
+	border: 1px solid var(--pt-border, var(--background-modifier-border));
+	background: var(--pt-surface, var(--background-secondary));
 	cursor: pointer;
-	font-size: var(--pt-text-sm);
+	font-size: var(--font-ui-small, 13px);
 	padding: 2px 8px;
-	border-radius: var(--pt-radius);
+	border-radius: var(--pt-radius-sm, var(--radius-s));
 	white-space: nowrap;
+	transition: background var(--pt-duration-fast, 120ms) ease, border-color var(--pt-duration-fast, 120ms) ease;
 }
 .pt-fav-remove:hover {
-	color: var(--pt-color-error, var(--text-error));
-	background: color-mix(in srgb, var(--pt-color-error, var(--text-error)) 10%, transparent);
+	color: var(--pt-text-strong, var(--text-normal));
+	background: var(--pt-surface-hover, var(--background-modifier-hover));
+	border-color: var(--pt-border-strong, var(--background-modifier-border-hover));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   全站小按钮统一配方（收尾兜底）：钉死底色/描边/文字色。
+   这些控件散布在浏览/更新/直链/CSS/收藏各页签，主题的 .theme-xxx button
+   （(0,1,1)）会盖过各页签自己的 (0,1,0) 声明，且各处受影响程度不一，
+   表现为「灰底深浅不一」。这里用 .pt-view 前缀（(0,2,0)+）+ 文件末位，
+   把同一份值钉给所有小按钮与筛选下拉，页间完全一致。
+   ═══════════════════════════════════════════════════════════════ */
+.pt-view .pt-select-btn,
+.pt-view .pt-updates-selectall,
+.pt-view .pt-updates-deselect,
+.pt-view .pt-updates-update-sel,
+.pt-view .pt-updates-update-all,
+.pt-view .pt-beta-install,
+.pt-view .pt-beta-install-empty,
+.pt-view .pt-css-bar .pt-css-status,
+.pt-view .pt-css-bar .pt-css-group,
+.pt-view .pt-css-bar .pt-css-new,
+.pt-view .pt-css-bar .pt-css-groups,
+.pt-view .pt-css-bulk-bar button,
+.pt-view .pt-fav-remove {
+	background: var(--background-secondary);
+	background-color: var(--background-secondary);
+	border-color: var(--background-modifier-border);
+	color: var(--text-normal);
+}
+.pt-view .pt-select-btn:hover,
+.pt-view .pt-updates-selectall:hover,
+.pt-view .pt-updates-deselect:hover,
+.pt-view .pt-updates-update-sel:hover,
+.pt-view .pt-updates-update-all:hover,
+.pt-view .pt-beta-install:hover,
+.pt-view .pt-beta-install-empty:hover,
+.pt-view .pt-css-bar .pt-css-status:hover,
+.pt-view .pt-css-bar .pt-css-group:hover,
+.pt-view .pt-css-bar .pt-css-new:hover,
+.pt-view .pt-css-bar .pt-css-groups:hover,
+.pt-view .pt-css-bulk-bar button:hover,
+.pt-view .pt-fav-remove:hover {
+	background: var(--background-modifier-hover);
+	background-color: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+	color: var(--text-normal);
 }

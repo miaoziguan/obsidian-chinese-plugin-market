@@ -1,9 +1,14 @@
 /**
- * 「收藏」页签列表渲染器：分组管理已收藏的插件。
+ * 「收藏」页签列表渲染器：分组管理已收藏的插件（卡片形态，与浏览页统一）。
  *
- * 顶部工具栏：搜索框 + 计数 + 分组筛选 + 新建分组按钮；
+ * 顶部工具栏：搜索框 + 计数 + 分组筛选（模式菜单同款下拉）+ 新建分组按钮；
  * 列表：按组分区块（组名标题 + 数量 + 重命名/删除），未分组区固定在最后；
- * 每行：插件名（点击打开详情）+ 组归属下拉（换组即存）+ 取消收藏按钮。
+ * 每项复用浏览页插件卡片（createPluginCard + .pt-featured-grid 网格），
+ * 悬停卡片显示「换组」下拉（组归属即存）。
+ *
+ * 点击交互走 ctx.onCardClick 事件委托（与浏览页/推荐区完全同一套：
+ * 安装 / 启用 / 收藏星标 / 对比 / 打开详情…）；取消收藏（点星标）后
+ * favoritesSet 变化 → 整页重渲，被取消的卡片即时移除。
  *
  * 数据模型（全部随 settings 持久化）：
  * - 收藏集 = ctx.favoritesSet（settings.favorites 的 Set 视图）；
@@ -11,12 +16,16 @@
  *   组列表由映射值动态派生（按首次出现顺序稳定排序），无需单独维护组清单——
  *   删除组 = 清掉成员映射；重命名组 = 遍历替换值。收藏量级小（几十），O(n) 足够。
  *
- * 注：与 view-css-snippets 同款约束——只用标准 DOM API，便于 jsdom 测试。
+ * 注：与 view-css-snippets 同款约束——只用标准 DOM API + 全局 createDiv/createEl，
+ * 便于 jsdom 测试。
  */
 
 import type { ViewContext } from "@ui/view/view-context";
-import { Modal } from "obsidian";
+import { Menu, Modal, setIcon } from "obsidian";
 import { PromptModal } from "@ui/modals/prompt-modal";
+import { createPluginCard } from "@ui/components/card-render";
+import { createMenuSelect } from "@ui/components/menu-select";
+import { handleToggleEnabled } from "@ui/view/view-cards";
 
 /** 分组筛选哨兵值：全部 */
 export const FAV_GROUP_ALL = "__all__";
@@ -28,6 +37,18 @@ export function renderFavoritesList(ctx: ViewContext): void {
 	const el = ctx.favoritesListEl;
 	if (!el || ctx.viewTab !== "favorites") return;
 	el.innerHTML = "";
+
+	// 卡片交互走与浏览页同一套事件委托（ctx.onCardClick：安装/收藏/对比/详情…）。
+	// 收藏集变化（点卡片星标取消收藏）→ 整页重渲，被取消的卡片即时移除。
+	const bound = el as HTMLElement & { __favClickBound?: boolean };
+	if (!bound.__favClickBound) {
+		bound.__favClickBound = true;
+		el.addEventListener("click", (ev) => {
+			const before = ctx.favoritesSet.size;
+			ctx.onCardClick?.(ev);
+			if (ctx.favoritesSet.size !== before) renderFavoritesList(ctx);
+		});
+	}
 
 	// 本地会话态（重渲染时重建，不持久化）；搜索词从 ctx.favKeyword 恢复，避免操作后丢失
 	const state = { keyword: ctx.favKeyword || "", group: ctx.favoriteGroupFilter || FAV_GROUP_ALL };
@@ -56,22 +77,18 @@ export function renderFavoritesList(ctx: ViewContext): void {
 		rerender();
 	});
 
-	// 分组筛选下拉
-	const groupSel = createEl("select", { cls: "pt-css-group" });
-	bar.appendChild(groupSel);
-	for (const [val, key] of [
-		[FAV_GROUP_ALL, "fav.filter.group.all"],
-		[FAV_GROUP_NONE, "fav.group.none"],
-	] as const) {
-		groupSel.appendChild(createEl("option", { text: ctx.t(key), attr: { value: val } }));
-	}
-	for (const name of listGroups(ctx)) {
-		groupSel.appendChild(createEl("option", { text: name, attr: { value: name } }));
-	}
-	groupSel.value = state.group;
-	groupSel.addEventListener("change", () => {
-		state.group = groupSel.value;
-		rerender();
+	// 分组筛选下拉：搜索模式同款（button + 原生 Menu），替换原生 <select>
+	createMenuSelect(bar, {
+		getOptions: () => [
+			{ value: FAV_GROUP_ALL, label: ctx.t("fav.filter.group.all") },
+			{ value: FAV_GROUP_NONE, label: ctx.t("fav.group.none") },
+			...listGroups(ctx).map((name) => ({ value: name, label: name })),
+		],
+		getValue: () => state.group,
+		onPick: (v) => {
+			state.group = v;
+			rerender();
+		},
 	});
 
 	// 新建分组
@@ -110,10 +127,9 @@ function listGroups(ctx: ViewContext): string[] {
 	return seen;
 }
 
-/** 收藏插件 → 展示信息（找不到插件信息时用 id 兜底，防脏数据渲染崩溃） */
-function favInfo(ctx: ViewContext, id: string): { id: string; name: string } {
-	const p = ctx.allPlugins.find((x) => x.id === id);
-	return { id, name: p?.name ?? id };
+/** 收藏插件展示名（找不到插件信息时用 id 兜底，防脏数据） */
+function nameOf(ctx: ViewContext, id: string): string {
+	return ctx.allPlugins.find((x) => x.id === id)?.name ?? id;
 }
 
 /** 按当前筛选渲染分组区块列表 */
@@ -123,10 +139,10 @@ function rerenderList(ctx: ViewContext, listEl: HTMLElement, countEl: HTMLElemen
 	const groupOf = ctx.settings.favoriteGroupOf;
 
 	// 收集 + 过滤（搜索按名称/Id；分组按选中桶）
-	const all = [...ctx.favoritesSet].map((id) => favInfo(ctx, id));
-	const visible = all.filter((f) => {
-		if (kw && !(`${f.name} ${f.id}`.toLowerCase().includes(kw))) return false;
-		const g = groupOf[f.id] ?? "";
+	const all = [...ctx.favoritesSet];
+	const visible = all.filter((id) => {
+		if (kw && !(`${nameOf(ctx, id)} ${id}`.toLowerCase().includes(kw))) return false;
+		const g = groupOf[id] ?? "";
 		if (state.group === FAV_GROUP_ALL) return true;
 		if (state.group === FAV_GROUP_NONE) return g === "";
 		return g === state.group;
@@ -144,13 +160,13 @@ function rerenderList(ctx: ViewContext, listEl: HTMLElement, countEl: HTMLElemen
 		return;
 	}
 
-	// 分桶：组名 → 成员（保持收藏原始顺序）；未分组桶 key 为 ""
-	const buckets = new Map<string, { id: string; name: string }[]>();
-	for (const f of visible) {
-		const g = groupOf[f.id] ?? "";
+	// 分桶：组名 → 成员 id（保持收藏原始顺序）；未分组桶 key 为 ""
+	const buckets = new Map<string, string[]>();
+	for (const id of visible) {
+		const g = groupOf[id] ?? "";
 		const arr = buckets.get(g);
-		if (arr) arr.push(f);
-		else buckets.set(g, [f]);
+		if (arr) arr.push(id);
+		else buckets.set(g, [id]);
 	}
 
 	// 渲染顺序：有名组在前（组清单顺序，空组也渲染区块让用户知道组已建好），未分组最后
@@ -169,12 +185,8 @@ function rerenderList(ctx: ViewContext, listEl: HTMLElement, countEl: HTMLElemen
 	}
 }
 
-/** 渲染单个分组区块（标题 + 行列表） */
-function renderGroupSection(
-	ctx: ViewContext,
-	group: string,
-	members: { id: string; name: string }[],
-): HTMLElement {
+/** 渲染单个分组区块（标题 + 卡片网格） */
+function renderGroupSection(ctx: ViewContext, group: string, members: string[]): HTMLElement {
 	const section = createDiv({ cls: "pt-fav-group" });
 	const head = createDiv({ cls: "pt-fav-group-head" });
 	head.appendChild(createSpan({ cls: "pt-fav-group-name", text: group || ctx.t("fav.group.none") }));
@@ -224,53 +236,89 @@ function renderGroupSection(
 	}
 	section.appendChild(head);
 
-	const rows = createDiv({ cls: "pt-fav-rows" });
-	for (const m of members) rows.appendChild(renderFavRow(ctx, m));
-	section.appendChild(rows);
+	// 卡片网格：复用浏览页推荐区同款网格布局
+	const grid = createDiv({ cls: "pt-featured-grid" });
+	for (const id of members) {
+		const wrap = renderFavCard(ctx, id);
+		if (wrap) grid.appendChild(wrap);
+	}
+	section.appendChild(grid);
 	return section;
 }
 
-/** 渲染单行：插件名（点击开详情）+ 组下拉（换组即存）+ 取消收藏 */
-function renderFavRow(ctx: ViewContext, fav: { id: string; name: string }): HTMLElement {
-	const row = createDiv({ cls: "pt-fav-row", attr: { "data-cpm-fav-row": fav.id } });
-	const nameBtn = createEl("button", {
-		cls: "pt-fav-name",
-		text: fav.name,
-		attr: { type: "button", title: ctx.t("fav.open.detail") },
-	});
-	row.appendChild(nameBtn);
-	nameBtn.addEventListener("click", () => ctx.openDetailDrawer(fav.id));
+/**
+ * 渲染单个收藏卡片：浏览页同款卡片 + 悬停显示的「换组」下拉。
+ * 插件信息缺失（脏数据：已收藏但目录里没有）时返回 null 跳过，防渲染崩溃。
+ */
+function renderFavCard(ctx: ViewContext, id: string): HTMLElement | null {
+	const plugin = ctx.allPlugins.find((p) => p.id === id);
+	if (!plugin) return null;
 
-	// 组归属下拉：换组直接写 favoriteGroupOf（选「未分组」即删映射）
-	const groupSel = createEl("select", { cls: "pt-css-status", attr: { "aria-label": ctx.t("fav.move.ph") } });
-	row.appendChild(groupSel);
-	groupSel.appendChild(createEl("option", { text: ctx.t("fav.group.none"), attr: { value: FAV_GROUP_NONE } }));
-	for (const g of listGroups(ctx)) {
-		groupSel.appendChild(createEl("option", { text: g, attr: { value: g } }));
-	}
-	groupSel.value = ctx.settings.favoriteGroupOf[fav.id] || FAV_GROUP_NONE;
-	groupSel.addEventListener("change", () => {
-		const g = groupSel.value;
-		const map = { ...ctx.settings.favoriteGroupOf };
-		if (g === FAV_GROUP_NONE) delete map[fav.id];
-		else map[fav.id] = g;
-		ctx.settings.favoriteGroupOf = map;
-		ctx.saveSettings();
-		renderFavoritesList(ctx); // 整页重渲（搜索词经 favKeyword 恢复）
+	const wrap = createDiv({ cls: "pt-fav-card-wrap", attr: { "data-cpm-fav-row": id } });
+	const card = createPluginCard(plugin, ctx.translatedResults?.[id], {
+		t: ctx.t,
+		settings: ctx.settings,
+		installedIds: ctx.installedIds,
+		enabledIds: ctx.enabledIds,
+		aiSearchResult: ctx.aiSearchResult ?? null,
+		compareSet: ctx.compareSet,
+		favoritesSet: ctx.favoritesSet,
+		smartSignals: ctx.smartSignals,
+		// 卡片高度固定，描述展开不改变布局
+		onDescToggle: () => {},
+		// 「🍎 系统翻译」成功 → 落库沉淀（cache + tmApproved）
+		onSysTranslatePersist: (pid, name, desc) => {
+			ctx.translator?.persistSystemTranslation?.(pid, name, desc);
+			ctx.saveTranslatorData?.();
+		},
+		// 卡片电源按钮：切换已安装插件启用/禁用
+		onToggleEnabled: (pid) => {
+			const p = ctx.plugins.find((x) => x.id === pid);
+			if (p) void handleToggleEnabled(ctx, p);
+		},
 	});
+	wrap.appendChild(card);
 
-	// 取消收藏
-	const rmBtn = createEl("button", {
-		cls: "pt-fav-remove clickable-icon",
-		text: ctx.t("fav.remove"),
-		attr: { type: "button", "aria-label": ctx.t("fav.remove"), "data-cpm-fav-remove": "" },
+	// 换组按钮：放在卡片头行「插件名 → 安装按钮」之间，紧跟插件名右侧。
+	// 之前把 <select> 绝对定位在卡片右上角会与安装胶囊重叠，外置手柄又占用额外列宽；
+	// 现在归位到头行内、插件名右边，既不打架又始终可见，点击弹出原生 Menu 选组。
+	const groupBtn = createEl("button", {
+		cls: "pt-card-group-btn",
+		attr: { type: "button", "aria-label": ctx.t("fav.move.ph"), title: ctx.t("fav.move.ph") },
 	});
-	row.appendChild(rmBtn);
-	rmBtn.addEventListener("click", () => {
-		ctx.toggleFavorite(fav.id); // 切换语义：已收藏 → 取消，内部同步 settings + favoritesSet + 落盘
-		renderFavoritesList(ctx); // 整页重渲（搜索词经 favKeyword 恢复）
+	setIcon(groupBtn, "folder");
+	groupBtn.addEventListener("click", (e) => {
+		e.stopPropagation();
+		const menu = new Menu();
+		const current = ctx.settings.favoriteGroupOf[id] || "";
+		const addOption = (label: string, value: string, isChecked: boolean) => {
+			menu.addItem((item) =>
+				item
+					.setTitle(label)
+					.setChecked(isChecked)
+					.onClick(() => {
+						const map = { ...ctx.settings.favoriteGroupOf };
+						if (value === FAV_GROUP_NONE) delete map[id];
+						else map[id] = value;
+						ctx.settings.favoriteGroupOf = map;
+						ctx.saveSettings();
+						renderFavoritesList(ctx); // 整页重渲（搜索词经 favKeyword 恢复）
+					}),
+			);
+		};
+		for (const g of listGroups(ctx)) {
+			addOption(g, g, g === current);
+		}
+		menu.addSeparator();
+		addOption(ctx.t("fav.group.none"), FAV_GROUP_NONE, current === "");
+		const rect = groupBtn.getBoundingClientRect();
+		menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 	});
-	return row;
+	const headRow = card.querySelector<HTMLElement>(".pt-card-head-row");
+	const installRef = headRow?.querySelector<HTMLElement>(".pt-card-install-btn");
+	if (headRow && installRef) headRow.insertBefore(groupBtn, installRef);
+	else wrap.appendChild(groupBtn);
+	return wrap;
 }
 
 /** 重命名组：替换组名清单项 + 遍历替换成员映射值（收藏量小，O(n) 足够） */

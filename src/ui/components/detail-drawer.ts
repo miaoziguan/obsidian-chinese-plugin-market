@@ -846,8 +846,6 @@ export class PluginDetailDrawer {
 		const iconId = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
 		const iconDownload = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 		const iconClock = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
-		const iconStatus = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
-		const iconStatusOff = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`;
 
 		const addMeta = (labelKey: I18nKey, value: string, icon: string) => {
 			if (!value) return;
@@ -863,16 +861,8 @@ export class PluginDetailDrawer {
 			const u = formatUpdated(p.updated);
 			if (u) addMeta("detail.updated", u, iconClock);
 		}
-		if (this.plugin.settings && p.id) {
-			try {
-				const plugins = asAppInternals(this.app).plugins;
-				if (plugins?.manifests?.[p.id]) {
-					const enabled = plugins.enabledPlugins?.has?.(p.id);
-					addMeta("detail.status", enabled ? this.t("card.installed.on") : this.t("card.installed.off"),
-						enabled ? iconStatus : iconStatusOff);
-				}
-			} catch { /* 半官方 API，容错忽略 */ }
-		}
+		// 「状态」不再进元信息行：与下方操作区首位的状态标签（已启用 / 未启用）完全重复。
+		// 安装/启用状态属于动作语义，统一由操作区那一个标签承载。
 
 	// ── 依赖 / 被依赖（数据集未加载时整块不渲染，零噪音）──
 	if (this.deps) {
@@ -1183,14 +1173,14 @@ export class PluginDetailDrawer {
 				const menu = new Menu();
 				const current = this.getCurrentReadmeChannel();
 				for (const ch of channels) {
+					// 不用 setChecked：当前通道由按钮文案标示，菜单内不画勾（全站统一）
 					menu.addItem((item) =>
-						item
-							.setTitle(this.readmeChannelLabel(ch))
-							.setChecked(ch === current)
-							.onClick(() => {
+						item.setTitle(this.readmeChannelLabel(ch)).onClick(() => {
+							if (ch !== current) {
 								this.readmeChannel = ch;
 								this.updateChannelBtn();
-							})
+							}
+						}),
 					);
 				}
 				// 锚点必须是「整个胶囊」(.pt-detail-readme-translate)，不能是右侧那个小 ⌄：

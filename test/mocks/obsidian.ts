@@ -111,6 +111,10 @@ export class Menu {
 		Menu.lastShown = this;
 	}
 
+	showAtPosition(): void {
+		Menu.lastShown = this;
+	}
+
 	close(): void {}
 }
 

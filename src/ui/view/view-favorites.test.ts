@@ -1,8 +1,10 @@
 /**
- * 「收藏」页签渲染器测试：分组区块 / 换组 / 新建·重命名·删除组 / 取消收藏 / 空态。
+ * 「收藏」页签渲染器测试（卡片形态）：分组区块 / 换组 / 新建·重命名·删除组 /
+ * 卡片交互走 onCardClick 委托 / 空态。
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { Menu } from "obsidian";
 import { renderFavoritesList, FAV_GROUP_ALL, FAV_GROUP_NONE } from "./view-favorites";
 import type { ViewContext } from "./view-context";
 
@@ -25,22 +27,55 @@ vi.mock("@ui/modals/prompt-modal", () => ({
 	},
 }));
 
+/**
+ * DOM 辅助方法补齐（与 view-beta.test.ts 同源）：
+ * jsdom 下 Obsidian 挂在 HTMLElement.prototype 上的 createEl/createDiv/createSpan
+ * 不存在，卡片渲染（card-render）需要，就地补。
+ */
+function patchDomHelpers() {
+	const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+	if (!proto.createEl) {
+		proto.createEl = function (this: HTMLElement, tag: string, o?: { cls?: string; text?: string; attr?: Record<string, string> }) {
+			const el = document.createElement(tag);
+			if (o?.cls) el.className = o.cls;
+			if (o?.text != null) el.textContent = o.text;
+			if (o?.attr) for (const [k, v] of Object.entries(o.attr)) el.setAttribute(k, String(v));
+			this.appendChild(el);
+			return el;
+		};
+	}
+	if (!proto.createDiv) proto.createDiv = function (this: HTMLElement, o?: unknown) { return (this.createEl as (t: string, o?: unknown) => HTMLElement)("div", o); };
+	if (!proto.createSpan) proto.createSpan = function (this: HTMLElement, o?: unknown) { return (this.createEl as (t: string, o?: unknown) => HTMLElement)("span", o); };
+	if (!proto.setText) proto.setText = function (this: HTMLElement, t: string) { this.textContent = t; return this; };
+	if (!proto.hasClass) proto.hasClass = function (this: HTMLElement, c: string) { return this.classList.contains(c); };
+}
+
 function makeCtx(over?: Partial<Record<string, unknown>>) {
 	const settings = {
 		favoriteGroupNames: ["AI 工具"] as string[],
 		favoriteGroupOf: { alpha: "AI 工具" } as Record<string, string>,
 		...(over?.["settings"] as object | undefined),
 	};
+	const plugins = [
+		{ id: "alpha", name: "Alpha", description: "", author: "", downloads: 0, updated: "" },
+		{ id: "beta", name: "Beta", description: "", author: "", downloads: 0, updated: "" },
+	];
 	const store = {
 		settings,
 		toggleFavorite: vi.fn(),
 		saveSettings: vi.fn(),
+		saveTranslatorData: vi.fn(),
 		openDetailDrawer: vi.fn(),
+		onCardClick: vi.fn(),
 		favoritesSet: new Set(["alpha", "beta"]),
-		allPlugins: [
-			{ id: "alpha", name: "Alpha" },
-			{ id: "beta", name: "Beta" },
-		],
+		plugins,
+		allPlugins: plugins,
+		translatedResults: {} as Record<string, unknown>,
+		installedIds: new Set<string>(),
+		enabledIds: new Set<string>(),
+		aiSearchResult: null,
+		compareSet: new Set<string>(),
+		smartSignals: new Map(),
 		viewTab: "favorites" as const,
 		favoriteGroupFilter: FAV_GROUP_ALL,
 		favoritesListEl: document.createElement("div"),
@@ -55,6 +90,7 @@ function makeCtx(over?: Partial<Record<string, unknown>>) {
 				"fav.group.rename.ph": "输入新的分组名称",
 				"fav.group.delete": "删除分组",
 				"fav.group.delete.confirm": "删除分组「{name}」？",
+				"fav.move.ph": "换组",
 				"fav.count": "找到 {shown} / 共 {total}",
 				"fav.empty": "暂无收藏",
 				"fav.empty.filtered": "无匹配",
@@ -72,6 +108,9 @@ describe("view-favorites 渲染器", () => {
 		document.body.innerHTML = "";
 		promptSubmit.current = null;
 		(window as { confirm?: unknown }).confirm = vi.fn(() => false);
+		// 卡片渲染（card-render）依赖 Obsidian 挂在 HTMLElement.prototype 上的
+		// createEl/createDiv/createSpan，jsdom 没有，补上
+		patchDomHelpers();
 	});
 
 	it("按组分块渲染：有名组在前、未分组最后，计数正确", () => {
@@ -83,31 +122,55 @@ describe("view-favorites 渲染器", () => {
 		expect(el.querySelector(".pt-css-count")?.textContent).toContain("2 / 共 2");
 	});
 
-	it("点击行内插件名打开详情", () => {
+	it("收藏项渲染为浏览页同款卡片 + 右侧分组手柄", () => {
 		const ctx = makeCtx();
 		renderFavoritesList(ctx);
-		const row = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
-		(row.querySelector<HTMLButtonElement>(".pt-fav-name")!).click();
-		expect(ctx.openDetailDrawer).toHaveBeenCalledWith("beta");
+		const wrap = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
+		expect(wrap.querySelector(".pt-card")).not.toBeNull();
+		expect(wrap.querySelector("select.pt-css-status")).toBeNull();
+		const handle = wrap.querySelector<HTMLButtonElement>(".pt-card-group-btn")!;
+		expect(handle).not.toBeNull();
+		expect(handle.getAttribute("aria-label")).toBeTruthy();
 	});
 
-	it("行内下拉换组：写回 favoriteGroupOf 并持久化", () => {
+	it("点击卡片走 onCardClick 事件委托（与浏览页同一套交互）", () => {
 		const ctx = makeCtx();
 		renderFavoritesList(ctx);
-		const row = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
-		const sel = row.querySelector<HTMLSelectElement>("select")!;
-		sel.value = "AI 工具";
-		sel.dispatchEvent(new Event("change"));
+		const wrap = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
+		(wrap.querySelector(".pt-card") as HTMLElement).click();
+		expect(ctx.onCardClick).toHaveBeenCalledTimes(1);
+	});
+
+	it("点击分组手柄：Menu 选组后写回 favoriteGroupOf 并持久化", () => {
+		const ctx = makeCtx();
+		renderFavoritesList(ctx);
+		const wrap = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
+		const handle = wrap.querySelector<HTMLButtonElement>(".pt-card-group-btn")!;
+		handle.click();
+		const menu = (Menu as unknown as { lastShown: { items: { title: string; cb: (() => void) | null }[] } }).lastShown;
+		const item = menu.items.find((i) => i.title === "AI 工具");
+		expect(item).toBeTruthy();
+		item!.cb!();
 		expect(ctx.settings.favoriteGroupOf["beta"]).toBe("AI 工具");
 		expect(ctx.saveSettings).toHaveBeenCalled();
 	});
 
-	it("取消收藏：调 toggleFavorite 并重渲染（行消失）", () => {
+	it("星标取消收藏：委托后 favoritesSet 变化触发重渲（卡片消失），搜索词保留", () => {
 		const ctx = makeCtx();
 		renderFavoritesList(ctx);
-		const row = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
-		row.querySelector<HTMLButtonElement>('[data-cpm-fav-remove]')!.click();
-		expect(ctx.toggleFavorite).toHaveBeenCalledWith("beta");
+		// 模拟真实委托行为：onCardClick 里 toggleFavorite 移除收藏
+		(ctx.onCardClick as ReturnType<typeof vi.fn>).mockImplementation(() => {
+			ctx.favoritesSet.delete("beta");
+		});
+		const search = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
+		search.value = "bet";
+		search.dispatchEvent(new Event("input"));
+		const wrap = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
+		(wrap.querySelector(".pt-card") as HTMLElement).click();
+		expect(ctx.toggleFavorite).not.toHaveBeenCalled(); // 取消由真实委托完成，页面只负责重渲
+		expect(ctx.favoritesListEl!.querySelector('[data-cpm-fav-row="beta"]')).toBeNull();
+		const search2 = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
+		expect(search2.value).toBe("bet");
 	});
 
 	it("新建分组：弹窗输入后组出现在清单与下拉", () => {
@@ -167,20 +230,8 @@ describe("view-favorites 渲染器", () => {
 		const ctx = makeCtx();
 		ctx.favoriteGroupFilter = FAV_GROUP_NONE;
 		renderFavoritesList(ctx);
-		const rows = Array.from(ctx.favoritesListEl!.querySelectorAll(".pt-fav-row")).map((r) => r.getAttribute("data-cpm-fav-row"));
+		const rows = Array.from(ctx.favoritesListEl!.querySelectorAll("[data-cpm-fav-row]")).map((r) => r.getAttribute("data-cpm-fav-row"));
 		expect(rows).toEqual(["beta"]);
-	});
-
-	it("搜索后取消收藏：搜索框不重建，输入词保留", () => {
-		const ctx = makeCtx({});
-		renderFavoritesList(ctx);
-		const search = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
-		search.value = "bet";
-		search.dispatchEvent(new Event("input"));
-		const row = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="beta"]')!;
-		row.querySelector<HTMLButtonElement>("[data-cpm-fav-remove]")!.click();
-		const search2 = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
-		expect(search2.value).toBe("bet");
 	});
 
 	it("搜索后换组：搜索框不重建，输入词保留", () => {
@@ -189,10 +240,13 @@ describe("view-favorites 渲染器", () => {
 		const search = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
 		search.value = "al";
 		search.dispatchEvent(new Event("input"));
-		const row = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="alpha"]')!;
-		const sel = row.querySelector<HTMLSelectElement>("select")!;
-		sel.value = FAV_GROUP_NONE;
-		sel.dispatchEvent(new Event("change"));
+		const wrap = ctx.favoritesListEl!.querySelector<HTMLElement>('[data-cpm-fav-row="alpha"]')!;
+		const handle = wrap.querySelector<HTMLButtonElement>(".pt-card-group-btn")!;
+		handle.click();
+		const menu = (Menu as unknown as { lastShown: { items: { title: string; cb: (() => void) | null }[] } }).lastShown;
+		const item = menu.items.find((i) => i.title === ctx.t("fav.group.none"));
+		expect(item).toBeTruthy();
+		item!.cb!();
 		const search2 = ctx.favoritesListEl!.querySelector<HTMLInputElement>("[data-cpm-fav-search]")!;
 		expect(search2.value).toBe("al");
 	});
