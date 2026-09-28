@@ -134,7 +134,15 @@
 	/* 两侧统一留白：源头变量——改这一处即可整体调整所有板块间距。
 	   featured 区在 .pt-view 之外，需单独引用同一变量以保证等距。 */
 	--pt-side-pad: 28px;
-	padding: var(--pt-space-sm) var(--pt-side-pad) var(--pt-space-md);
+	/* 安全区令牌：统一管理 env(safe-area-inset-*)，桌面/非刘海设备回退 0px。
+	   抽屉浮层 .pt-drawer 也各自定义一份（它不在 .pt-view 内），供 .pt-detail-* 继承。
+	   直接落在根容器、对所有设备生效：非移动端 env 回退 0px，无任何副作用。 */
+	--pt-safe-top: env(safe-area-inset-top, 0px);
+	--pt-safe-bottom: env(safe-area-inset-bottom, 0px);
+	--pt-safe-left: env(safe-area-inset-left, 0px);
+	--pt-safe-right: env(safe-area-inset-right, 0px);
+	padding: var(--pt-space-sm) var(--pt-side-pad);
+	padding-bottom: calc(var(--pt-space-md) + var(--pt-safe-bottom));
 	gap: var(--pt-space-sm);
 }
 
@@ -340,6 +348,277 @@
 	transition: color var(--pt-duration-fast) var(--pt-ease),
 		transform var(--pt-duration-fast) var(--pt-ease-spring);
 	transform: none;
+}
+
+/* 移动端（.is-tablet / .is-phone / .is-mobile…）核心会用特异性 (0,2,1) 的规则改写
+   按钮 padding（核心实测：.is-tablet button:not(.clickable-icon) { padding: 4px 20px }）。
+   工具栏图标按钮多为「width:32px + padding:0」即 (0,1,0)，会被它压过：40px 横向 padding
+   把 32px 按钮的内容盒挤成 0，而内部 svg 是 flex 项、默认可收缩，于是被压到 0 宽 ——
+   图标整体消失（桌面正常、平板/移动端「一批图标集体消失」即此因）。
+   这里用 .pt-view 前缀把 padding 提到 (0,3,0) 稳固覆盖；并禁止 svg 收缩做兜底。
+   与「正常显示」的足迹/设置/溢出按钮（无固定 width、未被该规则影响）保持同一套样式。 */
+.pt-view .pt-header-actions .pt-btn,
+.theme-light .pt-view .pt-header-actions .pt-btn,
+.theme-dark .pt-view .pt-header-actions .pt-btn {
+	padding: 0 8px;
+}
+.pt-view .pt-header-actions .pt-btn svg.svg-icon,
+.theme-light .pt-view .pt-header-actions .pt-btn svg.svg-icon,
+.theme-dark .pt-view .pt-header-actions .pt-btn svg.svg-icon {
+	flex: 0 0 auto;
+}
+
+/* 卡片操作行图标按钮（了解/对比/评测/收藏/卸载/系统翻译，及 beta 视图同容器按钮）：
+   与上一条同因同策。核心那条 (0,2,1) 规则同样命中卡片里的 <button class="pt-icon-btn">
+   （它们没有 .clickable-icon），把 26px 容器撑成 40px 并把内部 svg 压成 0 宽 ——
+   平板端「卡片一排图标集体消失」即此因（实测：btnW 40 / svgW 0）。
+   这里同样用 (0,3,0) 前缀锁回 padding 并禁止 svg 收缩；触控热区由 .pt-mobile 的
+   ::after 隐形扩边（inset: -9px）承担，不依赖 padding，故桌面/平板视觉一致。 */
+.pt-view .pt-card-actions-row .pt-icon-btn,
+.theme-light .pt-view .pt-card-actions-row .pt-icon-btn,
+.theme-dark .pt-view .pt-card-actions-row .pt-icon-btn {
+	padding: 0;
+}
+.pt-view .pt-card-actions-row .pt-icon-btn svg,
+.theme-light .pt-view .pt-card-actions-row .pt-icon-btn svg,
+.theme-dark .pt-view .pt-card-actions-row .pt-icon-btn svg {
+	flex: 0 0 auto;
+}
+
+/* 同类残留（同因同策）：主视图 / 抽屉里其它「固定尺寸 + padding:0」的纯图标按钮，
+   在平板端同样被核心规则撑成 40px 宽、svg 压成 0 —— 图标消失：
+   搜索清除 / 收藏卡片「换组」手柄 / 回到顶部 / 一键置底 / 抽屉关闭。
+   用复类名把 padding 提回 (0,3,0) 压过核心，并禁止 svg 收缩；
+   新增固定尺寸纯图标按钮时请登记在此，或直接给它 .clickable-icon（核心规则的 :not 会跳过）。 */
+.pt-view .pt-search-clear.pt-search-clear,
+.pt-view .pt-card-group-btn.pt-card-group-btn,
+.pt-view .pt-back-top.pt-back-top,
+.pt-view .pt-scroll-bottom.pt-scroll-bottom,
+.pt-drawer .pt-drawer-close.pt-drawer-close {
+	padding: 0;
+}
+.pt-view .pt-search-clear.pt-search-clear svg,
+.pt-view .pt-card-group-btn.pt-card-group-btn svg,
+.pt-view .pt-back-top.pt-back-top svg,
+.pt-view .pt-scroll-bottom.pt-scroll-bottom svg,
+.pt-drawer .pt-drawer-close.pt-drawer-close svg {
+	flex: 0 0 auto;
+}
+
+/* ═══ 平板/触屏核心按钮内边距豁免（根因同上：核心 .is-tablet button:not(.clickable-icon)）═══
+   核心那条 padding: 4px 20px 特异性 (0,2,1)，会压过插件里所有 ≤(0,2,0) 的按钮内边距：
+   固定尺寸图标按钮内容盒归零（图标消失）、文字/胶囊按钮被撑成 4px 20px（变形）。
+   下面把每个按钮类的「桌面设计值」用 (0,3,0)+ 选择器重述一遍（值逐条取自其原规则，
+   含各自的 --变体；放在文件前部以保证与原层叠顺序一致），使平板端与桌面完全一致。
+   维护：新增自定义按钮时，若其 padding 规则特异性 < (0,3,0)（或没写 padding 而依赖 UA 值），
+   请在此登记：有设计值的照抄原值，没有的用 padding: revert。 */
+.pt-btn.pt-btn.pt-btn {
+	padding: 0 8px;
+}
+.pt-filter.pt-filter.pt-filter {
+	padding: 4px 8px;
+}
+.pt-sort-btn.pt-sort-btn.pt-sort-btn {
+	padding: 0;
+}
+.pt-sort-menu-item.pt-sort-menu-item.pt-sort-menu-item {
+	padding: 7px 12px;
+}
+.pt-sort-menu-item--fav.pt-sort-menu-item--fav.pt-sort-menu-item--fav {
+	padding-top: 9px;
+}
+.pt-mode-btn.pt-mode-btn.pt-mode-btn {
+	padding: 0 24px 0 12px;
+}
+.pt-mode-menu-item.pt-mode-menu-item.pt-mode-menu-item {
+	padding: 7px 12px;
+}
+.pt-toggle-filters.pt-toggle-filters.pt-toggle-filters {
+	padding: 0;
+}
+.pt-refresh.pt-refresh.pt-refresh {
+	padding: 0;
+}
+button.pt-check-update.pt-check-update.pt-check-update {
+	padding: 0;
+}
+button.pt-profile-dropdown.pt-profile-dropdown.pt-profile-dropdown {
+	padding: 0;
+}
+.pt-ai-icon-btn.pt-ai-icon-btn.pt-ai-icon-btn {
+	padding: 0;
+}
+.pt-journal-copy.pt-journal-copy.pt-journal-copy {
+	padding: 3px 10px;
+}
+.pt-facet-more.pt-facet-more.pt-facet-more {
+	padding: 4px 8px;
+}
+.pt-advanced .pt-filter.pt-filter {
+	padding: 4px 12px;
+}
+.pt-advanced .pt-facet-more.pt-facet-more {
+	padding: 4px 12px;
+}
+button.pt-facet-letter-btn.pt-facet-letter-btn.pt-facet-letter-btn {
+	padding: 0;
+}
+.pt-view .pt-select-btn.pt-select-btn {
+	padding: 2px 8px;
+}
+.pt-toolbar-reset.pt-toolbar-reset.pt-toolbar-reset {
+	padding: 4px 12px;
+}
+.pt-advanced-heading > .pt-toolbar-reset--inline.pt-toolbar-reset--inline {
+	padding: 2px 8px;
+}
+.pt-card-install-btn.pt-card-install-btn.pt-card-install-btn {
+	padding: var(--pt-space-2xs) var(--pt-space-sm);
+}
+.pt-meta-chip.pt-meta-chip.pt-meta-chip {
+	padding: var(--pt-space-2xs) var(--pt-space-sm);
+}
+.pt-meta-chip.pt-meta-chip[data-action="author"] {
+	padding: 0;
+}
+.pt-guide-chip.pt-guide-chip.pt-guide-chip {
+	padding: var(--pt-space-sm) var(--pt-space-lg);
+}
+.pt-journal-chip.pt-journal-chip.pt-journal-chip {
+	padding: 2px 10px;
+}
+.pt-journal-star.pt-journal-star.pt-journal-star {
+	padding: 0 2px;
+}
+.pt-drawer-back.pt-drawer-back.pt-drawer-back {
+	padding: 2px 4px;
+}
+.pt-detail-btn.pt-detail-btn.pt-detail-btn {
+	padding: 7px 14px;
+}
+.pt-detail-btn.pt-detail-btn.mod-cta {
+	padding: var(--pt-space-sm) var(--pt-space-xl);
+}
+.pt-detail-btn--readme-translate.pt-detail-btn--readme-translate.pt-detail-btn--readme-translate {
+	padding: 4px 12px;
+}
+.pt-detail-btn--insight.pt-detail-btn--insight.pt-detail-btn--insight {
+	padding: 4px 12px;
+}
+.pt-detail-readme-translate .pt-detail-btn.pt-detail-btn {
+	padding-left: 10px;
+}
+.pt-detail-btn--caret.pt-detail-btn--caret.pt-detail-btn--caret {
+	padding-left: 6px;
+}
+.pt-detail-btn--readme-back.pt-detail-btn--readme-back.pt-detail-btn--readme-back {
+	padding: 4px 12px;
+}
+.pt-detail-section-head--readme .pt-detail-btn.pt-detail-btn {
+	padding: 7px 14px;
+}
+.pt-detail-section-head--readme .pt-detail-readme-translate .pt-detail-btn--caret {
+	padding: 7px 8px;
+}
+.pt-detail-readme-error-actions .pt-detail-btn.pt-detail-btn {
+	padding: var(--pt-space-2xs) var(--pt-space-sm);
+}
+.pt-compare-export-toggle.pt-compare-export-toggle.pt-compare-export-toggle {
+	padding: var(--pt-space-xs) var(--pt-space-sm);
+}
+.pt-compare-export-item.pt-compare-export-item.pt-compare-export-item {
+	padding: var(--pt-space-sm) var(--pt-space-md);
+}
+.pt-compare-ai-btn.pt-compare-ai-btn.pt-compare-ai-btn {
+	padding: var(--pt-space-xs) var(--pt-space-lg);
+}
+.pt-compare-ai-cancel.pt-compare-ai-cancel.pt-compare-ai-cancel {
+	padding: 2px var(--pt-space-sm);
+}
+.pt-compare-ai-retry.pt-compare-ai-retry.pt-compare-ai-retry {
+	padding: 2px var(--pt-space-sm);
+}
+.pt-compare-tray-open.pt-compare-tray-open.pt-compare-tray-open {
+	padding: var(--pt-space-sm) var(--pt-space-lg);
+}
+.pt-compare-tray-clear.pt-compare-tray-clear.pt-compare-tray-clear {
+	padding: var(--pt-space-sm) var(--pt-space-sm);
+}
+.pt-compare-back-btn.pt-compare-back-btn.pt-compare-back-btn {
+	padding: 2px 6px;
+}
+.pt-compare-add-btn.pt-compare-add-btn.pt-compare-add-btn {
+	padding: 3px 10px;
+}
+.pt-compare-card-remove.pt-compare-card-remove.pt-compare-card-remove {
+	padding: 2px 4px;
+}
+.pt-mobile .pt-overflow-btn.pt-overflow-btn {
+	padding: 0 10px;
+}
+
+@container pt-header (max-width: 760px) {
+	.pt-header-actions > .pt-overflow-btn.pt-overflow-btn { padding: 0 6px; }
+}
+
+@container pt-header (max-width: 520px) {
+	.pt-mode-btn.pt-mode-btn.pt-mode-btn { padding: 0 18px 0 10px; }
+}
+.cpm-group-btn.cpm-group-btn.cpm-group-btn {
+	padding: 0;
+}
+.pt-manage-color.pt-manage-color.pt-manage-color {
+	padding: 0;
+}
+.pt-view-tab.pt-view-tab.pt-view-tab {
+	padding: 4px 12px;
+}
+.pt-updates-selectall.pt-updates-selectall.pt-updates-selectall {
+	padding: 2px 8px;
+}
+.pt-updates-deselect.pt-updates-deselect.pt-updates-deselect {
+	padding: 2px 8px;
+}
+.pt-updates-update-sel.pt-updates-update-sel.pt-updates-update-sel {
+	padding: 2px 8px;
+}
+.pt-updates-update-all.pt-updates-update-all.pt-updates-update-all {
+	padding: 2px 8px;
+}
+.pt-beta-install.pt-beta-install.pt-beta-install {
+	padding: 2px 8px;
+}
+.pt-version-row.pt-version-row.pt-version-row {
+	padding: 6px 8px;
+}
+.pt-detail-dep-fix.pt-detail-dep-fix.pt-detail-dep-fix {
+	padding: 1px 8px;
+}
+.pt-css-bar .pt-css-new.pt-css-new {
+	padding: 2px 8px;
+}
+.pt-css-bar .pt-css-groups.pt-css-groups {
+	padding: 2px 8px;
+}
+.pt-fav-group-btn.pt-fav-group-btn.pt-fav-group-btn {
+	padding: 2px 6px;
+}
+
+/* 无自定义 padding、依赖 UA 默认值的按钮（设置页等）：revert 回滚核心那条改写 */
+.pt-active-chip-clear.pt-active-chip-clear.pt-active-chip-clear {
+	padding: revert;
+}
+.pt-selfhosted-del.pt-selfhosted-del.pt-selfhosted-del {
+	padding: revert;
+}
+.pt-profile-save.pt-profile-save.pt-profile-save {
+	padding: revert;
+}
+.pt-profile-del.pt-profile-del.pt-profile-del {
+	padding: revert;
+}
+.cpm-open-btn.cpm-open-btn.cpm-open-btn {
+	padding: revert;
 }
 
 /* 分组首元素保留左边框；其余边框已在上方清空。 */
@@ -1970,19 +2249,12 @@ button.pt-card-install-btn--installed {
 	opacity: 1;
 	transform: translateY(0);
 }
-/* 触屏设备始终显示操作按钮（无 hover 状态）并增大触控区域 */
+/* 触屏设备始终显示操作按钮（无 hover 状态）；图标尺寸交由上面的统一令牌，
+   不再在此单独放大，避免与桌面视觉不一致 */
 @media (hover: none) {
 	.pt-card-actions-row {
 		opacity: 1;
 		transform: none;
-	}
-	.pt-icon-btn {
-		width: 32px;
-		height: 32px;
-	}
-	.pt-icon-btn svg {
-		width: 16px;
-		height: 16px;
 	}
 }
 
@@ -2525,6 +2797,12 @@ button.pt-card-install-btn--installed {
 	cursor: pointer;
 	text-decoration: none;
 	transition: color var(--pt-duration-fast) var(--pt-ease);
+}
+/* 图标 SVG 统一尺寸：所有图标按钮内 svg 锁定 16px，桌面/移动/窄容器三处一致，
+   消除「移动端被单独放大到 22px」导致的偏大/错位/尺寸不统一（与 .pt-btn svg 同源）。 */
+.pt-icon-btn svg {
+	width: 16px;
+	height: 16px;
 }
 .theme-light .pt-icon-btn,
 .theme-dark .pt-icon-btn {
@@ -3308,8 +3586,14 @@ button.pt-card-install-btn--installed {
 	transform: translateX(100%);
 	opacity: 0;
 	transition: transform var(--pt-duration-normal) var(--pt-ease), opacity var(--pt-duration-normal) var(--pt-ease);
+	/* 安全区令牌（抽屉是浮层、不在 .pt-view 内，故在此独立定义，供内部 .pt-detail-* 继承） */
+	--pt-safe-top: env(safe-area-inset-top, 0px);
+	--pt-safe-bottom: env(safe-area-inset-bottom, 0px);
+	--pt-safe-left: env(safe-area-inset-left, 0px);
+	--pt-safe-right: env(safe-area-inset-right, 0px);
 	padding: var(--pt-space-lg);
-	padding-top: var(--pt-space-xl);
+	padding-top: calc(var(--pt-space-xl) + var(--pt-safe-top));
+	padding-bottom: calc(var(--pt-space-lg) + var(--pt-safe-bottom));
 	/* 容器查询根：以「抽屉/pane 宽度」而非窗口宽度决定双栏断点，
 	 * 这样在 Obsidian 把插件视图放在窄侧栏时不会误触双栏。
 	 * 必须挂在 drawer（本身不滚动）上，不能挂到 .pt-detail-page-scroll：
@@ -3370,8 +3654,8 @@ button.pt-card-install-btn--installed {
 	/* 顶部 padding = 头部固定块高度（JS 写入 --pt-detail-head-h），让 README
 	   正文从头部下方开始滚动；头部是 absolute 脱离文档流，需此占位避免遮挡。
 	   +40px 与 .pt-detail-head-block 的 top:40px 顶部留白对齐。 */
-	padding-top: calc(var(--pt-detail-head-h, 0px) + 40px);
-	padding-bottom: var(--pt-space-2xl);
+	padding-top: calc(var(--pt-detail-head-h, 0px) + 40px + var(--pt-safe-top));
+	padding-bottom: calc(var(--pt-space-2xl) + var(--pt-safe-bottom));
 	animation: pt-detail-fadein 0.25s var(--pt-ease);
 }
 
@@ -3494,8 +3778,9 @@ button.pt-card-install-btn--installed {
 .pt-detail-head-block {
 	position: absolute;
 	/* 顶部预留 40px 留白（避免详情页贴顶）：
-	   头部整块下移，滚动容器 padding-top 同步 +40 占位（见 .pt-detail-page-scroll） */
-	top: 40px;
+	   头部整块下移，滚动容器 padding-top 同步 +40 占位（见 .pt-detail-page-scroll）。
+	   再加 safe-area-top 避让移动端状态栏（与 .pt-detail-page-scroll 同步） */
+	top: calc(40px + var(--pt-safe-top));
 	left: 0;
 	right: 0;
 	z-index: 5;
@@ -6090,33 +6375,57 @@ button.pt-card-install-btn--installed {
 /*  #5 移动端触摸适配：放大触控热区（iOS 人机界面指南推荐 ≥44px） */
 /*  仅作用于 .pt-mobile（view-chrome 在移动端给视图根加的类），不影响桌面。 */
 /* ═══════════════════════════════════════════════════ */
-.pt-mobile .pt-search button,
-.pt-mobile .pt-search-field button,
-.pt-mobile .pt-sort-btn,
-.pt-mobile .pt-sort-wrap > button,
-.pt-mobile .pt-sort-menu button,
-.pt-mobile .pt-source-filters button,
-.pt-mobile .pt-facet-chips button,
-.pt-mobile .pt-toolbar-reset,
-.pt-mobile .pt-advanced-heading > .pt-toolbar-reset--inline,
-.pt-mobile .pt-card-install-btn,
-.pt-mobile .pt-card .pt-icon-btn,
-.pt-mobile .pt-drawer-head button,
-.pt-mobile .pt-back-top,
-.pt-mobile .pt-scroll-bottom {
-	min-height: 44px;
-	min-width: 44px;
-	padding-top: 8px;
-	padding-bottom: 8px;
+/* 移动端图标/按钮：与桌面零视觉差异（统一 26px 容器 / 16px svg / 32px 按钮），
+   仅用隐形 ::after 扩大触摸热区到 ~44px，不撑大视觉、不溢出窄卡片。
+   取代原先「把按钮放大到 44px」的补丁——那套会在按桌面尺寸排的密集网格里撑爆、错位、不一致。
+   图标尺寸由上方统一令牌锁定 16px，桌面/移动/窄容器三处一致。 */
+.pt-mobile .pt-icon-btn,
+.pt-mobile .pt-btn {
+	position: relative;
 }
-/* 工具栏主按钮（刷新 / AI 翻译 / 回顶 / 触底）水平内边距也放宽，便于手指命中 */
-.pt-mobile .pt-search-field button,
-.pt-mobile .pt-sort-wrap > button,
-.pt-mobile .pt-card-install-btn,
-.pt-mobile .pt-back-top,
-.pt-mobile .pt-scroll-bottom {
-	padding-left: 14px;
-	padding-right: 14px;
+.pt-mobile .pt-icon-btn::after,
+.pt-mobile .pt-btn::after {
+	content: "";
+	position: absolute;
+	inset: -9px;
+	border-radius: var(--pt-radius);
+}
+/* 卡片操作行图标间距放宽，避免误触相邻项（视觉仍与桌面一致） */
+.pt-mobile .pt-card-actions-row {
+	gap: 6px;
+}
+/* 收窄侧边距（桌面 28 → 16），统一窄屏留白节奏 */
+.pt-mobile {
+	--pt-side-pad: 16px;
+}
+/* 搜索区在移动端保持与桌面同一套扁平形态：不允许 Obsidian 移动端 / 主题把表单灰底与圆角
+   加回输入框。根因：移动端对 <input> 的全局表单样式特异性高于 .pt-search-input(0,1,0)，
+   而亮色主题下没有暗色分支那条兜底（1489 一带）、宽屏平板上 @container ≤520 的兜底
+   （6248 一带）也不生效 → 漏出 rgb(233,233,234) 的圆角灰块（桌面端不出现，两端不一致）。
+   此处与那两处同源同策，只把触发条件从「暗色」/「容器窄」改为「移动端设备」。 */
+/* 容器只清底色/圆角/投影，绝不动 border —— 下划线是本控件唯一的边界表达。
+   注意：pt-view 与 pt-mobile 加在「同一个元素」上，故用复合类 .pt-view.pt-mobile（非后代 .pt-mobile .pt-view）。 */
+.pt-view.pt-mobile .pt-search {
+	background: transparent;
+	background-color: transparent;
+	border-radius: 0;
+	box-shadow: none;
+}
+.pt-view.pt-mobile .pt-search-field {
+	background: transparent;
+	background-color: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+.pt-view.pt-mobile .pt-search .pt-search-input {
+	appearance: none;
+	-webkit-appearance: none;
+	background: transparent;
+	background-color: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
 }
 /* 搜索模式切换（网页/AI/名称…）与筛选 chip 行间距放宽，避免误触相邻项 */
 .pt-mobile .pt-mode-wrap,
@@ -6130,24 +6439,31 @@ button.pt-card-install-btn--installed {
 /*  #7 移动端响应式布局：单列卡片 + 工具栏溢出菜单       */
 /* ═══════════════════════════════════════════════════ */
 
-/* ⋮ 溢出按钮：默认隐藏，仅在 .pt-mobile（移动设备）或窄容器（≤520px）下显示，
-   避免桌面端与散开的 refresh / checkUpdate / AI 翻译按钮同时出现造成重复。 */
+/* ⋮ 溢出按钮：默认隐藏，只在容器真的放不下（≤760px，见下方容器查询）时显示。
+   与「隐藏 refresh / checkUpdate / AI 翻译等次要图标」是同一份条件，两者必须成对，
+   否则就会出现「图标与 ⋮ 菜单里的同名操作同时存在」的重复。
+   修过一次：此前 .pt-mobile 无条件显示 ⋮（与容器多宽无关），而隐藏图标只看容器宽度，
+   于是平板上容器够宽、图标本来就排得下，却仍多出一个 ⋮ 与图标重复。
+   正确取向：平板/大屏直点图标，⋮ 只在窄容器兜底，不因「是移动设备」就折叠。 */
 .pt-overflow-btn {
 	display: none;
 }
 
-/* 移动端溢出菜单按钮（收起 刷新/AI翻译 等次要操作） */
+/* 移动端 ⋮：只给触控尺寸（≥44px），不管显隐 ——
+   显隐统一由下方 @container pt-header (max-width: 760px) 决定，
+   避免在宽容器（平板）下多出一个与图标重复的 ⋮。 */
 .pt-mobile .pt-overflow-btn {
-	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	min-height: 44px;
-	min-width: 44px;
-	padding: 0 10px;
 	border: none;
 	background: none;
 	color: var(--pt-text-muted, var(--text-muted));
 	cursor: pointer;
+}
+.pt-mobile .pt-header-actions > .pt-overflow-btn {
+	min-height: 44px;
+	min-width: 44px;
+	padding: 0 10px;
 }
 .pt-mobile .pt-overflow-btn:active {
 	color: var(--pt-text-strong, var(--text-normal));
@@ -6191,14 +6507,16 @@ button.pt-card-install-btn--installed {
 }
 
 @container pt-header (max-width: 760px) {
-	/* 进一步把次要按钮收进 ⋮ 菜单，避免 520-760 之间按钮过多仍换行 */
+	/* 进一步把次要按钮收进 ⋮ 菜单，避免 520-760 之间按钮过多仍换行。
+	   清单必须与 ⋮ 菜单里的项一一对应：刷新 / 检查更新 / 全部更新 / AI 翻译（+AI 进度指示）。
+	   注：组合下拉（profile-dropdown）与足迹（header-footprint）此前也在这里被隐藏，
+	   但它们是**带独立 UI 的入口**（下拉菜单 / 足迹页），⋮ 里没有对应项，收起即功能丢失，
+	   故窄屏保留显示（工具栏在 ≤960 已允许换行，实测 375px 容器下也不横向溢出）。 */
 	.pt-header-actions .pt-refresh,
 	.pt-header-actions .pt-check-update,
 	.pt-header-actions .pt-update-all,
 	.pt-header-actions .pt-ai-icon-btn,
-	.pt-header-actions .pt-ai-progress,
-	.pt-header-actions .pt-profile-dropdown,
-	.pt-header-actions .pt-header-footprint {
+	.pt-header-actions .pt-ai-progress {
 		display: none;
 	}
 	.pt-header-actions > .pt-overflow-btn {
@@ -7348,3 +7666,9 @@ button.pt-card-install-btn--installed {
 	border-color: var(--background-modifier-border-hover);
 	color: var(--text-normal);
 }
+
+/* 触摸适配与 safe-area 已并入既有机制，不在此另起 @media：
+   - 按钮/图标放大 + 侧边距收窄 → .pt-mobile 段（6102 一带，view-chrome 在视图根加 pt-mobile 类）
+   - safe-area → .pt-view / .pt-drawer 基础块（env 在非移动端回退 0px，全设备安全）
+   用 .pt-mobile（单一 JS 钩子）而非 @media(hover:none) / .is-mobile，避免两套尺寸规则
+   互相打架、出现「部分按钮放大部分不放大」的不一致。 */
