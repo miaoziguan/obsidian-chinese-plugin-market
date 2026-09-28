@@ -83,6 +83,8 @@
 - **强制拦截**：`stylelint` 的 `declaration-no-important` 规则已在 `npm run lint` 中启用，任何新增 `!important` 都会直接报错。
 - **唯一豁免**：无障碍 `prefers-reduced-motion` 的「无条件禁用动画」语义允许使用 `!important`（如 `animation: none !important`），但必须紧邻加 `/* stylelint-disable declaration-no-important */` 注释说明原因。
 - **不要引入 postcss 自动前缀**：构建链里不存在 postcss；若日后加 `postcss-prefix-selector` 自动给选择器加 `.pt-view`，会和现有手写的 `.pt-view` 前缀叠加成 `.pt-view .pt-view …`，而 DOM 里只有一个 `.pt-view`，选择器直接失效、UI 崩。现有前缀 + 后加载已足够，无需此机制。
+- **移动端适配统一用 `.pt-mobile` 类**（view-chrome 在视图根加 pt-mobile 类，与既有 `.pt-mobile` 触摸热区段 6102、溢出菜单 6153 一致）：不要另起 `@media (hover: none)` 或 `.is-mobile` 第二套机制，否则两套尺寸规则互相打架、出现「部分按钮放大部分不放大」的不一致。按钮/图标**视觉必须与桌面零差异**（统一 16px 图标 / 26px 容器 / 32px 按钮），绝不在移动端单独放大视觉尺寸——曾因把按钮放大到 44px、图标 svg 拉到 22px，在按桌面尺寸排的密集网格里撑爆/错位/不一致。触摸热区改用 `.pt-icon-btn::after { inset:-9px }` 等**隐形扩张**（不改变视觉尺寸）。图标尺寸由 `.pt-icon-btn svg {16px}` 统一令牌锁定，桌面/移动/窄容器三处一致。不要用 `@media(width)`（团队约定见 1685，分屏场景会误判）。注意 `.pt-mobile` 与 `.pt-view` 是**同一视图根元素**，写选择器时用 `.pt-mobile .x`（后代），不要写 `.pt-mobile .pt-view .x`（同元素不是后代，不匹配）。
+- **安全区用 `--pt-safe-*` 变量**：`.pt-view` 与 `.pt-drawer` 各自定义 `--pt-safe-top/bottom/left/right`（= `env(safe-area-inset-*, 0px)` 的封装），所有需要避让刘海/底部工具栏的地方引用变量而非裸 `env(...)`。这样桌面/非刘海设备自动回退 0px，且便于统一调参。覆盖主题样式仍靠特异性，绝不用 `!important`。
 
 ## 七、行为准则
 
