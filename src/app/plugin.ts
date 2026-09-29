@@ -1785,7 +1785,12 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		try {
 			const r = await updateBetaEntry(this.app, entry);
 			if (r.updated) {
-				const next = { ...entry, installedVersion: r.manifest.version };
+				// release 一并回写：源码树版本落后时更新会自动改道 Release，不回写下次又读回旧版本号
+				const next = {
+					...entry,
+					installedVersion: r.manifest.version,
+					release: r.release,
+				};
 				this.settings.betaPlugins = this.settings.betaPlugins.map((e) => (e.id === id ? next : e));
 				void this.flushSaveSettings();
 				new Notice(t("beta.updated", { name: entry.name || id, version: r.manifest.version }), 5000);
@@ -1805,7 +1810,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		for (const r of res.results) {
 			if (r.updated && r.version) {
 				const e = byId.get(r.id);
-				if (e) e.installedVersion = r.version;
+				if (e) {
+					e.installedVersion = r.version;
+					if (r.release !== undefined) e.release = r.release;
+				}
 			}
 		}
 		this.settings.betaPlugins = [...byId.values()];

@@ -13,6 +13,7 @@
 
 import { Modal, Notice, Setting, type App, requestUrl, requireApiVersion } from "obsidian";
 import { makeT } from "@shared/i18n";
+import { compareVersion } from "@shared/version";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 
 const t = makeT();
@@ -165,6 +166,37 @@ export function githubReleaseAssetUrls(
 		`${base}/download/v${tag}/${file}`,
 		`${base}/latest/download/${file}`,
 	];
+}
+
+/**
+ * 该 raw 根 URL 是否「跟着默认分支走」（ref 为 HEAD）而非钉选 ref。
+ * raw 路径形如 /<owner>/<repo>/<ref>/：第三段就是 ref，HEAD = 未钉选。
+ * 用户显式钉了分支/标签/commit（含 owner/repo@dev 这类）就是明确跟踪那条线，
+ * 不该被 Release 最新版「越过」——只有跟默认分支的场景才做 Release 对照。
+ */
+export function isFloatingGithubRef(root: URL): boolean {
+	if (root.hostname !== "raw.githubusercontent.com") return false;
+	const parts = root.pathname.split("/").filter(Boolean);
+	return parts.length >= 3 && parts[2] === "HEAD";
+}
+
+/**
+ * 取 GitHub「最新 Release」里的 manifest.json。
+ *
+ * 走 /releases/latest/download/... 由 GitHub 302 到具体 tag 的资产，不消耗 API 配额。
+ * 仓库没发 Release、资产里没挂 manifest、网络异常 → 一律返回 null（沿用源码树的版本）。
+ */
+export async function fetchLatestReleaseManifest(
+	gh: { owner: string; repo: string },
+): Promise<Manifest | null> {
+	try {
+		const text = await fetchFromUrls(githubReleaseAssetUrls(gh, FILES[0]), FILES[0], true);
+		if (!text) return null;
+		const man = JSON.parse(text) as Manifest;
+		return typeof man?.version === "string" && man.version ? man : null;
+	} catch {
+		return null;
+	}
 }
 
 /** 候选链全部 404/410（「确实没有」）时抛出，供上层做 GitHub 诊断 */
@@ -406,10 +438,51 @@ async function fetchManifest(spec: SourceSpec): Promise<Manifest> {
 	return man;
 }
 
-export async function installFromUrl(app: App, url: string): Promise<Manifest> {
-	const spec = parseSourceSpec(url);
+/**
+ * 决定「该装哪个版本」：默认分支源码树 vs GitHub 最新 Release，取版本更高者。
+ *
+ * 真实用户反馈（AlbusGuo/albus-editing-suite）：作者发 Release 时忘了把默认分支的
+ * manifest.json 一起 bump（main = 1.2.2，Release latest = 1.3.0）。官方市场与
+ * 「源码树优先」的直链更新都只读默认分支，于是永远认为「已最新」，用户只能手贴
+ * releases/tag 链接才装得上新版。这里补一次 Release 对照兜住这类不规范的发布。
+ *
+ * 只在「跟默认分支（HEAD）的 GitHub 源」上生效：钉了分支/标签/commit 的条目是用户
+ * 明确指定要跟的线，不越过它改走 Release。
+ *
+ * @returns man 选中的 manifest；release=true 表示三件套要从 Release 资产取（不是源码树）
+ */
+export async function resolveRemoteManifest(
+	spec: SourceSpec,
+): Promise<{ man: Manifest; release: boolean }> {
+	if (spec.release) return { man: await fetchManifest(spec), release: true };
 	const man = await fetchManifest(spec);
-	return installFiles(app, spec, JSON.stringify(man), man);
+	if (!spec.gh || !isFloatingGithubRef(spec.root)) return { man, release: false };
+	const rel = await fetchLatestReleaseManifest(spec.gh);
+	// 同 id 才算同一个插件；Release 更高才改道，平级/更低一律沿用源码树
+	if (!rel || rel.id !== man.id || compareVersion(rel.version, man.version) <= 0) {
+		return { man, release: false };
+	}
+	return { man: rel, release: true };
+}
+
+export async function installFromUrl(app: App, url: string): Promise<Manifest> {
+	return (await installFromUrlResolved(app, url)).man;
+}
+
+/**
+ * 直链安装并返回「实际使用的来源模式」。
+ * release=true 时跟踪表要记下来，否则下次更新又从源码树读回旧版本号。
+ */
+export async function installFromUrlResolved(
+	app: App,
+	url: string,
+): Promise<{ man: Manifest; release: boolean }> {
+	const spec = parseSourceSpec(url);
+	const { man, release } = await resolveRemoteManifest(spec);
+	spec.release = release;
+	// 自动改道 Release 时不钉 tag：按拿到的版本号精确取，缺失再退 latest
+	const m = await installFiles(app, spec, JSON.stringify(man), man);
+	return { man: m, release };
 }
 
 // ──────────────────────────────────────────
@@ -552,13 +625,7 @@ export async function updateBetaTheme(
 }
 
 /**
- * 按跟踪表里的来源更新一个直链 Beta 插件。
- * - 远程 id 与记录不一致 → 抛错（防覆盖错插件）
- * - 版本相同 → 视为已最新，不写盘、不重载（updated=false）
- * - 版本不同 → 重新拉三件套写盘启用
- */
-/**
- * 由跟踪表项重建「更新用」来源：先按记录的 rootUrl 解析，再还原 release 开关与钉选 tag。
+ * 按跟踪表项重建「更新用」来源：先按记录的 rootUrl 解析，再还原 release 开关与钉选 tag。
  * 不还原 releaseTag 会导致更新退化为 latest（releaseTag 丢失 bug），故集中在此处处理。
  */
 export function rebuildUpdateSpec(entry: BetaPluginEntry): SourceSpec {
@@ -568,20 +635,31 @@ export function rebuildUpdateSpec(entry: BetaPluginEntry): SourceSpec {
 	return spec;
 }
 
+/**
+ * 按跟踪表里的来源更新一个直链 Beta 插件。
+ * - 远程 id 与记录不一致 → 抛错（防覆盖错插件）
+ * - 版本相同 → 视为已最新，不写盘、不重载（updated=false）
+ * - 版本不同 → 重新拉三件套写盘启用
+ * - 跟默认分支的 GitHub 源会对照最新 Release（源码树忘了 bump manifest 时也能更新到）
+ *
+ * @returns release 为本次实际使用的来源模式，供上层回写跟踪表
+ */
 export async function updateBetaPlugin(
 	app: App,
 	entry: BetaPluginEntry,
-): Promise<{ updated: boolean; manifest: Manifest }> {
+): Promise<{ updated: boolean; manifest: Manifest; release: boolean }> {
 	const spec = rebuildUpdateSpec(entry);
-	const man = await fetchManifest(spec);
+	const { man, release } = await resolveRemoteManifest(spec);
 	if (man.id !== entry.id) {
 		throw new Error(t("beta.idMismatch", { id: man.id, entry: entry.id }));
 	}
 	if (man.version === entry.installedVersion) {
-		return { updated: false, manifest: man };
+		return { updated: false, manifest: man, release };
 	}
+	// 改道 Release 时三件套必须从 Release 资产取，否则会拿到源码树里的旧构建产物
+	spec.release = release;
 	const m = await installFiles(app, spec, JSON.stringify(man), man);
-	return { updated: true, manifest: m };
+	return { updated: true, manifest: m, release };
 }
 
 /** 安装成功后回传给上层的信息（用于记入直链 Beta 跟踪表） */
@@ -661,15 +739,17 @@ export class DirectInstallModal extends Modal {
 				});
 				new Notice(t("beta.installed.theme", { name: info.name }), 6000);
 			} else {
-				const m = await installFromUrl(this.app, this.url);
+				// release 从「实际使用的来源模式」来：源码树版本落后时会自动改道 Release，
+				// 跟踪表必须记下改道结果，否则下次更新又从源码树读回旧版本号
+				const { man: m, release } = await installFromUrlResolved(this.app, this.url);
 				this.record({
 					id: m.id,
 					name: m.name ?? m.id,
 					version: m.version,
 					rootUrl: spec.root.href,
 					kind: "plugin",
-					release: spec.release,
-					releaseTag: spec.releaseTag,
+					release,
+					releaseTag: release ? spec.releaseTag : undefined,
 				});
 				new Notice(t("directInstall.done", { name: m.name || m.id, v: m.version }), 6000);
 			}

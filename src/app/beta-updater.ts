@@ -35,10 +35,13 @@ export function buildBetaEntry(
 export async function updateBetaEntry(
 	app: App,
 	entry: BetaPluginEntry,
-): Promise<{ updated: boolean; manifest: { version: string } }> {
-	return entry.kind === "theme"
-		? updateBetaTheme(app, entry)
-		: updateBetaPlugin(app, entry);
+): Promise<{ updated: boolean; manifest: { version: string }; release: boolean }> {
+	if (entry.kind === "theme") {
+		const r = await updateBetaTheme(app, entry);
+		// 主题来源模式本次不做判定（按记录原值回写，等于不变）
+		return { ...r, release: Boolean(entry.release) };
+	}
+	return updateBetaPlugin(app, entry);
 }
 
 export interface BetaUpdateItemResult {
@@ -48,6 +51,8 @@ export interface BetaUpdateItemResult {
 	updated: boolean;
 	/** 更新后的版本号（updated=true 时存在） */
 	version?: string;
+	/** 本次实际使用的来源模式（Release 改道结果），供上层回写跟踪表 */
+	release?: boolean;
 	/** 失败原因（失败时出现） */
 	error?: string;
 }
@@ -92,7 +97,13 @@ export async function updateAllBetaPlugins(
 			const r = await updateBetaEntry(app, e);
 			if (r.updated) {
 				res.updated++;
-				res.results.push({ id: e.id, name: e.name, updated: true, version: r.manifest.version });
+				res.results.push({
+					id: e.id,
+					name: e.name,
+					updated: true,
+					version: r.manifest.version,
+					release: r.release,
+				});
 				if (!silent) {
 					new Notice(t("beta.updated", { name: e.name || e.id, version: r.manifest.version }), 5000);
 				}
