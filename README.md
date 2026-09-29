@@ -697,7 +697,6 @@ npm run sync      # 构建并同步到本机 vault
 
 - Bug 与功能建议，走 [Issues](https://github.com/miaoziguan/obsidian-chinese-plugin-market/issues)。
 - 带上复现步骤与环境信息。
-- 使用问题与开放讨论，到 [Discussions](https://github.com/miaoziguan/obsidian-chinese-plugin-market/discussions)。
 
 ### 贡献代码
 
