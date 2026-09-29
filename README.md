@@ -1,5 +1,7 @@
 # 🀄 Chinese Market —— 重建 Obsidian 生态的巴别塔，实现天下大同
 
+**Chinese Market** is an Obsidian community-plugin browser built for Chinese-speaking users. The official plugin directory lists thousands of plugins in English; this plugin removes that barrier so you can search, read, and decide in Chinese. It works on desktop and mobile, requires Obsidian 1.13.0+, and is MIT licensed. The full English description is in the [English](#english) section at the bottom.
+
 > 传说里，人类想共建一座通天高塔。
 > 语言变乱。工程停工。人四散。
 >
