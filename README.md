@@ -1,809 +1,153 @@
-# 🀄 Chinese Market —— 中文社区插件市场 · 重建巴别塔，实现天下大同
+# 🀄 Chinese Market —— 让中文用户真正「用得上」的 Obsidian 插件市场
 
-> 传说里，人类想共建一座通天高塔。
-> 语言变乱。工程停工。人四散。
->
-> 今天，Obsidian 插件市场有数千个插件。
-> 名字是英文。描述是英文。README 也是英文。
->
-> 对中文用户，这就是又一座没建成的巴别塔。
->
-> 我们要做的，是把它接着建起来。
->
-> 天下大同，不是让所有人说同一种语言。
-> 而是让说不同语言的人，用得上同一座塔。
-
-[English](#english) · [设计理念](#设计理念-插件一条龙) · [三分钟上手](#二、三分钟上手) · [能力全景](#三、能力全景) · [架构](#六、架构与开发者指南) · [参与共建](#七、参与共建（一起把塔建起来）)
+> 不再被满屏英文插件名劝退。输入一句话，中文区优质插件即刻浮现眼前。
 
 ---
 
-## 一、被语言隔开的人
+## 🔥 为什么需要它？
 
-Obsidian 的社区插件市场是座宝库。
+你打开 Obsidian 社区插件市场，面对的是 **五千多个**英文命名的插件——`dataview`、`templater-obsidian`、`obsidian-linter`…… 名字看不懂，描述看不完，中文用户想找个「思维导图」插件要翻半小时。
 
-但这座宝库的门牌，全是英文。
+**这不合理。**
 
-中文用户撞上三堵墙。一堵比一堵高。
-
-### 1. 找不到
-
-- 你想做一个思维导图。
-- 脑子里冒出来的是「思维导图」四个字。
-- 搜索框只认 `mindmap`。
-- 你想找日历插件，翻遍推荐帖才知道它叫 `periodic-notes`。
-- 需求与工具之间，横着一本你没背过的词典。
-- 多数人不是败给难度。
-- 是败给第一步。
-
-### 2. 看不懂
-
-- 就算搜到了，`templater-obsidian` 像密码。
-- `obsidian-linter`、`dataview`，同样陌生。
-- 点开描述，是几百字英文。
-- 你只能靠截图。
-- 靠别人的一句「这个好用」。
-- 装了半天，发现它解决的是另一个问题。
-
-### 3. 不敢装
-
-- README 是英文长文。
-- 依赖是什么，埋在里面。
-- 兼容哪个版本，埋在里面。
-- 有没有已知问题，还是埋在里面。
-- 于是你不敢启用。
-- 不敢更新。
-- 最后只敢用被反复推荐的少数几个。
-- 真正适合你的那一个，还蹲在市场深处。
-
-### 这不是能力问题，是接入问题
-
-Chinese Market 把三堵墙逐一打通。
-
-- **找不到** → 中文检索。含离线语义。含可选的 AI 语义。
-- **看不懂** → 多层翻译。加可沉淀的翻译记忆。
-- **不敢装** → 详情页补齐 README 译文、相似推荐、依赖图谱、版本选择、评测台账。
-
-不是给英文市场贴一层中文皮。
-
-是在中文这一侧，重建一整套基础设施。
-
-发现、理解、决策、安装、配置、更新、管理、复盘。八个环节，一条链路。
-
-### 设计理念 —— 插件一条龙
-
-从「听说有个插件」到「决定不再用它」。
-
-中间有八个环节。
-
-我们在同一个中文界面里，一次做完。
-
-- **发现：** 三种搜索、八种排序、五类推荐。把候选捞出来。
-- **理解：** 卡片 + 详情抽屉。README 译文、AI 洞察、相似推荐、依赖图谱、版本历史。把插件看懂。
-- **决策：** 对比托盘并排比较。AI 给结论。还能导出 Markdown 或截图。
-- **安装：** 一键安装。直链装 Beta 与主题。可固定版本。依赖自动补齐。
-- **配置：** 设置页全翻译。别的插件那套英文设置项，打开就是中文。两条通道覆盖原生 `Setting` 组件，以及 React / Vue 自绘页。
-- **更新：** 更新页签。批量更新。健康度徽标。风险降级。红点提醒。
-- **管理：** 启用停用、卸载、组合一键切换。官方面板增强分组、备注与筛选。CSS 片段批量操作。
-- **复盘：** 收藏分组，沉淀你的工具箱。「我的插件足迹」记评分、弃用原因与动态，可导出 Markdown。
-
-为什么这件事关键？
-
-因为传统路径是断裂的。
-
-- 在社区市场搜。英文。
-- 去 GitHub 读 README。英文。
-- 回到设置页安装。
-- 靠记忆管理。
-- 忘了当初为什么卸载。
-
-每换一个地方，就多一次语言切换。
-
-也多一次上下文丢失。
-
-一条龙把这些断点接上：
-
-- 八个环节连成一条链。
-- 语言环境不再反复切换。
-- 装上就能配，不必再回英文界面。
-- 上下文不丢。
-- 数据互通。
-
-互通不是口号，是具体的：
-
-- 依赖图谱算出缺什么 → 一键补齐。
-- 足迹记下为什么弃用 → 下次不再踩同一个坑。
-- 健康度判断维护状态 → 决定这一次要不要更新。
-- 对比得出的结论 → 导出分享给同样在纠结的人。
-
-八个环节，就是塔的八层。
-
-一层一层往上砌，中间不留缝。
-
-而「配置」这一层，往往是最后一处英文——也是最后一段路。
+Chinese Market 把这件事彻底翻过来：**用中文搜、看中文、装得顺**。它是专为中文区用户打造的 Obsidian 社区插件搜索与翻译工具——不是又一个英文市场的壳，而是真正把「语言门槛」砸碎的利器。
 
 ---
 
-## 二、三分钟上手
+## ✨ 它能做什么？
 
-### 安装
+- **🔍 中文搜索，一步到位**
+  输入「思维导图」「日历」「同步」「日程」，立刻检索并展示翻译后的插件卡片。支持三种搜索模式自由切换：
+  - **关键词**：搜中文名、原名、作者，支持高级语法
+  - **本地语义**：本地向量召回，离线、免 API、按相关度排序
+  - **AI 语义**：用自然语言描述需求（"做思维导图的插件"），AI 召回并排序
 
-- 打开 Obsidian → 设置 → 第三方插件 → 浏览。
-- 搜索 **Chinese Market**。
-- 安装并启用。
-- 或者去 [Releases](https://github.com/miaoziguan/obsidian-chinese-plugin-market/releases) 下载 `main.js`、`manifest.json`、`styles.css`。
-- 放进 `<你的仓库>/.obsidian/plugins/chinese-plugin-market/`。
-- 回到设置里启用。
+- **🌐 全卡片翻译**
+  插件名、描述、功能说明，统统翻译成中文。看不懂？不存在的。
 
-要求 Obsidian **1.13.0** 及以上。
+- **🌐 多层翻译通道，零配置可用**
+  卡片名/描述/README 翻译由多层免费通道自动兜底：腾讯翻译（免费）→ Google → MyMemory → 腾讯云（需自填密钥）。其中**腾讯翻译（免费）为零配置、无密钥的免费通道**，默认开启，位于翻译链最前。注意：该通道为非官方逆向接口（transmart.qq.com，依赖腾讯 Transmart 扩展同源实现），可能随时变更或失效；失效时自动降级到后续通道，不影响使用。可在设置中关闭。
 
-手机、平板同样可用。并且为触控单独做了适配。
+- **🎛️ 智能筛选，所见即所得**
+  按来源、分类、作者、安装状态多维过滤。筛选条件常驻显示，随手 ✕ 即清，再也不怕「列表莫名变少却不知为何」。
 
-### 打开
+- **⚖️ 对比模式**
+  多个功能相近的插件并排对比，AI 帮你做深度分析，决策不再靠猜。
 
-- 点左侧栏的 🌐 图标。
-- 有可用更新时，它会挂上红点。
-- 或者按 <kbd>Ctrl/⌘ + P</kbd>。
-- 输入「插件搜索」。
+- **🍎 macOS 系统翻译**
+  （仅 macOS 桌面端）一键调用系统翻译，把插件 README 整篇译成中文——深度了解一个插件，从未如此轻松。
 
-### 使用，只有三步
-
-1. **搜：** 打中文。「思维导图」「日历」「同步」。想到什么打什么。
-2. **读：** 看卡片上的译名与描述。点开详情，读翻译后的 README、相似推荐、依赖关系。
-3. **装：** 点安装。需要稳妥时，先在详情页锁定一个版本。
-
-### 你不需要配置任何东西
-
-- 翻译走内置免费通道。
-- 搜索用关键词或本地语义。
-- 本地语义离线即可用。
-- AI 语义、更高质量的翻译通道，需要你自己填密钥。
-- 那是可选的增强。
-- 不是入场券。
+- **📌 收藏与推荐**
+  收藏常用插件，发现官方精选，构建你自己的中文插件工具箱。
 
 ---
 
-## 三、能力全景
-
-下面按这条链路逐项展开：发现、理解、决策、安装、配置、更新、管理、复盘。
-
-### 3.0 五个页签，一个台账
-
-主视图分五个页签（命令「插件搜索」）：
-
-- **浏览：** 默认卡片流。搜索、筛选、排序都在这里。
-- **更新：** 已安装插件的可用更新。带数量徽标。支持批量处理。
-- **直链：** 通过直链安装的 Beta 插件与主题。
-- **CSS 片段：** vault 里的片段，可分组、可批量切换。
-- **收藏：** 你自己的工具箱。支持分组。
-
-另有一个独立视图：**我的插件足迹**（命令「打开我的插件足迹」）。
-
-- 记录装过的每一个插件。
-- 状态、评分、弃用原因、首次安装、最近动态。
-- 可整体复制成 Markdown。
-- 装过什么、为什么扔掉，时间长了没人记得住。
-- 这个台账替你记。
-
-### 3.1 三种搜索
-
-**关键词模式：** 负责你已经知道要找什么的时刻。
-
-- 搜中文译名、英文原名、作者名。
-- 空格 = AND。
-- `|` = OR。
-- `-词` = 排除。
-- `name:`、`id:`、`author:`、`desc:` = 限定字段。
-- 双引号 = 锁定短语。
-
-举例：
-
-- `思维导图 | 大纲 -kanban` —— 要思维导图或大纲类，不要看板。
-- `author:zsviczian` —— 只看某个作者。
-- `name:dataview` —— 按原名精确查找。
-
-**本地语义模式：** 负责你只知道想要什么效果的时刻。
-
-- 用一句话描述需求。
-- 向量召回跑在你自己的机器上。
-- 离线。免密钥。按相关度排序。
-- 首次使用下载一次模型（默认 `Xenova/multilingual-e5-small`，量化后约 118MB）。
-- 之后彻底离线可用。
-
-**AI 语义模式：** 负责需求复杂、需要模型替你判断的时刻。
-
-- 用自然语言描述。
-- 大模型召回并精排。
-- 需要填 BaseURL、Key、Model。
-- 它是增强项。不是门槛项。
-
-为什么要有三种？
-
-- 因为需求是连续的。
-- 一端是「我知道名字」。
-- 另一端是「我只知道想要什么」。
-- 三种模式覆盖中间全部地带。
-- 而本地语义意味着：**检索能力不该被网络或付费门槛垄断**。
-
-### 3.2 翻译体系：本项目的地基
-
-翻译不是「调一个接口」。
-
-它是一条自动降级的多层通道链。
-
-顺序如下：
-
-1. 已缓存译名。
-2. 翻译记忆里你已采纳的译文。
-3. AI 固化的词典资产。
-4. AI 翻译。
-5. 自托管翻译（DeepLX / LibreTranslate）。
-6. 百度。
-7. 腾讯免费通道（Transmart）。
-8. Google。
-9. MyMemory。
-10. 腾讯云。
-11. 原文。
-
-规则很简单：
-
-- 任何一层失败，就交给下一层。
-- 超时、配额耗尽、断网，都算失败。
-- 所有通道统一走超时与熔断。
-- 返回空就降级。
-- 不会因为某个服务挂掉而卡住界面。
-
-默认策略：
-
-- 腾讯 Transmart、Google、MyMemory 这三个免费通道**默认开启**。
-- 零配置。不需要你填任何东西。
-- 百度、腾讯云、AI、自托管这些需要密钥的通道**默认关闭**。
-- 填了才会启用。
-- MyMemory 配额耗尽会当日封禁，跨天自动解除。
-
-**离线不是空话。**
-
-- 插件随包分发种子译名库 `seeded-translator-cache.json`。
-- 它与你的本地缓存合并。
-- 你自己的译文永远优先于种子。
-- 断网时，已积累的中文名照样显示。
-
-**翻译记忆（TM）是最值得说的一件事。**
-
-- 在线或 AI 产生的译文，落成 vault 里的 Markdown 笔记。
-- 默认在插件数据目录的 `tm/` 下。
-- 路径可在设置里改到 vault 任意位置。
-- 每条带 frontmatter：`id`、`source`、`status`、`confidence`、`created`。
-
-它带来三件事：
-
-- **可改：** 你改过的译法立即生效，并优先于后续任何在线结果。
-- **可管：** 译文能进 Git，能回溯、能同步、能分享。
-- **可带走：** 译文属于你，不锁在任何云端服务里。
-
-翻译不是一次性消费品。
-
-它是可以一代代积累的公共资产。
-
-这就是「重建」在这里的真正含义：不是替每个人翻译一遍，而是让翻译被留下。
-
-**设置页全翻译（可选）。**
-
-装完插件，真正的英文才刚开始。
-
-设置项名称、描述、按钮文字、下拉选项、输入框占位符——全是英文。
-
-我们把它也翻掉。
-
-两条通道，缺一不可：
-
-- **组件通道：** 钩住 Obsidian 原生 `Setting`、`ButtonComponent`、`DropdownComponent`、`TextComponent` 的原型方法。
-- 覆盖用 `new Setting()` 搭出来的传统设置页。
-- **DOM 通道：** 直接扫描设置面板里的英文文本节点。
-- 覆盖 React / Vue 自绘的设置页。
-- 比如 Copilot 这类全程 `render(<SettingsMainV2 />)` 的插件。
-- 它一个原生组件都不碰，组件通道一个字符串都拦不到。
-- DOM 通道就是为它们准备的。
-
-为什么不走词典路线：
-
-- 前辈方案（i18n-plus）是维护逐插件词典。
-- 它对长描述、动态生成的设置页，覆盖率是零。
-- 我们改成即时机翻：渲染时拦截字符串，实时送翻。
-- 长描述照样翻。动态内容照样翻。
-- 不需要等谁先去贡献词条。
-
-快，而且是肉眼可见的快：
-
-- 命中本地串缓存 → 直接替换。零闪烁。
-- 未命中 → 批量切块送翻。一块一次请求。
-- 实测：20 条文案约 1.4 秒。
-- 逐条「检测 + 翻译」要 9 秒。
-- 块级并发。每块译完立刻写入。
-- 你看到的是从上往下快速刷出中文。
-- 不是等全部翻完一次性跳变。
-
-安全约束，一条都不让：
-
-- 只改文本，不动结构。
-- 只写 `nodeValue` 与属性。
-- 绝不赋值 `innerHTML` / `outerHTML`。
-- 既避免 XSS，也不破坏 React 的 DOM diff。
-- 代码、输入框、SVG、编辑器区域不翻。
-- 已含中文的串跳过。
-- 支持按插件 ID 设黑名单。
-- 默认关闭。需要时再开。
-
-别的插件怎么写，我们管不了。
-
-但至少，你能读懂它。
-
-### 3.3 卡片：一眼看懂一个插件
-
-卡片是决策的第一现场。信息密度必须够。
-
-每张卡片给出：
-
-- 中文译名 + 英文原名（显示偏好可切换）。
-- 作者。点一下，钻取该作者的全部插件。
-- 下载量。
-- 最近更新时间。
-- 新上线标记。
-- 状态徽标：已安装、已启用、有更新、已弃用。
-- 健康度信号：维护活跃度与风险提示。
-- **未命中译文时，如实标注「尚未有中文译名」。**
-
-我们宁可承认没翻译。也不制造假装的理解。
-
-卡片上能做的事：
-
-- 安装、卸载。
-- 启用开关。
-- 加入对比。
-- 收藏。
-- 写评测。
-- 了解功能（让 AI 解释它到底能干什么）。
-- 打开仓库。
-- 打开插件设置。
-
-### 3.4 详情抽屉：从「敢装」到「装得明白」
-
-- **README 翻译：** 整篇译成中文。可切换通道。可随时返回原文。可一键复制。
-- **macOS 系统翻译：** 桌面端专用。处理长文。
-- **了解功能：** 让 AI 用几句话讲清这个插件的价值。
-- **相似推荐：** 基于分类与功能标签给出同类选项。
-- **版本选择：** 查看历史版本，并**固定到某个版本**。新版本不兼容时，这是退路。
-- **依赖图谱：** 列出必需与可选依赖及其状态（已装、缺失、未启用、版本过低）。可一键补齐。还会告诉你「谁依赖了它」。
-- **我的评测：** 记录安装次数、卸载时间、评分、弃用原因。沉淀进前面的台账。
-
-英文 README 译成中文、隐藏的依赖与版本风险一并标出——这些原本只有读懂英文才拿得到的信息，在这里全部补齐。
-
-决策不再依赖别人替你试错。
-
-### 3.5 筛选与排序：把主动权交回给你
-
-筛选维度：
-
-- 翻译状态：全部 / 已翻译 / 未翻译。
-- 安装状态：全部 / 已装 / 已启用 / 已装未启用。
-- 收藏。
-- 官方推荐。
-- 中文生态。
-- 系列标签：竹林中国系列、羽鳞精选。
-- 装过。
-- 弃用。
-- 踩坑原因。
-- 分类。
-- 作者。
-- 时间窗口：1 / 3 / 7 / 30 / 90 / 365 天。
-
-生效条件都以小圆片常驻显示。随手点 ✕ 就清掉。
-
-**不会出现列表莫名其妙变少、你却不知道为什么的情况。**
-
-排序有八种口径：
-
-- **相关度：** 搜索之后看它。
-- **下载量：** 想稳妥就按它。
-- **最近更新：** 想找活跃维护的。
-- **名称：** 你知道名字但需要排序时。
-- **最新上架：** 想看新出现的工具。
-- **热度：** 综合未装优先、下载与更新。
-- **趋势：** 想发现正在被更多人装的东西。
-- **推荐：** 想看别人替你筛过的。
-
-### 3.6 装得上，还要装得稳
-
-- 安装、卸载、启用走半官方 API。
-- 并正确维护 Obsidian 的配置。
-- Beta 插件与主题可以走**直链安装**。
-- 详情页能**固定版本**。
-- 新版本打断工作流时，这是你的回退点。
-- **更新页签**集中展示可用更新。
-- 支持全部更新与更新选中两种批量方式。
-- **健康度徽标**按最后发布时长判断：活跃 / 老化 / 风险。
-- 阈值可以自己定。
-- 也可以选择让风险插件降级。
-- 有更新时，侧栏图标挂红点。
-
-能装只是及格线。装得稳才算交付。
-
-### 3.7 对比：把纠结变成决策
-
-- 把两个以上候选放进**对比托盘**。
-- 打开对比视图并排比较。
-- 可以让 AI 给出深度分析。
-- 结论能**导出为 Markdown 或截图**。
-- 留给自己，或发给同样在纠结的人。
-
-功能相近的插件最难选。
-
-而这类比较恰恰最依赖英文描述。
-
-对比模式把这一步中文化、结构化。
-
-### 3.8 收藏、足迹，与「谁来决定什么值得推荐」
-
-- **收藏**可以分组。是你自己的中文工具箱。
-- **我的插件足迹**是长期台账。记状态、评分、弃用原因、首次安装、最近动态。可一键复制为 Markdown。
-
-推荐体系有四个来源：
-
-- **羽鳞精选：** 人工策划清单。排序中置顶。
-- **竹林中国系列：** 面向中文用户场景。可单独筛选。
-- **官方推荐：** 策划推荐清单。
-- **中文生态：** 人工清单 + 算法判定。
-
-还有一条独立信号：**趋势**。基于采样数据计算近期安装热度。
-
-为什么要做这么多层？
-
-- 如果推荐只由「下载量」决定。
-- 那么永远是英文世界先流行起来的插件排在前面。
-- 中文用户的需求永远排在后面。
-- 让人工策划、中文生态、本地趋势进入排序逻辑。
-- 就是让中文用户的需求也参与决定「什么值得被看见」。
-
-### 3.9 组合与批量管理
-
-**组合（Profile）：**
-
-- 把当前启用的一组插件存成组合。
-- 可一键应用。
-- 可绑定布局。
-- 每个组合生成一条命令。
-- 在快捷键设置里绑个键。
-- 「写作模式」「研究模式」「整理模式」瞬间切换。
-
-**已装插件管理：**
-
-- 给 Obsidian 原生的「社区插件」设置页做增强。
-- 分组、备注、筛选。
-- CSS 片段页同样支持分组。
-- 支持批量启用、停用、删除。
-
-这是增强，不是替代。
-
-你已有的习惯不被夺走。只补上缺失的那一块。
-
-### 3.10 命令与入口
-
-命令面板里可以找到：
-
-- 插件搜索。
-- 打开我的插件足迹。
-- 打开社区插件管理（直达 Obsidian 原生设置页）。
-- 从直链安装插件。
-- 直链安装主题。
-- 检查更新。
-- 清除翻译记忆库。
-- 打开翻译记忆库。
-
-动态命令有三类：
-
-- 每个组合一条：`应用组合：〈名称〉`。
-- 每个已装插件一条：`启用 / 停用〈插件〉`。
-- 每个片段一条：`切换 CSS 片段〈名称〉`。
-
-插件不预设快捷键。
-
-你可以在 Obsidian 的快捷键设置里自行绑定。
-
-### 3.11 设置项地图
-
-- **偏好：** 数据源筛选、默认排序、名称显示方式（译名优先 / 原名优先）。
-- **更新管理：** 新上线与近期更新窗口、健康度徽标与阈值、风险降级、趋势采样与保留天数、安装后的更新提醒。
-- **数据源：** 镜像源可选 GitHub、jsDelivr 或自定义。网络不通时换一条路，而不是被挡在门外。
-- **翻译引擎：** 各免费通道开关。百度、腾讯云、自托管、AI 的配置。
-- **AI 语义搜索：** 开关、BaseURL / Key / Model、是否展示推理过程。
-- **本地向量：** 模型选择、HF 镜像、WebGPU 状态、索引管理。
-- **缓存与质量：** 清除译名缓存、清除 AI 词典。
-- **翻译记忆库：** 路径、迁移、打开文件夹、清除已采纳、评测笔记路径。
-- **设置页翻译：** 开关、通道、黑名单。
-- **组合：** 保存、应用、绑定布局、删除。
-- **已装插件管理：** 增强开关、插件分组、CSS 片段分组。
+## 📦 安装
+
+### 方式一：社区插件市场（推荐）
+1. 打开 Obsidian → 设置 → 第三方插件 → 社区插件市场
+2. 搜索 **「Chinese Market」**
+3. 点击安装并启用
+
+> 上架审核通过后即可在此搜索到。若尚未上架，请用方式二。
+
+### 方式二：手动安装
+1. 到 [Releases](https://github.com/miaoziguan/obsidian-chinese-plugin-market/releases) 下载最新版的 `main.js`、`manifest.json`、`styles.css`
+2. 放入你的 vault 目录：`<你的仓库>/.obsidian/plugins/chinese-plugin-market/`
+3. 在 Obsidian 设置 → 第三方插件中启用「Chinese Market」
 
 ---
 
-## 四、隐私与数据：能本地就本地，能不传就不传
+## 🚀 使用
 
-原则只有一句。但每一处都照着做。
+1. 打开命令面板或侧边栏入口，启动 **Chinese Market**
+2. 在搜索框输入你想找的插件（中文就行！）
+3. 点击卡片查看详情、翻译 README、与相似插件对比
+4. 找到心仪的，直接跳转仓库安装
 
-### 必须联网的部分就那么多
-
-- 拉取官方插件清单与统计。走 `raw.githubusercontent.com` 或 jsDelivr 镜像。
-- 你在用的翻译通道。
-- 你自己填的 AI 地址。
-- 本地语义模型的一次性下载。HuggingFace 或镜像。
-
-### 需要密钥的部分，默认全关
-
-- 百度。
-- 腾讯云。
-- AI 翻译与 AI 搜索。
-- 自托管服务。
-
-你不填。它们就不存在。
-
-### 密钥单独存放
-
-- 写在插件目录下的 `credentials.json` 里。
-- 并从普通配置 `data.json` 中剥离。
-- 你备份、分享、同步 vault 时，不会顺手把密钥带走。
-
-### 本地优先是默认姿态
-
-- 关键词搜索。本地。
-- 本地语义搜索。本地。
-- 已缓存译名。本地。
-- 翻译记忆。本地。
-- SQLite 向量索引。本地。
-
-翻译全部失败时，我们如实回退原文。
-
-宁可给你看英文。也不给你一段错的中译文。
-
-### 你的译文归你
-
-- 翻译记忆就是 vault 里的 Markdown 文件。
-- 能编辑。
-- 能删除。
-- 能跟着仓库一起同步。
-- 它不属于任何服务方。
+**就这么简单。中文用户的 Obsidian，本就该如此。**
 
 ---
 
-## 五、为什么这样设计：每一处技术选择，都是一次立场表态
+## 💡 它代表什么
 
-- **翻译做成多级降级。** 免费通道打底，密钥通道可选。
-  - 因为有没有密钥、会不会配置，不该成为获取信息的门槛。
+工具不该有语言壁垒。
 
-- **本地向量跑 WebAssembly。** transformers.js，模型可走镜像。
-  - 因为语义检索能力不应依赖付费 API。
+Chinese Market 不只是一个插件搜索器——它是中文 Obsidian 社区「把世界拉到眼前」的一次实践：让每一个想法，都能被最快找到对应的工具。
 
-- **镜像源可以切换。** GitHub、jsDelivr、自定义。
-  - 因为网络环境不该把人挡在生态之外。
-
-- **译文落成 Markdown。** 进你的 vault。
-  - 因为翻译是公共资产，不是服务方的私有数据。
-
-- **增强而非替代官方面板。**
-  - 因为不夺走用户已有的习惯，只补齐缺失的那块。
-
-- **移动端单独适配。** 触控热区、容器查询断点、平板折叠策略。
-  - 因为「能用」不等于「好用」。
-
-- **未命中译文时如实标注。**
-  - 因为宁可承认没翻译，也不制造假的理解。
-
-这些不是设计美学。
-
-是一件件具体的事：
-
-- 有人在断网的飞机上想找个插件。
-- 有人没有信用卡，配不了 API。
-- 有人所在的网络访问不了默认源。
-- 有人只用手机记笔记。
-
-每一条设计的背后，都是一个真实的人。
+如果你也受够了在英文市场里迷路，**装上它，把时间还给创作本身。**
 
 ---
 
-## 六、架构与开发者指南
-
-### 分层：七层单向依赖
-
-import 统一走 `@layer/*` 别名。禁止跨层相对路径。详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-
-- **app**（`src/app/`）。Obsidian 装配层。插件入口、命令、设置面板、更新器、平台适配。
-- **ui**（`src/ui/`）。视图与组件。虚拟滚动列表、卡片、工具栏、详情抽屉、各个页签。
-- **domain**（`src/domain/`）。纯逻辑域。不依赖 Obsidian。检索、排序、推荐、对比、依赖、评测。
-- **translation**（`src/translation/`）。翻译通道、词典、简繁转换、翻译记忆。
-- **semantic**（`src/semantic/`）。向量嵌入、SQLite 向量库、编解码、worker。
-- **data**（`src/data/`）。平台与 IO。HTTP 端口、存储、安装器、片段管理。
-- **shared**（`src/shared/`）。常量、i18n、工具、平台判定。
-
-依赖只能从上往下走。
-
-这条规则保证了核心逻辑可以脱离 Obsidian 被测试。
-
-单测里跑得动的，才是真的逻辑。而不是插件的附庸。
-
-### 数据流
-
-- 官方清单与统计从远程拉取。带 TTL 与镜像容错。
-- 落进本地存储（PluginStorage）。
-- 进入检索与排序管线。关键词、BM25、向量召回、AI 精排。
-- 再经推荐与多样性重排。
-- 最后由虚拟滚动渲染。DOM 节点数始终受控。
-
-### 关键工程机制
-
-- **虚拟滚动：** 定高行 + 上下占位。DOM 节点数稳定在数百以内。搜索输入有防抖。
-- **向量存储：** sql.js（WASM）承载 SQLite。向量以量化形式存放。变更累积后批量落盘。因为写入少、读取频繁。
-- **模型推理：** 跑在独立 worker bundle 里（transformers.js）。模型按需下载。跨域请求由主线程代发。
-- **响应式：** 一律用容器查询（`@container`），不用视口宽度。所以分屏、侧栏里也判断正确。
-- **无障碍：** 卡片、工具栏、抽屉大量使用 `aria-*`、`role`、`tabindex`。
-- **降级链：** 贯穿始终。
-
-降级链具体是：
-
-- AI 精排失败 → 退回本地向量 ∪ 关键词。
-- 向量失败 → 退回纯关键词。
-- 统计失败 → 复用磁盘缓存。
-- 翻译失败 → 回退原文。
-
-### 数据文件与生成脚本
-
-- `plugin-tags.json`。离线中文分类索引。生成：`npm run gen-tags`。
-- `plugin-release-dates.json`。首次上架时间。从官方仓库 git 历史解析。生成：`npm run gen-release-dates`。
-- `plugin-chinese-ecosystem.json`。中文生态清单。生成：`npm run gen-chinese-ecosystem`。
-- `plugin-recommend.json`。推荐策划清单。生成：`node scripts/gen-recommend.mjs`。
-- `plugin-deps.json`。依赖图数据。生成：`node scripts/gen-plugin-deps.mjs`。
-- `seeded-translator-cache.json`。随包种子译名库。构建期产出。
-- `versions.json`。版本与最低 Obsidian 版本映射。由发布脚本维护。
-
-### 常用命令
+## 🛠 开发
 
 ```bash
-npm install       # 安装依赖
-npm run dev       # 开发构建（watch）
-npm run build     # 类型检查 + 生产构建
-npm test          # 单元测试（vitest）
-npm run lint      # eslint + stylelint
-npm run build:e2e # 构建 e2e 用例 bundle
-npm run test:e2e  # 端到端测试（playwright）
-npm run sync      # 构建并同步到本机 vault
+npm install      # 安装依赖
+npm run dev      # 开发构建
+npm run build    # 类型检查 + 生产构建
+npm test         # 运行测试
 ```
 
-### 文档地图
-
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：分层架构、依赖方向、命名约定。**动手前务必读一遍。**
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。开发环境与命令。附提交前自检清单。
-- [docs/PERF-ISSUES.md](docs/PERF-ISSUES.md)。性能问题与优化轨迹。
-- [docs/SELF-AUDIT.md](docs/SELF-AUDIT.md)。提官方市场 PR 前的自检清单。
-- [CONTRIBUTING.md](CONTRIBUTING.md)。贡献流程、分支与提交规范。
+欢迎 Issue 与 PR，一起把中文区插件生态做得更好。
 
 ---
 
-## 七、参与共建（一起把塔建起来）
+## 📄 许可证
 
-巴别塔不是一个人能重建的。
-
-这个项目里，「建塔」的最小单位不是代码。
-
-而是一条译名、一份清单、一次修正。
-
-### 报告问题与提建议
-
-- Bug 与功能建议，走 [Issues](https://github.com/miaoziguan/obsidian-chinese-plugin-market/issues)。
-- 带上复现步骤与环境信息。
-
-### 贡献代码
-
-- Fork 之后建分支。
-- 命名：`feat/`、`fix/`、`refactor/`、`docs/` + 简短描述。
-- 提交前跑完自检：
-  - `npm run build`。tsc 零错误。
-  - `npm test`。单测全绿。
-  - `npm run lint`。eslint 与 stylelint 零报错，含样式 `!important` 拦截。
-- 确认 import 全部走 `@layer/*` 别名。
-- 确认依赖方向没有反向。
-- 提交信息用类 Conventional Commits：`fix(css): …`、`feat(ui): …`。
-- 开 PR 时用 `closes #<issue号>` 关联你认领的 issue。
-
-> 改移动端样式请特别留意 [CONTRIBUTING.md](CONTRIBUTING.md) 里的约定：
-> - 统一用 `.pt-mobile` 类。它与 `.pt-view` 是同一元素，选择器必须写成后代形式。
-> - 视觉尺寸与桌面零差异。
-> - 触控热区用 `::after` 隐形扩张。
-> - 不要用 `@media(width)`。
-
-### 贡献译名与数据
-
-门槛从低到高，有三种方式。
-
-**第一种，改你自己的翻译记忆。**
-
-- 译文就在 vault 的 `tm/` 目录里。
-- 路径可在设置里改。
-- 是带 frontmatter 的 Markdown。
-- 直接编辑即可生效。
-- 改完立即优先于任何在线结果。
-
-**第二种，提交数据文件 PR。**
-
-- `plugin-tags.json`。分类与标签。
-- `plugin-chinese-ecosystem.json`。中文生态。
-- `plugin-recommend.json`。推荐策划。
-- `plugin-deps.json`。依赖数据。
-- `plugin-release-dates.json`。上架时间。
-- 各配一个生成脚本。
-
-**第三种，参与词典补译。**
-
-- 跑 `npm run check-dict`。
-- 它会产出缺失清单。
-- 按清单逐条补译后提交。
-
-### 鸣谢
-
-- 设置页的「鸣谢」列出所有贡献者的 GitHub 账号。
-- 每一条译名、每一次修正都会被记在这里。
-- **天下大同不是一家之言，而是众人各添一块砖。**
+MIT —— 自由使用，自由改造。
 
 ---
 
-## 八、许可证
+# 🀄 Chinese Market (English)
 
-MIT。自由使用，自由改造。
+**Chinese Market** is an Obsidian community-plugin search and translation tool built for Chinese-speaking users. It tears down the language barrier of the default (English-only) community plugin browser so you can **search in Chinese, read in Chinese, and install with confidence**.
 
----
+## Why it exists
 
-## English
+Obsidian's community plugin store lists **5,000+ plugins with English names** — `dataview`, `templater-obsidian`, `obsidian-linter`… Finding a "mind-map" plugin can take half an hour of guessing. Chinese Market flips that: search by Chinese keyword, see translated cards, install in one click.
 
-**Chinese Market** is an Obsidian community-plugin browser built for Chinese-speaking users.
+## Features
 
-The official plugin directory lists thousands of plugins with English names and English READMEs.
+- **🔍 Chinese search, one step.** Type "思维导图 / mind map", "日历 / calendar", "同步 / sync" and get translated plugin cards instantly. Three search modes:
+  - **Keyword** — search Chinese name, original name, or author, with advanced syntax.
+  - **Local semantic** — on-device vector recall, offline, no API key, ranked by relevance.
+  - **AI semantic** — describe your need in natural language ("a plugin for mind maps"); AI recalls and ranks.
+- **🌐 Full-card translation.** Plugin names, descriptions, and feature notes are all translated into Chinese.
+- **🎛️ Smart filters.** Filter by source, category, author, and install state. Active filters stay visible and are cleared with a single ✕.
+- **⚖️ Compare mode.** Put several similar plugins side by side; AI helps with a deep comparison so decisions aren't guesses.
+- **🍎 macOS system translation** (macOS desktop only). One-click system translation that renders an entire plugin README into Chinese.
+- **📌 Favorites & recommendations.** Bookmark plugins you use often and discover editor picks to build your own Chinese plugin toolbox.
 
-Chinese Market removes that barrier.
+## Installation
 
-You can **search in Chinese, read in Chinese, and decide with confidence**.
+**Option 1 — Community plugin browser (recommended).**
+1. Obsidian → Settings → Community plugins → Browse.
+2. Search **"Chinese Market"**.
+3. Click Install and enable.
 
-Its goal is not to make everyone speak one language.
+**Option 2 — Manual install.**
+1. Download the latest `main.js`, `manifest.json`, and `styles.css` from [Releases](https://github.com/miaoziguan/obsidian-chinese-plugin-market/releases).
+2. Put them in `<your vault>/.obsidian/plugins/chinese-plugin-market/`.
+3. Enable "Chinese Market" under Settings → Community plugins.
 
-Its goal is to **rebuild the tower** — so that people using different languages can reach the same tools.
+## Usage
 
-### What Chinese Market does
+1. Open the command palette or sidebar entry to launch **Chinese Market**.
+2. Type what you're looking for in the search box (Chinese is fine!).
+3. Click a card to view details, translate its README, or compare with similar plugins.
+4. Found the one? Jump straight to its repository to install.
 
-- **Five tabs, one local ledger.** Search, Translate, Card, Detail, and Manage. Every piece of plugin information is normalized into a single ledger that lives in your vault — you own it, and it stays searchable offline.
-- **Search the way that fits.** Keyword search with an advanced query syntax; on-device semantic search that runs fully offline with no API key; and an optional AI semantic search when you opt in.
-- **Translation is the foundation.** Free, zero-config channels are used by default, with automatic fallback between them and an offline seed dictionary. Your translation memory is stored as plain, editable Markdown inside your vault.
-- **Card view.** One card shows everything that matters about a plugin — name, description, rating, maintenance health, and whether it is safe to install.
-- **Detail drawer.** Move from "dare to install" to "install with clarity": a translated README, an AI summary, similar plugins, a dependency graph, and one-click version pinning.
-- **Filter and sort.** Filter by category, language, and update status; sort by relevance, popularity, or last updated. The initiative goes back to you.
-- **Install stable, not just installable.** Dependency resolution and version-risk detection surface problems before they break your setup; version pinning is your safety net when a new release is incompatible.
-- **Compare mode.** Put candidate plugins side by side and export the comparison, turning hesitation into a decision.
-- **Favorites, history, and recommendations.** What is worth recommending is decided by you, not an opaque algorithm, and your footprint stays local.
-- **Combo and batch management.** Install, enable, update, or remove a group of plugins together instead of one by one.
-- **Commands and entry points.** Every feature is reachable from the command palette, so power users never leave the keyboard.
-- **Settings map.** All options are laid out in one place; local-first is the default posture.
-- **Privacy by default.** Local-first wherever possible; only the minimal parts ever touch the network; API keys are off by default and stored separately; your translations belong to you and are never uploaded.
-- **Architecture.** A seven-layer one-way dependency design. Vector storage runs on sql.js (WASM) SQLite with quantized embeddings; changes batch to disk after they accumulate, because writes are rare and reads are frequent. Fully offline-capable.
+## Development
 
-Highlights:
+```bash
+npm install      # install dependencies
+npm run dev      # dev build
+npm run build    # type-check + production build
+npm test         # run tests
+```
 
-- **Three search modes.** Keyword with advanced syntax. On-device semantic search, offline, no API key. Optional AI semantic search.
-- **Layered translation pipeline.** Free zero-config channels by default. Automatic fallback. Offline seed dictionary.
-- **Translation memory.** Stored as editable Markdown in your vault.
-- **Rich detail view.** Translated README. AI summary. Similar plugins. Dependency graph. Version pinning.
-- **Full management loop.** Filters, sorting, compare mode with export, favorites, profiles.
-- **Enhances, not replaces** Obsidian's native plugin settings.
+Issues and PRs are welcome — let's make the Chinese plugin ecosystem better together.
 
-Install from Obsidian's community plugin browser, or manually from [Releases](https://github.com/miaoziguan/obsidian-chinese-plugin-market/releases).
+## License
 
-Requires Obsidian 1.13.0+. Works on desktop and mobile.
-
-Development: `npm install`, `npm run dev`, `npm run build`, `npm test`, `npm run lint`.
-
-Architecture and contribution rules: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md).
-
-MIT licensed.
+MIT — free to use and modify.
