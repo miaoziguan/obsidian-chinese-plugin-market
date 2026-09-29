@@ -1,6 +1,6 @@
-# 🀄 Chinese Market —— 重建 Obsidian 生态的巴别塔，实现天下大同
+**English description (required by the Obsidian community plugin directory):** Chinese Market is an Obsidian community-plugin browser built for Chinese-speaking users. The official Obsidian plugin directory lists thousands of plugins whose names, descriptions, and READMEs are written entirely in English, which makes it hard for Chinese-speaking users to find, understand, or confidently install the right plugin. Chinese Market removes that barrier: you can search, read, and decide in Chinese. It provides three search modes — keyword with advanced syntax, on-device offline semantic search (no API key), and optional AI semantic search — a layered translation pipeline with free zero-config channels and an offline translation memory, a rich detail view (translated README, AI summary, similar plugins, dependency graph, version pinning), and the full management loop: filters, sorting, compare mode with export, favorites, and profiles. It enhances rather than replaces Obsidian's native plugin settings, works on desktop and mobile (requires Obsidian 1.13.0+), and is MIT licensed. The full English description continues in the [English](#english) section below.
 
-**Chinese Market** is an Obsidian community-plugin browser built for Chinese-speaking users. The official plugin directory lists thousands of plugins in English; this plugin removes that barrier so you can search, read, and decide in Chinese. It works on desktop and mobile, requires Obsidian 1.13.0+, and is MIT licensed. The full English description is in the [English](#english) section at the bottom.
+# 🀄 Chinese Market —— 中文社区插件市场 · 重建巴别塔，实现天下大同
 
 > 传说里，人类想共建一座通天高塔。
 > 语言变乱。工程停工。人四散。
