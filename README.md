@@ -774,6 +774,23 @@ Its goal is not to make everyone speak one language.
 
 Its goal is to **rebuild the tower** — so that people using different languages can reach the same tools.
 
+### What Chinese Market does
+
+- **Five tabs, one local ledger.** Search, Translate, Card, Detail, and Manage. Every piece of plugin information is normalized into a single ledger that lives in your vault — you own it, and it stays searchable offline.
+- **Search the way that fits.** Keyword search with an advanced query syntax; on-device semantic search that runs fully offline with no API key; and an optional AI semantic search when you opt in.
+- **Translation is the foundation.** Free, zero-config channels are used by default, with automatic fallback between them and an offline seed dictionary. Your translation memory is stored as plain, editable Markdown inside your vault.
+- **Card view.** One card shows everything that matters about a plugin — name, description, rating, maintenance health, and whether it is safe to install.
+- **Detail drawer.** Move from "dare to install" to "install with clarity": a translated README, an AI summary, similar plugins, a dependency graph, and one-click version pinning.
+- **Filter and sort.** Filter by category, language, and update status; sort by relevance, popularity, or last updated. The initiative goes back to you.
+- **Install stable, not just installable.** Dependency resolution and version-risk detection surface problems before they break your setup; version pinning is your safety net when a new release is incompatible.
+- **Compare mode.** Put candidate plugins side by side and export the comparison, turning hesitation into a decision.
+- **Favorites, history, and recommendations.** What is worth recommending is decided by you, not an opaque algorithm, and your footprint stays local.
+- **Combo and batch management.** Install, enable, update, or remove a group of plugins together instead of one by one.
+- **Commands and entry points.** Every feature is reachable from the command palette, so power users never leave the keyboard.
+- **Settings map.** All options are laid out in one place; local-first is the default posture.
+- **Privacy by default.** Local-first wherever possible; only the minimal parts ever touch the network; API keys are off by default and stored separately; your translations belong to you and are never uploaded.
+- **Architecture.** A seven-layer one-way dependency design. Vector storage runs on sql.js (WASM) SQLite with quantized embeddings; changes batch to disk after they accumulate, because writes are rare and reads are frequent. Fully offline-capable.
+
 Highlights:
 
 - **Three search modes.** Keyword with advanced syntax. On-device semantic search, offline, no API key. Optional AI semantic search.
