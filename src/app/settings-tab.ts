@@ -18,7 +18,8 @@ import { logger } from "@shared/logger";
 import type { ChinesePluginMarketView } from "@ui/view/translator-view";
 import { CONTRIBUTORS, contributorGitHubUrl } from "@shared/contributors";
 import { CssSnippetSettingsList } from "@ui/settings/css-snippet-settings-list";
-import { localPhaseMs, PHASE } from "@domain/search/search-timing";
+import { localPhaseMs, PHASE, type SearchTimingSnapshot } from "@domain/search/search-timing";
+import type { SearchMatchDiagnosticsSnapshot } from "@domain/search/query-intent";
 
 export class TranslatorSettingTab extends PluginSettingTab {
 	private plugin: ChinesePluginMarket;
@@ -470,6 +471,40 @@ export class TranslatorSettingTab extends PluginSettingTab {
 								name: this.t("settings.ai.showReason"),
 								desc: this.t("settings.ai.showReason.desc"),
 								control: { type: "toggle", key: "aiSearchShowReason", defaultValue: false },
+							},
+						],
+					},
+					{
+						type: "page",
+						name: this.t("settings.querySampling.title"),
+						items: [
+							{
+								name: this.t("settings.querySampling.enable"),
+								desc: this.t("settings.querySampling.enable.desc"),
+								control: { type: "toggle", key: "querySamplingEnabled", defaultValue: false },
+							},
+							{
+								name: this.t("settings.querySampling.endpoint"),
+								desc: this.t("settings.querySampling.endpoint.desc"),
+								visible: () => s.querySamplingEnabled,
+								control: { type: "text", key: "querySamplingEndpoint", placeholder: "https://collector.example/query-samples" },
+							},
+							{
+								name: this.t("settings.querySampling.rate"),
+								desc: this.t("settings.querySampling.rate.desc"),
+								visible: () => s.querySamplingEnabled,
+								control: {
+									type: "dropdown",
+									key: "querySamplingRate",
+									defaultValue: "0.1",
+									options: {
+										"0.01": this.t("settings.querySampling.rate.01"),
+										"0.05": this.t("settings.querySampling.rate.05"),
+										"0.1": this.t("settings.querySampling.rate.1"),
+										"0.25": this.t("settings.querySampling.rate.25"),
+										"1": this.t("settings.querySampling.rate.100"),
+									},
+								},
 							},
 						],
 					},
@@ -1041,6 +1076,7 @@ export class TranslatorSettingTab extends PluginSettingTab {
 			case "aiSearchBaseURL":
 			case "aiSearchApiKey":
 			case "aiSearchModel":
+			case "querySamplingEndpoint":
 			case "embeddingBaseURL":
 			case "embeddingApiKey":
 			case "embeddingModel":
@@ -1059,6 +1095,9 @@ export class TranslatorSettingTab extends PluginSettingTab {
 				s[key] = value == null || value === "" || value === "off"
 					? null
 					: Number(value);
+				break;
+			case "querySamplingRate":
+				s[key] = Number(value);
 				break;
 			default:
 				s[key] = value;
@@ -1262,48 +1301,118 @@ export class TranslatorSettingTab extends PluginSettingTab {
 		const render = () => {
 			box.empty();
 			const snap = this.plugin.translator.getLastSearchTiming();
-			if (!snap) {
+			const match = this.plugin.translator.getLastMatchDiagnostics();
+			if (!snap && !match) {
 				box.createDiv({ cls: "pt-timing-empty", text: this.t("settings.diagnostics.empty") });
 				return;
 			}
-
-			box.createDiv({
-				cls: "pt-timing-total",
-				text: this.t("settings.diagnostics.total", { total: snap.totalMs.toFixed(1) }),
-			});
-			box.createDiv({
-				cls: "pt-timing-sub",
-				text: this.t("settings.diagnostics.local", { local: localPhaseMs(snap).toFixed(1) }),
-			});
-
-			// 各阶段：名称 + 毫秒 + 占比条。用 <progress> 而非内联宽度，遵循
-			// no-static-styles-assignment —— 动态宽度同样不走内联样式。
-			const maxMs = Math.max(1, ...snap.phases.map((p) => p.ms));
-			for (const p of snap.phases) {
-				const row = box.createDiv({ cls: "pt-timing-row" });
-				row.createSpan({ cls: "pt-timing-name", text: p.name });
-				row.createSpan({ cls: "pt-timing-ms", text: `${p.ms.toFixed(1)} ms` });
-				const bar = row.createEl("progress", {
-					cls: p.name === PHASE.llmRank ? "pt-timing-bar-llm" : "pt-timing-bar",
-				});
-				bar.max = maxMs;
-				bar.value = p.ms;
-			}
-
-			const counters = Object.entries(snap.counters);
-			if (counters.length > 0) {
-				box.createDiv({
-					cls: "pt-timing-counters",
-					text: counters.map(([k, v]) => `${k}=${v}`).join(" · "),
-				});
-			}
-
-			box.createDiv({ cls: "pt-timing-hint", text: this.t("settings.diagnostics.hint") });
+			if (snap) this.renderTimingSnapshot(box, snap);
+			if (match) this.renderMatchDiagnostics(box, match);
 		};
 
 		setting.addButton((b) =>
 			b.setButtonText(this.t("settings.diagnostics.refresh")).onClick(() => render())
 		);
 		render();
+	}
+
+	/** 把计时快照渲染成设置页诊断面板的第一部分。 */
+	private renderTimingSnapshot(box: HTMLElement, snap: SearchTimingSnapshot): void {
+		box.createDiv({
+			cls: "pt-timing-total",
+			text: this.t("settings.diagnostics.total", { total: snap.totalMs.toFixed(1) }),
+		});
+		box.createDiv({
+			cls: "pt-timing-sub",
+			text: this.t("settings.diagnostics.local", { local: localPhaseMs(snap).toFixed(1) }),
+		});
+
+		// 各阶段：名称 + 毫秒 + 占比条。用 <progress> 而非内联宽度，遵循
+		// no-static-styles-assignment —— 动态宽度同样不走内联样式。
+		const maxMs = Math.max(1, ...snap.phases.map((p) => p.ms));
+		for (const p of snap.phases) {
+			const row = box.createDiv({ cls: "pt-timing-row" });
+			row.createSpan({ cls: "pt-timing-name", text: p.name });
+			row.createSpan({ cls: "pt-timing-ms", text: `${p.ms.toFixed(1)} ms` });
+			const bar = row.createEl("progress", {
+				cls: p.name === PHASE.llmRank ? "pt-timing-bar-llm" : "pt-timing-bar",
+			});
+			bar.max = maxMs;
+			bar.value = p.ms;
+		}
+
+		const counters = Object.entries(snap.counters);
+		if (counters.length > 0) {
+			box.createDiv({
+				cls: "pt-timing-counters",
+				text: counters.map(([k, v]) => `${k}=${v}`).join(" · "),
+			});
+		}
+
+		box.createDiv({ cls: "pt-timing-hint", text: this.t("settings.diagnostics.hint") });
+	}
+
+	/** 渲染最近一次搜索的前 12 个最终候选及其召回证据。 */
+	private renderMatchDiagnostics(box: HTMLElement, snapshot: SearchMatchDiagnosticsSnapshot): void {
+		const section = box.createDiv({ cls: "pt-match-diagnostics" });
+		section.createDiv({ cls: "pt-match-title", text: this.t("settings.diagnostics.match.title") });
+		const mode = this.t(snapshot.mode === "local" ? "settings.diagnostics.match.mode.local" : "settings.diagnostics.match.mode.ai");
+		const ids = snapshot.rankedIds.slice(0, 12);
+		section.createDiv({
+			cls: "pt-match-summary",
+			text: this.t("settings.diagnostics.match.summary", {
+				mode,
+				results: String(snapshot.rankedIds.length),
+				candidates: String(Object.keys(snapshot.diagnostics).length),
+			}),
+		});
+		section.createDiv({ cls: "pt-match-query", text: `Query：${snapshot.query}` });
+
+		if (ids.length === 0) {
+			section.createDiv({ cls: "pt-match-empty", text: this.t("settings.diagnostics.match.empty") });
+			return;
+		}
+
+		const none = this.t("settings.diagnostics.match.none");
+		const rank = (value: number | null): string => value == null ? none : `#${value}`;
+		const score = (value: number | null): string => value == null ? none : value.toFixed(4);
+		const list = section.createDiv({ cls: "pt-match-list" });
+		for (const [index, id] of ids.entries()) {
+			const diagnostic = snapshot.diagnostics[id];
+			const row = list.createDiv({ cls: "pt-match-row" });
+			row.createDiv({ cls: "pt-match-name", text: `${index + 1}. ${snapshot.labels[id] || id}` });
+			row.createDiv({ cls: "pt-match-id", text: id });
+			if (!diagnostic) {
+				row.createDiv({ cls: "pt-match-missing", text: this.t("settings.diagnostics.match.empty") });
+				continue;
+			}
+			row.createDiv({
+				cls: "pt-match-ranks",
+				text: this.t("settings.diagnostics.match.rank", {
+					keyword: rank(diagnostic.keywordRank),
+					vector: rank(diagnostic.vectorRank),
+					title: rank(diagnostic.titleRank),
+				}),
+			});
+			row.createDiv({
+				cls: "pt-match-scores",
+				text: this.t("settings.diagnostics.match.score", {
+					rrf: score(diagnostic.rrfScore),
+					rerank: score(diagnostic.rerankScore),
+				}),
+			});
+			const details = row.createDiv({ cls: "pt-match-details" });
+			const appendDetail = (
+				key: "settings.diagnostics.match.terms" | "settings.diagnostics.match.phrases" | "settings.diagnostics.match.intents" | "settings.diagnostics.match.negative",
+				values: string[],
+				cls?: string,
+			) => {
+				if (values.length > 0) details.createDiv({ cls, text: this.t(key, { value: values.join("、") }) });
+			};
+			appendDetail("settings.diagnostics.match.terms", diagnostic.matchedTerms);
+			appendDetail("settings.diagnostics.match.phrases", diagnostic.phraseMatches);
+			appendDetail("settings.diagnostics.match.intents", diagnostic.intentMatches);
+			appendDetail("settings.diagnostics.match.negative", diagnostic.negativeMatches, "pt-match-negative");
+		}
 	}
 }

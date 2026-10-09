@@ -7,6 +7,13 @@ export { LLMClient } from "@translation/api/api";
 export { PluginTagService } from "@domain/catalog/plugin-tags";
 export { fuzzyTitleScores, rrfFuse, topNFused } from "@shared/utils";
 export { applyQualityFactors } from "@domain/search/quality";
+export {
+	parseQueryIntent,
+	pureNegativeCandidateIds,
+	rerankSearchCandidates,
+	type SearchCandidateText,
+} from "@domain/search/query-intent";
+export { buildBm25Index, bm25RecallScores } from "@domain/search/ai";
 export { tokenizeForBM25, bm25Score, segmentWords } from "@domain/search/bm25";
 export { t2sForEmbed } from "@translation/lexicon/t2s";
 export { expandQuery } from "@translation/lexicon/synonyms";

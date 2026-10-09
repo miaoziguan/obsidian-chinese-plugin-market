@@ -7816,3 +7816,55 @@ button.pt-card-install-btn--installed {
 .pt-timing-counters {
 	margin-top: 8px;
 }
+
+/* 最近一次搜索的候选证据：默认结果卡片不显示，只在设置页诊断中展开。 */
+.pt-match-diagnostics {
+	margin-top: 16px;
+	padding-top: 12px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+.pt-match-title {
+	font-weight: 600;
+}
+.pt-match-summary,
+.pt-match-query,
+.pt-match-id,
+.pt-match-ranks,
+.pt-match-scores,
+.pt-match-empty,
+.pt-match-missing {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+.pt-match-query {
+	margin-top: 4px;
+	word-break: break-word;
+}
+.pt-match-list {
+	margin-top: 8px;
+}
+.pt-match-row {
+	padding: 7px 0;
+	border-top: 1px solid var(--background-modifier-border-hover);
+}
+.pt-match-name {
+	font-weight: 600;
+	word-break: break-word;
+}
+.pt-match-id {
+	margin-top: 1px;
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+}
+.pt-match-ranks,
+.pt-match-scores,
+.pt-match-details {
+	margin-top: 3px;
+}
+.pt-match-details {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+.pt-match-negative {
+	color: var(--text-error);
+}

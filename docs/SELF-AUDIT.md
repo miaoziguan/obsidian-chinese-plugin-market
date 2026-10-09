@@ -18,7 +18,7 @@ Obsidian 社区插件的官方审核 = 向 `obsidianmd/obsidian-releases` 提 PR
 ## 1. 硬性红线（Developer policies，违反即拒 / 移除）
 | 红线 | 本插件现状 | 检查 |
 |---|---|---|
-| 客户端遥测（收集用量数据） | 无；运行时无 analytics / 埋点上报 | 自动：`grep` 无 telemetry/analytics 上报；人工确认 |
+| 客户端遥测（收集用量数据） | 默认关闭；只有用户显式开启并配置自托管 HTTPS 接收端后，才发送 P1.1 脱敏 query 特征与聚合排序指标。请求体不含原始 query、插件 ID、标题、描述或全文；发布前仍需人工确认是否符合目标目录政策 | 自动：`grep` 检查无默认 endpoint、默认开关为 false、payload 类型不含插件全文；人工确认 opt-in 文案、接收端归属与官方政策 |
 | 自更新机制（代码内自动下载更新） | 无；依赖 Obsidian 官方更新通道 | 人工确认无 `fetch` 下载并执行新代码 |
 | 动态广告 / UI 外静态广告 | 无 | 人工 |
 | 代码混淆 / 加密（必须可审计） | 生产构建对 `main.js` 启用 esbuild `minify`（标准压缩，**非加密/混淆**）；保留 `main.js.map`。如需可审计可提供未压缩产物 | 自动：确保无 `eval` / `new Function` / 加密逻辑；人工确认非混淆 |

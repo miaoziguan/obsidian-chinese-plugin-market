@@ -10,6 +10,7 @@
 import { Notice } from "obsidian";
 import { logger } from "@shared/logger";
 import { isAISearchUsable } from "@shared/utils";
+import { reportQuerySample } from "@domain/search/query-sampling";
 import type { ViewContext } from "@ui/view/view-context";
 
 /** 根据 Base URL 判断是否国内模型（直连可达，无需 VPN） */
@@ -147,6 +148,21 @@ export async function runAISearch(
 
 		ctx.aiSearchResult = aiResult;
 		ctx.aiSearchQueryCache = ctx.searchQuery.trim();
+		// P1.1：只发送脱敏后的查询形状与排序指标；reportQuerySample 默认关闭，
+		// 且内部不会接收 allPlugins，因此不会把插件全文或 ID 带出客户端。
+		void reportQuerySample(
+			{
+				enabled: settings.querySamplingEnabled,
+				endpoint: settings.querySamplingEndpoint,
+				sampleRate: settings.querySamplingRate,
+			},
+			{
+				query,
+				mode: isLocal ? "local" : "ai",
+				result: aiResult,
+				clientVersion: ctx.manifest?.version,
+			},
+		);
 		// 3a: 记录最近一次结果，供切回语义模式时复用
 		ctx.lastAiSearchResult = aiResult;
 		ctx.lastAiSearchQuery = ctx.aiSearchQueryCache;

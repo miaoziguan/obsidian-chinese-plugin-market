@@ -1,0 +1,88 @@
+[
+  { "id": "intent-realtime-conversion", "query": "实时转换", "expectedProfiles": ["realtime-conversion"] },
+  { "id": "intent-instant-preview", "query": "即时预览", "expectedProfiles": ["instant-preview"] },
+  { "id": "intent-direct-paste", "query": "直接粘贴", "expectedProfiles": ["direct-paste"] },
+  { "id": "intent-offline-local", "query": "离线使用", "expectedProfiles": ["offline-local"] },
+  { "id": "intent-cross-device-sync", "query": "跨设备同步", "expectedProfiles": ["cross-device-sync"] },
+  { "id": "intent-batch-processing", "query": "批量处理", "expectedProfiles": ["batch-processing"] },
+  { "id": "intent-quick-capture", "query": "快速记录", "expectedProfiles": ["quick-capture"] },
+  { "id": "intent-keyboard-command", "query": "快捷键", "expectedProfiles": ["keyboard-command"] },
+  { "id": "intent-privacy-first", "query": "隐私保护", "expectedProfiles": ["privacy-first"] },
+  { "id": "intent-task-project", "query": "任务管理", "expectedProfiles": ["task-project"] },
+  { "id": "intent-calendar-schedule", "query": "日历视图", "expectedProfiles": ["calendar-schedule"] },
+  { "id": "intent-publish-web", "query": "发布到网站", "expectedProfiles": ["publish-web"] },
+  { "id": "intent-format-conversion", "query": "格式转换", "expectedProfiles": ["format-conversion"] },
+  { "id": "intent-media-transcription", "query": "语音转文字", "expectedProfiles": ["media-transcription"] },
+  { "id": "intent-image-ocr", "query": "图片文字识别", "expectedProfiles": ["image-ocr"] },
+  { "id": "intent-knowledge-graph", "query": "知识图谱", "expectedProfiles": ["knowledge-graph"] },
+  { "id": "intent-table-database", "query": "数据库查询", "expectedProfiles": ["table-database"] },
+  { "id": "intent-metadata-frontmatter", "query": "元数据管理", "expectedProfiles": ["metadata-frontmatter"] },
+  { "id": "intent-template-automation", "query": "模板自动化", "expectedProfiles": ["template-automation"] },
+  { "id": "intent-research-citation", "query": "文献管理", "expectedProfiles": ["research-citation"] },
+  { "id": "intent-spaced-repetition", "query": "间隔重复", "expectedProfiles": ["spaced-repetition"] },
+  { "id": "intent-ai-assistant", "query": "AI助手", "expectedProfiles": ["ai-assistant"] },
+  { "id": "intent-mobile-first", "query": "手机端", "expectedProfiles": ["mobile-first"] },
+  { "id": "intent-canvas-visual", "query": "画布", "expectedProfiles": ["canvas-visual"] },
+  { "id": "intent-theme-ui", "query": "主题美化", "expectedProfiles": ["theme-ui"] },
+  { "id": "intent-file-attachments", "query": "文件管理", "expectedProfiles": ["file-attachments"] },
+  { "id": "intent-backup-version-control", "query": "版本控制", "expectedProfiles": ["backup-version-control"] },
+  { "id": "intent-search-navigation", "query": "全文搜索", "expectedProfiles": ["search-navigation"] },
+  { "id": "intent-language-dictionary", "query": "翻译插件", "expectedProfiles": ["language-dictionary"] },
+  { "id": "intent-math-science", "query": "数学公式", "expectedProfiles": ["math-science"] },
+  { "id": "intent-rss-web-clipping", "query": "RSS订阅", "expectedProfiles": ["rss-web-clipping"] },
+  { "id": "intent-habit-focus", "query": "习惯追踪", "expectedProfiles": ["habit-focus"] },
+  { "id": "intent-accessibility", "query": "无障碍阅读", "expectedProfiles": ["accessibility"] },
+  {
+    "id": "pure-cn-export",
+    "query": "不要导出",
+    "excludedTerms": ["导出", "export"],
+    "pureNegative": true
+  },
+  {
+    "id": "pure-cn-no-export",
+    "query": "无需导出",
+    "excludedTerms": ["导出", "export"],
+    "pureNegative": true
+  },
+  {
+    "id": "pure-en-export",
+    "query": "without export",
+    "excludedTerms": ["导出", "export"],
+    "pureNegative": true
+  },
+  {
+    "id": "mixed-preview-no-export",
+    "query": "即时预览，不要导出",
+    "excludedTerms": ["导出", "export"]
+  },
+  {
+    "id": "mixed-image-no-export",
+    "query": "图片插件 -export",
+    "excludedTerms": ["导出", "export"]
+  },
+  {
+    "id": "mixed-notes-no-sync",
+    "query": "笔记管理，不要同步",
+    "excludedTerms": ["同步", "sync"]
+  },
+  {
+    "id": "mixed-offline-no-ai",
+    "query": "离线处理 without AI",
+    "excludedTerms": ["人工智能", "ai", "gpt", "llm"]
+  },
+  {
+    "id": "mixed-task-no-calendar",
+    "query": "任务管理 exclude calendar",
+    "excludedTerms": ["日历", "calendar"]
+  },
+  {
+    "id": "mixed-reader-no-rss",
+    "query": "网页剪藏，不含 RSS",
+    "excludedTerms": ["rss", "订阅", "feed"]
+  },
+  {
+    "id": "mixed-local-no-backup",
+    "query": "本地处理，不需要备份",
+    "excludedTerms": ["备份", "backup", "git"]
+  }
+]

@@ -22,6 +22,11 @@ const PLUGINS = [
 	{ id: "translate", name: "Translate", description: "Translate text in notes" },
 ];
 
+const NEGATIVE_PLUGINS = [
+	{ id: "exporter", name: "Exporter", description: "Export notes to PDF and HTML" },
+	{ id: "organizer", name: "Organizer", description: "Organize notes and folders locally" },
+];
+
 function makeSearcher(embeddingSource: "keyword" | "local" = "keyword") {
 	const tagService = new PluginTagService();
 	tagService.load({
@@ -135,6 +140,15 @@ describe("AISearcher 降级健壮性", () => {
 		expect(result.rankedIds.length).toBeGreaterThan(0);
 		// 关键词召回应命中 dataview（"database" 命中描述）
 		expect(result.rankedIds).toContain("dataview");
+	});
+
+	it("纯否定 query 跳过正向召回并硬排除否定能力", async () => {
+		const { searcher } = makeSearcher();
+		const result = await searcher.localSearch("不要导出", NEGATIVE_PLUGINS as any);
+
+		expect(result.rankedIds).toEqual(["organizer"]);
+		expect(result.matchDiagnostics?.exporter).toBeUndefined();
+		expect(result.matchDiagnostics?.organizer?.negativeMatches).toEqual([]);
 	});
 
 	it("LLM 只返回部分 ranking 时，未排序候选兜底补回，结果不缺失", async () => {
@@ -256,6 +270,66 @@ describe("搜索分段计时（生产埋点）", () => {
 		expect(snap).not.toBeNull();
 		expect(snap!.phases.map((p) => p.name)).not.toContain(PHASE.llmRank);
 		expect(snap!.counters["结果数"]).toBeGreaterThan(0);
+	});
+
+	it("localSearch 保存匹配诊断，且快照返回深拷贝", async () => {
+		const { searcher } = makeSearcher();
+		req.mockRejectedValue(new Error("localSearch 不应调用 LLM"));
+
+		expect(searcher.getLastMatchDiagnostics()).toBeNull();
+		const result = await searcher.localSearch("query notes", PLUGINS as any);
+		const first = searcher.getLastMatchDiagnostics();
+
+		expect(first).not.toBeNull();
+		expect(first!.query).toBe("query notes");
+		expect(first!.mode).toBe("local");
+		expect(first!.rankedIds).toEqual(result.rankedIds);
+		expect(first!.diagnostics.dataview).toBeDefined();
+		expect(first!.diagnostics.dataview.matchedTerms.length).toBeGreaterThan(0);
+		expect(first!.labels.dataview).toBe("Dataview");
+
+		result.matchDiagnostics!.dataview.matchedTerms.push("result mutation");
+		first!.rankedIds.push("fake");
+		first!.labels.dataview = "改名";
+		first!.diagnostics.dataview.matchedTerms.push("fake");
+		first!.diagnostics.dataview.phraseMatches.push("fake");
+
+		const second = searcher.getLastMatchDiagnostics()!;
+		expect(second.rankedIds).not.toContain("fake");
+		expect(second.labels.dataview).toBe("Dataview");
+		expect(second.diagnostics.dataview.matchedTerms).not.toContain("fake");
+		expect(second.diagnostics.dataview.matchedTerms).not.toContain("result mutation");
+		expect(second.diagnostics.dataview.phraseMatches).not.toContain("fake");
+	});
+
+	it("AI 搜索把最终排序与匹配诊断一起保存", async () => {
+		const { searcher } = makeSearcher();
+		req.mockResolvedValue({
+			status: 200,
+			json: {
+				choices: [{ message: { content: JSON.stringify({ ranking: [2, 0, 1] }) } }],
+			},
+		});
+
+		const result = await searcher.search("query notes", PLUGINS as any);
+		const snapshot = searcher.getLastMatchDiagnostics()!;
+
+		expect(snapshot.mode).toBe("ai");
+		expect(snapshot.rankedIds).toEqual(result.rankedIds);
+		expect(snapshot.rankedIds.length).toBeGreaterThan(0);
+		expect(snapshot.diagnostics.translate).toBeDefined();
+		expect(result.matchDiagnostics).toEqual(snapshot.diagnostics);
+	});
+
+	it("新搜索失败时清除上一次匹配诊断，避免面板展示过期证据", async () => {
+		const { searcher } = makeSearcher();
+		req.mockRejectedValueOnce(new Error("llm down"));
+		await searcher.localSearch("query notes", PLUGINS as any);
+		expect(searcher.getLastMatchDiagnostics()).not.toBeNull();
+
+		req.mockRejectedValue(new Error("all batches down"));
+		await expect(searcher.search("zzzz不存在zzzz", PLUGINS as any)).rejects.toThrow();
+		expect(searcher.getLastMatchDiagnostics()).toBeNull();
 	});
 
 	it("快照是拷贝：外部改动不影响内部状态", async () => {

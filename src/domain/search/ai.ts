@@ -15,6 +15,14 @@ import { computeIndexFingerprints } from "@shared/fingerprint";
 import { logger } from "@shared/logger";
 import { tokenizeForBM25, bm25Idf, bm25LenNorm, bm25TermWeight } from "@domain/search/bm25";
 import { applyQualityFactors } from "@domain/search/quality";
+import {
+	parseQueryIntent,
+	pureNegativeCandidateIds,
+	rerankSearchCandidates,
+	type SearchCandidateText,
+	type SearchMatchDiagnostics,
+	type SearchMatchDiagnosticsSnapshot,
+} from "@domain/search/query-intent";
 import { t2sForEmbed } from "@translation/lexicon/t2s";
 import { expandQuery } from "@translation/lexicon/synonyms";
 import {
@@ -92,6 +100,8 @@ type SearchPlugin = {
 	description: string;
 	nameZh?: string;
 	descZh?: string;
+	downloads?: number;
+	updated?: number;
 };
 /**
  * LLM 精排固定处理前 N 条候选（本地召回已给粗序，仅前 30 条进 LLM）。
@@ -296,6 +306,9 @@ export class AISearcher {
 	 */
 	private lastSearchTiming: SearchTimingSnapshot | null = null;
 
+	/** 最近一次搜索的召回/意图命中证据，供设置页搜索诊断面板读取。 */
+	private lastMatchDiagnostics: SearchMatchDiagnosticsSnapshot | null = null;
+
 	/**
 	 * 上一次搜索是否重建了向量索引。
 	 * 用于识别「每次都重建」这类退化 —— 它不会体现在 localPhaseMs 里（向量索引属外部
@@ -352,6 +365,62 @@ export class AISearcher {
 			totalMs: s.totalMs,
 			counters: { ...s.counters },
 			at: s.at,
+		};
+	}
+
+	/**
+	 * 最近一次搜索的匹配证据（尚未搜索过，或没有本地候选时为 null）。
+	 * 返回深拷贝，设置页渲染或测试修改结果都不会污染搜索结果缓存。
+	 */
+	getLastMatchDiagnostics(): SearchMatchDiagnosticsSnapshot | null {
+		const s = this.lastMatchDiagnostics;
+		if (!s) return null;
+		return {
+			query: s.query,
+			mode: s.mode,
+			rankedIds: [...s.rankedIds],
+			labels: { ...s.labels },
+			diagnostics: this.cloneMatchDiagnostics(s.diagnostics),
+			at: s.at,
+		};
+	}
+
+	private cloneMatchDiagnostics(
+		diagnostics: Record<string, SearchMatchDiagnostics>,
+	): Record<string, SearchMatchDiagnostics> {
+		return Object.fromEntries(
+			Object.entries(diagnostics).map(([id, d]) => [id, {
+				...d,
+				matchedTerms: [...d.matchedTerms],
+				phraseMatches: [...d.phraseMatches],
+				intentMatches: [...d.intentMatches],
+				negativeMatches: [...d.negativeMatches],
+			}])
+		);
+	}
+
+	private saveMatchDiagnostics(
+		query: string,
+		mode: "ai" | "local",
+		rankedIds: string[],
+		allPlugins: SearchPlugin[],
+		diagnostics: Record<string, SearchMatchDiagnostics>,
+	): void {
+		const byId = new Map(allPlugins.map((p) => [p.id, p]));
+		const labels: Record<string, string> = {};
+		for (const id of Object.keys(diagnostics)) {
+			const plugin = byId.get(id);
+			if (!plugin) continue;
+			const translated = plugin.nameZh?.trim();
+			labels[id] = translated ? `${translated} · ${plugin.name}` : plugin.name;
+		}
+		this.lastMatchDiagnostics = {
+			query,
+			mode,
+			rankedIds: [...rankedIds],
+			labels,
+			diagnostics: this.cloneMatchDiagnostics(diagnostics),
+			at: Date.now(),
 		};
 	}
 
@@ -420,6 +489,8 @@ export class AISearcher {
 		onPhase?: (phase: string, detail: string) => void,
 		filterCategories?: string[],
 	): Promise<AISearchResult> {
+		// 匹配证据只描述当前这次搜索；即使参数校验失败，也不应在设置页继续展示上一次成功搜索。
+		this.lastMatchDiagnostics = null;
 		if (!this.aiConfig.apiKey && !isLocalBaseUrl(this.aiConfig.baseURL))
 			throw new Error("NO_API_KEY");
 		if (!allPlugins.length) throw new Error("无插件数据，请先加载列表");
@@ -430,6 +501,11 @@ export class AISearcher {
 		try {
 			// ── 召回：混合召回链（向量语义 RRF 融合 本地关键词 → LLM 兜底）──
 			let merged: AISearchCandidate[] = [];
+			const intent = parseQueryIntent(query);
+			// 纯否定 query 没有正向召回词：跳过向量/BM25/标题路，改用中性质量分
+			// 形成候选池，并硬排除命中否定词的插件，避免「不要导出」反而召回导出插件。
+			const recallQuery = intent.isPureNegative ? "" : intent.recallQuery || query;
+			let matchDiagnostics: Record<string, SearchMatchDiagnostics> = {};
 
 			const embCfg = this.aiConfig.embedding;
 			const useVector = embCfg && embCfg.source !== "keyword";
@@ -441,13 +517,13 @@ export class AISearcher {
 
 			// 向量召回（带分数，供 RRF 融合）
 			let vectorScores: Map<string, number> | null = null;
-			if (useVector) {
+			if (useVector && recallQuery) {
 				try {
 					// 不要在这里再包一层 measure：vectorRecallScores 内部已用 measure 记
 					// 「向量索引」「query 编码+余弦」。外层再包一层会让 localPhaseMs 把整段
 					// 向量耗时算两遍（曾导致慢查询告警在开启向量搜索时虚报）。
 					vectorScores = await this.vectorRecallScores(
-						query,
+						recallQuery,
 						allPlugins,
 						embCfg,
 						timing,
@@ -464,26 +540,39 @@ export class AISearcher {
 			// 关键词召回（CJK 三元组 BM25 + 同义词 + t2s，对齐本地语义模式）
 			onPhase?.("本地召回", "正在本地粗筛候选…");
 			const localScores = await timing.measure(PHASE.keyword, () =>
-				bm25RecallScores(query, this.getBm25Index(allPlugins, fingerprints.bm25), RECALL_PATH_CAP)
+				recallQuery
+					? bm25RecallScores(recallQuery, this.getBm25Index(allPlugins, fingerprints.bm25), RECALL_PATH_CAP)
+					: new Map<string, number>()
 			);
 
 			// 标题模糊匹配（第三路）：兜住「用户只记得名字大概」的场景
 			// 用 t2sForEmbed(query) 与召回路同 token 空间（繁体 query 也能命中简体标题）
 			const fuzzyScores = await timing.measure(PHASE.fuzzy, () =>
-				fuzzyTitleScores(t2sForEmbed(query), allPlugins)
+				recallQuery ? fuzzyTitleScores(t2sForEmbed(recallQuery), allPlugins) : new Map<string, number>()
 			);
 
 			// RRF 融合：向量 + 关键词 + 标题模糊 三路名次融合（异构分数量纲不同，RRF 只看名次，
 			// 比「并集取前 N」更稳；多路都命中的候选自然靠前，减少 LLM 精排负担）。
 			const fusedIds = await timing.measure(PHASE.rrf, () => {
-				if (vectorScores && vectorScores.size > 0) {
-					// 向量路可用：三路融合（模糊权重低一些，作 tie-break）
-					const fused = rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5]);
-					return topNFused(fused, CANDIDATE_POOL_CAP).map((x) => x.id);
-				}
-				// 向量路不可用：关键词 + 标题模糊 两路融合
-				const fused = rrfFuse([localScores, fuzzyScores], [1.0, 0.5]);
-				return topNFused(fused, CANDIDATE_POOL_CAP).map((x) => x.id);
+				const baseFused = intent.isPureNegative
+					? new Map(pureNegativeCandidateIds(intent, allPlugins).map((id) => [id, 1]))
+					: vectorScores && vectorScores.size > 0
+						? rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5])
+						: rrfFuse([localScores, fuzzyScores], [1.0, 0.5]);
+				const fused = intent.isPureNegative ? applyQualityFactors(baseFused, allPlugins) : baseFused;
+				const pool = topNFused(fused, CANDIDATE_POOL_CAP).map((x) => x.id);
+				const reranked = rerankSearchCandidates({
+					intent,
+					ids: pool,
+					plugins: allPlugins as SearchCandidateText[],
+					fusedScores: fused,
+					keywordScores: localScores,
+					vectorScores,
+					titleScores: fuzzyScores,
+					limit: CANDIDATE_POOL_CAP,
+				});
+				matchDiagnostics = reranked.diagnostics;
+				return reranked.ids;
 			});
 
 			const idToPlugin = new Map(allPlugins.map((p) => [p.id, p]));
@@ -503,7 +592,7 @@ export class AISearcher {
 			timing.count("标题命中", fuzzyScores.size);
 
 			// LLM 兜底召回
-			if (merged.length === 0) {
+			if (merged.length === 0 && !intent.isPureNegative) {
 				merged = await timing.measure(PHASE.llmFallback, () =>
 					this.recallAllBatches(query, allPlugins, onPhase)
 				);
@@ -511,10 +600,17 @@ export class AISearcher {
 			timing.count("候选池", merged.length);
 
 			if (merged.length === 0) {
-				throw new Error("未找到相关插件，请尝试更换搜索词");
+				throw new Error(
+					intent.isPureNegative
+						? "纯否定查询没有可返回的插件，请补充要搜索的功能"
+						: "未找到相关插件，请尝试更换搜索词"
+				);
 			}
 
-			const exp = this.buildExplainability(query, vectorScores, localScores, fuzzyScores);
+			const exp = {
+				...this.buildExplainability(intent.recallQuery, vectorScores, localScores, fuzzyScores),
+				matchDiagnostics,
+			};
 
 			let result: AISearchResult;
 			if (merged.length < 2) {
@@ -544,6 +640,7 @@ export class AISearcher {
 			// 精排结果以计数器呈现（原先用两条 logger.debug 表达同一信息）
 			timing.count("精排降级", result.rankFallback ? 1 : 0);
 			timing.count("结果数", result.rankedIds.length);
+			this.saveMatchDiagnostics(query, "ai", result.rankedIds, allPlugins, matchDiagnostics);
 			return result;
 		} finally {
 			this.finishTiming(timing, `AI 搜索 query="${query}"`);
@@ -562,23 +659,28 @@ export class AISearcher {
 		allPlugins: SearchPlugin[],
 		filterCategories?: string[],
 	): Promise<AISearchResult> {
+		// 匹配证据只描述当前这次搜索；即使参数校验失败，也不应在设置页继续展示上一次成功搜索。
+		this.lastMatchDiagnostics = null;
 		if (!allPlugins.length) throw new Error("无插件数据，请先加载列表");
 
 		const timing = SearchTiming.start();
 		try {
 			const embCfg = this.aiConfig.embedding;
 			const useVector = embCfg && embCfg.source !== "keyword";
+			const intent = parseQueryIntent(query);
+			const recallQuery = intent.isPureNegative ? "" : intent.recallQuery || query;
+			let matchDiagnostics: Record<string, SearchMatchDiagnostics> = {};
 
 			// 与 search() 同理：单趟算出两个索引的失效签名
 			const fingerprints = computeIndexFingerprints(allPlugins, (p) => this.pluginTags[p.id]);
 
 			// 向量召回（带分数）
 			let vectorScores: Map<string, number> | null = null;
-			if (useVector) {
+			if (useVector && recallQuery) {
 				try {
 					// 同 search()：不在此再包一层 measure，避免向量耗时被 localPhaseMs 双计
 					vectorScores = await this.vectorRecallScores(
-						query,
+						recallQuery,
 						allPlugins,
 						embCfg,
 						timing,
@@ -594,21 +696,36 @@ export class AISearcher {
 
 			// 关键词召回（CJK 三元组 BM25，替代简单重叠）+ 标题模糊
 			const localScores = await timing.measure(PHASE.keyword, () =>
-				bm25RecallScores(query, this.getBm25Index(allPlugins, fingerprints.bm25), RECALL_PATH_CAP)
+				recallQuery
+					? bm25RecallScores(recallQuery, this.getBm25Index(allPlugins, fingerprints.bm25), RECALL_PATH_CAP)
+					: new Map<string, number>()
 			);
 			const fuzzyScores = await timing.measure(PHASE.fuzzy, () =>
-				fuzzyTitleScores(t2sForEmbed(query), allPlugins)
+				recallQuery ? fuzzyTitleScores(t2sForEmbed(recallQuery), allPlugins) : new Map<string, number>()
 			);
 
 			// RRF 融合（与 AI 模式召回一致；向量不可用时退化为关键词+标题）
 			const fusedIds = await timing.measure(PHASE.rrf, () => {
-				const rrf =
-					vectorScores && vectorScores.size > 0
+				const rrf = intent.isPureNegative
+					? new Map(pureNegativeCandidateIds(intent, allPlugins).map((id) => [id, 1]))
+					: vectorScores && vectorScores.size > 0
 						? rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5])
 						: rrfFuse([localScores, fuzzyScores], [1.0, 0.5]);
 				// 质量因子在此直接塑造最终排序（本地模式无 LLM 精排，是它的主战场）
 				const fused = applyQualityFactors(rrf, allPlugins);
-				return topNFused(fused, CANDIDATE_POOL_CAP).map((x) => x.id);
+				const pool = topNFused(fused, CANDIDATE_POOL_CAP).map((x) => x.id);
+				const reranked = rerankSearchCandidates({
+					intent,
+					ids: pool,
+					plugins: allPlugins as SearchCandidateText[],
+					fusedScores: fused,
+					keywordScores: localScores,
+					vectorScores,
+					titleScores: fuzzyScores,
+					limit: CANDIDATE_POOL_CAP,
+				});
+				matchDiagnostics = reranked.diagnostics;
+				return reranked.ids;
 			});
 
 			timing.count("插件数", allPlugins.length);
@@ -616,9 +733,17 @@ export class AISearcher {
 			timing.count("关键词命中", localScores.size);
 			timing.count("标题命中", fuzzyScores.size);
 			timing.count("结果数", fusedIds.length);
+			if (fusedIds.length === 0 && intent.isPureNegative) {
+				throw new Error("纯否定查询没有可返回的插件，请补充要搜索的功能");
+			}
 
-			const exp = this.buildExplainability(query, vectorScores, localScores, fuzzyScores);
-			return { rankedIds: fusedIds, rankFallback: true, ...exp };
+			const exp = {
+				...this.buildExplainability(intent.recallQuery, vectorScores, localScores, fuzzyScores),
+				matchDiagnostics,
+			};
+			const result = { rankedIds: fusedIds, rankFallback: true, ...exp };
+			this.saveMatchDiagnostics(query, "local", result.rankedIds, allPlugins, matchDiagnostics);
+			return result;
 		} finally {
 			this.finishTiming(timing, `本地语义 query="${query}"`);
 		}

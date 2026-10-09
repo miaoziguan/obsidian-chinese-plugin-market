@@ -23,6 +23,7 @@ import { buildSelfHostedTranslators, type SelfHostedTranslator } from "@translat
 import { TransmartClient } from "@translation/api/transmart";
 import { AISearcher } from "@domain/search/ai";
 import type { SearchTimingSnapshot } from "@domain/search/search-timing";
+import type { SearchMatchDiagnostics, SearchMatchDiagnosticsSnapshot } from "@domain/search/query-intent";
 import { CoverageTracker } from "@domain/catalog/coverage";
 import { PluginTagService, type PluginTag } from "@domain/catalog/plugin-tags";
 import { type TMEntry } from "@translation/memory/translation-memory";
@@ -117,6 +118,11 @@ export interface AISearchResult {
 	 * title=标题模糊命中 / llm=经 AI 精排保留（LLM 认为相关）。
 	 */
 	signals?: Record<string, string[]>;
+	/**
+	 * 每个候选的本地排序证据。字段保持可选以兼容旧调用方和 LLM 兜底召回。
+	 * keywordRank 等名次为 1-based；未命中对应召回路时为 null。
+	 */
+	matchDiagnostics?: Record<string, SearchMatchDiagnostics>;
 }
 
 export interface CoverageSnapshot {
@@ -1147,6 +1153,11 @@ export class Translator {
 	 */
 	getLastSearchTiming(): SearchTimingSnapshot | null {
 		return this.aiSearcher.getLastSearchTiming();
+	}
+
+	/** 最近一次 AI / 本地语义搜索的匹配证据（供设置页搜索诊断面板展示）。 */
+	getLastMatchDiagnostics(): SearchMatchDiagnosticsSnapshot | null {
+		return this.aiSearcher.getLastMatchDiagnostics();
 	}
 
 	/** AI 深度对比委托（带缓存：同一插件集合直接命中，避免重复烧 token） */

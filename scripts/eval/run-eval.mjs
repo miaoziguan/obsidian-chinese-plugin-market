@@ -36,15 +36,34 @@ const VAULT = path.join(
 
 const require2 = createRequire(import.meta.url);
 const B = require2("./eval.bundle.cjs");
-const { fuzzyTitleScores, rrfFuse, topNFused, applyQualityFactors, bm25Score, t2sForEmbed, expandQuery, AISearcher, LLMClient, PluginTagService } = B;
+const {
+	fuzzyTitleScores,
+	rrfFuse,
+	topNFused,
+	applyQualityFactors,
+	bm25Score,
+	t2sForEmbed,
+	expandQuery,
+	parseQueryIntent,
+	pureNegativeCandidateIds,
+	rerankSearchCandidates,
+	buildBm25Index,
+	bm25RecallScores,
+	AISearcher,
+	LLMClient,
+	PluginTagService,
+} = B;
 
 const UPDATE = process.argv.includes("--update-baseline");
 const BM25_TITLE_W = 2.0; // 镜像 ai.ts 常量（漂移由 parity 兜底）
 
 // ───────── 数据 ─────────
 const pool = JSON.parse(fs.readFileSync(path.join(TASK, "eval-pool.json"), "utf8"));
-const evalSet = JSON.parse(fs.readFileSync(path.join(TASK, "eval-set.json"), "utf8"));
+const evalSetPath = process.env.EVAL_SET_FILE || path.join(TASK, "eval-set.json");
+const evalSet = JSON.parse(fs.readFileSync(evalSetPath, "utf8"));
 const vecCache = JSON.parse(fs.readFileSync(path.join(TASK, "eval-vec-cache.json"), "utf8"));
+const intentEvalPath = process.env.INTENT_EVAL_CASES_FILE || path.join(HERE, "intent-eval-cases.json");
+const intentEvalCases = JSON.parse(fs.readFileSync(intentEvalPath, "utf8"));
 // zh 面 = 种子 ∪ 用户文件（用户优先）——镜像生产 onload 合并语义（plugin.ts: cache={...seed,...file}）。
 // 2026-09-20 事故：用户文件被空写回（iCloud 读竞争怀疑），harness 只读用户文件 → 静默跑在纯英文面。
 const zhUser = JSON.parse(fs.readFileSync(path.join(VAULT, "translator-cache.json"), "utf8")).cache ?? {};
@@ -70,6 +89,8 @@ const plugins = pool.map((p) => {
 		updated: st?.updated,
 	};
 });
+// tri 臂必须直接复用生产 BM25 实现；其它臂保留历史分词对照。
+const productionBm25Index = buildBm25Index(plugins, "eval-harness");
 
 // ───────── 分词臂 ─────────
 // 已知正例断言：复制 CJK 字符类的历史坑（截断 range 静默丢字）靠它当场现形
@@ -185,17 +206,77 @@ function recallScores(query, idx, tok) {
 	return out;
 }
 
-// ───────── 单 query 融合排序（镜像 localSearch） ─────────
-function rank(query, idx, tok) {
+// ───────── 单 query 融合排序（旧 RRF / 当前意图重排） ─────────
+function vectorScoresFor(query, fallbackQuery = "") {
 	// trad 修复配套：生产 embed 的是 t2s(query)，缓存键同构（简体 query 的 t2s=自身，繁体键=简体孪生）
-		const vectorScores = new Map(vecCache.perQuery[B.t2sForEmbed(query)] ?? vecCache.perQuery[query] ?? []);
-	const localScores = recallScores(query, idx, tok);
-	const fuzzyScores = fuzzyTitleScores(query, plugins);
+	const keys = [
+		B.t2sForEmbed(query),
+		query,
+		fallbackQuery ? B.t2sForEmbed(fallbackQuery) : "",
+		fallbackQuery,
+	].filter(Boolean);
+	for (const key of keys) {
+		if (vecCache.perQuery[key]) return new Map(vecCache.perQuery[key]);
+	}
+	return new Map();
+}
+
+function localScoresFor(query, idx, tok, armId) {
+	return armId === "tri" ? bm25RecallScores(query, productionBm25Index, 500) : recallScores(query, idx, tok);
+}
+
+function baselineRank(query, idx, tok, armId = "tri") {
+	const vectorScores = vectorScoresFor(query);
+	const localScores = localScoresFor(query, idx, tok, armId);
+	const fuzzyScores = fuzzyTitleScores(t2sForEmbed(query), plugins);
 	const fused =
 		vectorScores.size > 0
 			? rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5])
 			: rrfFuse([localScores, fuzzyScores], [1.0, 0.5]);
-	return topNFused(applyQualityFactors(fused, plugins), 300).map((x) => x.id);
+	const scored = applyQualityFactors(fused, plugins);
+	return { ids: topNFused(scored, 300).map((x) => x.id), scored, keyword: localScores, vector: vectorScores, title: fuzzyScores };
+}
+
+function enhancedRank(query, idx, tok, armId = "tri") {
+	const intent = parseQueryIntent(query);
+	if (intent.isPureNegative) {
+		const neutral = new Map(pureNegativeCandidateIds(intent, plugins).map((id) => [id, 1]));
+		const scored = applyQualityFactors(neutral, plugins);
+		const pool = topNFused(scored, 300).map((x) => x.id);
+		const reranked = rerankSearchCandidates({
+			intent,
+			ids: pool,
+			plugins,
+			fusedScores: scored,
+			keywordScores: new Map(),
+			vectorScores: null,
+			titleScores: new Map(),
+			limit: 300,
+		});
+		return { ids: reranked.ids, scored, keyword: new Map(), vector: null, title: new Map() };
+	}
+
+	const recallQuery = intent.recallQuery || query;
+	const vectorScores = vectorScoresFor(recallQuery, query);
+	const localScores = localScoresFor(recallQuery, idx, tok, armId);
+	const fuzzyScores = fuzzyTitleScores(t2sForEmbed(recallQuery), plugins);
+	const fused =
+		vectorScores.size > 0
+			? rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5])
+			: rrfFuse([localScores, fuzzyScores], [1.0, 0.5]);
+	const scored = applyQualityFactors(fused, plugins);
+	const pool = topNFused(scored, 300).map((x) => x.id);
+	const reranked = rerankSearchCandidates({
+		intent,
+		ids: pool,
+		plugins,
+		fusedScores: scored,
+		keywordScores: localScores,
+		vectorScores,
+		titleScores: fuzzyScores,
+		limit: 300,
+	});
+	return { ids: reranked.ids, scored, keyword: localScores, vector: vectorScores, title: fuzzyScores };
 }
 
 // ───────── parity：tri 臂 top20 ≡ 生产 AISearcher.localSearch（注入同向量分） ─────────
@@ -207,7 +288,9 @@ async function parityCheck(triRankedByQuery) {
 	);
 	let bad = 0;
 	for (const { q } of evalSet.queries.slice(0, 5)) {
-		searcher.vectorRecallScores = async () => new Map(vecCache.perQuery[q] ?? []);
+		const intent = parseQueryIntent(q);
+		const recallQuery = intent.isPureNegative ? "" : intent.recallQuery || q;
+		searcher.vectorRecallScores = async () => (recallQuery ? vectorScoresFor(recallQuery, q) : new Map());
 		const r = await searcher.localSearch(q, plugins);
 		const a = r.rankedIds.slice(0, 20).join(",");
 		const b = triRankedByQuery[q].slice(0, 20).join(",");
@@ -231,16 +314,32 @@ const agg = (rows, k) => rows.reduce((s, r) => s + r[k], 0) / rows.length;
 
 // ───────── 主流程 ─────────
 const results = {};
+let triContext = null;
+let triBaselineRows = null;
+let triBaselinePerQ = null;
+let triComparison = null;
 for (const arm of ARMS) {
 	const t0 = Date.now();
 	const idx = buildIndex(arm.tok);
 	const buildMs = Date.now() - t0;
 	const perQ = {};
 	const rows = [];
+	const baselineRows = [];
+	const baselinePerQ = {};
 	for (const { q, gold, bucket } of evalSet.queries) {
-		const ranked = rank(q, idx, arm.tok);
-		perQ[q] = ranked;
-		rows.push({ bucket, ...metrics(ranked, gold) });
+		const ranked = enhancedRank(q, idx, arm.tok, arm.id);
+		perQ[q] = ranked.ids;
+		rows.push({ bucket, ...metrics(ranked.ids, gold) });
+		if (arm.id === "tri") {
+			const baseline = baselineRank(q, idx, arm.tok, arm.id);
+			baselineRows.push({ bucket, ...metrics(baseline.ids, gold) });
+			baselinePerQ[q] = baseline.ids;
+		}
+	}
+	if (arm.id === "tri") {
+		triContext = { idx, tok: arm.tok };
+		triBaselineRows = baselineRows;
+		triBaselinePerQ = baselinePerQ;
 	}
 	const buckets = [...new Set(rows.map((r) => r.bucket))];
 	results[arm.id] = {
@@ -262,6 +361,57 @@ for (const arm of ARMS) {
 	);
 }
 
+if (triBaselineRows) {
+	const oldR10 = agg(triBaselineRows, "r10");
+	const oldMrr = agg(triBaselineRows, "mrr");
+	const oldP10 = agg(triBaselineRows, "p10");
+	const current = results.tri;
+	triComparison = {
+		baseline: { r10: oldR10, mrr: oldMrr, p10: oldP10 },
+		current: { r10: current.r10, mrr: current.mrr, p10: current.p10 },
+		delta: { r10: current.r10 - oldR10, mrr: current.mrr - oldMrr, p10: current.p10 - oldP10 },
+	};
+	const queryComparison = evalSet.queries.map(({ q, gold, bucket }) => {
+		const baselineIds = triBaselinePerQ?.[q] ?? [];
+		const currentIds = current.perQ[q] ?? [];
+		const baselineMetrics = metrics(baselineIds, gold);
+		const currentMetrics = metrics(currentIds, gold);
+		return {
+			q,
+			bucket,
+			gold,
+			baseline: baselineMetrics,
+			current: currentMetrics,
+			delta: {
+				r5: currentMetrics.r5 - baselineMetrics.r5,
+				r10: currentMetrics.r10 - baselineMetrics.r10,
+				mrr: currentMetrics.mrr - baselineMetrics.mrr,
+				p10: currentMetrics.p10 - baselineMetrics.p10,
+			},
+			baselineTop10: baselineIds.slice(0, 10),
+			currentTop10: currentIds.slice(0, 10),
+		};
+	});
+	triComparison.perQuery = queryComparison;
+	const regressions = queryComparison
+		.filter((row) => row.delta.r10 < 0 || row.delta.mrr < 0)
+		.sort((a, b) => a.delta.mrr - b.delta.mrr || a.delta.r10 - b.delta.r10)
+		.slice(0, 10);
+	if (regressions.length > 0) {
+		console.log("意图重排回退最大的 query：");
+		for (const row of regressions) {
+			console.log(
+				`  ${row.q} [${row.bucket}]：MRR ${(row.baseline.mrr - row.current.mrr).toFixed(3)}，R@10 ${(row.baseline.r10 - row.current.r10).toFixed(3)}`
+			);
+		}
+	}
+	console.log(
+		`旧 RRF → 当前意图重排：R@10 ${oldR10.toFixed(3)} → ${current.r10.toFixed(3)} (${(current.r10 - oldR10 >= 0 ? "+" : "")}${(current.r10 - oldR10).toFixed(3)}) · ` +
+			`MRR ${oldMrr.toFixed(3)} → ${current.mrr.toFixed(3)} (${(current.mrr - oldMrr >= 0 ? "+" : "")}${(current.mrr - oldMrr).toFixed(3)}) · ` +
+			`P@10 ${oldP10.toFixed(3)} → ${current.p10.toFixed(3)} (${(current.p10 - oldP10 >= 0 ? "+" : "")}${(current.p10 - oldP10).toFixed(3)})`
+	);
+}
+
 const bad = await parityCheck(results.tri.perQ);
 if (bad > 0) {
 	console.error(`[parity] ${bad} 条 query 与生产 localSearch 不一致 → harness 与生产漂移，exit 2`);
@@ -269,8 +419,79 @@ if (bad > 0) {
 }
 console.log("[parity] tri 臂 top20 ≡ 生产 localSearch ✓");
 
+// ───────── 否定查询评测 ─────────
+const pluginById = new Map(plugins.map((p) => [p.id, p]));
+function excludedHit(id, excludedTerms) {
+	const p = pluginById.get(id);
+	if (!p) return false;
+	const text = `${p.id} ${p.name} ${p.nameZh ?? ""} ${p.description} ${p.descZh ?? ""}`.toLowerCase();
+	return excludedTerms.some((term) => text.includes(String(term).toLowerCase()));
+}
+function negativeRow(ranked, excludedTerms) {
+	const top10 = ranked.slice(0, 10);
+	const hits = top10.filter((id) => excludedHit(id, excludedTerms)).length;
+	return { violation: hits > 0 ? 1 : 0, violationRate: hits / Math.max(1, top10.length), hits };
+}
+if (!triContext) throw new Error("缺少 tri 评测上下文");
+const intentCases = intentEvalCases.filter((c) => Array.isArray(c.expectedProfiles));
+let intentMismatches = 0;
+for (const c of intentCases) {
+	const actual = parseQueryIntent(c.query).activeProfiles.map((profile) => profile.key).sort();
+	const expected = [...c.expectedProfiles].sort();
+	if (actual.join(",") !== expected.join(",")) {
+		intentMismatches++;
+		console.error(`[intent-eval] ${c.id} query="${c.query}" expected=${expected.join(",")} actual=${actual.join(",")}`);
+	}
+}
+if (intentMismatches > 0) throw new Error(`[intent-eval] ${intentMismatches}/${intentCases.length} 条意图标注不一致`);
+console.log(`[intent-eval] ${intentCases.length}/${intentCases.length} 条意图触发通过`);
+
+const negativeCases = intentEvalCases.filter((c) => Array.isArray(c.excludedTerms));
+const negativeRows = negativeCases.map((c) => {
+	const baseline = negativeRow(baselineRank(c.query, triContext.idx, triContext.tok).ids, c.excludedTerms);
+	const currentRank = enhancedRank(c.query, triContext.idx, triContext.tok);
+	const current = negativeRow(currentRank.ids, c.excludedTerms);
+	const parsed = parseQueryIntent(c.query);
+	if (Boolean(c.pureNegative) !== parsed.isPureNegative) {
+		throw new Error(`[intent-eval] pureNegative 标注不一致：${c.id} query="${c.query}"`);
+	}
+	return { id: c.id, query: c.query, pureNegative: parsed.isPureNegative, baseline, current };
+});
+const avgNegative = (rows, key, field) => rows.reduce((sum, row) => sum + row[key][field], 0) / Math.max(1, rows.length);
+const pureRows = negativeRows.filter((row) => row.pureNegative);
+console.log(
+	`否定查询 Top10 违规率：旧 RRF ${(avgNegative(negativeRows, "baseline", "violationRate") * 100).toFixed(1)}% → 当前 ${(avgNegative(negativeRows, "current", "violationRate") * 100).toFixed(1)}% · ` +
+	`纯否定 ${(avgNegative(pureRows, "baseline", "violationRate") * 100).toFixed(1)}% → ${(avgNegative(pureRows, "current", "violationRate") * 100).toFixed(1)}%`
+);
+for (const row of negativeRows) {
+	console.log(
+		`  ${row.id.padEnd(26)} ${row.query}：旧=${row.baseline.hits} 当前=${row.current.hits}`
+	);
+}
+
+const evalReport = {
+	savedAt: new Date().toISOString(),
+	evalSetVersion: evalSet.version,
+	queryCount: evalSet.queries.length,
+	production: results.tri,
+	comparison: triComparison,
+	intentCases: { total: intentCases.length, passed: intentCases.length - intentMismatches, mismatches: intentMismatches },
+	negativeCases: {
+		total: negativeRows.length,
+		baselineViolationRate: avgNegative(negativeRows, "baseline", "violationRate"),
+		currentViolationRate: avgNegative(negativeRows, "current", "violationRate"),
+		pureBaselineViolationRate: avgNegative(pureRows, "baseline", "violationRate"),
+		pureCurrentViolationRate: avgNegative(pureRows, "current", "violationRate"),
+		rows: negativeRows,
+	},
+};
+if (process.env.EVAL_REPORT_FILE) {
+	fs.writeFileSync(process.env.EVAL_REPORT_FILE, JSON.stringify(evalReport, null, 2));
+	console.log(`[report] 已写入 ${process.env.EVAL_REPORT_FILE}`);
+}
+
 // ───────── 基线门 ─────────
-const BASE = path.join(TASK, "eval-fusion-baseline.json");
+const BASE = process.env.EVAL_BASELINE_FILE || path.join(TASK, "eval-fusion-baseline.json");
 const snapshot = {
 	savedAt: new Date().toISOString(),
 	evalSetVersion: evalSet.version,

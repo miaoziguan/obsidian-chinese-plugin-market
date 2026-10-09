@@ -78,6 +78,10 @@ export interface ChinesePluginMarketSettings {
 	aiSearchApiKey: string;
 	aiSearchModel: string;
 	aiSearchShowReason: boolean;
+	/** 真实 query 脱敏采样：默认关闭，仅显式开启且配置接收端后发送特征与排序指标 */
+	querySamplingEnabled: boolean;
+	querySamplingEndpoint: string;
+	querySamplingRate: number;
 	// Embedding 向量召回（阶段 2 + 2.5）
 	embeddingSource: "keyword" | "api" | "local";
 	embeddingBaseURL: string;
@@ -185,6 +189,9 @@ export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
 	aiSearchApiKey: "",
 	aiSearchModel: "deepseek-chat",
 	aiSearchShowReason: false,
+	querySamplingEnabled: false,
+	querySamplingEndpoint: "",
+	querySamplingRate: 0.1,
 	embeddingSource: "local", // 默认走本地向量（multilingual-e5-small + WebGPU/WASM，中英跨语言）
 	embeddingBaseURL: "https://api.openai.com",
 	embeddingApiKey: "",
@@ -1330,4 +1337,3 @@ public flashAction = (btn: HTMLElement) => flashAction(this._ctx, btn);
 // ──────────────────────────────────────────
 // 主插件类
 // ──────────────────────────────────────────
-
