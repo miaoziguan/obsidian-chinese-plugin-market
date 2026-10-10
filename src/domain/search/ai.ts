@@ -19,7 +19,6 @@ import {
 	parseQueryIntent,
 	pureNegativeCandidateIds,
 	rerankSearchCandidates,
-	type SearchCandidateText,
 	type SearchMatchDiagnostics,
 	type SearchMatchDiagnosticsSnapshot,
 } from "@domain/search/query-intent";
@@ -564,7 +563,7 @@ export class AISearcher {
 				const reranked = rerankSearchCandidates({
 					intent,
 					ids: pool,
-					plugins: allPlugins as SearchCandidateText[],
+					plugins: allPlugins,
 					fusedScores: fused,
 					keywordScores: localScores,
 					vectorScores,
@@ -717,7 +716,7 @@ export class AISearcher {
 				const reranked = rerankSearchCandidates({
 					intent,
 					ids: pool,
-					plugins: allPlugins as SearchCandidateText[],
+					plugins: allPlugins,
 					fusedScores: fused,
 					keywordScores: localScores,
 					vectorScores,
