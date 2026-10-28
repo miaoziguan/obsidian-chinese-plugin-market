@@ -79,6 +79,9 @@ export default defineConfig({
 			 *   → 三项距上一个整数分别为 0.74 / 0.21 / 0.21pt，维持 68 / 62 / 79。
 			 *   本轮价值不在数字：新增的两个模块各 100% 覆盖，且它们原先都是
 			 *   「callback 内联 / 出事才执行」的死区——这类代码删掉不会有测试变红。
+			 * 第 13 版（进入 ui/ 层，补齐 view-data 的数据管线后）：69.09% / 63.79% / 80.90%
+			 *   → functions 上调为 63、branches 上调为 80（余量 0.79 / 0.90）；
+			 *     lines 69.09 距 69 仅 0.09，维持 68。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -90,8 +93,8 @@ export default defineConfig({
 			thresholds: {
 				lines: 68,
 				statements: 68,
-				functions: 62,
-				branches: 79,
+				functions: 63,
+				branches: 80,
 			},
 		},
 	},
