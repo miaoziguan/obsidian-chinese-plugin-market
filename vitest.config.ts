@@ -85,6 +85,9 @@ export default defineConfig({
 			 * 第 14 版（补齐 ensureDataLoaded 加载状态机后）：69.77% / 64.04% / 80.89%
 			 *   → lines/statements 上调为 69（余量 0.77）；functions 64.04 距 64 仅 0.04、
 			 *     branches 距 81 差 0.11，维持 63 / 80。
+			 * 第 15 版（补齐对比页渲染器后）：70.74% / 64.96% / 80.94%
+			 *   → lines/statements 上调为 70、functions 上调为 64（余量 0.74 / 0.96）；
+			 *     branches 距 81 仅 0.06，维持 80。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -94,9 +97,9 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 69,
-				statements: 69,
-				functions: 63,
+				lines: 70,
+				statements: 70,
+				functions: 64,
 				branches: 80,
 			},
 		},
