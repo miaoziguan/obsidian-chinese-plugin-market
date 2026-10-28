@@ -38,6 +38,9 @@ import { TranslatorSettingTab } from "@app/settings-tab";
 import { debounce, mapWithConcurrency, contentHash, isAISearchUsable } from "@shared/utils";
 import { LocalEmbeddingProvider, buildVectorIndex, DEFAULT_LOCAL_MODEL, normalizeRemoteHost, embeddingIndexKey, type EmbeddingProvider, type IndexPlugin } from "@semantic/embedding";
 import { setWorkerSourceLoader, setModelProgressReporter, setWorkerFetchBridge, isWorkerFetchBridgeInstalled, reportModelProgress, disposeAllShared } from "@semantic/workers/worker-backend";
+import { createModelDownloadBridge } from "@semantic/model-download-bridge";
+import { runScrollLayoutDiagnostic, runCheckUpdates } from "./commands/plugin-diagnostics";
+import { loadSettingsDataSafely, armTmApprovedSafetyValve } from "./startup-guards";
 import { ChinesePluginMarketView, ChinesePluginMarketSettings, DEFAULT_SETTINGS, getDefaultSettings, type PluginProfile } from "@ui/view/translator-view";
 import { refreshOutdated } from "@ui/view/view-data";
 import { VIEW_TYPE } from "@shared/constants";
@@ -502,130 +505,20 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 大文件走 Range 分块（8MB/块）：requestUrl 整包对百 MB 级响应无进度、有挂死/
 		// 上限风险（2026-09-16 实测 118MB 整包长时间不到齐）；分块后每块即时上报真实
 		// 百分比，单块失败整单报错由 worker 回退原生 fetch 兜底。
-		setWorkerFetchBridge(async (url, method) => {
-			if (method === "HEAD") {
-				const r = await getHttpClient().request({ url, method });
-				return { status: r.status, buffer: null, headers: r.headers };
-			}
-			const CHUNK = 8 * 1024 * 1024;
-			const CHUNK_TIMEOUT_MS = 90_000;
-			const PROBE_TIMEOUT_MS = 10_000;
-			const OFFICIAL = "https://huggingface.co/";
-			const rewriteHost = (u: string, host: string) => u.replace(/^https?:\/\/[^/]+\//, host);
-			// 单块超时：任何一块挂死 90s 即整单报错 → worker 回退原生 fetch（官方源，
-			// 有真实流式进度 + 看门狗续表），杜绝「无声挂死」状态（2026-09-16 用户反馈卡死）。
-			const withTimeout = <T,>(p: Promise<T>, label: string, ms = CHUNK_TIMEOUT_MS): Promise<T> =>
-				new Promise<T>((resolve, reject) => {
-					const t = window.setTimeout(() => reject(new Error(`${label} 超时（${ms / 1000}s）`)), ms);
-					p.then(
-						(v) => {
-							window.clearTimeout(t);
-							resolve(v);
-						},
-						(e) => {
-							window.clearTimeout(t);
-							reject(e instanceof Error ? e : new Error(String(e)));
-							}
-					);
-				});
-			// ── 源可用性探测（10 分钟缓存）──
-			// 2026-09-16 实测：hf-mirror 与官方会**同时**被网络层封锁（http=000 / TLS reset），
-			// 而无探测时每个文件要对死源白等 90s/块才切换。探测=对候选源发 HEAD（10s 超时），
-			// 选第一个活着的；全死则立即显式报错（设置页红字），不再无谓消耗。
-			const candidates = [...new Set([normalizeRemoteHost(this.settings.embeddingRemoteHost) ?? OFFICIAL, OFFICIAL])];
-			const now = Date.now();
-			const cacheValid =
-				this.bridgeSourceCache &&
-				now - this.bridgeSourceCache.at < 10 * 60_000 &&
-				candidates.includes(this.bridgeSourceCache.host);
-			if (!cacheValid) {
-				let chosen: string | null = null;
-				for (const h of candidates) {
-					try {
-						await withTimeout(
-							getHttpClient().request({ url: rewriteHost(url, h), method: "HEAD" }),
-							`源探测(${h})`,
-							PROBE_TIMEOUT_MS
-						);
-						chosen = h;
-						break;
-					} catch {
-						logger.warn(`[Chinese Plugin Market] 源探测不可达：${h}`);
-					}
-				}
-				if (!chosen) {
-					return {
-						status: 0,
-						buffer: null,
-						error: `所有下载源均不可达（${candidates.join(" / ")}），请稍后重试或在设置中更换镜像`,
-					};
-				}
-				this.bridgeSourceCache = { host: chosen, at: now };
-			}
-			// 文件粒度重置进度：避免上一个文件的 100% 被误读为当前文件进度
-			reportModelProgress({ status: "downloading", loaded: 0, total: 0 });
-			const short = url.slice(url.lastIndexOf("/") + 1) || url;
-			// 下载中某块失败 → 切另一候选源续传（同文件 Range 偏移通用；只切不回）。
-			let base = rewriteHost(url, this.bridgeSourceCache!.host);
-			const fetchChunk = async (range: string, label: string) => {
-				const once = (u: string, tag: string) =>
-					withTimeout(getHttpClient().request({ url: u, method: "GET", headers: { Range: range } }), tag).then((r) => {
-						if (r.status !== 206 && r.status !== 200) throw new Error(`HTTP ${r.status}`);
-						return r;
-					});
-				try {
-					return await once(base, label);
-				} catch (e: unknown) {
-					const curHost = new URL(base).origin + "/";
-					const other = candidates.find((c) => c !== curHost);
-					if (!other) throw e;
-					logger.warn(
-						`[Chinese Plugin Market] 桥接 ${short}：${label} 失败（${(e as Error)?.message ?? e}），切 ${other} 续传后续块`
-					);
-					base = rewriteHost(url, other);
-					this.bridgeSourceCache = { host: other, at: Date.now() };
-					return await once(base, `${label}@${other}`);
-				}
-			};
-			const first = await fetchChunk(`bytes=0-${CHUNK - 1}`, `首块`);
-			// 服务端不支持 Range（非 206 但 200）：整包已回，直接用
-			if (first.status !== 206) {
-				logger.debug(`[Chinese Plugin Market] 桥接 ${short}：不支持 Range（HTTP ${first.status}），整包返回`);
-				return { status: first.status, buffer: first.arrayBuffer ?? null, headers: first.headers };
-			}
-			const rangeHdr = first.headers["content-range"] ?? first.headers["Content-Range"] ?? "";
-			const totalMatch = /\/(\d+)$/.exec(rangeHdr);
-			const total = totalMatch ? Number(totalMatch[1]) : 0;
-			const parts: Uint8Array[] = [];
-			let loaded = 0;
-			const push = (buf: ArrayBuffer | undefined) => {
-				if (!buf) return;
-				parts.push(new Uint8Array(buf));
-				loaded += buf.byteLength;
-				reportModelProgress({ status: "downloading", loaded, total: total || loaded });
-			};
-			push(first.arrayBuffer);
-			let offset = loaded;
-			let chunkNo = 1;
-			while (total > 0 && offset < total) {
-				const end = Math.min(offset + CHUNK, total) - 1;
-				const r = await fetchChunk(`bytes=${offset}-${end}`, `块${chunkNo}`);
-				push(r.arrayBuffer);
-				logger.debug(
-					`[Chinese Plugin Market] 桥接 ${short}：块${chunkNo} 完成 ${loaded}/${total}（${new URL(base).host}）`
-				);
-				offset = end + 1;
-				chunkNo++;
-			}
-			const merged = new Uint8Array(loaded);
-			let at = 0;
-			for (const p of parts) {
-				merged.set(p, at);
-				at += p.byteLength;
-			}
-			reportModelProgress({ status: "downloading", loaded, total: total || loaded });
-			return { status: 200, buffer: merged.buffer, headers: first.headers };
-		});
+		setWorkerFetchBridge(
+			createModelDownloadBridge({
+				request: (o) => getHttpClient().request(o),
+				normalizeHost: normalizeRemoteHost,
+				getPreferredHost: () => this.settings.embeddingRemoteHost,
+				reportProgress: reportModelProgress,
+				getCache: () => this.bridgeSourceCache,
+				setCache: (c) => {
+					this.bridgeSourceCache = c;
+				},
+				logger,
+				officialHost: "https://huggingface.co/",
+			}),
+		);
 		// 本地模型下载进度上报：首次本地语义搜索/设置页预建触发 worker 下载量化模型时，
 		// 把进度归约写入 localModelState，供搜索视图轮询展示与设置页同款的进度条 + 百分比。
 		setModelProgressReporter((p) => {
@@ -645,16 +538,10 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 防御：data.json 若因中断写盘而损坏（存在但 JSON 解析失败），
 		// Obsidian 的 loadData() 会从 JSON.parse 直接抛出，导致整个 onload 中止、
 		// 插件彻底无法加载。此处兜底为空白状态，保证插件始终能启动（数据可重建）。
-		let loaded: Record<string, unknown> = {};
-		try {
-			loaded = ((await this.loadData()) as Record<string, unknown>) ?? {};
-		} catch (e: unknown) {
-			logger.warn(
-				"[Chinese Plugin Market] data.json 解析失败，已回退空白状态（原文件可能损坏）：",
-				e,
-			);
-			loaded = {};
-		}
+		const loaded = await loadSettingsDataSafely({
+			load: () => this.loadData(),
+			warn: (message, error) => logger.warn(message, error),
+		});
 		this._data = loaded;
 		const allData = this._data;
 		// 独立缓存存储层（stats / trending / 插件列表），先行初始化以供后续加载使用
@@ -691,19 +578,15 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		// 注意：仅在 tmApprovedReady 尚未 resolve 时才报警并兜底（用闭包标志位判定，
 		// 而非重复 resolve——Promise 重复 resolve 是 no-op），避免回灌正常完成时
 		// 仍到点打印「兜底超时」假报警，误导排查。
-		let tmApprovedSettled = false;
+		// 先捕获原始引用：包装后 originalResolve 不能再读 this._resolveTmApprovedReady（会递归）
 		const origResolve = this._resolveTmApprovedReady;
-		this._resolveTmApprovedReady = (...args: []) => {
-			tmApprovedSettled = true;
-			origResolve(...args);
-		};
-		window.setTimeout(() => {
-			if (tmApprovedSettled) return; // 回灌已正常完成，不误报
-			logger.warn(
-				"[Chinese Plugin Market] tmApprovedReady 兜底超时（30s）：视图已降级继续，vault 译名可能未回灌。",
-			);
-			this._resolveTmApprovedReady();
-		}, 30_000);
+		armTmApprovedSafetyValve({
+			originalResolve: origResolve,
+			setResolve: (fn) => {
+				this._resolveTmApprovedReady = fn;
+			},
+			warn: (message) => logger.warn(message),
+		});
 
 		// 官方推荐清单（体量小，同步加载以保推荐区首屏完整；不依赖 initDeferredLoad 的异步时序）
 		await this.loadPluginRecommend();
@@ -811,40 +694,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			id: "scroll-layout-debug",
 			name: "诊断滚动布局（开发者）",
 			callback: () => {
-				const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-				const view = leaves[0]?.view as ChinesePluginMarketView | undefined;
-				if (!(view instanceof ChinesePluginMarketView)) {
-					new Notice("请先打开插件搜索视图");
-					return;
-				}
-				const vp = view.scrollViewport;
-				if (!vp) {
-					new Notice("scrollViewport 不存在");
-					return;
-				}
-				const cs = getComputedStyle(vp);
-				const root = vp.parentElement;
-				const rcs = root ? getComputedStyle(root) : null;
-				const info = {
-					viewportClientH: vp.clientHeight,
-					viewportScrollH: vp.scrollHeight,
-					viewportScrollTop: vp.scrollTop,
-					viewportDisplay: cs.display,
-					viewportPosition: cs.position,
-					viewportHeight: cs.height,
-					viewportOverflowY: cs.overflowY,
-					rootClass: root?.className ?? "(无)",
-					rootDisplay: rcs?.display ?? "(无)",
-					rootPosition: rcs?.position ?? "(无)",
-					rootHeight: rcs?.height ?? "(无)",
-					canScroll: vp.scrollHeight > vp.clientHeight + 1,
-				};
-				logger.debug(info);
-				const msg =
-					`列表高度=${info.viewportClientH}px | 内容总高=${info.viewportScrollH}px | 可滚动=${info.canScroll}\n` +
-					`viewport: display=${info.viewportDisplay} position=${info.viewportPosition} overflowY=${info.viewportOverflowY}\n` +
-					`root(.${info.rootClass}): display=${info.rootDisplay} position=${info.rootPosition} height=${info.rootHeight}`;
-				new Notice(msg, 15000);
+				runScrollLayoutDiagnostic({
+					findView: () => this.findMarketView(),
+					notify: (message, timeout) => new Notice(message, timeout),
+					logDebug: (info) => logger.debug(info),
+				});
 			},
 		});
 
@@ -883,22 +737,14 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		this.addCommand({
 			id: "check-updates",
 			name: t("action.checkUpdate"),
-			callback: async () => {
-				const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-				const view = leaves[0]?.view as ChinesePluginMarketView | undefined;
-				if (!(view instanceof ChinesePluginMarketView)) {
-					new Notice("请先打开插件搜索视图");
-					return;
-				}
-				try {
-					await refreshOutdated(view.ctx);
-					const n = view.ctx.outdatedIds?.size ?? 0;
-					if (n <= 0) new Notice(t("action.checkUpdate.upToDate"));
-					else new Notice(t("action.checkUpdate.available", { n: String(n) }));
-				} catch {
-					new Notice(t("action.checkUpdate.failed"));
-				}
-			},
+			callback: () =>
+				void runCheckUpdates({
+					findView: () => this.findMarketView(),
+					notify: (message, timeout) => new Notice(message, timeout),
+					refreshOutdated: (ctx) => refreshOutdated(ctx as Parameters<typeof refreshOutdated>[0]),
+					// t 的 key 是字面量联合，诊断模块只按字符串调用，故用宽签名注入
+					t: (k, vars) => (t as (key: string, vars?: Record<string, string>) => string)(k, vars),
+				}),
 		});
 
 		// 注册 TM 文件夹的 vault 事件：用 create/delete 事件增量发现笔记，
@@ -1435,6 +1281,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	}
 
 	/** 点击 ribbon 时的聚合菜单：打开市场 + 各 profile 一键切换 + 管理组合 */
+	/** 取当前已打开的市场视图（未打开或类型不符时为 null），供命令面板的诊断类命令复用 */
+	private findMarketView(): ChinesePluginMarketView | null {
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		const view = leaf?.view;
+		return view instanceof ChinesePluginMarketView ? view : null;
+	}
+
 	private showRibbonMenu(ev: MouseEvent): void {
 		const menu = new Menu();
 		const t = makeT();
