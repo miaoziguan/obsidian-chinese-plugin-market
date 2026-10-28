@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-10-27T18:21:38.977Z",
+  "note": "存量违规快照。请逐一修复并从此文件删除对应条目，使棘轮只减不增。",
+  "runtimeViolations": [
+    "src/data/platform/plugin-installer.ts->src/ui/view/view-data.ts",
+    "src/data/platform/plugin-installer.ts->src/ui/view/deps-report.ts",
+    "src/data/storage/plugin-storage.ts->src/domain/catalog/stats.ts",
+    "src/data/storage/plugin-storage.ts->src/domain/recommend/trending.ts",
+    "src/data/storage/plugin-storage.ts->src/domain/catalog/translator.ts",
+    "src/data/storage/plugin-storage.ts->src/domain/journal/install-history.ts",
+    "src/shared/fingerprint.ts->src/domain/search/bm25.ts",
+    "src/ui/view/translator-view.ts->src/app/plugin-updater.ts"
+  ],
+  "typeViolations": [
+    "src/data/platform/plugin-installer.ts->src/domain/catalog/translator.ts",
+    "src/data/platform/plugin-installer.ts->src/ui/view/view-context.ts",
+    "src/data/platform/plugin-installer.ts->src/domain/catalog/mirror.ts",
+    "src/domain/search/search-mode.ts->src/ui/view/view-context.ts",
+    "src/shared/constants.ts->src/domain/filter/filter.ts",
+    "src/shared/test-utils.ts->src/ui/view/view-context.ts",
+    "src/shared/test-utils.ts->src/ui/components/detail-drawer.ts",
+    "src/shared/test-utils.ts->src/ui/view/translator-view.ts",
+    "src/shared/test-utils.ts->src/domain/catalog/translator.ts",
+    "src/translation/api/api.ts->src/domain/catalog/translator.ts",
+    "src/translation/api/self-hosted.ts->src/domain/catalog/translator.ts",
+    "src/translation/api/transmart.ts->src/domain/catalog/translator.ts",
+    "src/translation/settings/settings-translator.ts->src/domain/catalog/translator.ts",
+    "src/ui/view/translator-view.ts->src/app/beta-updater.ts",
+    "src/ui/view/translator-view.ts->src/app/plugin.ts",
+    "src/ui/view/view-beta.ts->src/app/direct-install.ts",
+    "src/ui/view/view-context.ts->src/app/direct-install.ts"
+  ],
+  "runtimeCycles": [
+    "src/ui/components/detail-drawer.ts|src/ui/view/view-cards.ts"
+  ],
+  "typeCycles": [
+    "src/semantic/embedding.ts|src/semantic/workers/worker-backend.ts",
+    "src/domain/catalog/coverage.ts|src/domain/catalog/translator.ts|src/domain/compare/plugin-insight.ts|src/domain/search/ai.ts|src/translation/api/api.ts|src/translation/api/self-hosted.ts|src/translation/api/transmart.ts",
+    "src/app/main.ts|src/app/plugin.ts|src/app/settings-tab.ts|src/data/platform/plugin-installer.ts|src/domain/search/search-mode.ts|src/ui/components/card-render.ts|src/ui/components/detail-drawer.ts|src/ui/view/active-filters.ts|src/ui/view/deps-lazy.ts|src/ui/view/deps-report.ts|src/ui/view/installed-watch.ts|src/ui/view/translator-view.ts|src/ui/view/view-ai-search.ts|src/ui/view/view-beta.ts|src/ui/view/view-cards.ts|src/ui/view/view-chrome.ts|src/ui/view/view-compare.ts|src/ui/view/view-context.ts|src/ui/view/view-css-snippets.ts|src/ui/view/view-data.ts|src/ui/view/view-favorites.ts|src/ui/view/view-featured.ts|src/ui/view/view-render.ts|src/ui/view/view-toolbar.ts|src/ui/view/view-updates.ts"
+  ]
+}

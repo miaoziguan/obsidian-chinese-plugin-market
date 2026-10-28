@@ -2,6 +2,9 @@ node_modules/
 *.log
 .DS_Store
 
+# 覆盖率报告（npm run test:coverage 生成，本地与 CI 临时产物，不入库）
+coverage/
+
 # 翻译批处理中间产物（可选保留，默认忽略）
 _batches/
 _merge.ts

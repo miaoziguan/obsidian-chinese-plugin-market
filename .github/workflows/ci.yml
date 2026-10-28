@@ -30,7 +30,26 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npm test
+      # 带覆盖率与阈值门禁（vitest.config.ts 中的 thresholds 为棘轮基线）。
+      # ⚠️ 本步骤依赖 devDependency @vitest/coverage-v8；若 package.json 已改而
+      # pnpm-lock.yaml 尚未更新，`--frozen-lockfile` 会以 ERR_PNPM_OUTDATED_LOCKFILE
+      # 失败，且会让本文件所有 job 全红。新增/改动依赖后务必先本地执行 pnpm install 再推送。
+      - run: npm run test:coverage
+
+  architecture:
+    name: architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # 零外部依赖的自研门禁：把 ARCHITECTURE.md 的七层单向依赖变成硬约束。
+      # 采用基线棘轮（scripts/arch-baseline.json）——存量违规不阻断，任何新增违规立即失败。
+      - run: npm run check:architecture
 
   build:
     name: build
