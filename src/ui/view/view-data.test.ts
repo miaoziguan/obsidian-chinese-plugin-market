@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ViewContext } from "./view-context";
 import {
 	mirrorConfig,
@@ -9,6 +9,7 @@ import {
 	buildAuthorFacet,
 	relativeTime,
 	updateRefreshTooltip,
+	ensureDataLoaded,
 	applySearchInput,
 	updateAiTranslateButton,
 	toggleAuthorFilter,
@@ -663,5 +664,231 @@ describe("renderAuthorFacet：字母索引与 chips", () => {
 		const chips = el.querySelector(".pt-facet-chips");
 		expect(chips).not.toBeNull();
 		expect(chips!.textContent).toContain("张三");
+	});
+});
+
+describe("ensureDataLoaded：加载决策与状态机", () => {
+	beforeEach(() => {
+		// 必须连 Date 一起接管：函数里有 `while (!cachedStats && Date.now() < deadline)`
+		// 的等待循环，只 fake setTimeout 而 Date 走真实时间会让它空转 300ms 真实时间，
+		// 甚至在某些配置下不退出。
+		vi.useFakeTimers({
+			toFake: ["setTimeout", "setInterval", "clearTimeout", "clearInterval", "requestAnimationFrame", "Date"],
+		});
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	const makeLoadCtx = (over: Ctx = {}) => {
+		const translator = {
+			getData: () => ({ cache: {} }),
+			tmApproved: {},
+			recordCoverage: vi.fn(),
+			mergeOffline: vi.fn(() => ({ results: {} })),
+		};
+		const ctx = makeCtx({
+			dataLoaded: false,
+			dataLoading: false,
+			lastListFetchAt: 0,
+			containerEl: document.createElement("div"),
+			scrollCardLayer: null,
+			manifest: { version: "1.0.0" },
+			translator,
+			plugin: {
+				scheduleIndexRefresh: vi.fn(),
+				tmApprovedReady: Promise.resolve(),
+			},
+			settings: { embeddingSource: "keyword" },
+			fetchPlugins: vi.fn(async () => [plugin("a")]),
+			savePluginListCache: vi.fn(async () => {}),
+			buildAuthorFacet: vi.fn(),
+			applyAIConfig: vi.fn(),
+			saveTranslatorData: vi.fn(),
+			reportNewPluginDelta: vi.fn(),
+			showLoadingState: vi.fn(),
+			loadStatsCache: vi.fn(async () => null),
+			mergeStatsFromCache: vi.fn(),
+			snapshotInstalled: vi.fn(),
+			scheduleRender: vi.fn(),
+			fetchStatsAndMerge: vi.fn(async () => {}),
+			tryLoadCachedPluginList: vi.fn(async () => null),
+			buildLocalIndex: vi.fn(async () => {}),
+			warmupLocalEmbedding: vi.fn(),
+			showSearchGuide: vi.fn(),
+			buildSearchIndex: vi.fn(),
+			renderAuthorFacet: vi.fn(),
+			updateFacetVisibility: vi.fn(),
+			updateRefreshTooltip: vi.fn(),
+			...over,
+		});
+		return { ctx, translator };
+	};
+
+	/** 推进假时钟直到加载完成（幂等的“跑到底”辅助） */
+	const finish = async (p: Promise<boolean>) => {
+		await vi.advanceTimersByTimeAsync(2000);
+		return p;
+	};
+
+	it("已加载且未过期：直接返回 true，不重复请求", async () => {
+		const { ctx } = makeLoadCtx({ dataLoaded: true, lastListFetchAt: Date.now() });
+
+		await expect(ensureDataLoaded(ctx)).resolves.toBe(true);
+		expect(ctx.fetchPlugins).not.toHaveBeenCalled();
+	});
+
+	it("已加载但超过 TTL：重新拉取（让用户看到新上架）", async () => {
+		const { ctx } = makeLoadCtx({ dataLoaded: true, lastListFetchAt: Date.now() - 365 * 24 * 3600 * 1000 });
+
+		const p = ensureDataLoaded(ctx);
+		await expect(finish(p)).resolves.toBe(true);
+		expect(ctx.fetchPlugins).toHaveBeenCalled();
+	});
+
+	it("正在加载中：等待既有加载完成，不重复发起", async () => {
+		const { ctx } = makeLoadCtx({ dataLoading: true });
+		// 模拟另一条加载流程在稍后完成
+		window.setTimeout(() => {
+			ctx.dataLoaded = true;
+			ctx.dataLoading = false;
+		}, 100);
+
+		await expect(finish(ensureDataLoaded(ctx))).resolves.toBe(true);
+		expect(ctx.fetchPlugins).not.toHaveBeenCalled();
+	});
+
+	it("成功路径：写入列表、构建索引、标记已加载并调度渲染", async () => {
+		const { ctx } = makeLoadCtx();
+
+		await expect(finish(ensureDataLoaded(ctx))).resolves.toBe(true);
+
+		expect((ctx.plugins as unknown[]).length).toBe(1);
+		expect(ctx.dataLoaded).toBe(true);
+		expect(ctx.buildSearchIndex).toHaveBeenCalled();
+		expect(ctx.scheduleRender).toHaveBeenCalled();
+		expect(ctx.snapshotInstalled).toHaveBeenCalled();
+	});
+
+	it("成功路径：把列表缓存到本地（离线重启秒开）", async () => {
+		const { ctx } = makeLoadCtx();
+		await finish(ensureDataLoaded(ctx));
+		expect(ctx.savePluginListCache).toHaveBeenCalled();
+	});
+
+	it("显式选择本地语义时才预建索引并预热模型（不打扰默认用户）", async () => {
+		const { ctx } = makeLoadCtx({ settings: { embeddingSource: "local" } });
+
+		await finish(ensureDataLoaded(ctx));
+
+		expect(ctx.buildLocalIndex).toHaveBeenCalled();
+		expect(ctx.warmupLocalEmbedding).toHaveBeenCalled();
+	});
+
+	it("默认关键词模式不预建索引（避免给用户强塞大模型）", async () => {
+		const { ctx } = makeLoadCtx({ settings: { embeddingSource: "keyword" } });
+
+		await finish(ensureDataLoaded(ctx));
+
+		expect(ctx.buildLocalIndex).not.toHaveBeenCalled();
+		expect(ctx.warmupLocalEmbedding).not.toHaveBeenCalled();
+	});
+
+	it("网络失败但有本地缓存：恢复列表并提示当前为缓存", async () => {
+		const cached = [plugin("cached")];
+		const { ctx } = makeLoadCtx({
+			fetchPlugins: vi.fn(async () => {
+				throw new Error("network down");
+			}),
+			tryLoadCachedPluginList: vi.fn(async () => cached),
+		});
+
+		await expect(finish(ensureDataLoaded(ctx))).resolves.toBe(true);
+
+		expect((ctx.plugins as unknown[]).length).toBe(1);
+		expect(ctx.dataLoaded).toBe(true);
+		expect(ctx.scheduleRender).toHaveBeenCalled();
+	});
+
+	it("网络失败且无缓存：渲染错误态并返回 false", async () => {
+		const layer = document.createElement("div");
+		const { ctx } = makeLoadCtx({
+			fetchPlugins: vi.fn(async () => {
+				throw new Error("network down");
+			}),
+			tryLoadCachedPluginList: vi.fn(async () => null),
+			scrollCardLayer: layer,
+			cardById: new Map(),
+			windowStart: 0,
+			windowEnd: 0,
+		});
+
+		await expect(finish(ensureDataLoaded(ctx))).resolves.toBe(false);
+
+		expect(layer.querySelector(".pt-error")).not.toBeNull();
+		expect(ctx.dataLoaded).toBe(false);
+	});
+
+	it("无缓存的错误态提供「重试」与「回到搜索」两个明确出口", async () => {
+		const layer = document.createElement("div");
+		const { ctx } = makeLoadCtx({
+			fetchPlugins: vi.fn(async () => {
+				throw new Error("network down");
+			}),
+			tryLoadCachedPluginList: vi.fn(async () => null),
+			scrollCardLayer: layer,
+			cardById: new Map(),
+			windowStart: 0,
+			windowEnd: 0,
+		});
+
+		await finish(ensureDataLoaded(ctx));
+
+		expect(layer.querySelector(".pt-error-retry")).not.toBeNull();
+		expect(layer.querySelector(".pt-error-guide")).not.toBeNull();
+	});
+
+	it("点击「回到搜索」重置加载锁并展示搜索引导", async () => {
+		const layer = document.createElement("div");
+		const { ctx } = makeLoadCtx({
+			fetchPlugins: vi.fn(async () => {
+				throw new Error("network down");
+			}),
+			tryLoadCachedPluginList: vi.fn(async () => null),
+			scrollCardLayer: layer,
+			cardById: new Map(),
+			windowStart: 0,
+			windowEnd: 0,
+		});
+
+		await finish(ensureDataLoaded(ctx));
+		(layer.querySelector(".pt-error-guide") as HTMLElement).click();
+
+		expect(ctx.dataLoaded).toBe(false);
+		expect(ctx.dataLoading).toBe(false);
+		expect(ctx.showSearchGuide).toHaveBeenCalled();
+	});
+
+	it("无论如何结束都会复位 dataLoading（避免锁死后续加载）", async () => {
+		const { ctx } = makeLoadCtx({
+			fetchPlugins: vi.fn(async () => {
+				throw new Error("boom");
+			}),
+		});
+
+		await finish(ensureDataLoaded(ctx));
+
+		expect(ctx.dataLoading).toBe(false);
+	});
+
+	it("stats 缓存缺失时会主动补拉一次（首屏下载量不空白）", async () => {
+		const loadStatsCache = vi.fn(async () => new Map([["a", { downloads: 1 }]]));
+		const { ctx } = makeLoadCtx({ loadStatsCache });
+
+		await finish(ensureDataLoaded(ctx));
+
+		expect(loadStatsCache).toHaveBeenCalled();
+		expect(ctx.mergeStatsFromCache).toHaveBeenCalled();
 	});
 });
