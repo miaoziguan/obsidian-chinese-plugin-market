@@ -50,8 +50,21 @@ export class Modal {
 }
 export class TFile {}
 export class Component {
+	private _cleanups: Array<() => void> = [];
 	load() {}
-	unload() {}
+	/**
+	 * 对齐 Obsidian 语义：记录清理函数，unload 时统一执行。
+	 * 缺这个方法会让所有 `comp.register(...)` 的调用方（对比页、抽屉等）直接崩，
+	 * 且「卸载时是否真的清理」无法被断言。
+	 */
+	register(fn: () => void): void {
+		this._cleanups.push(fn);
+	}
+	unload() {
+		const fns = this._cleanups;
+		this._cleanups = [];
+		for (const fn of fns) fn();
+	}
 }
 
 /**
