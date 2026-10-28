@@ -159,7 +159,15 @@ describe("saveJournalEntry：有内容则落盘", () => {
 	it("写入的正文能被解析回原条目（render → parse 往返）", async () => {
 		const { plugin, noteStorage } = makePlugin();
 		noteStorage.exists.mockResolvedValue(true);
-		const e = entry({ status: "abandoned", rating: 4, verdict: ["易冲突"], note: "正文备注" });
+		// 固定 updated：renderJournalNote 在缺省时会写 Date.now()，
+		// 两次渲染跨毫秒就会让字符串比较偶发失败（曾在本机全量跑时复现）
+		const e = entry({
+			status: "abandoned",
+			rating: 4,
+			verdict: ["易冲突"],
+			note: "正文备注",
+			updated: 1700000000000,
+		});
 
 		await plugin.saveJournalEntry(e);
 
