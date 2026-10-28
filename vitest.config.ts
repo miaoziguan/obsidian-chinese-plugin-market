@@ -99,6 +99,9 @@ export default defineConfig({
 			 *   → 全部维持（距上一整数 0.04 / 0.07 / 0.26，全都不足 0.5pt）。
 			 *   注意边际收益已明显衰减：本轮 17 个用例 +66 条覆盖，只推动全局 +0.16pt；
 			 *   继续在同一文件深挖的性价比低于换更大的块（如 detail-drawer 的 1195 条）。
+			 * 第 19 版（开始啃 detail-drawer 的生命周期与判定逻辑）：72.24% / 66.89% / 81.45%
+			 *   → functions 上调为 66（余量 0.89）；lines 距 72 差 0.24、branches 距 81 差 0.45，
+			 *     均不足 0.5pt，维持 71 / 80。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -110,7 +113,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 71,
 				statements: 71,
-				functions: 65,
+				functions: 66,
 				branches: 80,
 			},
 		},
