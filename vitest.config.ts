@@ -109,6 +109,9 @@ export default defineConfig({
 			 * 第 21 版（补齐 README 加载/渲染/网络错误降级后）：73.72% / 67.83% / 81.11%
 			 *   → lines 上调为 72（余量 1.72）；functions 距 68 差 0.17、branches 距 81 差 0.11，
 			 *     均不足 0.5pt，维持 67 / 80。detail-drawer 单文件 62.7% → 69.8%（+117 条）。
+			 * 第 22 版（补齐 sysTranslate 翻译流程后）：73.97% / 67.91% / 81.09%
+			 *   → lines 上调为 73（余量 0.97）；functions 距 68 差 0.09、branches 距 81 差 0.09，
+			 *     均不足 0.5pt，维持 67 / 80。detail-drawer 单文件 69.8% → 76.2%（+104 条）。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -118,8 +121,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 72,
-				statements: 72,
+				lines: 73,
+				statements: 73,
 				functions: 67,
 				branches: 80,
 			},
