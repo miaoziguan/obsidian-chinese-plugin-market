@@ -109,10 +109,6 @@ export class SettingsTranslator {
 		this.dom.reset();
 	}
 
-	isPatched(): boolean {
-		return this.patched;
-	}
-
 	enable(): void {
 		if (this.patched) return;
 		// 卸载上一任持有者（理论上只有单实例，热重载兜底）

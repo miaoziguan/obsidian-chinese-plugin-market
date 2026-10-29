@@ -2,7 +2,7 @@
  * 直链 Beta 插件聚合更新（P0 闭环）。
  *
  * 单插件更新逻辑在 direct-install.ts 的 updateBetaPlugin（复用 installFiles 写盘/重载）。
- * 本模块负责「批量」与「纯函数」，供设置页「全部更新」与插件启动自动更新调用，
+ * 本模块负责批量更新，供设置页「全部更新」与插件启动自动更新调用，
  * 并集中处理移动端限制与逐条错误隔离（一条失败不影响其余）。
  */
 
@@ -10,7 +10,6 @@ import { type App, Platform, Notice } from "obsidian";
 import {
 	updateBetaPlugin,
 	updateBetaTheme,
-	type BetaKind,
 	type BetaPluginEntry,
 } from "@app/direct-install";
 import { makeT } from "@shared/i18n";
@@ -18,18 +17,6 @@ import { makeT } from "@shared/i18n";
 export type { BetaPluginEntry } from "@app/direct-install";
 
 const t = makeT();
-
-/** 由一次成功的直链安装构造跟踪表项（未冻结） */
-export function buildBetaEntry(
-	id: string,
-	name: string,
-	version: string,
-	rootUrl: string,
-	kind: BetaKind = "plugin",
-	release = false,
-): BetaPluginEntry {
-	return { id, name: name || id, rootUrl, installedVersion: version, frozen: false, kind, release };
-}
 
 /** 按类型更新单项（插件走三件套，主题走 theme.css） */
 export async function updateBetaEntry(

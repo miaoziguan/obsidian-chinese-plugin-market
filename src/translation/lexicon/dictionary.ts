@@ -11,56 +11,6 @@ export interface DictEntry {
 	author?: string;
 }
 
-export interface ParsedDictionary {
-	/** 校验通过、name 非空的词条（已 trim） */
-	dict: Record<string, DictEntry>;
-	/** 被忽略的无效条目数（name 为空 / 非对象 / 空 id） */
-	invalid: number;
-}
-
-/**
- * 解析词典 JSON 文本（产品改进 #13 复用，亦用于本地批量导入）。
- * 格式：{ "插件ID": { "name": "中文名", "description?": "…" } }。
- * - 顶层非法 JSON / 非对象 → 抛错（含中文可读信息）。
- * - 单条 name 为空、非对象、id 为空 → 忽略并计入 invalid（不阻断其余）。
- * - name / description 自动 trim；空 description 规范为 undefined。
- */
-export function parseDictionaryText(text: string): ParsedDictionary {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(text);
-	} catch {
-		throw new Error("解析失败：不是合法的 JSON");
-	}
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error("格式错误：顶层应为对象 { 插件ID: { name, description } }");
-	}
-
-	const obj = parsed as Record<string, unknown>;
-	const dict: Record<string, DictEntry> = {};
-	let invalid = 0;
-	for (const [pid, val] of Object.entries(obj)) {
-		if (!pid || typeof val !== "object" || val === null) {
-			invalid++;
-			continue;
-		}
-		const entry = val as Record<string, unknown>;
-		const name = typeof entry.name === "string" ? entry.name.trim() : "";
-		if (!name) {
-			invalid++;
-			continue;
-		}
-		dict[pid] = {
-			name,
-			description:
-				typeof entry.description === "string"
-					? entry.description.trim() || undefined
-					: undefined,
-		};
-	}
-	return { dict, invalid };
-}
-
 /**
  * 词典覆盖率统计（产品迭代 #3）。
  *

@@ -232,11 +232,6 @@ function getCandidateTokenSet(id: string, desc: string): Set<string> {
 	return tokens;
 }
 
-/** 测试专用：清空候选 token 缓存（模块级缓存在测试间会泄漏状态）。 */
-export function __clearCandidateTokenCacheForTest(): void {
-	CANDIDATE_TOKEN_CACHE.clear();
-}
-
 // ───────── 核心评分 ─────────
 
 interface ScoredItem {

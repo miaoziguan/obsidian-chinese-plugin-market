@@ -15,8 +15,8 @@ import {
 } from "obsidian";
 import { pickLang } from "@shared/i18n";
 import { logger } from "@shared/logger";
-import { GROUP_ALL, GROUP_OTHER } from "@domain/manage/types";
-import { listGroups } from "@domain/manage/group";
+import { GROUP_ALL, type ManageRow } from "@domain/manage/types";
+import { listGroups, shouldShowGroupBadge } from "@domain/manage/group";
 import { getMeta } from "@domain/manage/plugin-meta";
 import { renderInlineNoteEditor } from "./inline-note-editor";
 import type { SnippetInfo } from "@data/platform/snippet";
@@ -32,9 +32,19 @@ export interface CssSnippetRowContext {
 	requestRename: (baseName: string) => void;
 }
 
-/** 「全部」与「其他」不显示为徽标 */
-function shouldShowBadge(groupKey: string, hasName: boolean): boolean {
-	return hasName && groupKey !== GROUP_ALL && groupKey !== GROUP_OTHER;
+/** 从原生或自渲染片段行读取筛选数据，启用状态以当前 DOM 为准。 */
+export function readCssSnippetRow(rowEl: HTMLElement, store: CssStorePort): ManageRow | null {
+	const baseName = rowEl.dataset.cpmSnippet;
+	if (!baseName) return null;
+	const meta = getMeta(store.settings.cssMeta, baseName);
+	return {
+		id: baseName,
+		name: baseName,
+		author: "",
+		remark: meta.remark,
+		group: meta.group,
+		enabled: Boolean(rowEl.querySelector(".checkbox-container.is-enabled")),
+	};
 }
 
 /**
@@ -56,7 +66,7 @@ export function renderCssSnippetRow(
 	const nameEl = createDiv({ cls: "setting-item-name" });
 	infoEl.appendChild(nameEl);
 	nameEl.appendChild(createSpan({ text: snippet.name }));
-	if (shouldShowBadge(meta.group, Boolean(groupName))) {
+	if (shouldShowGroupBadge(meta.group, Boolean(groupName))) {
 		const badge = createSpan({ cls: "cpm-group-badge", text: groupName });
 		nameEl.appendChild(badge);
 		const color = store.settings.cssGroupColors[meta.group];
@@ -123,7 +133,10 @@ export function renderCssSnippetRow(
 	groupBtn.addEventListener("click", (event: MouseEvent) => {
 		event.preventDefault();
 		event.stopPropagation();
-		openGroupMenu(event, store, snippet.baseName, meta.group, rowEl, ctx);
+		openCssSnippetGroupMenu(event, store, snippet.baseName, meta.group, () => {
+			ctx.onRowChange(rowEl, snippet.baseName);
+			ctx.onFilterChange();
+		});
 	});
 	controlEl.appendChild(groupBtn);
 
@@ -148,13 +161,12 @@ export function renderCssSnippetRow(
 }
 
 /** 分组菜单：选中后重画该行并重算计数 */
-function openGroupMenu(
+export function openCssSnippetGroupMenu(
 	event: MouseEvent,
 	store: CssStorePort,
 	baseName: string,
 	currentGroup: string,
-	rowEl: HTMLElement,
-	ctx: CssSnippetRowContext,
+	onChange: () => void,
 ): void {
 	try {
 		const menu = new Menu();
@@ -166,8 +178,7 @@ function openGroupMenu(
 					.setChecked(key === currentGroup)
 					.onClick(() => {
 						store.saveCssMeta(baseName, { group: key });
-						ctx.onRowChange(rowEl, baseName);
-						ctx.onFilterChange();
+						onChange();
 					}),
 			);
 		}

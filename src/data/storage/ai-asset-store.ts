@@ -57,11 +57,6 @@ export class AiAssetStore {
 		this.aiDict[pid] = entry;
 	}
 
-	/** 删除单条（人工校正 / 移除反馈时连带清除，避免与可信层并存） */
-	deleteEntry(pid: string): void {
-		delete this.aiDict[pid];
-	}
-
 	/** 清空全部个人 AI 资产（不影响 cache） */
 	clear(): void {
 		this.aiDict = {};

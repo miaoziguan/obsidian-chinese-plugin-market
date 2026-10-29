@@ -31,9 +31,9 @@ describe("fetchWithReleaseFallback — 官方插件更新 Release 回退", () =>
 		expect(requestUrl).toHaveBeenCalledTimes(1);
 	});
 
-	it("源码树 404 后 Release 200 返回 Release 内容（Git 插件场景）", async () => {
+	it.each([404, 410])("源码树 %i 后 Release 200 返回 Release 内容（Git 插件场景）", async (status) => {
 		mockResponses({
-			"https://raw.githubusercontent.com/o/r/HEAD/main.js": { status: 404, text: "" },
+			"https://raw.githubusercontent.com/o/r/HEAD/main.js": { status, text: "" },
 			"https://github.com/o/r/releases/download/1.0.0/main.js": { status: 200, text: "release-main" },
 		});
 		const text = await fetchWithReleaseFallback("o/r", "main.js", "1.0.0", mirror);
@@ -68,11 +68,17 @@ describe("fetchWithReleaseFallback — 官方插件更新 Release 回退", () =>
 		expect(text).toBeNull();
 	});
 
-	it("源码树 500 直接抛错，不继续试 Release", async () => {
+	it.each([403, 429, 500])("源码树 %i 直接抛错，不继续试 Release", async (status) => {
 		mockResponses({
-			"https://raw.githubusercontent.com/o/r/HEAD/main.js": { status: 500, text: "" },
+			"https://raw.githubusercontent.com/o/r/HEAD/main.js": { status, text: "" },
 		});
-		await expect(fetchWithReleaseFallback("o/r", "main.js", "1.0.0", mirror)).rejects.toThrow("500");
+		await expect(fetchWithReleaseFallback("o/r", "main.js", "1.0.0", mirror)).rejects.toThrow(String(status));
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
+
+	it("可选文件遇到网络异常仍抛错，不作为缺失忽略", async () => {
+		vi.mocked(requestUrl).mockRejectedValueOnce(new Error("network down"));
+		await expect(fetchWithReleaseFallback("o/r", "styles.css", "1.0.0", mirror, true)).rejects.toThrow("network down");
 		expect(requestUrl).toHaveBeenCalledTimes(1);
 	});
 });

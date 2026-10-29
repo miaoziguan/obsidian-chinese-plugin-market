@@ -13,6 +13,7 @@
 
 import { netRequest } from "@data/net/net";
 import { logger } from "@shared/logger";
+import { parseGithubRepo } from "@shared/github";
 
 /** 单个可选版本 */
 export interface PluginVersion {
@@ -34,14 +35,6 @@ const cache = new Map<string, { at: number; versions: PluginVersion[] }>();
 /** 仅测试用：清空内存缓存 */
 export function clearPluginVersionsCache(): void {
 	cache.clear();
-}
-
-/** owner/name 反解 */
-function parseRepo(repo: string): { owner: string; repo: string } | null {
-	const cleaned = repo.replace(/^\/+|\/+$/g, "");
-	const parts = cleaned.split("/");
-	if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
-	return { owner: parts[0], repo: parts[1] };
 }
 
 /** tag → 展示版本号（去 v/V 前缀） */
@@ -141,7 +134,7 @@ async function fetchUncached(parsed: { owner: string; repo: string }): Promise<P
  * 网络不可用 / 仓库无 Release 与 Tag 时返回空数组，由调用方给出空态文案。
  */
 export async function fetchPluginVersions(repo: string, force = false): Promise<PluginVersion[]> {
-	const parsed = parseRepo(repo);
+	const parsed = parseGithubRepo(repo);
 	if (!parsed) return [];
 	const key = `${parsed.owner}/${parsed.repo}`;
 

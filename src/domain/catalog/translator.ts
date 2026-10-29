@@ -135,12 +135,6 @@ export interface CoverageSnapshot {
 	cacheHits: number;
 }
 
-export interface CoverageTrend {
-	current: CoverageSnapshot;
-	prev?: CoverageSnapshot;
-	deltaPct: number;
-}
-
 export interface CoverageStat {
 	coverage: number;
 	total: number;
@@ -436,15 +430,6 @@ export class Translator {
 		this.coverage.load(snapshots.slice(0, 12));
 	}
 
-	getCoverageTrend(): CoverageTrend | null {
-		const snapshots = this.coverage.snapshot();
-		if (snapshots.length === 0) return null;
-		const current = snapshots[0];
-		const prev = snapshots.length > 1 ? snapshots[1] : undefined;
-		const deltaPct = prev ? Math.round((current.coverage - prev.coverage) * 100) / 100 : 0;
-		return { current, prev, deltaPct };
-	}
-
 	/** 判断插件是否有任何历史落盘译文（cache 非 original / TM 已采纳 / AI 固化资产）。
 	 *  供 isTranslated（"从未翻译"筛选）使用，排除所有已有译文的插件。 */
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars -- plugin 保留以兼容调用方签名（PERF-8 后判定不再依赖 name/description）
@@ -624,11 +609,6 @@ export class Translator {
 	/** 重新标记脏（写 vault 笔记失败、需下次 flush 重试时调用） */
 	markTMDirty(id: string): void {
 		this.tmDirtyTracker.markDirty(id);
-	}
-
-	/** 取走移除标记集合（取后清空，供 plugin flush 删 vault 笔记） */
-	takeTMRemoved(): string[] {
-		return this.tmDirtyTracker.takeRemoved();
 	}
 
 	/** 仅查看移除标记（不清空） */

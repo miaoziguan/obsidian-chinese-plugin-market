@@ -1,7 +1,6 @@
 /**
  * 构建 E2E 测试包：把源码 + 测试入口打包成浏览器可用的 IIFE。
  * - obsidian → 本地 mock（test/e2e/obsidian-mock.ts）
- * - @xenova/transformers → 桩（渲染层不触发 AI 模型）
  * 输出两个 bundle：
  *   - render.bundle.js   渲染层关键路径（卡片 / 对比页）
  *   - plugin.bundle.js   整插件启动关键路径（onload / 命令 / 设置读写）
@@ -11,9 +10,6 @@ import { resolve } from "path";
 
 const alias = {
 	obsidian: resolve("test/e2e/obsidian-mock.ts"),
-	"@xenova/transformers": resolve("test/e2e/transformers-stub.ts"),
-	// 主构建用 inlineWorkerSourcePlugin 注入 worker 源码；e2e 不启动真实 worker，用空桩占位
-	"@inline-worker": resolve("test/e2e/inline-worker-stub.ts"),
 };
 
 const entries = [

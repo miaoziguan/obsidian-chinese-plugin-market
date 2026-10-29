@@ -12,11 +12,18 @@ const banner = `/*
  */
 `;
 
-// ── 样式表：构建时从源码根复制到插件根目录（Obsidian 插件约定 styles.css 在根，随插件分发）──
+// ── 样式表：源码保留可读格式，分发副本单独压缩（发布时仍以 styles.css 为文件名）──
 if (!existsSync("styles.css")) {
 	throw new Error("Missing styles.css at project root");
 }
-copyFileSync("styles.css", path.join(PLUGIN_ROOT, "styles.css"));
+await esbuild.build({
+	entryPoints: ["styles.css"],
+	outfile: path.join(PLUGIN_ROOT, "dist/styles.css"),
+	minify: prod,
+	charset: "utf8",
+	target: "es2020",
+	logLevel: "info",
+});
 
 // ── 运行时 WASM 资产：构建时从 node_modules 拷贝到插件根目录，随插件分发 ──
 const copyWasm = (src, name) => {
@@ -146,6 +153,8 @@ await esbuild.build({
 	platform: "node",
 	logLevel: "info",
 	minify: prod,
+	// Obsidian 通过 UTF-8 读取插件，保留中文字符可避免大量 Unicode 转义。
+	charset: "utf8",
 	sourcemap: prod ? "external" : "inline",
 	treeShaking: true,
 	outfile: path.join(PLUGIN_ROOT, "main.js"),

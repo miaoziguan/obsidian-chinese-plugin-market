@@ -1,7 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { resolveUrl, classifyNetworkError, buildMirrorOrder, type MirrorSource } from "@domain/catalog/mirror";
+import { buildRawFileUrl, resolveUrl, classifyNetworkError, type MirrorConfig, type MirrorSource } from "@domain/catalog/mirror";
+import { buildManifestUrl, buildMainJsUrl } from "@domain/compare/plugin-insight";
 
 const RAW = "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json";
+
+describe("仓库文件 URL 共用构造", () => {
+	it.each<MirrorConfig>([
+		{ source: "github" },
+		{ source: "jsdelivr" },
+		{ source: "ghproxy" },
+		{ source: "custom", customBase: "https://mirror.example.com/" },
+		{ source: "custom" },
+	])("manifest、入口文件与指定 ref 使用相同的镜像规则：%j", (mirror) => {
+		const base = "https://raw.githubusercontent.com/owner/repo";
+		expect(buildManifestUrl("/owner/repo/", mirror)).toBe(resolveUrl(`${base}/HEAD/manifest.json`, mirror));
+		expect(buildMainJsUrl("owner/repo", " dist/plugin.js ", mirror)).toBe(resolveUrl(`${base}/HEAD/dist/plugin.js`, mirror));
+		expect(buildMainJsUrl("owner/repo", "   ", mirror)).toBe(resolveUrl(`${base}/HEAD/main.js`, mirror));
+		expect(buildRawFileUrl("owner/repo", "styles.css", mirror, "v1.2.3")).toBe(resolveUrl(`${base}/v1.2.3/styles.css`, mirror));
+	});
+
+	it.each([undefined, "", "owner", "owner//repo", "owner/repo/extra", "///"])("非法仓库不生成下载 URL：%s", (repo) => {
+		expect(buildRawFileUrl(repo, "main.js", { source: "github" })).toBe("");
+		expect(buildManifestUrl(repo, { source: "github" })).toBe("");
+	});
+});
 
 describe("resolveUrl", () => {
 	it("github 源原样返回", () => {
@@ -82,28 +104,5 @@ describe("classifyNetworkError", () => {
 	it("非 Error 非 string → unknown", () => {
 		expect(classifyNetworkError(null).kind).toBe("unknown");
 		expect(classifyNetworkError(42).kind).toBe("unknown");
-	});
-});
-
-describe("buildMirrorOrder（镜像容错探测顺序）", () => {
-	it("当前源排在最前", () => {
-		expect(buildMirrorOrder("jsdelivr")).toEqual(["jsdelivr", "github"]);
-	});
-
-	it("github 当前：其余按默认序补足", () => {
-		expect(buildMirrorOrder("github")).toEqual(["github", "jsdelivr"]);
-	});
-
-	it("ghproxy 当前：用户主动选 ghproxy 源时仍排最前（默认不再探测该源）", () => {
-		expect(buildMirrorOrder("ghproxy")).toEqual(["ghproxy", "jsdelivr", "github"]);
-	});
-
-	it("custom 不在候选集：保留全部候选", () => {
-		expect(buildMirrorOrder("custom")).toEqual(["custom", "jsdelivr", "github"]);
-	});
-
-	it("自定义候选子集", () => {
-		expect(buildMirrorOrder("github", ["jsdelivr", "github"])).toEqual(["github", "jsdelivr"]);
-		expect(buildMirrorOrder("jsdelivr", ["jsdelivr", "github"])).toEqual(["jsdelivr", "github"]);
 	});
 });

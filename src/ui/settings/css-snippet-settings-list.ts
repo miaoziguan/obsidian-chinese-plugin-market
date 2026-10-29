@@ -10,14 +10,13 @@
 import { pickLang } from "@shared/i18n";
 import { type ManageRow } from "@domain/manage/types";
 import { listGroups } from "@domain/manage/group";
-import { getMeta } from "@domain/manage/plugin-meta";
 import {
 	countByGroup,
 	matchesFilter,
 	type ManageFilterState,
 } from "@domain/manage/manage-filter";
 import { ManageFilterBar } from "./manage-filter-bar";
-import { renderCssSnippetRow, type CssSnippetRowContext } from "./css-snippet-row";
+import { readCssSnippetRow, renderCssSnippetRow, type CssSnippetRowContext } from "./css-snippet-row";
 import { SnippetRenameModal } from "./snippet-rename-modal";
 import type { CssStorePort } from "./snippet-manage-store";
 import type { App } from "obsidian";
@@ -114,7 +113,7 @@ export class CssSnippetSettingsList {
 		for (const rowEl of Array.from(
 			this.listEl.querySelectorAll<HTMLElement>(".cpm-css-settings-row"),
 		)) {
-			const row = this.readRow(rowEl);
+			const row = readCssSnippetRow(rowEl, this.store);
 			if (row) rows.push({ rowEl, row });
 		}
 
@@ -131,20 +130,6 @@ export class CssSnippetSettingsList {
 		);
 		this.filterBar.setCount(rows.length, "个片段");
 		this.persistFilter(state);
-	}
-
-	private readRow(rowEl: HTMLElement): ManageRow | null {
-		const baseName = rowEl.dataset.cpmSnippet;
-		if (!baseName) return null;
-		const meta = getMeta(this.store.settings.cssMeta, baseName);
-		return {
-			id: baseName,
-			name: baseName,
-			author: "",
-			remark: meta.remark,
-			group: meta.group,
-			enabled: Boolean(rowEl.querySelector(".checkbox-container.is-enabled")),
-		};
 	}
 
 	private persistFilter(state: ManageFilterState): void {

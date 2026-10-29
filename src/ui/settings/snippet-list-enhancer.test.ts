@@ -6,6 +6,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Menu } from "../../../test/mocks/obsidian";
 import { SnippetListEnhancer } from "./snippet-list-enhancer";
+import { CssSnippetSettingsList } from "./css-snippet-settings-list";
+import type { App } from "obsidian";
 import type { CssStorePort } from "./snippet-manage-store";
 import { addGroup, createDefaultManageSettings } from "@domain/manage/group";
 import { setMeta } from "@domain/manage/plugin-meta";
@@ -108,6 +110,30 @@ afterEach(() => {
 });
 
 describe("SnippetListEnhancer", () => {
+	it.each(["native", "fallback", "settings"])("%s 列表修改分组后同步徽标、筛选与分组计数", (mode) => {
+		const root = mode === "native" ? buildDom() : document.body.appendChild(document.createElement("div"));
+		const store = createStore();
+		store.settings.cssGroups["1"] = "暗色";
+		if (mode === "settings") {
+			new CssSnippetSettingsList({} as App, store, { openPluginSettings() {}, openManageGroups() {} }).render(root);
+		} else {
+			new SnippetListEnhancer(store, { onManageGroups() {}, requestRenameSnippet() {} }).enhance(root);
+		}
+		const group = root.querySelector<HTMLSelectElement>(".cpm-filter-group")!;
+		group.value = "1";
+		group.dispatchEvent(new Event("change"));
+		const row = root.querySelector<HTMLElement>('[data-cpm-snippet="alpha"]')!;
+		expect(row.classList.contains("cpm-filtered-out")).toBe(true);
+		row.querySelector<HTMLButtonElement>(".cpm-group-btn")!.click();
+		expect(Menu.lastShown!.items.map((item) => item.title)).toEqual(["暗色", "其他"]);
+		Menu.lastShown!.items.find((item) => item.title === "暗色")!.cb!();
+		expect(store.settings.cssMeta.alpha.group).toBe("1");
+		expect(row.querySelector(".cpm-group-badge")?.textContent).toBe("暗色");
+		expect(row.classList.contains("cpm-filtered-out")).toBe(false);
+		expect(group.selectedOptions[0].textContent).toBe("暗色（1）");
+		expect(store.listSnippets().filter((snippet) => snippet.enabled).map((snippet) => snippet.baseName)).toEqual(["alpha"]);
+	});
+
 	it("为每行注入备注 / 分组按钮 / 打开按钮", () => {
 		const root = buildDom();
 		const enhancer = new SnippetListEnhancer(createStore(), {

@@ -133,11 +133,6 @@ export function parseSourceSpec(input: string): SourceSpec {
 	return { root: u, gh: null, release: false };
 }
 
-/** 解析安装来源到三件套所在目录的 URL（parseSourceSpec 的简版，保留给旧调用方与测试） */
-export function resolveInstallRoot(input: string): URL {
-	return parseSourceSpec(input).root;
-}
-
 /** raw 根 URL（raw.githubusercontent.com/<owner>/<repo>/...）反解出 owner/repo */
 export function parseGithubRepoFromRaw(root: URL): { owner: string; repo: string } | null {
 	if (root.hostname !== "raw.githubusercontent.com") return null;
@@ -325,7 +320,7 @@ export interface BetaPluginEntry {
 }
 
 /**
- * 把三件套写盘并启用（installFromUrl / updateBetaPlugin 共用）。
+ * 把三件套写盘并启用（installFromUrlResolved / updateBetaPlugin 共用）。
  * - 普通模式：先取源码树（root），取不到再回退 GitHub Release 资产（精确 tag → v 前缀 → latest）
  * - release 模式（spec.release）：只从 Release 资产取（源码树里没有构建产物）
  */
@@ -463,10 +458,6 @@ export async function resolveRemoteManifest(
 		return { man, release: false };
 	}
 	return { man: rel, release: true };
-}
-
-export async function installFromUrl(app: App, url: string): Promise<Manifest> {
-	return (await installFromUrlResolved(app, url)).man;
 }
 
 /**

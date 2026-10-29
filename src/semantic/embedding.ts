@@ -6,14 +6,13 @@
  *   2. LocalEmbeddingProvider  —— 本地模型（transformers.js 跑在 Worker，离线可用）
  *
  * 关键词兜底不在本模块：向量路不可用时由 ai.ts 的 BM25 召回（bm25RecallScores，
- * CJK 三元组倒排）接管，再由 RRF 与标题模糊融合。旧注释写的「localRecall 兜底」
- * 已过时——utils.ts 的 localRecall/localRecallScores 现在只剩测试在用。
+ * CJK 三元组倒排）接管，再由 RRF 与标题模糊融合。
  *
- * 向量的数学内核（余弦相似度 / topK）在 utils.ts，纯函数、已单测。
+ * 向量的数学内核（归一化 / topK）在 utils.ts，纯函数、已单测。
  * 本模块只负责「文本 → 向量」的获取（含 HTTP），以及索引缓存的编排。
  */
 
-import { cosineSimilarity, topKBySimilarity, contentHash, buildOpenAIEndpoint, normalizeVector, mapWithConcurrency } from "@shared/utils";
+import { topKBySimilarity, contentHash, buildOpenAIEndpoint, normalizeVector, mapWithConcurrency } from "@shared/utils";
 import { computeIndexFingerprints } from "@shared/fingerprint";
 import { netRequest } from "@data/net/net";
 import { WorkerLocalBackend } from "@semantic/workers/worker-backend";
@@ -592,22 +591,6 @@ function computeFieldsHash(plugins: IndexPlugin[]): string {
 	return computeIndexFingerprints(plugins, (p) => p).fields;
 }
 
-/**
- * 向量召回：把 query embed 后，在索引中取 topK 最相似的插件 id。
- * @returns 命中的插件 id 列表（降序）。索引为空或 query 向量缺失时返回空。
- */
-export async function vectorRecall(
-	provider: EmbeddingProvider,
-	query: string,
-	index: VectorIndex,
-	k: number,
-	minScore = -1,
-	allowedIndices?: ReadonlySet<number>,
-): Promise<string[]> {
-	const m = await vectorRecallScores(provider, query, index, k, minScore, allowedIndices);
-	return m ? Array.from(m.keys()) : [];
-}
-
 /** query embedding LRU 缓存（PERF-9）：key = provider名+模型+query，命中则跳过重复 embed。
  *  模型进 key：同会话内切换模型（如 bge→e5）不会命中旧模型的过期向量。 */
 const QUERY_VEC_CACHE = new Map<string, number[]>();
@@ -641,7 +624,7 @@ export function __clearQueryVecCacheForTest(): void {
 }
 
 /**
- * 向量召回（带分数版）：同 vectorRecall，但返回 `Map<插件id, 余弦相似度>`，
+ * 向量召回：把 query embed 后，在索引中取 topK，返回 `Map<插件id, 余弦相似度>`，
  * 供上层做 RRF 融合（而非简单并集）。索引为空或 query 向量缺失时返回 null。
  */
 export async function vectorRecallScores(
@@ -674,6 +657,3 @@ export async function vectorRecallScores(
 	}
 	return m;
 }
-
-// 便于其它模块复用（避免重复 import 路径）
-export { cosineSimilarity, topKBySimilarity };

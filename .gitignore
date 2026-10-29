@@ -11,6 +11,7 @@ models/
 *.onnx
 
 # CI 构建产物
+dist/
 scripts/check-dict-delta.mjs
 dict-delta-report.json
 

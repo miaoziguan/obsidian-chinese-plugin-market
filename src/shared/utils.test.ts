@@ -4,14 +4,11 @@ import {
 	stripReviewNotice,
 	parseJSON,
 	parseRecallCandidates,
-	localRecall,
-	cosineSimilarity,
 	topKBySimilarity,
 	contentHash,
 	extractLLMContent,
 	supportsJsonMode,
 	mapWithConcurrency,
-	mergeRecallIds,
 	isListStale,
 	computePluginDelta,
 	debounce,
@@ -121,92 +118,6 @@ describe("parseJSON", () => {
 	it("容错：全角标点 + 前后说明文字混合", () => {
 		const content = "结果如下：｛\"ranking\"：［1，2，3］｝ 完毕。";
 		expect(parseJSON(content)).toEqual({ ranking: [1, 2, 3] });
-	});
-});
-
-describe("localRecall", () => {
-	const plugins = [
-		{ id: "obsidian-kanban", name: "Kanban Board", description: "Manage tasks with a kanban board view" },
-		{ id: "dataview", name: "Dataview", description: "Query your notes as a database with SQL-like syntax" },
-		{ id: "excalidraw", name: "Excalidraw", description: "Sketch diagrams and hand-drawn notes" },
-		{ id: "calendar", name: "Calendar", description: "Track your daily notes in a calendar view" },
-		{ id: "templater", name: "Templater", description: "Create templates with dynamic variables" },
-		{ id: "zh-calendar", name: "日历插件", description: "中文日历，管理你的每日笔记" },
-	];
-
-	it("英文子串命中 name 的排在前面", () => {
-		const out = localRecall("kanban", plugins, 10);
-		expect(out[0].id).toBe("obsidian-kanban");
-	});
-
-	it("词素命中（board）能召回 board 相关插件", () => {
-		const out = localRecall("board", plugins, 10);
-		expect(out.map((c) => c.id)).toContain("obsidian-kanban");
-	});
-
-	it("中文查询字面命中（插件含中文名/描述）", () => {
-		const out = localRecall("日历", plugins, 10);
-		expect(out[0].id).toBe("zh-calendar");
-	});
-
-	it("中文 query 对纯英文插件字面无重叠时返回空（由 LLM 兜底召回）", () => {
-		// calendar 的 name/desc 都是英文，无中文字面重叠 → 本地召回为空，
-		// 此时应由上层 aiSearch 回退到 LLM 全量召回，而非本地硬匹配。
-		const out = localRecall("日历", [
-			{ id: "calendar", name: "Calendar", description: "Track your daily notes in a calendar view" },
-		], 10);
-		expect(out).toEqual([]);
-	});
-
-	it("无命中返回空数组（上层应回退 LLM 召回）", () => {
-		expect(localRecall("zzz-nonexistent-xyz", plugins, 10)).toEqual([]);
-	});
-
-	it("按得分降序：name 命中优先于仅 description 命中", () => {
-		const out = localRecall("view", plugins, 10);
-		// Kanban(name 含 board view? no) — Dataview/Excalidraw/Calendar 均靠 description 命中；
-		// 此处只断言返回非空且全部得分>0（即都含 token "view"）
-		expect(out.length).toBeGreaterThan(0);
-		for (const c of out) {
-			const hit = (c.name + " " + c.description).toLowerCase().includes("view");
-			expect(hit).toBe(true);
-		}
-	});
-
-	it("不超过 cap 上限", () => {
-		const big = Array.from({ length: 50 }, (_, i) => ({
-			id: `p${i}`,
-			name: `thing ${i}`,
-			description: "a widget tool",
-		}));
-		const out = localRecall("widget", big, 12);
-		expect(out.length).toBeLessThanOrEqual(12);
-	});
-
-	it("空 query / 空库 / cap<=0 直接返回空", () => {
-		expect(localRecall("", plugins, 10)).toEqual([]);
-		expect(localRecall("board", [], 10)).toEqual([]);
-		expect(localRecall("board", plugins, 0)).toEqual([]);
-	});
-});
-
-describe("cosineSimilarity", () => {
-	it("同向向量相似度为 1", () => {
-		expect(cosineSimilarity([1, 2, 3], [2, 4, 6])).toBeCloseTo(1, 6);
-	});
-
-	it("正交向量相似度为 0", () => {
-		expect(cosineSimilarity([1, 0], [0, 1])).toBeCloseTo(0, 6);
-	});
-
-	it("反向向量相似度为 -1", () => {
-		expect(cosineSimilarity([1, 1], [-1, -1])).toBeCloseTo(-1, 6);
-	});
-
-	it("长度不等 / 空 / 零向量返回 0", () => {
-		expect(cosineSimilarity([1, 2], [1, 2, 3])).toBe(0);
-		expect(cosineSimilarity([], [1])).toBe(0);
-		expect(cosineSimilarity([0, 0], [1, 1])).toBe(0);
 	});
 });
 
@@ -531,37 +442,6 @@ describe("mapWithConcurrency", () => {
 	});
 });
 
-describe("mergeRecallIds（混合召回并集）", () => {
-	it("向量 + 关键词无重叠：并集且向量在前", () => {
-		expect(mergeRecallIds(["a", "b"], ["c", "d"])).toEqual(["a", "b", "c", "d"]);
-	});
-
-	it("有重叠：去重，向量命中保留在前面", () => {
-		// 关键：关键词命中的 b 已在向量里，不应重复；且顺序遵循「向量优先」
-		expect(mergeRecallIds(["a", "b"], ["b", "c"])).toEqual(["a", "b", "c"]);
-	});
-
-	it("向量路失败(null)：退化为纯关键词", () => {
-		expect(mergeRecallIds(null, ["x", "y"])).toEqual(["x", "y"]);
-	});
-
-	it("向量路为空数组：与关键词并集，仅留关键词", () => {
-		expect(mergeRecallIds([], ["p", "q"])).toEqual(["p", "q"]);
-	});
-
-	it("关键词为空：仅向量结果", () => {
-		expect(mergeRecallIds(["m", "n"], [])).toEqual(["m", "n"]);
-	});
-
-	it("两者皆空：返回空数组（触发 LLM 兜底）", () => {
-		expect(mergeRecallIds([], [])).toEqual([]);
-		expect(mergeRecallIds(null, [])).toEqual([]);
-	});
-
-	it("关键词内有重复 id：合并时一并去重", () => {
-	expect(mergeRecallIds(["a"], ["b", "b", "c"])).toEqual(["a", "b", "c"]);
-});
-
 describe("isListStale（产品改进 #15：列表 TTL 自动失效）", () => {
 	const TTL = 6 * 60 * 60 * 1000; // 6h
 	// 基准时刻必须足够大，确保 now-TTL 仍为正（否则会命中"未拉取"分支）
@@ -600,7 +480,6 @@ describe("isListStale（产品改进 #15：列表 TTL 自动失效）", () => {
 		expect(isListStale(NaN, 1_000, TTL)).toBe(true);
 		expect(isListStale(100, NaN, TTL)).toBe(true);
 	});
-});
 });
 
 describe("computePluginDelta（新增插件翻译增量）", () => {
@@ -706,66 +585,6 @@ describe("parseRecallCandidates · 6 种 LLM 召回响应格式", () => {
 		const out = parseRecallCandidates({ ids: ["1", "sync"] }, batch);
 		// "1" 先在 batch.id 中查，不存在则按索引 idx=1（kanban）
 		expect(out.map((c) => c.id)).toEqual(["kanban", "sync"]);
-	});
-});
-
-// ── localRecall / mergeRecallIds 增补边缘情况 ──
-
-describe("localRecall · 边缘情况", () => {
-	const plugins = [
-		{ id: "a", name: "Mind Map", description: "draw mind maps" },
-		{ id: "b", name: "思维导图", description: "绘制思维导图。支持 Markdown。" },
-		{ id: "c", name: "Calendar", description: "date picker" },
-		{ id: "d", name: "Map View", description: "show map" },
-	];
-
-	it("空查询返回空数组", () => {
-		expect(localRecall("", plugins, 10)).toEqual([]);
-		expect(localRecall("   ", plugins, 10)).toEqual([]);
-	});
-
-	it("cap <= 0 返回空", () => {
-		expect(localRecall("map", plugins, 0)).toEqual([]);
-		expect(localRecall("map", plugins, -1)).toEqual([]);
-	});
-
-	it("完全无匹配返回空", () => {
-		expect(localRecall("zzzzzz_nomatch", plugins, 10)).toEqual([]);
-	});
-
-	it("中文查询按单字分词并命中", () => {
-		const out = localRecall("思维导图", plugins, 10);
-		expect(out.map((c) => c.id)).toContain("b"); // 思维导图 name 命中
-	});
-
-	it("部分中文词命中：仅一个字符匹配也计入", () => {
-		const out = localRecall("导图", plugins, 10);
-		expect(out.map((c) => c.id)).toContain("b");
-	});
-
-	it("name 命中分数更高，排在前面", () => {
-		const out = localRecall("map", plugins, 10);
-		// d (Map View) name 包含"map"，c (Calendar) 仅 desc 包含"date"，a (Mind Map) name 包含
-		expect(out[0].id).toBe("a"); // name "Mind Map" 全串匹配
-	});
-
-	it("结果数量不超过 cap", () => {
-		const out = localRecall("map", plugins, 1);
-		expect(out.length).toBe(1);
-	});
-
-	it("query 仅含标点和空格时无 token，返回空", () => {
-		expect(localRecall("!@#  $%^", plugins, 10)).toEqual([]);
-	});
-});
-
-describe("mergeRecallIds · 增补边缘情况", () => {
-	it("vectorIds 为 null 时，只看 localIds", () => {
-		expect(mergeRecallIds(null, ["a", "b"])).toEqual(["a", "b"]);
-	});
-
-	it("vectorIds 为 undefined 时，只看 localIds", () => {
-		expect(mergeRecallIds(undefined as unknown as string[], ["c"])).toEqual(["c"]);
 	});
 });
 

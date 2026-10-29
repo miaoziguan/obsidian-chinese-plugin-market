@@ -45,11 +45,6 @@ export function compareTagsMulti(allTags: string[][]): CompareTagsResult {
 	return { common, only };
 }
 
-/** 取一组插件中下载量的最大值（用于指标区条形基准），无数据返回 0 */
-export function maxDownloads(plugins: { downloads?: number }[]): number {
-	return plugins.reduce((m, p) => Math.max(m, p.downloads ?? 0), 0);
-}
-
 /**
  * 命令（commands）交集/差集计算（纯函数，无副作用，便于单测）。
  * 与 compareTagsMulti 同构，但以「实际代码注册的命令名」为维度——

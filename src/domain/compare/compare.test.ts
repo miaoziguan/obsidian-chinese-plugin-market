@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compareTagsMulti, maxDownloads } from "@domain/compare/compare";
+import { compareTagsMulti } from "@domain/compare/compare";
 
 describe("compareTagsMulti", () => {
 	it("N=2 求交集与各自独有", () => {
@@ -56,12 +56,5 @@ describe("compareTagsMulti", () => {
 		]);
 		expect(r.common).toEqual(["笔记"]);
 		expect(r.only[0]).toEqual(["双链"]);
-	});
-});
-
-describe("maxDownloads", () => {
-	it("取最大值，缺失按 0 处理", () => {
-		expect(maxDownloads([{ downloads: 100 }, { downloads: 5000 }, {}])).toBe(5000);
-		expect(maxDownloads([])).toBe(0);
 	});
 });

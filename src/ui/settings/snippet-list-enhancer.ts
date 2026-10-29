@@ -9,16 +9,16 @@
  *    主题 / 其他开关项（外观页无稳定的 snippet 行 data 属性）。
  */
 
-import { Menu, Notice, setIcon } from "obsidian";
+import { Notice, setIcon } from "obsidian";
 import { pickLang } from "@shared/i18n";
 import { logger } from "@shared/logger";
-import { GROUP_ALL, GROUP_OTHER, type ManageRow } from "@domain/manage/types";
-import { listGroups } from "@domain/manage/group";
+import type { ManageRow } from "@domain/manage/types";
+import { listGroups, shouldShowGroupBadge } from "@domain/manage/group";
 import { getMeta } from "@domain/manage/plugin-meta";
 import { countByGroup, matchesFilter, type ManageFilterState } from "@domain/manage/manage-filter";
 import { ManageFilterBar } from "./manage-filter-bar";
 import { renderInlineNoteEditor } from "./inline-note-editor";
-import { renderCssSnippetRow } from "./css-snippet-row";
+import { openCssSnippetGroupMenu, readCssSnippetRow, renderCssSnippetRow } from "./css-snippet-row";
 import type { CssStorePort } from "./snippet-manage-store";
 import type { SnippetInfo } from "@data/platform/snippet";
 
@@ -33,11 +33,6 @@ const ROW_SELECTOR = ".setting-item";
 export interface SnippetEnhancerHost {
 	onManageGroups: () => void;
 	requestRenameSnippet: (baseName: string) => void;
-}
-
-/** 「其他」不显示为徽标 */
-function shouldShowBadge(groupKey: string, hasName: boolean): boolean {
-	return hasName && groupKey !== GROUP_ALL && groupKey !== GROUP_OTHER;
 }
 
 export class SnippetListEnhancer {
@@ -302,7 +297,7 @@ export class SnippetListEnhancer {
 
 	private addGroupBadge(nameEl: HTMLElement, groupKey: string): void {
 		const groupName = this.store.settings.cssGroups[groupKey];
-		if (!shouldShowBadge(groupKey, Boolean(groupName))) return;
+		if (!shouldShowGroupBadge(groupKey, Boolean(groupName))) return;
 
 		const badge = createSpan({ cls: "cpm-group-badge", text: groupName });
 		badge.setAttribute(OWNED_ATTR, ROW_OWNER);
@@ -342,7 +337,11 @@ export class SnippetListEnhancer {
 		button.addEventListener("click", (event: MouseEvent) => {
 			event.preventDefault();
 			event.stopPropagation();
-			this.openGroupMenu(event, rowEl, id, currentGroup);
+			openCssSnippetGroupMenu(event, this.store, id, currentGroup, () => {
+				this.removeRowEnhancement(rowEl);
+				this.enhanceRow(rowEl, id);
+				this.applyFilters();
+			});
 		});
 		const firstNativeButton = Array.from(controlEl.children).find(
 			(el) => el.tagName === "BUTTON" && !el.hasAttribute(OWNED_ATTR),
@@ -380,7 +379,7 @@ export class SnippetListEnhancer {
 		const hasButton = Boolean(
 			rowEl.querySelector(`[${OWNED_ATTR}="${ROW_OWNER}"][data-role="${GROUP_BTN_ROLE}"]`),
 		);
-		const needsBadge = shouldShowBadge(
+		const needsBadge = shouldShowGroupBadge(
 			groupKey,
 			Boolean(this.store.settings.cssGroups[groupKey]),
 		);
@@ -410,7 +409,7 @@ export class SnippetListEnhancer {
 			);
 		const collected: ManageRow[] = [];
 		for (const rowEl of targetRows) {
-			const row = this.readRow(rowEl);
+			const row = readCssSnippetRow(rowEl, this.store);
 			if (row) collected.push(row);
 		}
 
@@ -431,21 +430,6 @@ export class SnippetListEnhancer {
 		this.persistFilter(state);
 	}
 
-	/** 从行 DOM 抽取可计算的数据 */
-	private readRow(rowEl: HTMLElement): ManageRow | null {
-		const baseName = rowEl.dataset.cpmSnippet;
-		if (!baseName) return null;
-		const meta = getMeta(this.store.settings.cssMeta, baseName);
-		return {
-			id: baseName,
-			name: baseName,
-			author: "",
-			remark: meta.remark,
-			group: meta.group,
-			enabled: Boolean(rowEl.querySelector(".checkbox-container.is-enabled")),
-		};
-	}
-
 	/** 筛选状态变化即落盘 */
 	private persistFilter(state: ManageFilterState): void {
 		this.store.saveCssFilterState({
@@ -453,36 +437,5 @@ export class SnippetListEnhancer {
 			group: state.group,
 			status: state.status,
 		});
-	}
-
-	// ── 分组菜单 ──
-
-	private openGroupMenu(
-		event: MouseEvent,
-		rowEl: HTMLElement,
-		id: string,
-		currentGroup: string,
-	): void {
-		try {
-			const menu = new Menu();
-			for (const { key, name } of listGroups(this.store.settings.cssGroups)) {
-				if (key === GROUP_ALL) continue;
-				menu.addItem((item) =>
-					item
-						.setTitle(name)
-						.setChecked(key === currentGroup)
-						.onClick(() => {
-							this.store.saveCssMeta(id, { group: key });
-							this.removeRowEnhancement(rowEl);
-							this.enhanceRow(rowEl, id);
-							this.applyFilters();
-						})
-				);
-			}
-			menu.showAtMouseEvent(event);
-		} catch (error) {
-			logger.warn("[Chinese Plugin Market] 打开 CSS 分组菜单失败：", error);
-			new Notice("打开分组菜单失败，详情见控制台日志");
-		}
 	}
 }

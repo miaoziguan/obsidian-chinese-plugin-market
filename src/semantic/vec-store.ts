@@ -54,8 +54,6 @@ export class SqliteVectorStore {
 	private idleTimer: number | null = null;
 	private flushInFlight: Promise<void> | null = null;
 	private disposed = false;
-	/** 内容版本号，任何变更自增（供上层判断是否需要重建下游结构） */
-	private revision = 0;
 
 	private constructor(
 		private readonly adapter: PersistAdapter,
@@ -246,11 +244,6 @@ export class SqliteVectorStore {
 
 	// ── 持久化（防抖） ───────────────────────────────────────────────────
 
-	/** 内容版本号：任何变更自增 */
-	getRevision(): number {
-		return this.revision;
-	}
-
 	/**
 	 * 触发一次写盘并吞掉失败（仅记日志）。
 	 * 直接用 `void this.flush()` 会在 adapter.write 失败（磁盘满/vault 锁定/移动端权限）
@@ -264,7 +257,6 @@ export class SqliteVectorStore {
 	}
 
 	private touch(force = false): void {
-		this.revision++;
 		this.mutationCount++;
 		if (this.idleTimer) {
 			window.clearTimeout(this.idleTimer);

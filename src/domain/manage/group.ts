@@ -137,6 +137,11 @@ export function listGroups(
 	return ordered.filter((key) => key in groups).map((key) => ({ key, name: groups[key] }));
 }
 
+/** 仅已命名的自定义分组显示徽标；「全部」与「其他」不显示。 */
+export function shouldShowGroupBadge(groupKey: string, hasName: boolean): boolean {
+	return hasName && groupKey !== GROUP_ALL && groupKey !== GROUP_OTHER;
+}
+
 /** 生成下一个自定义分组 key（递增数字，避开已占用） */
 export function nextGroupKey(groups: Record<string, string>): string {
 	let max = 0;

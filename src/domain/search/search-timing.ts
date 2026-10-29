@@ -152,11 +152,6 @@ export class SearchTiming {
 			at: this.startedAt,
 		};
 	}
-
-	/** 单行摘要，便于 grep 与前后对照。 */
-	toLogLine(label: string): string {
-		return formatSearchTiming(this.finish(), label);
-	}
 }
 
 /** 把快照格式化为单行摘要（独立导出，便于对已有快照复用）。 */

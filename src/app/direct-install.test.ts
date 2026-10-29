@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-	resolveInstallRoot,
 	parseSourceSpec,
 	parseGithubRepoFromRaw,
 	githubReleaseAssetUrls,
@@ -84,77 +83,77 @@ describe("parseSourceSpec — 钉选分支/标签/commit（P1）", () => {
 	});
 });
 
-describe("resolveInstallRoot", () => {
+describe("parseSourceSpec · 安装目录", () => {
 	it("GitHub 仓库 URL（无尾斜杠）→ raw HEAD", () => {
-		const r = resolveInstallRoot("https://github.com/MarcBolo/Inflow");
+		const r = parseSourceSpec("https://github.com/MarcBolo/Inflow").root;
 		expect(r.origin + r.pathname).toBe(
 			"https://raw.githubusercontent.com/MarcBolo/Inflow/HEAD/"
 		);
 	});
 	it("GitHub 仓库 URL（带尾斜杠）", () => {
-		const r = resolveInstallRoot("https://github.com/owner/repo/");
+		const r = parseSourceSpec("https://github.com/owner/repo/").root;
 		expect(r.origin + r.pathname).toBe(
 			"https://raw.githubusercontent.com/owner/repo/HEAD/"
 		);
 	});
 	it("GitHub .git 后缀", () => {
-		const r = resolveInstallRoot("https://github.com/owner/repo.git");
+		const r = parseSourceSpec("https://github.com/owner/repo.git").root;
 		expect(r.origin + r.pathname).toBe(
 			"https://raw.githubusercontent.com/owner/repo/HEAD/"
 		);
 	});
 	it("GitHub /tree/<branch>", () => {
-		const r = resolveInstallRoot("https://github.com/owner/repo/tree/dev");
+		const r = parseSourceSpec("https://github.com/owner/repo/tree/dev").root;
 		expect(r.origin + r.pathname).toBe(
 			"https://raw.githubusercontent.com/owner/repo/dev/"
 		);
 	});
 	it("GitHub /tree/<branch> 带斜杠分支", () => {
-		const r = resolveInstallRoot("https://github.com/owner/repo/tree/feature/x");
+		const r = parseSourceSpec("https://github.com/owner/repo/tree/feature/x").root;
 		expect(r.origin + r.pathname).toBe(
 			"https://raw.githubusercontent.com/owner/repo/feature/x/"
 		);
 	});
 	it("GitHub /blob/<branch>/manifest.json", () => {
-		const r = resolveInstallRoot(
+		const r = parseSourceSpec(
 			"https://github.com/owner/repo/blob/main/manifest.json"
-		);
+		).root;
 		expect(r.origin + r.pathname).toBe(
 			"https://raw.githubusercontent.com/owner/repo/main/"
 		);
 	});
 	it("GitHub URL 保留 query", () => {
-		const r = resolveInstallRoot("https://github.com/owner/repo?ref=abc");
+		const r = parseSourceSpec("https://github.com/owner/repo?ref=abc").root;
 		expect(r.pathname).toBe("/owner/repo/HEAD/");
 		expect(r.search).toBe("?ref=abc");
 	});
 	it("GitHub 仅 owner（无 repo）→ badUrl", () => {
-		expect(() => resolveInstallRoot("https://github.com/owner")).toThrow(/地址/);
+		expect(() => parseSourceSpec("https://github.com/owner").root).toThrow(/地址/);
 	});
 	it("非 GitHub 目录 URL → 原样标准化", () => {
-		const r = resolveInstallRoot("https://example.com/myplugin/");
+		const r = parseSourceSpec("https://example.com/myplugin/").root;
 		expect(r.origin + r.pathname).toBe("https://example.com/myplugin/");
 	});
 	it("非 GitHub manifest.json 链接 → 取父目录", () => {
-		const r = resolveInstallRoot("https://example.com/myplugin/manifest.json");
+		const r = parseSourceSpec("https://example.com/myplugin/manifest.json").root;
 		expect(r.origin + r.pathname).toBe("https://example.com/myplugin/");
 	});
 	it("http://localhost 放行（dev）", () => {
-		const r = resolveInstallRoot(
+		const r = parseSourceSpec(
 			"http://localhost:3000/myplugin/manifest.json"
-		);
+		).root;
 		expect(r.origin + r.pathname).toBe("http://localhost:3000/myplugin/");
 	});
 	it("http 非 localhost → needHttps", () => {
-		expect(() => resolveInstallRoot("http://example.com/myplugin/")).toThrow(
+		expect(() => parseSourceSpec("http://example.com/myplugin/").root).toThrow(
 			/https/
 		);
 	});
 	it("无效 URL → badUrl", () => {
-		expect(() => resolveInstallRoot("not a url")).toThrow();
+		expect(() => parseSourceSpec("not a url").root).toThrow();
 	});
 	it("去掉 fragment", () => {
-		const r = resolveInstallRoot("https://example.com/p/#frag");
+		const r = parseSourceSpec("https://example.com/p/#frag").root;
 		expect(r.hash).toBe("");
 	});
 });

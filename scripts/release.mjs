@@ -59,7 +59,7 @@ if (!localTag) {
 const assets = [
   "main.js",
   "manifest.json",
-  "styles.css",
+  "dist/styles.css",
   "versions.json",
   "embedding-worker.bundle.js",
   "sql-wasm.wasm",

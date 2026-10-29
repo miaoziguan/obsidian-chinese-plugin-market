@@ -49,21 +49,6 @@ function cleanOutput(s: string): string {
 	return s.replace(/^\uFEFF/, "").trim();
 }
 
-/**
- * Markdown 翻译占位保护（方案 A）：
- * 系统翻译会把整段 Markdown 当纯文本，连语法结构（代码块 / 行内代码 / 表格行 /
- * 链接 URL / 图片 / HTML 标签）一起翻译，破坏格式与代码。翻译前把这类结构摘出来，
- * 替换成独特的 ASCII 占位 token（如 ZZCMPLACE0ZZ），翻译回来后再还原。
- *
- * 为什么用 ASCII 乱码 token 而非 NUL 控制符：实测 Apple 翻译服务会剥离/改写不可见
- * 控制符（\u0000），导致索引数字裸奔并被翻译成乱码（如把图片变成「找不到 docs/x.png」）。
- * 全大写 + 数字的怪串（ZZCMPLACE123ZZ）通常被翻译引擎原样保留，token 完整性更高。
- */
-
-/** 占位 token 前缀/后缀（独特乱码，系统翻译一般不改写） */
-const PH = "ZZCMPLACE";
-const PH_END = "ZZ";
-
 /** 匹配「不应被翻译」的 Markdown 结构（按优先级依次收集） */
 const PROTECT_PATTERNS: RegExp[] = [
 	// 围栏代码块（含语言标注与内容）：```lang ... ```
@@ -91,70 +76,8 @@ const PROTECT_PATTERNS: RegExp[] = [
 	/^\s*(?:[-*+]\s+|\d+\.\s+)/gm,
 ];
 
-/** 生成唯一占位 token：ZZCMPLACE<idx>ZZ */
-function token(idx: number): string {
-	return `${PH}${idx}${PH_END}`;
-}
-
 /**
- * 把 Markdown 中不应被翻译的结构摘出并替换为占位 token，返回 { text, blocks }。
- * blocks[i] = 原始片段；图片片段原样保存，翻译后还原可见，不残留坏链提示。
- */
-export function protectMarkdown(md: string): { text: string; blocks: string[] } {
-	const blocks: string[] = [];
-	let out = md;
-	for (const re of PROTECT_PATTERNS) {
-		re.lastIndex = 0;
-		out = out.replace(re, (m) => {
-			const idx = blocks.length;
-			blocks.push(m);
-			return token(idx);
-		});
-	}
-	return { text: out, blocks };
-}
-
-/**
- * 把占位 token 还原为原始被保护片段。
- *
- * 必须循环还原至不动点：PROTECT_PATTERNS 是按序多轮替换的，靠后的模式（链接 / 图片 /
- * HTML 标签）可能把靠前模式已生成的 token 整体吞进自己的片段里（如
- * "[看 `x` 文档](url)" → 行内代码先变 token，再被链接整体收走）。只做一轮 replace
- * 会导致内层 token 裸奔残留在正文中。这里反复展开直到没有 token 可还原为止。
- *
- * token 匹配使用宽松正则 `ZZCMPLACE\s*(\d+)\s*ZZ`：实测翻译引擎（腾讯 transmart /
- * macOS 快捷指令）会把 `ZZCMPLACE8ZZ` 这类大写+数字串分词改写为 `ZZCMPLACE 8 ZZ`
- * （数字两侧插入空格），严格匹配会导致图片/代码块无法还原、token 残留正文。
- * 允许 token 内部出现空白即可覆盖该改写；数字部分是还原的唯一凭据，不受影响。
- *
- * 循环设有上限（blocks.length + 1 轮）：正常嵌套深度不会超过保护模式的层数，
- * 加上限可防御被破坏的输入（如译文里出现自引用 token）造成的死循环。
- */
-export function restoreMarkdown(translated: string, blocks: string[]): string {
-	const re = new RegExp(`${PH}\\s*(\\d+)\\s*${PH_END}`, "g");
-	let out = translated;
-	// 最多展开 blocks.length + 1 轮：每轮至少消解一层嵌套，超出即视为异常输入
-	const maxRounds = blocks.length + 1;
-	for (let round = 0; round < maxRounds; round++) {
-		re.lastIndex = 0;
-		if (!re.test(out)) break;
-		re.lastIndex = 0;
-		out = out.replace(re, (_m, idxStr) => {
-			const idx = Number(idxStr);
-			return blocks[idx] ?? ""; // 找不到（被破坏）则移除该 token，避免裸奔乱码
-		});
-	}
-	return out;
-}
-
-/**
- * Markdown 拆解翻译（方案 B，取代 token 占位）：
- *
- * 不再把图片 / 链接 / 代码等结构替换成占位 token 再还原——token 会被翻译引擎改写
- * （`ZZCMPLACE8ZZ` → `ZZCMPLACE 8 ZZ`），导致结构无法还原、残留正文。
- * 改为在原文上按 PROTECT_PATTERNS 切出「不译结构」与「可译文本」交替块：
- * 只把文本块交给翻译引擎，结构块原样保留后拼回。图片/链接/代码从头到尾不进入
- * 翻译引擎，从根源上消除结构被改写的问题。
+ * Markdown 分块翻译：只翻译文本块，图片、链接、代码等结构原样拼回。
  */
 
 /** 单个拆解块：isKeep=true 表示原始结构（原样保留，不参与翻译） */
@@ -163,7 +86,7 @@ export interface MarkdownBlock {
 	value: string;
 }
 
-/** 匹配「不应被翻译」的 Markdown 结构（与 PROTECT_PATTERNS 同一套 pattern） */
+/** 匹配「不应被翻译」的 Markdown 结构 */
 function keepMatcher(): RegExp {
 	const merged = PROTECT_PATTERNS.map((re) => {
 		// 去掉每条的 g/gm 标志，在合并正则上统一处理
@@ -176,8 +99,7 @@ function keepMatcher(): RegExp {
 
 /**
  * 把 markdown 拆成「不译结构」与「可译文本」交替块。
- * PROTECT_PATTERNS 按序执行时会出现嵌套（靠后模式吞掉靠前模式已收走的内容），
- * 这里改为单遍扫描：任一个 pattern 命中的区间整体作为不译块，其余原文留作文本块。
+ * 单遍扫描：任一个 pattern 命中的区间整体作为不译块，其余原文留作文本块。
  * 导出仅供单测与上层（detail-drawer 逐块翻译并拼回）。
  */
 export function splitMarkdownForTranslate(md: string): MarkdownBlock[] {
@@ -294,14 +216,6 @@ const MACOS_CONCURRENCY = 1;
 const MACOS_RETRY_TIMES = 3;
 /** 重试退避基数（ms），第 n 次失败后等 base * 2^(n-1) */
 const MACOS_RETRY_BASE_MS = 400;
-
-/**
- * 把长文本按段落拆成 ≤BATCH 字符的批次（尽量在段落边界断开，避免切断句子）。
- * 导出仅供单测。
- */
-export function splitBatches(text: string, limit: number): string[] {
-	return splitBatchesDetailed(text, limit).batches;
-}
 
 /**
  * 分段并记录「批次之间的原始分隔符」，供 joinBatches 无损拼回。

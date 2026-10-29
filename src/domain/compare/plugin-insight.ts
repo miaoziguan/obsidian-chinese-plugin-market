@@ -12,7 +12,7 @@
 import type { PluginInfo } from "@domain/catalog/translator";
 import type { LLMClient } from "@translation/api/api";
 import { netRequest } from "@data/net/net";
-import { resolveUrl, buildReadmeUrl, type MirrorConfig } from "@domain/catalog/mirror";
+import { buildRawFileUrl, buildReadmeUrl, type MirrorConfig } from "@domain/catalog/mirror";
 
 /** manifest.json 中我们关心的字段 */
 export interface PluginManifest {
@@ -53,13 +53,7 @@ export interface CompareItem {
 
 /** 由 repo（owner/name）构造 manifest.json 的 raw URL 并按镜像映射 */
 export function buildManifestUrl(repo: string | undefined, mirror: MirrorConfig): string {
-	if (!repo) return "";
-	const cleaned = repo.replace(/^\/+|\/+$/g, "");
-	const parts = cleaned.split("/");
-	if (parts.length !== 2 || !parts[0] || !parts[1]) return "";
-	const [owner, name] = parts;
-	const rawUrl = `https://raw.githubusercontent.com/${owner}/${name}/HEAD/manifest.json`;
-	return resolveUrl(rawUrl, mirror);
+	return buildRawFileUrl(repo, "manifest.json", mirror);
 }
 
 /** 构造 main.js 的 raw URL（manifest.main 指定入口；缺省 main.js） */
@@ -68,14 +62,8 @@ export function buildMainJsUrl(
 	main: string | undefined,
 	mirror: MirrorConfig
 ): string {
-	if (!repo) return "";
-	const cleaned = repo.replace(/^\/+|\/+$/g, "");
-	const parts = cleaned.split("/");
-	if (parts.length !== 2 || !parts[0] || !parts[1]) return "";
-	const [owner, name] = parts;
 	const entry = main && main.trim() ? main.trim() : "main.js";
-	const rawUrl = `https://raw.githubusercontent.com/${owner}/${name}/HEAD/${entry}`;
-	return resolveUrl(rawUrl, mirror);
+	return buildRawFileUrl(repo, entry, mirror);
 }
 
 /** 拉取并解析 manifest.json；失败返回空对象（不阻断洞察生成，降级用已有元数据） */

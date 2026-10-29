@@ -55,8 +55,6 @@ export const MAINJS_PATTERNS: string[] = [
 export const DROP_BELOW = 0.3;
 /** 达到此置信度才允许是 required */
 export const REQUIRED_MIN = 0.7;
-/** UI 标「可能」的阈值（README 推断的那批） */
-export const MAYBE_BELOW = 0.85;
 
 /** 各来源的置信度常量（detect.ts 与测试共用，避免魔法数字散落） */
 export const CONFIDENCE = {

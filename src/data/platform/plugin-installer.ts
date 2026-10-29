@@ -14,9 +14,10 @@ import { asAppInternals, type AppPlugins } from "@data/platform/obsidian-interna
 import type { PluginInfo } from "@domain/catalog/translator";
 import type { ViewContext } from "@ui/view/view-context";
 import { netRequest } from "@data/net/net";
-import type { MirrorConfig } from "@domain/catalog/mirror";
+import { buildRawFileUrl, type MirrorConfig } from "@domain/catalog/mirror";
 import { mirrorConfig } from "@ui/view/view-data";
 import { logger } from "@shared/logger";
+import { parseGithubRepo } from "@shared/github";
 import { reportMissingDeps } from "@ui/view/deps-report";
 
 /** 安装结果 */
@@ -45,34 +46,11 @@ function buildReleaseAssetUrl(
 	version: string,
 	mirror: MirrorConfig
 ): string {
-	if (!repo) return "";
-	const cleaned = repo.replace(/^\/+|\/+$/g, "");
-	const parts = cleaned.split("/");
-	if (parts.length !== 2 || !parts[0] || !parts[1]) return "";
-	const [owner, name] = parts;
-	const base = `https://github.com/${owner}/${name}/releases/download/${version}/${file}`;
+	const gh = parseGithubRepo(repo);
+	if (!gh) return "";
+	const base = `https://github.com/${gh.owner}/${gh.repo}/releases/download/${version}/${file}`;
 	if (mirror.source === "ghproxy") return `https://gh-proxy.com/${base}`;
 	// github / jsdelivr / custom：release 资产直连 github.com
-	return base;
-}
-
-/**
- * 构造 manifest.json 的 raw URL（与官方社区市场一致，从源码树 HEAD 读取）。
- */
-function buildManifestUrl(repo: string, mirror: MirrorConfig): string {
-	const cleaned = repo.replace(/^\/+|\/+$/g, "");
-	const parts = cleaned.split("/");
-	if (parts.length !== 2 || !parts[0] || !parts[1]) return "";
-	const [owner, name] = parts;
-	const base = `https://raw.githubusercontent.com/${owner}/${name}/HEAD/manifest.json`;
-	if (mirror.source === "ghproxy") return `https://gh-proxy.com/${base}`;
-	if (mirror.source === "jsdelivr") {
-		return `https://cdn.jsdelivr.net/gh/${owner}/${name}@HEAD/manifest.json`;
-	}
-	if (mirror.source === "custom" && mirror.customBase) {
-		const withSlash = mirror.customBase.replace(/\/$/, "");
-		return `${withSlash}/${owner}/${name}/HEAD/manifest.json`;
-	}
 	return base;
 }
 
@@ -99,7 +77,7 @@ async function downloadFullManifest(
 	repo: string,
 	mirror: MirrorConfig
 ): Promise<FullPluginManifest | null> {
-	const url = buildManifestUrl(repo, mirror);
+	const url = buildRawFileUrl(repo, "manifest.json", mirror);
 	if (!url) return null;
 	try {
 		const resp = await netRequest({ url, method: "GET" });
@@ -284,12 +262,10 @@ async function fetchReleaseAsset(
 	if (!version.startsWith("v")) variants.push(`v${version}`);
 	else variants.push(version.slice(1));
 
-	const cleaned = repo.replace(/^\/+|\/+$/g, "");
-	const parts = cleaned.split("/");
-	if (parts.length !== 2) return { ok: false, text: "", url: "" };
-	const [owner, name] = parts;
+	const gh = parseGithubRepo(repo);
+	if (!gh) return { ok: false, text: "", url: "" };
 	const githubDirect = (tag: string) =>
-		`https://github.com/${owner}/${name}/releases/download/${tag}/${file}`;
+		`https://github.com/${gh.owner}/${gh.repo}/releases/download/${tag}/${file}`;
 
 	for (const tag of variants) {
 		const candidates: string[] = [];

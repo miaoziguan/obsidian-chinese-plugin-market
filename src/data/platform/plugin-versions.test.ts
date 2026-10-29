@@ -113,8 +113,17 @@ describe("fetchPluginVersions", () => {
 	});
 
 	it("repo 非法直接返回空数组（不发请求）", async () => {
-		await expect(fetchPluginVersions("")).resolves.toEqual([]);
-		await expect(fetchPluginVersions("only-one")).resolves.toEqual([]);
+		for (const repo of ["", "only-one", "o//r", "o/r/extra", "///"]) {
+			await expect(fetchPluginVersions(repo)).resolves.toEqual([]);
+		}
 		expect(req).not.toHaveBeenCalled();
+	});
+
+	it("首尾斜杠归一后与普通仓库简写共用缓存", async () => {
+		req.mockResolvedValue(res(200, [{ tag_name: "1.0.0" }]));
+		await fetchPluginVersions("///o/r///");
+		await fetchPluginVersions("o/r");
+		expect(req).toHaveBeenCalledTimes(1);
+		expect(req.mock.calls[0][0].url).toBe(releasesUrl);
 	});
 });

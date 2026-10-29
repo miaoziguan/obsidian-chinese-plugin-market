@@ -14,8 +14,8 @@
 import { Menu, Notice, setIcon } from "obsidian";
 import { pickLang } from "@shared/i18n";
 import { logger } from "@shared/logger";
-import { GROUP_ALL, GROUP_OTHER, type ManageRow } from "@domain/manage/types";
-import { listGroups } from "@domain/manage/group";
+import { GROUP_ALL, type ManageRow } from "@domain/manage/types";
+import { listGroups, shouldShowGroupBadge } from "@domain/manage/group";
 import { getMeta } from "@domain/manage/plugin-meta";
 import { countByGroup, matchesFilter, type ManageFilterState } from "@domain/manage/manage-filter";
 import { renderInlineNoteEditor } from "./inline-note-editor";
@@ -37,11 +37,6 @@ const ROW_SELECTOR = ".setting-items > .setting-item[data-plugin-id]";
 export interface EnhancerHost {
 	/** 打开分组管理界面（由 app 层实现，通常是定位到本插件设置页） */
 	onManageGroups: () => void;
-}
-
-/** 「其他」是未分组条目的兜底归属，不显示为徽标，否则每行都挂一个「其他」纯属噪音 */
-function shouldShowBadge(groupKey: string, hasName: boolean): boolean {
-	return hasName && groupKey !== GROUP_ALL && groupKey !== GROUP_OTHER;
 }
 
 export class PluginListEnhancer {
@@ -180,7 +175,7 @@ export class PluginListEnhancer {
 
 	private addGroupBadge(nameEl: HTMLElement, groupKey: string): void {
 		const groupName = this.store.settings.pluginGroups[groupKey];
-		if (!shouldShowBadge(groupKey, Boolean(groupName))) return;
+		if (!shouldShowGroupBadge(groupKey, Boolean(groupName))) return;
 
 		const badge = createSpan({ cls: "cpm-group-badge", text: groupName });
 		badge.setAttribute(OWNED_ATTR, ROW_OWNER);
@@ -239,7 +234,7 @@ export class PluginListEnhancer {
 		const hasButton = Boolean(
 			rowEl.querySelector(`[${OWNED_ATTR}="${ROW_OWNER}"][data-role="${GROUP_BTN_ROLE}"]`)
 		);
-		const needsBadge = shouldShowBadge(
+		const needsBadge = shouldShowGroupBadge(
 			groupKey,
 			Boolean(this.store.settings.pluginGroups[groupKey])
 		);

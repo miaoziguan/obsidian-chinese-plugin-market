@@ -1,54 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDictionaryText, computeCoverage } from "@translation/lexicon/dictionary";
-
-describe("parseDictionaryText", () => {
-	it("解析合法词典，保留有效条目", () => {
-		const text = JSON.stringify({
-			"obsidian-kanban": { name: "看板", description: "看板视图" },
-			"obsidian-dataview": { name: "Dataview" },
-		});
-		const { dict, invalid } = parseDictionaryText(text);
-		expect(invalid).toBe(0);
-		expect(dict["obsidian-kanban"]).toEqual({ name: "看板", description: "看板视图" });
-		expect(dict["obsidian-dataview"]).toEqual({ name: "Dataview" });
-	});
-
-	it("非法 JSON 抛出可读错误", () => {
-		expect(() => parseDictionaryText("{ not json")).toThrow(/解析失败/);
-	});
-
-	it("顶层非对象（数组/字符串）报错", () => {
-		expect(() => parseDictionaryText("[1,2,3]")).toThrow(/顶层应为对象/);
-		expect(() => parseDictionaryText('"hello"')).toThrow(/顶层应为对象/);
-	});
-
-	it("剔除 name 为空的无效条目并记录", () => {
-		const text = JSON.stringify({
-			valid: { name: "有效" },
-			emptyName: { description: "无名称" },
-			notObject: "x",
-			"": { name: "空 id" },
-		});
-		const { dict, invalid } = parseDictionaryText(text);
-		expect(invalid).toBe(3);
-		expect(Object.keys(dict)).toEqual(["valid"]);
-	});
-
-	it("trim name / description", () => {
-		const text = JSON.stringify({
-			trim: { name: "  带空格  ", description: "  desc " },
-		});
-		const { dict } = parseDictionaryText(text);
-		expect(dict["trim"].name).toBe("带空格");
-		expect(dict["trim"].description).toBe("desc");
-	});
-
-	it("空 description 解析为 undefined（而非空串）", () => {
-		const text = JSON.stringify({ a: { name: "A", description: "" } });
-		const { dict } = parseDictionaryText(text);
-		expect(dict["a"].description).toBeUndefined();
-	});
-});
+import { computeCoverage } from "@translation/lexicon/dictionary";
 
 describe("computeCoverage", () => {
 	const total = new Set(["a", "b", "c", "d", "e"]);

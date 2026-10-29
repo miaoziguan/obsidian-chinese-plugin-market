@@ -188,90 +188,6 @@ export interface RecallCandidate {
 	nameZh?: string;
 }
 
-/**
- * 本地零依赖召回：从全量插件中粗筛出"字面相关"的候选，作为 LLM 精排的输入。
- *
- * 设计动机（阶段 1 路线 B）：让 LLM 扫描全量插件库既昂贵又易触发 max_tokens 截断
- * （即用户遇到的 finish_reason=length）。改为「本地粗筛 → LLM 精排」两段式后，
- * LLM 只需处理数百条候选，稳定、快、省。
- *
- * 匹配策略（零依赖、可单测）：
- *   - query 归一化：小写、压缩空格、提取英文单词与中文字符作为词素；
- *   - 逐条插件在 name（高权重）与 description（低权重）中统计命中；
- *   - 得分 = name 完整子串命中×3 + name 单词/字命中×2 + description 子串命中×1；
- *   - 按得分降序，仅保留得分>0 者，截断到 cap。
- *
- * @returns 命中候选（降序），无命中返回空数组（上层应回退到 LLM 全量召回）。
- */
-export function localRecall(
-	query: string,
-	allPlugins: RecallCandidate[],
-	cap: number
-): RecallCandidate[] {
-	if (!query.trim() || !allPlugins.length || cap <= 0) return [];
-
-	const q = query.toLowerCase().replace(/\s+/g, " ").trim();
-	// 词素：连续英文/数字（单词），以及单个中文字符
-	const tokens = q.match(/[a-z0-9]+|[一-龥]/g) || [];
-	if (tokens.length === 0) return [];
-
-	const scored: { c: RecallCandidate; score: number }[] = [];
-	for (const p of allPlugins) {
-		const name = (p.name || "").toLowerCase();
-		const desc = (p.description || "").toLowerCase();
-		let score = 0;
-
-		// 整句子串命中（最强信号）
-		if (name.includes(q)) score += 3;
-		if (desc.includes(q)) score += 1;
-
-		// 词素命中
-		for (const t of tokens) {
-			if (name.includes(t)) score += 2;
-			else if (desc.includes(t)) score += 1;
-		}
-
-		if (score > 0) scored.push({ c: p, score });
-	}
-
-	scored.sort((a, b) => b.score - a.score);
-	return scored.slice(0, cap).map((s) => s.c);
-}
-
-/**
- * 本地关键词召回（带分数版）：与 localRecall 同算法，但返回 `Map<插件id, 分数>`，
- * 供上层做 RRF 融合。无命中返回空 Map。
- */
-export function localRecallScores(
-	query: string,
-	allPlugins: RecallCandidate[],
-	cap: number
-): Map<string, number> {
-	const out = new Map<string, number>();
-	const q = query.toLowerCase().replace(/\s+/g, " ").trim();
-	const tokens = q.match(/[a-z0-9]+|[一-龥]/g) || [];
-	if (tokens.length === 0) return out;
-	for (const p of allPlugins) {
-		const name = (p.name || "").toLowerCase();
-		const desc = (p.description || "").toLowerCase();
-		let score = 0;
-		if (name.includes(q)) score += 3;
-		if (desc.includes(q)) score += 1;
-		for (const t of tokens) {
-			if (name.includes(t)) score += 2;
-			else if (desc.includes(t)) score += 1;
-		}
-		if (score > 0) out.set(p.id, score);
-	}
-	// 仅保留分数最高的前 cap 个（与 localRecall 一致），避免低分噪声进入融合
-	const top = Array.from(out.entries())
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, cap);
-	out.clear();
-	for (const [id, s] of top) out.set(id, s);
-	return out;
-}
-
 // ──────────────────────────────────────────
 // 标题模糊匹配（第三路检索器，借鉴 vault-curate 的 Jaro-Winkler）
 // ──────────────────────────────────────────
@@ -394,28 +310,6 @@ export function fuzzyTitleScores(
 	}
 	out.sort((a, b) => b[1] - a[1]);
 	return new Map(out.slice(0, top));
-}
-
-// ──────────────────────────────────────────
-// 阶段 2：向量召回纯函数（零依赖、可单测）
-// ──────────────────────────────────────────
-
-/**
- * 余弦相似度：两个等长向量的夹角余弦，范围 [-1, 1]，越大越相似。
- * 任一向量为空、长度不等或模长为 0 时返回 0（视为不相关）。
- */
-export function cosineSimilarity(a: number[], b: number[]): number {
-	if (!a || !b || a.length === 0 || a.length !== b.length) return 0;
-	let dot = 0;
-	let normA = 0;
-	let normB = 0;
-	for (let i = 0; i < a.length; i++) {
-		dot += a[i] * b[i];
-		normA += a[i] * a[i];
-		normB += b[i] * b[i];
-	}
-	if (normA === 0 || normB === 0) return 0;
-	return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 /** 归一化向量到单位长度（模长 0 时原样返回）。返回新数组。 */
@@ -563,35 +457,6 @@ export function contentHash(texts: string[]): string {
 	}
 	// 转无符号十六进制
 	return (h >>> 0).toString(16);
-}
-
-/**
- * 混合召回合并：把向量召回与关键词召回的结果取【并集】。
- *
- * 目的（阶段 2.5 增强）：向量能命中字面无重叠的语义相关项（跨语言），
- * 关键词能补回向量漏掉的字面精确项。两者并集可显著提升召回率。
- *
- * 语义：向量命中优先排在前面（语义更可能相关），关键词命中补在后面，
- * 整体按出现顺序去重（同一 id 不重复出现）。
- *
- * @param vectorIds 向量召回命中的插件 id（可能为空数组/null 表示向量路失败）
- * @param localIds  关键词召回命中的插件 id
- * @returns 去重后的并集 id 列表（顺序：向量在前，关键词在后）
- */
-export function mergeRecallIds(
-	vectorIds: string[] | null,
-	localIds: string[]
-): string[] {
-	const seen = new Set<string>();
-	const out: string[] = [];
-	const push = (id: string) => {
-		if (!id || seen.has(id)) return;
-		seen.add(id);
-		out.push(id);
-	};
-	if (vectorIds) vectorIds.forEach(push);
-	localIds.forEach(push);
-	return out;
 }
 
 /**

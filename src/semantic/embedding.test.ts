@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
 	buildVectorIndex,
-	vectorRecall,
+	vectorRecallScores,
 	LocalEmbeddingProvider,
 	DEFAULT_LOCAL_MODEL,
 	DEFAULT_REMOTE_HOST,
@@ -171,7 +171,7 @@ describe("buildVectorIndex · 用法 A：分类维度注入（召回信号）", 
 	});
 });
 
-describe("vectorRecall", () => {
+describe("vectorRecallScores", () => {
 	const index: VectorIndex = {
 		ids: ["sync", "theme", "kanban"],
 		vectors: [
@@ -185,15 +185,15 @@ describe("vectorRecall", () => {
 
 	it("query 向量与 sync 同向 → sync 排第一", async () => {
 		const provider = makeMockProvider({ "同步": [1, 0, 0] });
-		const out = await vectorRecall(provider, "同步", index, 2);
-		expect(out[0]).toBe("sync");
-		expect(out.length).toBe(2);
+		const out = await vectorRecallScores(provider, "同步", index, 2);
+		expect([...out!.keys()][0]).toBe("sync");
+		expect(out!.size).toBe(2);
 	});
 
 	it("query 向量与 theme 同向 → theme 排第一", async () => {
 		const provider = makeMockProvider({ q: [0, 1, 0] });
-		const out = await vectorRecall(provider, "q", index, 1);
-		expect(out).toEqual(["theme"]);
+		const out = await vectorRecallScores(provider, "q", index, 1);
+		expect([...out!.keys()]).toEqual(["theme"]);
 	});
 
 	it("分类候选在 top-K 前过滤：选中分类排在全局 K 之后仍能召回", async () => {
@@ -208,24 +208,24 @@ describe("vectorRecall", () => {
 			hash: "h",
 			model: "m1",
 		};
-		const out = await vectorRecall(provider, "q", indexed, 1, -1, new Set([1, 2]));
-		expect(out).toEqual(["selected-category"]);
+		const out = await vectorRecallScores(provider, "q", indexed, 1, -1, new Set([1, 2]));
+		expect([...out!.keys()]).toEqual(["selected-category"]);
 	});
 
 	it("空索引返回空", async () => {
 		const provider = makeMockProvider({ q: [1, 0, 0] });
 		const empty: VectorIndex = { ids: [], vectors: [], hash: "", model: "m1" };
-		expect(await vectorRecall(provider, "q", empty, 5)).toEqual([]);
+		expect(await vectorRecallScores(provider, "q", empty, 5)).toBeNull();
 	});
 
 	it("query 向量为空返回空", async () => {
 		const provider = makeMockProvider({ q: [] });
-		expect(await vectorRecall(provider, "q", index, 5)).toEqual([]);
+		expect(await vectorRecallScores(provider, "q", index, 5)).toBeNull();
 	});
 });
 
 describe("provider embed 失败应向上抛（供上层降级）", () => {
-	it("embed 抛错时 vectorRecall 抛错", async () => {
+	it("embed 抛错时 vectorRecallScores 抛错", async () => {
 		const provider: EmbeddingProvider = {
 			name: "fail",
 			embed: vi.fn().mockRejectedValue(new Error("network down")),
@@ -236,7 +236,7 @@ describe("provider embed 失败应向上抛（供上层降级）", () => {
 			hash: "h",
 			model: "m1",
 		};
-		await expect(vectorRecall(provider, "q", index, 1)).rejects.toThrow(
+		await expect(vectorRecallScores(provider, "q", index, 1)).rejects.toThrow(
 			"network down"
 		);
 	});
@@ -500,7 +500,7 @@ describe("e5 指令前缀（query:/passage:）", () => {
 			hash: "h",
 			model: "Xenova/multilingual-e5-small",
 		};
-		await vectorRecall(provider, "思维导图", index, 1);
+		await vectorRecallScores(provider, "思维导图", index, 1);
 		expect(provider.captured[0]).toBe("query: 思维导图");
 	});
 

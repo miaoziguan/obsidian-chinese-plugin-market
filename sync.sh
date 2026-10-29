@@ -83,12 +83,20 @@ else
 fi
 
 # ── 拷贝 ──
+if [ ! -f "$SRC_DIR/dist/styles.css" ]; then
+	echo "❌ 缺少构建样式 dist/styles.css，请先运行 npm run build。"
+	exit 1
+fi
 mkdir -p "$DEST"
 echo "📦 同步到: $DEST"
 
 for f in "${FILES[@]}"; do
-	if [ -f "$SRC_DIR/$f" ]; then
-		cp "$SRC_DIR/$f" "$DEST/"
+	source_file="$SRC_DIR/$f"
+	if [ "$f" = "styles.css" ]; then
+		source_file="$SRC_DIR/dist/styles.css"
+	fi
+	if [ -f "$source_file" ]; then
+		cp "$source_file" "$DEST/$f"
 		printf "   ✓ %s\n" "$f"
 	else
 		printf "   ⚠ 跳过（源文件不存在）: %s\n" "$f"

@@ -1,9 +1,6 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import {
-	protectMarkdown,
-	restoreMarkdown,
 	splitMarkdownForTranslate,
-	splitBatches,
 	splitBatchesDetailed,
 	joinBatches,
 	isMacOS,
@@ -135,118 +132,6 @@ describe("macos-shortcuts · 多段全部失败返回空串（上层走失败提
 	});
 });
 
-describe("macos-shortcuts · Markdown 占位保护（方案 A）", () => {
-	it("保护围栏代码块并还原", () => {
-		const md = "标题\n\n```js\nconst a = 1;\n```\n\n结束";
-		const { text, blocks } = protectMarkdown(md);
-		// 代码块被替换成占位 token
-		expect(text).not.toContain("const a = 1;");
-		expect(text).toContain("ZZCMPLACE");
-		expect(blocks.length).toBe(1);
-		// 模拟系统翻译（此处原样返回，token 不变）
-		const translated = text;
-		expect(restoreMarkdown(translated, blocks)).toBe(md);
-	});
-
-	it("保护行内代码", () => {
-		const md = "使用 `npm install` 安装。";
-		const { text, blocks } = protectMarkdown(md);
-		expect(text).not.toContain("npm install");
-		expect(text).toContain("ZZCMPLACE");
-		expect(restoreMarkdown(text, blocks)).toBe(md);
-	});
-
-	it("保护表格分隔行", () => {
-		const md = "| A | B |\n|---|---|\n| 1 | 2 |";
-		const { text, blocks } = protectMarkdown(md);
-		expect(blocks.some((b) => b.includes("---"))).toBe(true);
-		// 分隔行被占位，不随翻译变化
-		expect(restoreMarkdown(text, blocks)).toBe(md);
-	});
-
-	it("保护链接整体（text 与 URL 均不被翻译破坏）", () => {
-		const md = "看 [文档](https://example.com/docs)";
-		const { text, blocks } = protectMarkdown(md);
-		// 整个 [text](url) 被替换为占位符，避免 URL 被翻译破坏
-		expect(text).not.toContain("[文档]");
-		expect(text).not.toContain("https://example.com");
-		expect(blocks.some((b) => b.includes("https://example.com"))).toBe(true);
-		expect(restoreMarkdown(text, blocks)).toBe(md);
-	});
-
-	it("图片保护后原样还原（URL 不被翻译、渲染不失效）", () => {
-		const md = "截图：![demo](https://example.com/demo.png) 说明";
-		const { text, blocks } = protectMarkdown(md);
-		// 图片整体占位，URL 不进翻译文本
-		expect(text).not.toContain("example.com");
-		// 原样保存原始图片语法，还原后图片仍可见
-		expect(restoreMarkdown(text, blocks)).toBe(md);
-	});
-
-	it("保护引用式图片与引用定义行（URL 不被翻译改写）", () => {
-		const md = "![logo][1]\n\n[1]: https://example.com/logo.png";
-		const { text, blocks } = protectMarkdown(md);
-		expect(text).not.toContain("example.com");
-		expect(text).not.toContain("[1]");
-		expect(restoreMarkdown(text, blocks)).toBe(md);
-	});
-
-	it("保护 HTML 标签", () => {
-		const md = "<img src=\"/logo.png\" alt=\"logo\"> 与 <!-- 注释 -->";
-		const { text, blocks } = protectMarkdown(md);
-		expect(text).not.toContain("<img");
-		expect(restoreMarkdown(text, blocks)).toBe(md);
-	});
-
-	it("token 原样保留时能正确还原（系统翻译对全大写乱串通常原样保留）", () => {
-		const md = "代码 `x` 结束";
-		const { text, blocks } = protectMarkdown(md);
-		// 模拟系统翻译原样保留了 token（其余正文被翻译）
-		const translated = text.replace("使用", "译").replace("安装", "装");
-		expect(restoreMarkdown(translated, blocks)).toBe(md);
-	});
-
-	it("token 完全不可识别的改写不会崩溃", () => {
-		const md = "代码 `x` 结束";
-		const { text, blocks } = protectMarkdown(md);
-		const broken = text.replace(/ZZCMPLACE\d+ZZ/g, "xxx");
-		const restored = restoreMarkdown(broken, blocks);
-		// 无法识别时保留改写后的文本（不崩溃、不抛错即可）
-		expect(typeof restored).toBe("string");
-	});
-
-	it("无受保护结构时原样通过", () => {
-		const md = "纯文本段落，没有特殊结构。";
-		const { text, blocks } = protectMarkdown(md);
-		expect(text).toBe(md);
-		expect(blocks.length).toBe(0);
-	});
-
-	it("嵌套占位：链接内含行内代码时能完整还原（不残留 token）", () => {
-		const md = "点击 [看 `config.json` 文件](https://example.com/docs) 了解";
-		const { text, blocks } = protectMarkdown(md);
-		const restored = restoreMarkdown(text, blocks);
-		expect(restored).not.toContain("ZZCMPLACE");
-		expect(restored).toBe(md);
-	});
-
-	it("嵌套占位：图片 alt 内含行内代码时完整还原图片", () => {
-		const md = "图 ![见 `x` 示例](https://example.com/a.png) 结束";
-		const { text, blocks } = protectMarkdown(md);
-		const restored = restoreMarkdown(text, blocks);
-		expect(restored).not.toContain("ZZCMPLACE");
-		expect(restored).toBe(md);
-	});
-
-	it("嵌套占位：HTML 标签内含行内代码", () => {
-		const md = "<span title=\"`a`\">文本</span>";
-		const { text, blocks } = protectMarkdown(md);
-		const restored = restoreMarkdown(text, blocks);
-		expect(restored).not.toContain("ZZCMPLACE");
-		expect(restored).toBe(md);
-	});
-});
-
 describe("macos-shortcuts · Markdown 拆解翻译（方案 B，结构不进翻译引擎）", () => {
 	it("图片与行内代码拆为不译块，正文留文本块", () => {
 		const md = "Default binding shortcut key `Ctrl+1`\n\n![](https://example.com/x.png)";
@@ -372,15 +257,15 @@ describe("macos-shortcuts · Markdown 拆解翻译（方案 B，结构不进翻�
 	});
 });
 
-describe("macos-shortcuts · splitBatches 分段", () => {
+describe("macos-shortcuts · splitBatchesDetailed 分段", () => {
 	it("短文本不分段", () => {
-		expect(splitBatches("hello", 900)).toEqual(["hello"]);
+		expect(splitBatchesDetailed("hello", 900).batches).toEqual(["hello"]);
 	});
 
 	it("按段落边界拆分，且每段不超过上限", () => {
 		const para = "a".repeat(300);
 		const text = `${para}\n\n${para}\n\n${para}\n\n${para}`; // 4 段，每段 300 字
-		const batches = splitBatches(text, 900);
+		const batches = splitBatchesDetailed(text, 900).batches;
 		expect(batches.length).toBe(2); // 每批最多装 2 段（300*2=600 ≤900）
 		for (const b of batches) expect(b.length).toBeLessThanOrEqual(900);
 		// 拼接回原文（含段间空行）
@@ -389,7 +274,7 @@ describe("macos-shortcuts · splitBatches 分段", () => {
 
 	it("单段超限时按字符硬切，完整覆盖不丢失", () => {
 		const text = "x".repeat(2000);
-		const batches = splitBatches(text, 900);
+		const batches = splitBatchesDetailed(text, 900).batches;
 		expect(batches.every((b) => b.length <= 900)).toBe(true);
 		expect(batches.join("")).toBe(text); // 不丢失任何字符
 	});

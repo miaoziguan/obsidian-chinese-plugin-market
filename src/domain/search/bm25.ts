@@ -37,11 +37,6 @@ const SegmenterCtor = IntlRecord.Segmenter as
 const intlSegmenter: SegmentLike | null =
 	typeof SegmenterCtor === "function" ? new SegmenterCtor("zh-Hans", { granularity: "word" }) : null;
 
-/** 当前环境是否有 Intl.Segmenter 词层（进 bm25IndexSig 指纹）。 */
-export function hasIntlSegmenter(): boolean {
-	return intlSegmenter !== null;
-}
-
 /** ICU 词典词（isWordLike 过滤 + 小写）；无词层环境返回空数组。 */
 export function segmentWords(text: string): string[] {
 	if (!intlSegmenter || !text) return [];

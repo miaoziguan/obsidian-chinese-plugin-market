@@ -40,7 +40,8 @@ jobs:
         # 缺任一项会导致语义搜索在本地静默降级/不可用（与 sync.sh 的同步清单保持一致）。
         run: |
           mkdir -p dist
-          cp main.js manifest.json styles.css versions.json dist/
+          # dist/styles.css 已由生产构建压缩，不能用源码覆盖。
+          cp main.js manifest.json versions.json dist/
           cp embedding-worker.bundle.js sql-wasm.wasm ort-wasm-simd-threaded.jsep.wasm dist/
 
       - name: 为构建产物生成来源证明（build provenance / attestation）

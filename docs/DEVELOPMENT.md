@@ -69,7 +69,7 @@ sql-wasm.wasm  ort-wasm-simd-threaded.jsep.wasm
 - 位置:与被测源码同目录的 `*.test.ts`(`include: src/**/*.test.ts`)。
 - 环境:jsdom;`test/setup.ts` 为全局初始化。
 - 别名:`vitest.config.ts` 的 `resolve.alias` 手写 `@layer` 映射(与 tsconfig 一一对应)。
-- **Obsidian mock**:`obsidian` 被指向 `test/mocks/obsidian.ts`;`@inline-worker` 指向 `test/mocks/inline-worker.ts`。需要网络的用例各自 mock provider,不走真实 `requestUrl`。
+- **Obsidian mock**:`obsidian` 被指向 `test/mocks/obsidian.ts`。需要网络的用例各自 mock provider,不走真实 `requestUrl`。
 
 写测试时优先测 `domain` / `translation/lexicon` / `shared` 等纯逻辑,无需 DOM 即可覆盖。
 
