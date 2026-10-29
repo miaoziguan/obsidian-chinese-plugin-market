@@ -102,6 +102,10 @@ export default defineConfig({
 			 * 第 19 版（开始啃 detail-drawer 的生命周期与判定逻辑）：72.24% / 66.89% / 81.45%
 			 *   → functions 上调为 66（余量 0.89）；lines 距 72 差 0.24、branches 距 81 差 0.45，
 			 *     均不足 0.5pt，维持 71 / 80。
+			 * 第 20 版（补齐 buildContent 同步渲染分支后）：73.45% / 67.69% / 81.07%
+			 *   → functions 上调为 67（余量 0.69）；lines 距 73 差 0.45、branches 距 81 差 0.07，
+			 *     均不足 0.5pt，维持 71 / 80。本轮 buildContent 一次调用覆盖大量行，
+			 *     detail-drawer 单文件 34.8% → 62.7%（+460 条）。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -113,7 +117,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 71,
 				statements: 71,
-				functions: 66,
+				functions: 67,
 				branches: 80,
 			},
 		},
