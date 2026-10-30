@@ -122,6 +122,11 @@ export default defineConfig({
 			 *     均不足 0.5pt，维持 67 / 80。此前 view-render 只覆盖了「无视口降级」的早退分支，
 			 *     本轮补上 renderWindow 非空分支 + updateWindowImpl + fillVisibleWindow，
 			 *     view-render 单文件 40.7% → 81.6%（+293 条）。
+			 * 第 25 版（补 view-render 入口与同步层后）：75.08% / 68.40% / 81.29%
+			 *   → 全部维持 74 / 67 / 80。lines 距 75 仅 0.08、functions 距 68 差 0.40、
+			 *     branches 距 81 差 0.29，三项都不足 0.5pt 余量（functions 是卡在 0.40 的
+			 *     临界值，仍按规则不上调）。view-render 单文件 81.6% → 97.4%（+113 条），
+			 *     仅剩 19 行未覆盖，可视为啃完。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
