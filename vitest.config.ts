@@ -117,6 +117,11 @@ export default defineConfig({
 			 *     branches 距 81 差 0.26，三项都不足 0.5pt 余量——此时上调到 74 会让 CI
 			 *     只剩 0.13pt 缓冲，任何微小回落都立刻转红，正是该余量规则要防的情况。
 			 *     detail-drawer 单文件 76.2% → 80.3%（+69 条）。
+			 * 第 24 版（啃 view-render 真·虚拟滚动渲染路径后）：74.82% / 68.13% / 81.22%
+			 *   → lines 上调为 74（余量 0.82）；functions 距 68 差 0.13、branches 距 81 差 0.22，
+			 *     均不足 0.5pt，维持 67 / 80。此前 view-render 只覆盖了「无视口降级」的早退分支，
+			 *     本轮补上 renderWindow 非空分支 + updateWindowImpl + fillVisibleWindow，
+			 *     view-render 单文件 40.7% → 81.6%（+293 条）。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -126,8 +131,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 73,
-				statements: 73,
+				lines: 74,
+				statements: 74,
 				functions: 67,
 				branches: 80,
 			},
