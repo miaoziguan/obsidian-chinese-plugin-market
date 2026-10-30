@@ -132,6 +132,12 @@ export default defineConfig({
 			 *     branches 距 81 差 0.37，不足 0.5pt，维持 80。
 			 *     view-chrome 单文件 12.5% → 92.7%（+430 条，全周期单文件最大跃升）：
 			 *     它此前是 ui 层最大的未覆盖缺口（469 条语句、仅 29 行测试）。
+			 * 第 27 版（啃 createViewContext 委派层后）：77.05% / 74.13% / 82.18%
+			 *   → lines 上调为 76、functions 上调为 69、branches 上调为 81
+			 *     （余量 1.05 / 5.13 / 1.18；仍按每轮 +1pt 的节奏，不一次吃满）。
+			 *     view-context 单文件 54.4% → 100.0%（888/888 全覆盖）：约 400 个
+			 *     getter/setter 的函数体只有被读写才计入覆盖，光建对象不算——
+			 *     故用遍历逐个读写，既覆盖也顺带验证委派两侧指到同一处。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -141,10 +147,10 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 75,
-				statements: 75,
-				functions: 68,
-				branches: 80,
+				lines: 76,
+				statements: 76,
+				functions: 69,
+				branches: 81,
 			},
 		},
 	},
