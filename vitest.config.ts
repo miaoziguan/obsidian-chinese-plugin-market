@@ -127,6 +127,11 @@ export default defineConfig({
 			 *     branches 距 81 差 0.29，三项都不足 0.5pt 余量（functions 是卡在 0.40 的
 			 *     临界值，仍按规则不上调）。view-render 单文件 81.6% → 97.4%（+113 条），
 			 *     仅剩 19 行未覆盖，可视为啃完。
+			 * 第 26 版（啃 view-chrome 空态体系与视图骨架后）：76.09% / 69.20% / 81.37%
+			 *   → lines 上调为 75（余量 1.09）、functions 上调为 68（余量 1.20）；
+			 *     branches 距 81 差 0.37，不足 0.5pt，维持 80。
+			 *     view-chrome 单文件 12.5% → 92.7%（+430 条，全周期单文件最大跃升）：
+			 *     它此前是 ui 层最大的未覆盖缺口（469 条语句、仅 29 行测试）。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -136,9 +141,9 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 74,
-				statements: 74,
-				functions: 67,
+				lines: 75,
+				statements: 75,
+				functions: 68,
 				branches: 80,
 			},
 		},
