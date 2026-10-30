@@ -138,6 +138,12 @@ export default defineConfig({
 			 *     view-context 单文件 54.4% → 100.0%（888/888 全覆盖）：约 400 个
 			 *     getter/setter 的函数体只有被读写才计入覆盖，光建对象不算——
 			 *     故用遍历逐个读写，既覆盖也顺带验证委派两侧指到同一处。
+			 * 第 28 版（啃 card-render 卡片骨架与状态填充后）：77.59% / 74.36% / 82.90%
+			 *   → lines 上调为 77、functions 上调为 70、branches 上调为 82
+			 *     （余量 0.59 / 4.36 / 0.90；仍按每轮 +1pt 的节奏）。
+			 *     card-render 单文件 68.6% → 91.4%（+317 条）：createCardElement /
+			 *     updateInstallButton / handleCardSysTranslate / applyCardState 这
+			 *     ~675 行此前完全没跑到（旧测试只碰了 createPluginCard）。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -147,10 +153,10 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 76,
-				statements: 76,
-				functions: 69,
-				branches: 81,
+				lines: 77,
+				statements: 77,
+				functions: 70,
+				branches: 82,
 			},
 		},
 	},
