@@ -156,6 +156,13 @@ export default defineConfig({
 			 *     view-toolbar 单文件 72.4% → 86.1%（+163 条）：旧测试只驱动 buildToolbar
 			 *     结构契约，applySearchMode（259-342 模式切换大块）与全部事件处理器体
 			 *     （预设菜单 / 一键全更 / AI 翻译 / 检查更新 / 溢出菜单 / 折叠面板）此前没触发。
+			 * 第 31 版（啃 view-cards 卡片事件与入口函数后）：78.88% / 74.93% / 83.08%
+			 *   → functions 上调为 73（余量 1.93）；lines 距 79 差 0.12、branches 距 83 差 0.08，
+			 *     两项均不足 0.5pt 余量，维持 78 / 82。
+			 *     view-cards 单文件 68.1% → 87.0%（+163 条）：既有 view-cards.test.ts /
+			 *     view-cards-interaction.test.ts 把 ctx.flashAction / ctx.openDetailDrawer 都
+			 *     mock 成 vi.fn()，导致这 4 个真实函数体（openDetailDrawer / computeSimilarFor /
+			 *     flashAction 以及 insight 分支）零覆盖；本批直接调用真实函数 + 派发事件补齐。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -167,7 +174,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 78,
 				statements: 78,
-				functions: 72,
+				functions: 73,
 				branches: 82,
 			},
 		},
