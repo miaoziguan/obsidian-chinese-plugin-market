@@ -169,6 +169,15 @@ export default defineConfig({
 			 *     journal-table 单文件 45.7% → 99.4%（+191 条）：旧测试只测纯函数，
 			 *     renderJournalTable（167-352 全 185 行）一行没跑到；残余 2 行是 fmtDate
 			 *     的 catch 兜底（Invalid Date 实际不抛错，属不可达防御代码）。
+			 * 第 33 版（转向非 ui 层最大块 app/plugin.ts 后）：79.74% / 75.85% / 83.28%
+			 *   → lines 上调为 79（余量 0.74）、functions 上调为 75（余量 0.85）；
+			 *     branches 距 83 仅 0.28，不足 0.5pt，维持 82。
+			 *     app/plugin.ts 单文件 64.2% → 69.3%（+175 条）：既有 8 个 plugin*.test.ts
+			 *     覆盖了 css-store / journal-tm / loaders / ribbon / translator-save /
+			 *     vector-store / updater，但台账跳转、组合预设 CRUD 与命令注册、
+			 *     社区插件设置页、插件/CSS 片段切换命令这几组一行没跑到。
+			 *     注意：mock 里 Plugin 是空类、Notice 是普通 class（非 spy），
+			 *     需自行打桩 addCommand/removeCommand 并把 Notice 换成 spy。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -178,9 +187,9 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 78,
-				statements: 78,
-				functions: 74,
+				lines: 79,
+				statements: 79,
+				functions: 75,
 				branches: 82,
 			},
 		},
