@@ -144,6 +144,12 @@ export default defineConfig({
 			 *     card-render 单文件 68.6% → 91.4%（+317 条）：createCardElement /
 			 *     updateInstallButton / handleCardSysTranslate / applyCardState 这
 			 *     ~675 行此前完全没跑到（旧测试只碰了 createPluginCard）。
+			 * 第 29 版（补齐 view-data 数据管线副作用后）：78.22% / 74.74% / 82.94%
+			 *   → functions 上调为 71（余量 3.74）；lines 距 78 仅 0.22、branches 距 83 差 0.06，
+			 *     两项都不足 0.5pt 余量，维持 77 / 82。
+			 *     view-data 单文件 63.7% → 90.7%（+331 条）：旧测试只覆盖纯逻辑，
+			 *     refreshData / refreshOutdated / aiTranslateAllPending / reportNewPluginDelta /
+			 *     refreshCardTranslation / disposeViewDataCache 这 ~360 行此前完全没跑到。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -155,7 +161,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 77,
 				statements: 77,
-				functions: 70,
+				functions: 71,
 				branches: 82,
 			},
 		},
