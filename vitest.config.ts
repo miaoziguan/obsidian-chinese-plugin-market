@@ -163,6 +163,12 @@ export default defineConfig({
 			 *     view-cards-interaction.test.ts 把 ctx.flashAction / ctx.openDetailDrawer 都
 			 *     mock 成 vi.fn()，导致这 4 个真实函数体（openDetailDrawer / computeSimilarFor /
 			 *     flashAction 以及 insight 分支）零覆盖；本批直接调用真实函数 + 派发事件补齐。
+			 * 第 32 版（啃 journal-table 渲染与交互后）：79.32% / 75.09% / 83.22%
+			 *   → functions 上调为 74（余量 1.09）；lines 距 79 差 0.32、branches 距 83 差 0.22，
+			 *     两项均不足 0.5pt 余量，维持 78 / 82。
+			 *     journal-table 单文件 45.7% → 99.4%（+191 条）：旧测试只测纯函数，
+			 *     renderJournalTable（167-352 全 185 行）一行没跑到；残余 2 行是 fmtDate
+			 *     的 catch 兜底（Invalid Date 实际不抛错，属不可达防御代码）。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -174,7 +180,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 78,
 				statements: 78,
-				functions: 73,
+				functions: 74,
 				branches: 82,
 			},
 		},
