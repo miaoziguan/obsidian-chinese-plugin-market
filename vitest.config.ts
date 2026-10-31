@@ -150,6 +150,12 @@ export default defineConfig({
 			 *     view-data 单文件 63.7% → 90.7%（+331 条）：旧测试只覆盖纯逻辑，
 			 *     refreshData / refreshOutdated / aiTranslateAllPending / reportNewPluginDelta /
 			 *     refreshCardTranslation / disposeViewDataCache 这 ~360 行此前完全没跑到。
+			 * 第 30 版（啃 view-toolbar 事件处理器与模式切换后）：78.61% / 75.08% / 83.03%
+			 *   → lines 上调为 78（余量 0.61）、functions 上调为 72（余量 3.08）；
+			 *     branches 距 83 仅 0.03，不足 0.5pt，维持 82。
+			 *     view-toolbar 单文件 72.4% → 86.1%（+163 条）：旧测试只驱动 buildToolbar
+			 *     结构契约，applySearchMode（259-342 模式切换大块）与全部事件处理器体
+			 *     （预设菜单 / 一键全更 / AI 翻译 / 检查更新 / 溢出菜单 / 折叠面板）此前没触发。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -159,9 +165,9 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 77,
-				statements: 77,
-				functions: 71,
+				lines: 78,
+				statements: 78,
+				functions: 72,
 				branches: 82,
 			},
 		},
