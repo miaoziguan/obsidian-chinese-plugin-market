@@ -1,6 +1,52 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { snapshotInstalled, refreshOutdated } from "@ui/view/view-data";
+import { snapshotInstalled, refreshOutdated, scheduleBm25Warmup, disposeViewDataCache, buildSearchIndex } from "@ui/view/view-data";
 import { setHttpClient, resetHttpClient } from "@data/net/http-port";
+import { AISearcher } from "@domain/search/ai";
+import { prepareSearchPlugins } from "@domain/search/search-plugins";
+import { LLMClient } from "@translation/api/api";
+import { PluginTagService } from "@domain/catalog/plugin-tags";
+import type { Translator } from "@domain/catalog/translator";
+import { makeMockContext } from "@shared/test-utils";
+
+describe("双语 BM25 预热", () => {
+	beforeEach(() => { vi.useFakeTimers(); });
+	afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
+	function setup() {
+		const config = { baseURL: "http://localhost", apiKey: "", model: "mock", embedding: { source: "keyword" as const } };
+		const searcher = new AISearcher(config, new LLMClient(config), new PluginTagService());
+		const translator = { aiSearcher: searcher, cache: { a: { source: "custom" as const, translatedName: "日历", translatedDesc: "管理每日笔记" } } } as unknown as Translator;
+		const ctx = makeMockContext({ translator, plugins: [{ id: "a", name: "Calendar", description: "Daily notes", author: "x" }], searchIndex: new Map() });
+		return { ctx, searcher };
+	}
+
+	it("译文合并后的预热与第一次本地搜索共享同一个索引", async () => {
+		const { ctx, searcher } = setup();
+		ctx.translatedResults = {};
+		const build = vi.spyOn(searcher, "getBm25Index");
+		buildSearchIndex(ctx);
+		vi.advanceTimersByTime(60);
+		const warmed = build.mock.results[0].value;
+		const args = prepareSearchPlugins(ctx.plugins, ctx.translator.cache);
+		const result = await searcher.localSearch("日历", args);
+		expect(result.rankedIds).toContain("a");
+		expect(searcher.getBm25Index(args)).toBe(warmed);
+	});
+
+	it("合并多次预热，只使用执行时的最新译文；卸载取消任务", () => {
+		const { ctx, searcher } = setup();
+		const build = vi.spyOn(searcher, "getBm25Index");
+		scheduleBm25Warmup(ctx);
+		ctx.translator.cache.a.translatedName = "最新日历";
+		scheduleBm25Warmup(ctx);
+		vi.advanceTimersByTime(60);
+		expect(build).toHaveBeenCalledTimes(1);
+		expect(build.mock.calls[0][0][0]).toMatchObject({ nameZh: "最新日历" });
+		scheduleBm25Warmup(ctx);
+		disposeViewDataCache(ctx);
+		vi.advanceTimersByTime(60);
+		expect(build).toHaveBeenCalledTimes(1);
+	});
+});
 
 /**
  * 回归测试：snapshotInstalled 必须把已装插件的 id / 版本 / 启用态写回 ctx。

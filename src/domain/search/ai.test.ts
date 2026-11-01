@@ -27,6 +27,44 @@ const NEGATIVE_PLUGINS = [
 	{ id: "organizer", name: "Organizer", description: "Organize notes and folders locally" },
 ];
 
+describe("分类约束在候选截断前生效", () => {
+	const plugins = Array.from({ length: 601 }, (_, i) => ({ id: `scope-${i}`, name: "Zztest", description: "Zztest feature" }));
+	const tags = Object.fromEntries(plugins.map((p, i) => [p.id, { category: i === 600 ? "selected" : "other", tags: [] }]));
+
+	it.each(["local", "ai"])("%s 模式保留所选分类中全局第 601 项，且索引仍复用全库", async (mode) => {
+		const { searcher, llm } = makeSearcher();
+		searcher.setPluginTags(tags);
+		vi.spyOn(llm, "call").mockResolvedValue('{"ranking":[0]}');
+		const index = searcher.getBm25Index(plugins);
+		const result = mode === "local"
+			? await searcher.localSearch("zztest", plugins, ["selected"])
+			: await searcher.search("zztest", plugins, false, undefined, ["selected"]);
+		expect(result.rankedIds).toEqual(["scope-600"]);
+		expect(searcher.getBm25Index(plugins)).toBe(index);
+		expect(index.N).toBe(601);
+	});
+
+	it("纯否定查询同样只从所选分类建立候选池", async () => {
+		const { searcher } = makeSearcher();
+		searcher.setPluginTags(tags);
+		const result = await searcher.localSearch("不要导出", plugins, ["selected"]);
+		expect(result.rankedIds).toEqual(["scope-600"]);
+	});
+
+	it("LLM 兜底只收到所选分类；空分类范围不向全库兜底", async () => {
+		const { searcher, llm } = makeSearcher();
+		searcher.setPluginTags(tags);
+		const call = vi.spyOn(llm, "call").mockResolvedValueOnce('{"indices":[0]}').mockResolvedValue('{"ranking":[0]}');
+		await searcher.search("罕见qwxqwx", plugins, false, undefined, ["selected"]);
+		const recallPrompt = call.mock.calls[0][1];
+		expect(recallPrompt).toContain("scope-600");
+		expect(recallPrompt).not.toContain("scope-0");
+		call.mockClear();
+		await expect(searcher.search("罕见qwxqwx", plugins, false, undefined, ["missing"])).rejects.toThrow("未找到相关插件");
+		expect(call).not.toHaveBeenCalled();
+	});
+});
+
 function makeSearcher(embeddingSource: "keyword" | "local" = "keyword") {
 	const tagService = new PluginTagService();
 	tagService.load({

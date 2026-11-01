@@ -18,6 +18,7 @@ import { type SortBy } from "@domain/filter/sort";
 import type { ViewContext, ViewTab } from "@ui/view/view-context";
 import { asAppInternals } from "@data/platform/obsidian-internals";
 import { refreshOutdated } from "@ui/view/view-data";
+import { invalidateAISearch, restoreAISearch } from "@ui/view/view-search-state";
 import { createUpdateProgressLayer } from "@ui/components/update-progress";
 import {
 	NEW_WINDOWS,
@@ -258,6 +259,9 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// 模式切换处理（自绘菜单项点击 → applySearchMode）
 		const applySearchMode = (newMode: SearchMode) => {
 			if (ctx.searchMode === newMode) return;
+			invalidateAISearch(ctx);
+			window.clearTimeout(ctx.debounceTimer);
+			ctx.searchQuery = searchInput.value.trim().toLowerCase();
 			const previousMode = ctx.searchMode;
 			const enteringSemantic = newMode === "local" || newMode === "ai";
 			const leavingSemantic = previousMode !== "keyword" && newMode === "keyword";
@@ -310,13 +314,8 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				ctx.aiSearchQueryCache = "";
 				ctx.selectedCategories = [];
 			} else {
-				// 3a: 切回 AI 模式时，若当前 query 与最近一次 AI 搜索相同，复用缓存结果（无需重新 Enter）
-				const qry = ctx.searchQuery.trim();
-				const catsUnchanged = ctx.selectedCategories.length === 0;
-				if (qry && qry === ctx.lastAiSearchQuery && ctx.lastAiSearchResult && catsUnchanged) {
-						ctx.aiSearchResult = ctx.lastAiSearchResult;
-						ctx.aiSearchQueryCache = ctx.lastAiSearchQuery;
-					}
+				// 只有模式、查询、分类、配置及数据快照全部相同才复用。
+				restoreAISearch(ctx);
 				}
 			}
 			updateModeBadge();
@@ -367,6 +366,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 
 		// 清除按钮：清空输入 → 立即重新过滤 → 重新聚焦搜索框
 		clearBtn.addEventListener("click", () => {
+			invalidateAISearch(ctx);
 			searchInput.value = "";
 			ctx.searchQuery = "";
 			// AI 结果随查询清空一并失效
@@ -781,6 +781,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		});
 		searchInput.addEventListener("compositionend", () => {
 			composing = false;
+			window.clearTimeout(ctx.debounceTimer);
 			// 输入法结束后立即触发一次
 			ctx.applySearchInput();
 		});
@@ -790,6 +791,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			ctx.updateGuidance();
 		};
 		searchInput.addEventListener("input", () => {
+			if (searchInput.value.trim().toLowerCase() !== ctx.searchQuery) invalidateAISearch(ctx);
 			// 清除按钮可见性即时同步（不等 debounce）
 			syncClearBtn();
 			window.clearTimeout(ctx.debounceTimer);
@@ -810,9 +812,12 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// Enter 键：AI 模式下触发 AI 搜索；其余模式立即刷新本地过滤
 		// （若数据尚未加载，先懒加载再渲染，避免首次直接 Enter 出现空结果）
 		searchInput.addEventListener("keydown", (e) => {
+			// 输入法确认 Enter/Escape 由输入法消费，不能提交或清空搜索。
+			if (composing || e.isComposing || e.keyCode === 229) return;
 			void (async () => {
 				// Esc 清空搜索框（符合输入控件直觉）
 				if (e.key === "Escape") {
+					invalidateAISearch(ctx);
 					if (searchInput.value) {
 						searchInput.value = "";
 						ctx.searchQuery = "";
@@ -835,6 +840,11 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				}
 				if (e.key !== "Enter") return;
 				e.preventDefault();
+				window.clearTimeout(ctx.debounceTimer);
+				const query = searchInput.value.trim().toLowerCase();
+				if (query !== ctx.searchQuery) invalidateAISearch(ctx);
+				ctx.searchQuery = query;
+				ctx.updateGuidance();
 				if (isAIMode(ctx) || isLocalMode(ctx)) {
 					// 语义模式（AI / 本地）由 Enter 触发检索：AI 走 LLM 精排，本地走 RRF 融合排序
 					await ctx.runAISearch(searchInput, aiBadge);
@@ -923,6 +933,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 				categories,
 				ctx.selectedCategories,
 				(cat) => {
+					invalidateAISearch(ctx);
 					const idx = ctx.selectedCategories.indexOf(cat);
 					if (idx >= 0) {
 						ctx.selectedCategories.splice(idx, 1);

@@ -3,6 +3,7 @@ import { Notice } from "obsidian";
 import { makeMockContext, makeMockPlugin } from "@shared/test-utils";
 import { runAISearch } from "@ui/view/view-ai-search";
 import type { ViewContext } from "@ui/view/view-context";
+import { invalidateAISearch, restoreAISearch, validateAISearchResult } from "@ui/view/view-search-state";
 
 // 隔离 Notice：断言 AI 搜索编排的控制流，不依赖真实 toast。
 vi.mock("obsidian", async () => {
@@ -38,6 +39,7 @@ vi.mock("obsidian", async () => {
 		translator,
 		t: (k: string) => String(k),
 		searchQuery: "vue",
+		searchMode: "ai",
 		plugins: [],
 		aiSearchPending: false,
 		aiSearchResult: null,
@@ -55,6 +57,138 @@ vi.mock("obsidian", async () => {
 
 beforeEach(() => {
 	vi.clearAllMocks();
+});
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason: Error) => void;
+	const promise = new Promise<T>((ok, fail) => { resolve = ok; reject = fail; });
+	return { promise, resolve, reject };
+}
+
+describe("语义请求生命周期与缓存边界", () => {
+	it("首次加载期间重复提交只搜索一次，加载异常也释放 pending", async () => {
+		const { ctx, translator, searchInput, aiBadge } = mkCtx();
+		const loading = deferred<boolean>();
+		vi.mocked(ctx.ensureDataLoaded).mockReturnValue(loading.promise);
+		const first = runAISearch(ctx, searchInput, aiBadge);
+		expect(ctx.aiSearchPending).toBe(true);
+		await runAISearch(ctx, searchInput, aiBadge);
+		loading.resolve(true);
+		await first;
+		expect(translator.aiSearch).toHaveBeenCalledTimes(1);
+		vi.mocked(ctx.ensureDataLoaded).mockRejectedValue(new Error("load failed"));
+		await runAISearch(ctx, searchInput, aiBadge);
+		expect(ctx.aiSearchPending).toBe(false);
+	});
+
+	it.each(["resolve", "reject"] as const)("旧请求 %s 不修改新请求的结果、徽章或 pending", async (completion) => {
+		const { ctx, translator, searchInput, aiBadge } = mkCtx();
+		ctx.plugins = [{ id: "a", name: "A", description: "d", author: "x" }];
+		const old = deferred<{ rankedIds: string[] }>();
+		const latest = deferred<{ rankedIds: string[] }>();
+		translator.aiSearch.mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+		const first = runAISearch(ctx, searchInput, aiBadge);
+		ctx.searchQuery = "git";
+		const second = runAISearch(ctx, searchInput, aiBadge);
+		const titleCalls = aiBadge.setAttribute.mock.calls.length;
+		const notices = vi.mocked(Notice).mock.calls.length;
+		if (completion === "resolve") old.resolve({ rankedIds: ["stale"] });
+		else old.reject(new Error("stale failure"));
+		await first;
+		expect(ctx.aiSearchResult).toBeNull();
+		expect(ctx.aiSearchPending).toBe(true);
+		expect(aiBadge.setAttribute).toHaveBeenCalledTimes(titleCalls);
+		expect(Notice).toHaveBeenCalledTimes(notices);
+		expect(ctx.renderPluginList).not.toHaveBeenCalled();
+		latest.resolve({ rankedIds: ["latest"] });
+		await second;
+		expect(ctx.aiSearchResult?.rankedIds).toEqual(["latest"]);
+		expect(ctx.aiSearchQueryCache).toBe("git");
+		expect(ctx.aiSearchPending).toBe(false);
+	});
+
+	it.each(["query", "mode", "categories", "config", "translation", "disposed"])("等待期间 %s 改变时丢弃旧结果", async (change) => {
+		const { ctx, translator, searchInput, aiBadge } = mkCtx({ embeddingSource: "api" });
+		ctx.plugins = [{ id: "a", name: "A", description: "d", author: "x" }];
+		translator.cache = {};
+		const waiting = deferred<{ rankedIds: string[] }>();
+		translator.aiSearch.mockReturnValue(waiting.promise);
+		const work = runAISearch(ctx, searchInput, aiBadge);
+		if (change === "query") ctx.searchQuery = "git";
+		if (change === "mode") ctx.searchMode = "keyword";
+		if (change === "categories") ctx.selectedCategories.push("other");
+		if (change === "config") ctx.settings.aiSearchModel = "new-model";
+		if (change === "translation") translator.cache.a = { source: "custom", translatedName: "新译名", translatedDesc: "新描述" };
+		if (change === "disposed") ctx.disposed = true;
+		waiting.resolve({ rankedIds: ["stale"] });
+		await work;
+		expect(ctx.aiSearchResult).toBeNull();
+		expect(ctx.aiSearchQueryCache).toBe("");
+		expect(ctx.aiSearchPending).toBe(false);
+		expect(ctx.saveVectorIndex).not.toHaveBeenCalled();
+		expect(ctx.renderPluginList).not.toHaveBeenCalled();
+		expect(Notice).not.toHaveBeenCalled();
+	});
+
+	it("加载期间取消后，不再启动搜索", async () => {
+		const { ctx, translator, searchInput, aiBadge } = mkCtx();
+		const loading = deferred<boolean>();
+		vi.mocked(ctx.ensureDataLoaded).mockReturnValue(loading.promise);
+		const work = runAISearch(ctx, searchInput, aiBadge);
+		invalidateAISearch(ctx);
+		ctx.searchQuery = "";
+		loading.resolve(true);
+		await work;
+		expect(translator.aiSearch).not.toHaveBeenCalled();
+		expect(ctx.aiSearchPending).toBe(false);
+	});
+
+	it("新请求已成功后，旧请求失败也不清空新结果", async () => {
+		const { ctx, translator, searchInput, aiBadge } = mkCtx();
+		ctx.plugins = [{ id: "a", name: "A", description: "d", author: "x" }];
+		const old = deferred<{ rankedIds: string[] }>();
+		translator.aiSearch.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ rankedIds: ["latest"] });
+		const first = runAISearch(ctx, searchInput, aiBadge);
+		ctx.searchQuery = "git";
+		await runAISearch(ctx, searchInput, aiBadge);
+		old.reject(new Error("late failure"));
+		await first;
+		expect(ctx.aiSearchResult?.rankedIds).toEqual(["latest"]);
+		expect(ctx.aiSearchQueryCache).toBe("git");
+		expect(ctx.renderPluginList).toHaveBeenCalledTimes(1);
+	});
+
+	it("同一查询切回相同模式可复用，另一模式不复用", async () => {
+		const { ctx, searchInput, aiBadge } = mkCtx();
+		await runAISearch(ctx, searchInput, aiBadge);
+		const result = ctx.aiSearchResult;
+		invalidateAISearch(ctx);
+		ctx.searchMode = "local";
+		expect(restoreAISearch(ctx)).toBe(false);
+		ctx.searchMode = "ai";
+		expect(restoreAISearch(ctx)).toBe(true);
+		expect(ctx.aiSearchResult).toBe(result);
+	});
+
+	it.each(["category", "model", "credentials", "embedding", "translation", "data", "stats", "tags"])("缓存对 %s 变化失效", async (change) => {
+		const { ctx, translator, searchInput, aiBadge } = mkCtx();
+		ctx.plugins = [{ id: "a", name: "A", description: "d", author: "x" }];
+		translator.cache = {};
+		translator.pluginTags = {};
+		await runAISearch(ctx, searchInput, aiBadge);
+		if (change === "category") ctx.selectedCategories = ["other"];
+		if (change === "model") ctx.settings.aiSearchModel = "new-model";
+		if (change === "credentials") ctx.settings.aiSearchApiKey = "changed-key";
+		if (change === "embedding") ctx.settings.embeddingBaseURL = "http://localhost/new";
+		if (change === "translation") translator.cache.a = { source: "custom", translatedName: "译名", translatedDesc: "描述" };
+		if (change === "data") ctx.plugins[0].description = "changed";
+		if (change === "stats") ctx.plugins[0].downloads = 100;
+		if (change === "tags") translator.pluginTags.a = { category: "new", tags: [] };
+		expect(restoreAISearch(ctx)).toBe(false);
+		validateAISearchResult(ctx);
+		expect(ctx.aiSearchResult).toBeNull();
+	});
 });
 
 describe("runAISearch (P2-1: 从 view-data 拆离 AI 搜索编排)", () => {
