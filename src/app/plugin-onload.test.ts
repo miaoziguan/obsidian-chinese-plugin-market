@@ -142,7 +142,7 @@ describe("onload：启动编排（491-771）", () => {
 
 		// 触发卸载清理：settingsIntegration 置空
 		unloadFns.forEach((fn) => fn());
-		expect((plugin as AnyPlugin).settingsIntegration).toBeNull();
+		expect((plugin as Record<string, unknown>).settingsIntegration).toBeNull();
 	});
 
 	it("betaAutoUpdate 开启 → 布局就绪后静默触发 runBetaAutoUpdate", async () => {
