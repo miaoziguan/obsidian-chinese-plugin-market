@@ -187,6 +187,13 @@ export default defineConfig({
 			 *     安全阀 / 两个 onLayoutReady 延迟体 / 卸载清理），逻辑分支极少，直接调用 onload +
 			 *     把重 IO 子加载器 stub 掉即可一次性覆盖；JournalView 工厂闭包（606-633）经 mock 成
 			 *     哑类后调用工厂覆盖。armTmApprovedSafetyValve 的 30s setTimeout 需用 fake timers 防挂起。
+			 * 第 35 版（啃 plugin.ts 的 buildLocalIndex 完整 embed 闭环后）：81.04% / 76.23% / 83.61%
+			 *   → branches 上调为 83（余量 0.61）；lines 实测 81.04 → 到 81 余量 0.04、
+			 *     functions 实测 76.23 → 到 76 余量 0.23，两项均不足 0.5pt，维持 80 / 75。
+			 *     app/plugin.ts 单文件 84.6% → 85.1%：buildLocalIndex 的 embed 主流程（3113-3256，约 145 行）
+			 *     此前一行没跑到——既有 vector-status 测试只覆盖了它的早返回分支（无插件数据 / 并发去重 /
+			 *     已请求卸载）。本轮把 buildVectorIndex 换成可控桩，真正调用 provider.embed 驱动 embed 闭包，
+			 *     再回调 onPartial 增量发布 / 落盘 / error / finally 脏重跑，覆盖整段构建编排。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -199,7 +206,7 @@ export default defineConfig({
 				lines: 80,
 				statements: 80,
 				functions: 75,
-				branches: 82,
+				branches: 83,
 			},
 		},
 	},
