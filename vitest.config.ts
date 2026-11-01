@@ -178,6 +178,15 @@ export default defineConfig({
 			 *     社区插件设置页、插件/CSS 片段切换命令这几组一行没跑到。
 			 *     注意：mock 里 Plugin 是空类、Notice 是普通 class（非 spy），
 			 *     需自行打桩 addCommand/removeCommand 并把 Notice 换成 spy。
+			 * 第 34 版（啃 plugin.ts 的 onload 启动编排后）：80.71% / 75.85% / 83.38%
+			 *   → lines 上调为 80（余量 0.71）；functions 实测 75.85% < 76，不足以上调，维持 75；
+			 *     branches 距 83 仅 0.38，不足 0.5pt，维持 82。
+			 *     app/plugin.ts 单文件 69.3% → 81.1%（+218 条）：onload()（491-771，约 280 行启动编排）
+			 *     此前整段未覆盖——既有 plugin*.test.ts 从不调用 onload（被当成只能手测的集成入口）。
+			 *     但这段绝大多数是顺序编排（装配端口 / 注册视图·命令·ribbon·设置页 / 武装 tmApproved
+			 *     安全阀 / 两个 onLayoutReady 延迟体 / 卸载清理），逻辑分支极少，直接调用 onload +
+			 *     把重 IO 子加载器 stub 掉即可一次性覆盖；JournalView 工厂闭包（606-633）经 mock 成
+			 *     哑类后调用工厂覆盖。armTmApprovedSafetyValve 的 30s setTimeout 需用 fake timers 防挂起。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -187,8 +196,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 79,
-				statements: 79,
+				lines: 80,
+				statements: 80,
 				functions: 75,
 				branches: 82,
 			},
