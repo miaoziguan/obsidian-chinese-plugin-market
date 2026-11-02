@@ -201,6 +201,12 @@ export default defineConfig({
 			 *     内联译名迁移 / plugin-tags 离线分类）、install-history 记账、buildLocalIndex 完整
 			 *     embed 闭环、translator 缓存防抖落盘 + 清空已采纳 TM、TM vault 事件实时发现/清理、
 			 *     waitMetadataResolved 超时兜底、loadLegacyVectorIndex 旧版 .bin/.json 一次性迁移。
+			 * 第 41-43 版（持续啃 plugin.ts 散落小方法）：81.58% / 77.05% / 83.96%
+			 *   → lines/statements 上调为 81（余量 0.58）；functions 实测 77.05 → 到 77 差 0.17、
+			 *     branches 实测 83.96 → 到 84 差 0.04，两项均不足 0.5pt，维持 76 / 83。
+			 *     plugin.ts 单文件 89.9% → 91.8%（+109 条）：视图聚焦/新建、旧默认记忆库一键迁移、
+			 *     JournalView 工厂 officialNames 闭包、estimateTimesFromDisk 磁盘时间推断、getInstallFacts
+			 *     只读事实、migrateTMFromDefault 手动迁移、resolveTMFileIntoIndex 单文件回灌 tmApproved。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -210,8 +216,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 80,
-				statements: 80,
+				lines: 81,
+				statements: 81,
 				functions: 76,
 				branches: 83,
 			},
