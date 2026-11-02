@@ -194,6 +194,13 @@ export default defineConfig({
 			 *     此前一行没跑到——既有 vector-status 测试只覆盖了它的早返回分支（无插件数据 / 并发去重 /
 			 *     已请求卸载）。本轮把 buildVectorIndex 换成可控桩，真正调用 provider.embed 驱动 embed 闭包，
 			 *     再回调 onPartial 增量发布 / 落盘 / error / finally 脏重跑，覆盖整段构建编排。
+			 * 第 36-40 版（持续啃 plugin.ts 散落段）：81.36% / 76.67% / 83.89%
+			 *   → functions 上调为 76（余量 0.67）；lines 实测 81.36 → 到 81 余量 0.36、
+			 *     branches 实测 83.89 → 到 84 差 0.11，两项均不足 0.5pt，维持 80 / 83。
+			 *     plugin.ts 单文件 81.1% → 89.0%（+783 条）：settings-load（翻译源配置同步 /
+			 *     内联译名迁移 / plugin-tags 离线分类）、install-history 记账、buildLocalIndex 完整
+			 *     embed 闭环、translator 缓存防抖落盘 + 清空已采纳 TM、TM vault 事件实时发现/清理、
+			 *     waitMetadataResolved 超时兜底、loadLegacyVectorIndex 旧版 .bin/.json 一次性迁移。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -205,7 +212,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 80,
 				statements: 80,
-				functions: 75,
+				functions: 76,
 				branches: 83,
 			},
 		},
