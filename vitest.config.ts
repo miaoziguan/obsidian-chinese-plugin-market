@@ -201,13 +201,13 @@ export default defineConfig({
 			 *     内联译名迁移 / plugin-tags 离线分类）、install-history 记账、buildLocalIndex 完整
 			 *     embed 闭环、translator 缓存防抖落盘 + 清空已采纳 TM、TM vault 事件实时发现/清理、
 			 *     waitMetadataResolved 超时兜底、loadLegacyVectorIndex 旧版 .bin/.json 一次性迁移。
-			 * 第 41-44 版（持续啃 plugin.ts 散落小方法）：81.65% / 77.21% / 83.98%
-			 *   → lines/statements 实测 81.65 距 82 还差 0.35（需 ≥82.5 才能上调），维持 81；
-			 *     functions 实测 77.21 → 到 77 余量 0.21、branches 实测 83.98 → 到 84 差 0.02，
-			 *     两项均不足 0.5pt，维持 76 / 83。
-			 *     plugin.ts 单文件 91.8% → 92.6%（+98 条）：loadJournalEntry 容错读取评测笔记、
-			 *     ensureSettingsTranslator 懒创建、openTMFolder 失败提示、JournalView 工厂 officialNames
-			 *     闭包、estimateTimesFromDisk/getInstallFacts/migrateTMFromDefault/resolveTMFileIntoIndex 等。
+			 * 第 41-47 版（持续啃 plugin.ts 散落小方法）：81.79% / 77.59% / 84.08%
+			 *   → functions 上调为 77（余量 0.59）；lines/statements 实测 81.79 距 82 还差 0.21、
+			 *     branches 实测 84.08 → 到 84 差 0.42，两项均不足 0.5pt，维持 81 / 83。
+			 *     plugin.ts 单文件 91.8% → 94.4%（+250 条）：loadJournalEntry/ensureSettingsTranslator/
+			 *     openTMFolder、setModelProgressReporter 闭包、saveTMApprovedSnapshot 折叠、buildPluginTagMap/
+			 *     refreshOpenViews、loadVectorIndex 尾部兜底、hasStaleInstalledRecord/journalEnabled/
+			 *     getDefaultReviewFolder/getRecommendedIds/loadPluginListCache 等小取值器。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -219,7 +219,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 81,
 				statements: 81,
-				functions: 76,
+				functions: 77,
 				branches: 83,
 			},
 		},
