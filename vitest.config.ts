@@ -244,6 +244,16 @@ export default defineConfig({
 			 *     onOpen 渲染、load 加载中/空态/失败告警、renderList 逐行（保持最新/版本行/当前标记/预发布）、
 			 *     点版本行 onPick(tag)、点『保持最新』onPick(null)、onPick 拒绝弹 Notice、busy 守卫、openVersionPicker。
 			 *
+			 * 第 54 版（续啃 ui 层对比页 + 依赖检查弹窗）：全局 84.57% / 80.74% / 85.0%
+			 *   → lines/statements 上调为 84（实测 84.57 ≥ 84.5，余量 0.07）；functions 实测 80.74 距 81
+			 *     还差 0.76、branches 实测 85.0 → 到 85 需 ≥85.5 差 0.5，两项均不足 0.5pt，维持 80 / 84。
+			 *     ui 层整体 90.1%（函数 86.1% / 分支 85.0%）；compare-view.ts 70.2%→93.2%（+594 条）：
+			 *     导航/卡片渲染、安装态三分支、GitHub 链接、tag/desc/分类/更新行、导出菜单展开+Markdown 导出
+			 *     （clipboard 成功/失败两分支）、洞察信号（标签交集/陈旧告警）、无 key 时 AI 区禁用+徽标、
+			 *     有 key 触发 AI 对比（网络/缓存/失败重试/取消）、命令级信号（有 repo 抽取/无 repo 跳过）、dispose；
+			 *     dep-check-modal.ts 65.1%→100%（86/86，+86 条）：open 仅渲染 action 项+关闭、跳过 ok/unknown、
+			 *     点修复回调并禁用、点关闭真正清空、全就绪仅关闭按钮。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -252,8 +262,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 83,
-				statements: 83,
+				lines: 84,
+				statements: 84,
 				functions: 80,
 				branches: 84,
 			},
