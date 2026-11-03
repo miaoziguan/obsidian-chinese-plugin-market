@@ -230,6 +230,13 @@ export default defineConfig({
 			 *     展示条件门禁、推荐集为空/非空、签名缓存命中（内容+安装签名）、折叠态同步显隐、
 			 *     ensureFeaturedSection 构建与 toggle 折叠切换、hideFeaturedSection。
 			 *
+			 * 第 52 版（续啃 ui 层评测台账视图）：全局 83.66% / 79.87% / 84.77%
+			 *   → lines/statements 上调为 83（实测 83.66 ≥ 83.5，余量 0.16）；functions 实测 79.87 → 到 80
+			 *     需 ≥80.5 还差 0.63、branches 实测 84.77 → 到 85 差 0.73，两项均不足 0.5pt，维持 79 / 84。
+			 *     ui 层整体 87.6%（函数 84.1% / 分支 84.4%）；journal-view.ts 34.7%→100%（118/118，+118 条）：
+			 *     onOpen 三并发 IO、加载指示、IO 失败错误块、无评测引导（含/不含『装过』提示）、有评测逐行
+			 *     组装双语名 + 委托 renderJournalTable 并接上点击跳回回调、onClose 清空。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -238,8 +245,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 82,
-				statements: 82,
+				lines: 83,
+				statements: 83,
 				functions: 79,
 				branches: 84,
 			},
