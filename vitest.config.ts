@@ -223,6 +223,13 @@ export default defineConfig({
 			 *     /TextComponent/ButtonComponent，覆盖输入弹窗 commit/Enter 提交、破坏性确认/取消、
 			 *     重命名空值/同名短路。
 			 *
+			 * 第 51 版（续啃 ui 层落地页推荐区）：全局 83.48% / 79.53% / 84.85%
+			 *   → functions 上调为 79（实测 79.53 ≥ 79.5，余量 0.03，已逼近上限）；lines 实测 83.48 距
+			 *     83.5 仅差 0.02、branches 实测 84.85 → 到 85 差 0.65，两项均不足 0.5pt，维持 82 / 84。
+			 *     ui 层整体 87.1%（函数 83.3% / 分支 84.6%）；view-featured.ts 15.1%→94.6%（+194 条）：
+			 *     展示条件门禁、推荐集为空/非空、签名缓存命中（内容+安装签名）、折叠态同步显隐、
+			 *     ensureFeaturedSection 构建与 toggle 折叠切换、hideFeaturedSection。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -233,7 +240,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 82,
 				statements: 82,
-				functions: 78,
+				functions: 79,
 				branches: 84,
 			},
 		},
