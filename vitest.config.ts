@@ -237,6 +237,13 @@ export default defineConfig({
 			 *     onOpen 三并发 IO、加载指示、IO 失败错误块、无评测引导（含/不含『装过』提示）、有评测逐行
 			 *     组装双语名 + 委托 renderJournalTable 并接上点击跳回回调、onClose 清空。
 			 *
+			 * 第 53 版（续啃 ui 层版本选择弹窗）：全局 83.95% / 80.53% / 84.72%
+			 *   → functions 上调为 80（实测 80.53 ≥ 80.5，余量 0.03，已逼近上限）；lines 实测 83.95 → 到 84
+			 *     需 ≥84.5 差 0.55、branches 实测 84.72 → 到 85 差 0.78，两项均不足 0.5pt，维持 83 / 84。
+			 *     ui 层整体 88.4%（函数 85.6% / 分支 84.3%）；version-picker-modal.ts 32.8%→99.5%（188/189，+127 条）：
+			 *     onOpen 渲染、load 加载中/空态/失败告警、renderList 逐行（保持最新/版本行/当前标记/预发布）、
+			 *     点版本行 onPick(tag)、点『保持最新』onPick(null)、onPick 拒绝弹 Notice、busy 守卫、openVersionPicker。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -247,7 +254,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 83,
 				statements: 83,
-				functions: 79,
+				functions: 80,
 				branches: 84,
 			},
 		},
