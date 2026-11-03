@@ -209,6 +209,12 @@ export default defineConfig({
 			 *     以及 loadSettings 大方法的旧版迁移全分支（locale/sourceFilter/versionPins/translateSettings/
 			 *     credentials/favorites/translator-cache/embedding 模型与来源/移动端降级）。
 			 *
+			 * 第 49 版（转进啃 ui 层薄弱文件）：全局 82.42% / 78.57% / 84.77%
+			 *   → functions 上调为 78（余量 0.57）；lines/statements 实测 82.42 距 82.5 还差 0.08、
+			 *     branches 实测 84.77 → 到 85 差 0.73，两项均不足 0.5pt，维持 81 / 84。
+			 *     ui 层整体 83.4% → 84.1%；installed-watch.ts 16.0% → 96.2%（+105 条）：桌面 fs.watch /
+			 *     移动轮询 / 快照 diff / recordInstallDiff / applyCardState 原地刷新 / disposer 释放。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -219,7 +225,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 81,
 				statements: 81,
-				functions: 77,
+				functions: 78,
 				branches: 84,
 			},
 		},
