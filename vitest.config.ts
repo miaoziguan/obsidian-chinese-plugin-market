@@ -215,6 +215,14 @@ export default defineConfig({
 			 *     ui 层整体 83.4% → 84.1%；installed-watch.ts 16.0% → 96.2%（+105 条）：桌面 fs.watch /
 			 *     移动轮询 / 快照 diff / recordInstallDiff / applyCardState 原地刷新 / disposer 释放。
 			 *
+			 * 第 50 版（续啃 ui 层弹窗）：全局 82.71% / 79.17% / 84.83%
+			 *   → lines/statements 上调为 82（实测 82.71 ≥ 82.5，余量 0.21）；functions 实测 79.17 距 79.5
+			 *     还差 0.33、branches 实测 84.83 → 到 85 差 0.67，两项均不足 0.5pt，维持 78 / 84。
+			 *     ui 层整体 84.9%；三个弹窗 confirm-modal 16.3%→100%、prompt-modal 27.3%→98.5%、
+			 *     snippet-rename-modal 30.3%→90.9%（共 +160 条）：vi.mock("obsidian") 最小 Modal/Setting
+			 *     /TextComponent/ButtonComponent，覆盖输入弹窗 commit/Enter 提交、破坏性确认/取消、
+			 *     重命名空值/同名短路。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -223,8 +231,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 81,
-				statements: 81,
+				lines: 82,
+				statements: 82,
 				functions: 78,
 				branches: 84,
 			},
