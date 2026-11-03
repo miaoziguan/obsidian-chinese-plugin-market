@@ -267,6 +267,16 @@ export default defineConfig({
 			 *     本轮顺带修正 obsidian mock 的 TextComponent：输入即同步内部 value，贴合真实 Obsidian，
 			 *     避免测试手搓输入值失真（影响 group-management-modal 重命名路径）。
 			 *
+			 * 第 56 版（续啃 ui 层：facet-chips / dep-section）：全局 84.96% / 81.23% / 85.38%
+			 *   → 依旧余量不足 0.5pt：lines 实测 84.96 < 85.5、functions 81.23 < 81.5、branches 85.38 < 85.5，
+			 *     阈值维持 84 / 80 / 84（本轮不拧紧）。ui 层整体 91.2%（函数 87.3% / 分支 86.0%）。
+			 *     facet-chips.ts 84.7%→100%（59/59，+8 例）：class 分支（active/inactive/all）、toggle 回调与状态、
+			 *     计数渲染、clear 按钮显隐、空列表渲染；dep-section.ts 89.9%→100%（109/109，+14 例）：依赖行（状态 class/
+			 *     图标/名称/种类/回退 id）、canOpen 可点+点击、minVersion、confidence「可能」标记、状态→动作按钮
+			 *     （missing/disabled/outdated/ok/unknown）、被依赖区（折叠/摘要/可点 chip）。本轮补齐为局部 DOM helper
+			 *     （与 view-toolbar.test.ts 一致，各测试文件各自局部补齐），未触碰全局 obsidian mock 原型增强以避免
+			 *     与既有局部实现冲突（settings-tab 等依赖自身 helper）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
