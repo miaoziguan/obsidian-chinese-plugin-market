@@ -225,6 +225,10 @@ export class TextComponent {
 		this.inputEl = document.createElement("input");
 		this.inputEl.type = "text";
 		if (containerEl) containerEl.appendChild(this.inputEl);
+		// 与真实 Obsidian 一致：输入即更新内部值，供 getValue() 读取
+		this.inputEl.addEventListener("input", () => {
+			this.value = this.inputEl.value;
+		});
 	}
 	setValue(value: string): this { this.value = value; this.inputEl.value = value; return this; }
 	getValue(): string { return this.value || this.inputEl.value; }
