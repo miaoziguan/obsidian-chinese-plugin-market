@@ -201,13 +201,13 @@ export default defineConfig({
 			 *     内联译名迁移 / plugin-tags 离线分类）、install-history 记账、buildLocalIndex 完整
 			 *     embed 闭环、translator 缓存防抖落盘 + 清空已采纳 TM、TM vault 事件实时发现/清理、
 			 *     waitMetadataResolved 超时兜底、loadLegacyVectorIndex 旧版 .bin/.json 一次性迁移。
-			 * 第 41-47 版（持续啃 plugin.ts 散落小方法）：81.79% / 77.59% / 84.08%
-			 *   → functions 上调为 77（余量 0.59）；lines/statements 实测 81.79 距 82 还差 0.21、
-			 *     branches 实测 84.08 → 到 84 差 0.42，两项均不足 0.5pt，维持 81 / 83。
-			 *     plugin.ts 单文件 91.8% → 94.4%（+250 条）：loadJournalEntry/ensureSettingsTranslator/
-			 *     openTMFolder、setModelProgressReporter 闭包、saveTMApprovedSnapshot 折叠、buildPluginTagMap/
-			 *     refreshOpenViews、loadVectorIndex 尾部兜底、hasStaleInstalledRecord/journalEnabled/
-			 *     getDefaultReviewFolder/getRecommendedIds/loadPluginListCache 等小取值器。
+			 * 第 41-48 版（持续啃 plugin.ts 大方法内部缺口）：82.04% / 77.84% / 84.58%
+			 *   → branches 上调为 84（余量 0.58）；lines/statements 实测 82.04 距 82.5 还差 0.46、
+			 *     functions 实测 77.84 → 到 78 差 0.16，两项均不足 0.5pt，维持 81 / 77。
+			 *     plugin.ts 单文件 94.4% → 97.4%（+319 条）：saveJournalEntry 视图刷新、renameSnippetPrompt
+			 *     弹窗、runIncrementalRescan 删除分支、backfillInstallHistory、openManageGroups、loadPluginDeps，
+			 *     以及 loadSettings 大方法的旧版迁移全分支（locale/sourceFilter/versionPins/translateSettings/
+			 *     credentials/favorites/translator-cache/embedding 模型与来源/移动端降级）。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
@@ -220,7 +220,7 @@ export default defineConfig({
 				lines: 81,
 				statements: 81,
 				functions: 77,
-				branches: 83,
+				branches: 84,
 			},
 		},
 	},
