@@ -392,6 +392,17 @@ export default defineConfig({
 			 *     curr≤prev(不计 velocity) / 信号已满 3 被 length<3 守卫挡下）+ computeVelocityScores（prev 缺失或 curr≤prev 跳过 /
 			 *     velocities 空早返 / 均值-方差-Z-score-sigmoid 归一化）。
 			 *
+			 * 第 68 版（续啃 domain/ 层：sort + plugin-meta 两小块）：全局 86.31% / 82.75% / 86.51%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，branches 86.51 ≥ 86.5 → **85→86 拧紧**（lines 86.31 < 86.5、functions 82.75 < 83.5 仍不收紧）。
+			 *   （branches 以 0.01 的微弱优势越线，是本轮 sort 把 73%→87% 分支补上叠加 plugin-meta 100% 的合力；按既定公式即应拧紧。）
+			 *     domain/filter/sort.ts 89.6%→100%（134/134，函数 50%→100%、分支 87%，+14 例；纯函数无 mock）：7 个维度（downloads/updated/
+			 *     published/name/popular/trending/recommended）+ relevance/default 保持原序，空列表直返、入参不可变、相等 key 稳定排序、
+			 *     name 三层显示名来源（displayNameOf 回调 > displayName 字段 > name 回退）、popular 未安装优先→下载量→更新时间 决策链、
+			 *     trending/recommended 缺评分表→全 0 维持原序。
+			 *     domain/manage/plugin-meta.ts 76.9%→100%（52/52，函数/分支全 100%，纯函数无 mock）：getMeta（未登记→其他分组+空备注 /
+			 *     group 假值回退 OTHER / remark 非字符串回退空串）、setMeta（仅 patch group 保留 remark、仅 patch remark 保留 group、二者同补、
+			 *     不可变返回新对象）、pruneOrphanedMeta（validIds 为 Set 剔除孤儿 / 为可迭代数组同样生效 / 无孤儿返回原引用跳过写盘）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -403,7 +414,7 @@ export default defineConfig({
 				lines: 85,
 				statements: 85,
 				functions: 82,
-				branches: 85,
+				branches: 86,
 			},
 		},
 	},
