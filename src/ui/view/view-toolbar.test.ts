@@ -3,6 +3,15 @@ import { buildToolbar, alignFacetLabels } from "@ui/view/view-toolbar";
 import { makeMockContext } from "@shared/test-utils";
 import type { ViewContext } from "@ui/view/view-context";
 import { SEARCH_MODES, LAYOUT } from "@shared/constants";
+import { Menu } from "obsidian";
+import { refreshOutdated } from "@ui/view/view-data";
+import { createUpdateProgressLayer } from "@ui/components/update-progress";
+
+// 补齐 buildToolbar 检查更新 / 一键更新 路径所需的异步依赖替身（其余路径已由现有用例覆盖）
+vi.mock("@ui/view/view-data", () => ({ refreshOutdated: vi.fn(() => Promise.resolve()) }));
+vi.mock("@ui/components/update-progress", () => ({
+	createUpdateProgressLayer: vi.fn(() => ({ el: document.createElement("div"), set: vi.fn(), finish: vi.fn() })),
+}));
 
 /**
  * 工具栏测试替身。
@@ -546,5 +555,162 @@ describe("筛选胶囊与重置", () => {
 		expect(ctx.installFilter).toBe("all");
 		expect(ctx.favoriteFilter).toBe("all");
 		expect(ctx.selectedCategories).toEqual([]);
+	});
+});
+
+describe("工具栏动作按钮与高级筛选交互（补齐 584-1184 缺口）", () => {
+	beforeEach(() => {
+		// 高级筛选折叠动画 200ms 后会走 requestAnimationFrame，jsdom 未实现，同步桩之
+		(window as unknown as { requestAnimationFrame: (cb: FrameRequestCallback) => number }).requestAnimationFrame = (cb) => {
+			cb(0);
+			return 0;
+		};
+		(window as unknown as { cancelAnimationFrame: () => void }).cancelAnimationFrame = () => {};
+	});
+
+	it("刷新按钮 → track(action:refresh) + refreshData（583-584）", () => {
+		const { ctx } = build({ refreshData: vi.fn() } as any);
+		(ctx.contentEl.querySelector(".pt-refresh") as HTMLElement)!.click();
+		expect(ctx.track).toHaveBeenCalledWith("action:refresh");
+		expect(ctx.refreshData).toHaveBeenCalled();
+	});
+
+	it("检查更新按钮 → 置 pt-spin + track + refreshOutdated + 完成后清旋转并刷新徽标（592-605）", async () => {
+		const { ctx } = build({ outdatedIds: new Set(["a", "b"]) } as any);
+		ctx.refreshViewTabsBadge = vi.fn();
+		const btn = (ctx.contentEl.querySelector(".pt-check-update:not(.pt-update-all)") as HTMLElement)!;
+		btn.click();
+		expect(btn.classList.contains("pt-spin")).toBe(true);
+		expect(ctx.track).toHaveBeenCalledWith("action:checkUpdate");
+		expect(refreshOutdated).toHaveBeenCalledWith(ctx);
+		await vi.waitFor(() => expect(ctx.refreshViewTabsBadge).toHaveBeenCalled());
+		expect(btn.classList.contains("pt-spin")).toBe(false);
+	});
+
+	it("更新全部按钮（有待更）→ 进度层 + updateAll + track（613-615, 60-74）", () => {
+		const { ctx } = build({ outdatedIds: new Set(["a"]), updateAll: vi.fn(() => Promise.resolve()) } as any);
+		(ctx.contentEl.querySelector(".pt-update-all") as HTMLElement)!.click();
+		expect(createUpdateProgressLayer).toHaveBeenCalled();
+		expect(ctx.updateAll).toHaveBeenCalled();
+		expect(ctx.track).toHaveBeenCalledWith("action:updateAll");
+	});
+
+	it("更新全部按钮（无待更）→ 仅提示不启动更新（60-74 early return）", () => {
+		const { ctx } = build({ outdatedIds: new Set(), updateAll: vi.fn(() => Promise.resolve()) } as any);
+		(ctx.contentEl.querySelector(".pt-update-all") as HTMLElement)!.click();
+		expect(createUpdateProgressLayer).not.toHaveBeenCalled();
+		expect(ctx.updateAll).not.toHaveBeenCalled();
+	});
+
+	it("设置按钮 → setting.open + openTabById(manifest.id)（631-637）", () => {
+		const { ctx } = build() as any;
+		const setting = { open: vi.fn(), openTabById: vi.fn() };
+		(ctx.app as any).setting = setting;
+		(ctx.contentEl.querySelector(".pt-open-settings") as HTMLElement)!.click();
+		expect(setting.open).toHaveBeenCalled();
+		expect(setting.openTabById).toHaveBeenCalledWith(ctx.manifest.id);
+	});
+
+	it("溢出菜单四项正确触发 refresh/checkUpdate/updateAll/aiTranslate（648-674）", () => {
+		const { ctx } = build({ outdatedIds: new Set(["a"]) } as any);
+		ctx.refreshData = vi.fn();
+		ctx.refreshViewTabsBadge = vi.fn();
+		ctx.updateAll = vi.fn(() => Promise.resolve());
+		(ctx.contentEl.querySelector(".pt-overflow-btn") as HTMLElement)!.click();
+		const items = (Menu as any).lastShown.items as Array<{ title: string; cb?: () => void }>;
+		items.find((i) => i.title === "action.refresh")!.cb!();
+		expect(ctx.refreshData).toHaveBeenCalled();
+		items.find((i) => i.title === "action.checkUpdate")!.cb!();
+		expect(refreshOutdated).toHaveBeenCalled();
+		items.find((i) => i.title === "action.updateAll")!.cb!();
+		expect(ctx.updateAll).toHaveBeenCalled();
+		items.find((i) => i.title === "action.aiTranslate")!.cb!();
+		expect(ctx.aiTranslateAllPending).toHaveBeenCalled();
+	});
+
+	it("排序按钮 → 切换 pt-sort-wrap--open（763-766）", () => {
+		const { ctx } = build() as any;
+		(ctx.contentEl.querySelector(".pt-sort-btn") as HTMLElement)!.click();
+		expect((ctx.contentEl.querySelector(".pt-sort-wrap") as HTMLElement)!.classList.contains("pt-sort-wrap--open")).toBe(true);
+	});
+
+	it("普通排序项点击 → sortBy/设置/重绘/关闭菜单（718-732）", () => {
+		const { ctx } = build() as any;
+		(ctx.contentEl.querySelector('.pt-sort-menu-item[data-sort="downloads"]') as HTMLElement)!.click();
+		expect(ctx.sortBy).toBe("downloads");
+		expect(ctx.sortFavoritesFirst).toBe(false);
+		expect(ctx.sortByUserSelected).toBe(true);
+		expect(ctx.semanticSortBackup).toBeNull();
+		expect(ctx.settings.sortBy).toBe("downloads");
+		expect(ctx.track).toHaveBeenCalledWith("sort:downloads");
+		expect(ctx.saveSettings).toHaveBeenCalled();
+		expect(ctx.scheduleRender).toHaveBeenCalled();
+		expect((ctx.contentEl.querySelector(".pt-sort-wrap") as HTMLElement)!.classList.contains("pt-sort-wrap--open")).toBe(false);
+	});
+
+	it("收藏优先项点击 → 切换 sortFavoritesFirst + track（743-761）", () => {
+		const { ctx } = build() as any;
+		(ctx.contentEl.querySelector(".pt-sort-menu-item--fav") as HTMLElement)!.click();
+		expect(ctx.sortFavoritesFirst).toBe(true);
+		expect(ctx.track).toHaveBeenCalledWith("sort:favorites_on");
+		expect(ctx.scheduleRender).toHaveBeenCalled();
+	});
+
+	it("生态 toggle → chineseEcoFilter 切换 eco/all + track + scheduleRender(true)（1052-1057）", () => {
+		const { ctx } = build() as any;
+		const t = (ctx.contentEl.querySelector(".pt-toggle-eco") as HTMLElement)!;
+		t.click();
+		expect(ctx.chineseEcoFilter).toBe("eco");
+		expect(t.getAttribute("aria-pressed")).toBe("true");
+		expect(ctx.track).toHaveBeenCalledWith("filter:eco");
+		expect(ctx.scheduleRender).toHaveBeenCalledWith(true);
+		t.click();
+		expect(ctx.chineseEcoFilter).toBe("all");
+		expect(ctx.track).toHaveBeenCalledWith("filter:eco_off");
+	});
+
+	it("系列 toggle（竹林/羽鳞）互斥切换（1070-1081）", () => {
+		const { ctx } = build() as any;
+		const toggles = (ctx.contentEl.querySelectorAll(".pt-toggle-series") as HTMLElement[]);
+		toggles[0].click();
+		expect(ctx.seriesFilter).toBe("bamboo");
+		toggles[1].click();
+		expect(ctx.seriesFilter).toBe("yulin");
+		toggles[1].click();
+		expect(ctx.seriesFilter).toBe("all");
+		expect(ctx.track).toHaveBeenCalledWith("filter:series_yulin_off");
+	});
+
+	it("上线 toggle → newWithinDays 切换 + 持久化（1099-1106）", () => {
+		const { ctx } = build() as any;
+		const t = (ctx.contentEl.querySelector(".pt-toggle-new") as HTMLElement)!;
+		t.click();
+		expect(ctx.newWithinDays).not.toBeNull();
+		expect(ctx.settings.newWithinDays).toBe(ctx.newWithinDays);
+		expect(ctx.saveSettings).toHaveBeenCalled();
+		expect(ctx.scheduleRender).toHaveBeenCalledWith(true);
+		t.click();
+		expect(ctx.newWithinDays).toBeNull();
+	});
+
+	it("更新 toggle → updatedWithinDays 切换 + 持久化（1127-1134）", () => {
+		const { ctx } = build() as any;
+		const t = (ctx.contentEl.querySelector(".pt-toggle-upd") as HTMLElement)!;
+		t.click();
+		expect(ctx.updatedWithinDays).not.toBeNull();
+		expect(ctx.settings.updatedWithinDays).toBe(ctx.updatedWithinDays);
+		expect(ctx.saveSettings).toHaveBeenCalled();
+		expect(ctx.scheduleRender).toHaveBeenCalledWith(true);
+		t.click();
+		expect(ctx.updatedWithinDays).toBeNull();
+	});
+
+	it("高级筛选折叠开关 → 切换 pt-open + renderFeaturedSection + aria-expanded（1157-1182）", () => {
+		const { ctx } = build() as any;
+		const tb = (ctx.contentEl.querySelector(".pt-toggle-filters") as HTMLElement)!;
+		tb.click();
+		expect(tb.getAttribute("aria-expanded")).toBe("true");
+		expect(ctx.advancedOpen).toBe(true);
+		expect(ctx.renderFeaturedSection).toHaveBeenCalled();
 	});
 });
