@@ -327,6 +327,18 @@ export default defineConfig({
 			 *     onCardKeydown（Enter 开详情/方向键网格移动/输入框不拦截）、focusCardByIdx（无 layer 安全/滚入视口+聚焦）、
 			 *     openInsightModal（无 AI 降级 + 抓 manifest 生成）。局部 rAF 同步执行以确定性覆盖 fillSimilar/focus。
 			 *
+			 * 第 62 版（续啃 ui 层：view-toolbar 工具栏交互收口）：全局 85.53% / 81.84% / 85.77%
+			 *   → 维持第 58 版拧紧后的阈值 84 / 81 / 85（lines 85.53 < 86.0、functions 81.84 < 82.0、branches 85.77 < 86.0，
+			 *     三项均够不着「+0.5 才许拧紧」的下限，故本轮不收紧；view-toolbar 单文件仍实打实抬升）。
+			 *     view-toolbar.ts 86.1%→90.4%（1070/1184，+14 例，仅 mock refreshOutdated + createUpdateProgressLayer 两依赖）：
+			 *     刷新按钮（track+refreshData）、检查更新（pt-spin 守卫 + refreshOutdated + 完成后清旋转 + 刷新徽标 + Notice）、
+			 *     更新全部（有待更→进度层+updateAll；无待更→仅提示早退）、设置齿轮（setting.open + openTabById(manifest.id)）、
+			 *     溢出菜单四项（refresh/checkUpdate/updateAll/aiTranslate 经 Menu.lastShown 触发）、排序按钮（pt-sort-wrap--open
+			 *     切换）、普通排序项（sortBy/设置/关闭/重绘）、收藏优先项（sortFavoritesFirst 切换 + track）、生态 toggle
+			 *     （chineseEcoFilter eco/all 互斥 + aria-pressed + scheduleRender(true)）、系列 toggle（竹林/羽鳞 互斥切换）、
+			 *     上线 toggle（newWithinDays 切换 + 持久化）、更新 toggle（updatedWithinDays 切换 + 持久化）、高级筛选折叠
+			 *     （pt-open + renderFeaturedSection + aria-expanded；动画 200ms 后 measureLayout/updateWindow 经 rAF 同步桩收敛）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
