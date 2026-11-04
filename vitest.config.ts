@@ -348,6 +348,16 @@ export default defineConfig({
 			 *     弹提示空返回 / 移动端静默空返回 / 冻结跳过 / 更新成功 updated++ 带 version+release / 已最新计 skipped / 单条失败隔离
 			 *     failed++ 记 error 不妨碍其余 / 非静默走逐条+汇总提示分支 / 静默跳过全部 !silent 分支 / 空列表不弹汇总）。
 			 *
+			 * 第 64 版（转战 app/ 层拉基线：obsidian-adapters 依赖倒置装配点）：全局 85.69% / 82.11% / 85.96%
+			 *   → 维持第 58 版拧紧后的阈值 84 / 81 / 85（lines 85.69 < 86.0、functions 82.11 < 82.5、branches 85.96 < 86.5，
+			 *     三项均差一点够不着「+0.5 才许拧紧」下限，故本轮不收紧）。
+			 *     app/obsidian-adapters.ts 84.3%→100%（198/198，函数 100%、分支 98%，+28 例；vi.mock("obsidian") 工厂仅把
+			 *     会抛错的 requestUrl 换成 vi.fn、并补 obsidian mock 缺失的 TFolder 等价类，其余沿用 mock）：ObsidianHttpClient.request
+			 *     （补 throw:false + 整形响应 / 默认 GET）、ObsidianStoragePort（exists/read/write 委托）、ObsidianNoteStorage
+			 *     全部分支（adapter/vault 双后端在 exists/createFolder/writeNote/deleteNote/listMarkdown/readNote/statMtime 的择路
+			 *     与容错：逐级建目录、list 抛错视为空、vault 路径非文件回退 adapter.read、stat 抛错归 0）、obsidianPlatformCapability
+			 *     （缺字段全 false / 补 isDesktopApp+isMacOS 透传 / 布尔化防御）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
