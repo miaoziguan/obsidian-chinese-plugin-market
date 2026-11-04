@@ -406,8 +406,10 @@ export default defineConfig({
 			 * 第 69 版（续啃 domain/ 层：trending 趋势引擎）：全局 86.42% / 82.96% / 86.55%
 			 *   → 维持第 68 版拧紧后的阈值 85 / 82 / 86（lines 86.42 < 86.5、functions 82.96 < 83.5、branches 86.55 < 87.5，
 			 *     三项均够不着下一档「+0.5 才许拧紧」下限，故本轮不收紧）。分支 100% 为单文件满贯。
-			 *     domain/recommend/trending.ts 80.4%→100%（240/240，函数/分支全 100%，+23 例；仅 spy Date.now 固定采样时间轴，
-			 *     无模块 mock）：构造函数（默认配置 / 部分覆盖）、updateWithStats（空 stats 不新增 / 新插件首次采样 / 间隔内仅跟进更大下载量
+			 *     domain/recommend/trending.ts 80.4%→100%（240/240，函数/分支全 100%，+29 例；初版 23 例整文件重写时覆盖了既有
+			 *     12 例旧测试，随后按断言逐条补回 6 条语义契约防线：serialize/load 多插件往返一致、load 混合非法条目合法项保留、
+			 *     lastSampleStats 空历史空 Map、H1 自比恒 0 多插件基线、时距过短暴涨下载量不产生天文增速、999/天精确 log 压缩 0.75）。
+			 *     仅 spy Date.now 固定采样时间轴，无模块 mock：构造函数（默认配置 / 部分覆盖）、updateWithStats（空 stats 不新增 / 新插件首次采样 / 间隔内仅跟进更大下载量
 			 *     不新增点 / 超出间隔追加 / 自定义 intervalMs / maxSnapshots 裁剪 shift 最旧）、trendingScore（无历史或不足 2 点默认分 /
 			 *     时距低于 MIN_SPAN 默认分 / 窗口外旧点剔除后不足 2 点默认分 / 正常增速 log10 压缩 / 下载量下降增速封底 0 / 极高增速封顶 1 /
 			 *     defaultScore 可配置）、batchTrendingScores（空列表 / 单插件 stddev=0 统一 0.5 / 增速差异 sigmoid 归一化低增速更低）、

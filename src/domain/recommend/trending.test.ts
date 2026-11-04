@@ -7,6 +7,7 @@ let NOW = 1_000_000_000_000;
 let spy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+	NOW = 1_000_000_000_000; // 每个用例固定起点，避免模块级时间跨用例漂移
 	spy = vi.spyOn(Date, "now").mockImplementation(() => NOW);
 });
 afterEach(() => {
@@ -236,5 +237,78 @@ describe("持久化与运维方法", () => {
 		e.updateWithStats(stats([["a", 100]]), 1);
 		e.reset();
 		expect(e.isEmpty()).toBe(true);
+	});
+});
+
+// 保留旧版测试的语义回归防线（覆盖重写时按断言逐条补回，避免只留分支覆盖丢了契约）
+describe("TrendingEngine 契约回归防线", () => {
+	it("serialize → load 往返一致（多插件多次采样，逐点比对）", () => {
+		const e = new TrendingEngine();
+		e.updateWithStats(stats([["a", 100], ["b", 50]]), 1);
+		NOW += 2 * 60 * 60 * 1000;
+		e.updateWithStats(stats([["a", 300]]), 1);
+
+		const dump = e.serialize();
+		const e2 = new TrendingEngine();
+		e2.load(dump);
+		expect(e2.serialize()).toEqual(dump);
+		expect(e2.getSnapshots("a")!).toHaveLength(2);
+		expect(e2.getSnapshots("b")!).toHaveLength(1);
+	});
+
+	it("load 混合条目：合法保留，非数组 / NaN / Infinity 静默跳过", () => {
+		const e = new TrendingEngine();
+		e.load({
+			ok: [{ downloads: 1, timestamp: 1 }],
+			bad1: "not-an-array" as unknown as TrendSnapshot[],
+			bad2: [{ downloads: NaN, timestamp: 1 } as TrendSnapshot],
+			bad3: [{ downloads: 1, timestamp: Infinity } as TrendSnapshot],
+		});
+		const prev = e.lastSampleStats();
+		expect(prev.has("ok")).toBe(true);
+		expect(prev.get("ok")?.downloads).toBe(1);
+		expect(prev.has("bad1")).toBe(false);
+		expect(prev.has("bad2")).toBe(false);
+		expect(prev.has("bad3")).toBe(false);
+	});
+
+	it("lastSampleStats 空历史返回空 Map", () => {
+		expect(new TrendingEngine().lastSampleStats().size).toBe(0);
+	});
+
+	it("lastSampleStats 多插件基线（H1：自比恒 0 的回归防线）", () => {
+		const e = new TrendingEngine();
+		e.updateWithStats(stats([["a", 100], ["b", 200]]), 1);
+		NOW += 2 * 60 * 60 * 1000;
+		e.updateWithStats(stats([["a", 500]]), 1);
+		const prev = e.lastSampleStats();
+		expect(prev.get("a")?.downloads).toBe(500);
+		expect(prev.get("b")?.downloads).toBe(200);
+		// 基线须为上一轮快照而非当前 stats 自比（否则 velocity 恒 0）
+		expect(prev.get("a")?.downloads).not.toBe(0);
+	});
+
+	it("时距过短：即便下载量暴涨也不产生天文数字增速（中性分）", () => {
+		const t0 = NOW;
+		const e = new TrendingEngine();
+		e.load({
+			a: [
+				{ downloads: 100, timestamp: t0 },
+				{ downloads: 10_000, timestamp: t0 + 30 * 60 * 1000 },
+			],
+		});
+		expect(e.trendingScore("a")).toBe(DEFAULT_TRENDING_CONFIG.defaultScore);
+	});
+
+	it("正常跨天增速精确 log 压缩：999/天 → log10(1000)/4 = 0.75", () => {
+		const t0 = NOW;
+		const e = new TrendingEngine();
+		e.load({
+			a: [
+				{ downloads: 1, timestamp: t0 },
+				{ downloads: 1000, timestamp: t0 + DAY },
+			],
+		});
+		expect(e.trendingScore("a")).toBeCloseTo(0.75, 5);
 	});
 });
