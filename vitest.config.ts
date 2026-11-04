@@ -434,6 +434,20 @@ export default defineConfig({
 			 *     变化不重建 / 其它 class 变化重建 / removed owned 立即重建 / added 全 owned 忽略 / 混入非 owned 重建 / 其它类型重建）、
 			 *     onlyFilterVisibilityChanged（oldValue null 空串比较）。
 			 *
+			 * 第 71 版（收尾小洼地：shared/platform + insight-cache）：全局 87.08% / 84.33% / 86.78%
+			 *   → 维持第 70 版拧紧后的阈值 86 / 83 / 86（lines 87.08 < 87.5、functions 84.33 < 84.5、branches 86.78 < 87.5，
+			 *     三项均够不着下一档「+0.5 才许拧紧」下限，故本轮不收紧）。两文件语句/函数/分支三项全 100%。
+			 *     shared/platform.ts 67.1%→100%（76/76，函数 20%→100%、分支 50%→100%，+16 例；vi.mock("obsidian") 用 getter
+			 *     动态返回 Platform 以模拟 undefined/isMobile/读取抛错，vi.stubGlobal 控制 window/matchMedia/rIC，fake timers 驱动
+			 *     降级 setTimeout）：isMobileEnvironment（Platform 未定义 / isMobile true / 非 true / getter 抛错 catch）、
+			 *     isTouchEnvironment（window 未定义 / matchMedia 缺失或非函数 / matches true 且查询 coarse pointer 串 / matches 非 true /
+			 *     抛错 catch）、requestIdle（原生 rIC 透传 timeout 并回调 / 默认 100 / 缺失降级 setTimeout 封顶 50ms / 小 timeout 不封顶）、
+			 *     cancelIdle（原生 cIC / 降级 clearTimeout）。
+			 *     data/storage/insight-cache.ts 78.4%→100%（102/102，函数 33%→100%、分支 71%→100%，+10 例；纯类无 mock）：
+			 *     isValidEntry 经 load 间接覆盖（合法 / 旧 schema / 缺 text / text 非 string / 非对象 / null / 最早纯 string 格式全丢弃）、
+			 *     load 缺字段不清空 / 空对象字段清空该侧、get/setInsight、compareKey 排序且不修改入参、{A,B} 与 {B,A} 命中同一缓存、
+			 *     toJSON 两套导出 + load 往返一致。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
