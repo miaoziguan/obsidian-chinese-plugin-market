@@ -416,6 +416,24 @@ export default defineConfig({
 			 *     serialize/load 往返 + 非法数据（非对象/null/非数组/字段非法）静默跳过 + load 按 maxSnapshots 截断、
 			 *     lastSampleStats 返回最新下载量、prune（删过期点 / 全过期删整条 / 无过期不改）、reset 清空、isEmpty/getSnapshots。
 			 *
+			 * 第 70 版（最后一块硬骨头：settings-integration-controller 设置页增强控制器）：全局 86.97% / 83.8% / 86.7%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，本轮**两项同时拧紧**：
+			 *     lines/statements 85→**86**（86.97 ≥ 86.5）、functions 82→**83**（83.8 ≥ 83.5）、branches 维持 86（86.7 < 87.5 不够）。
+			 *   （该 377 行文件此前函数 0%，一次性补满是 functions 跨过 83.5 的主因。）
+			 *     app/settings-integration/settings-integration-controller.ts 38.7%→100%（377/377，函数 0%→100%、分支 98%，
+			 *     +50 例；vi.hoisted 造两个 enhancer 类替身 + logger.warn + FakeObserver(可控 trigger) + rAF 队列(同步 flush)，
+			 *     asAppInternals 为透明类型断言不 mock、pruneOrphanedMeta 保真）：start（setting 缺失/无容器静默放弃 / 幂等 / patch 8 方法
+			 *     + observe + 排帧）、stop（disconnect / 取消帧 / 精确还原 / 两个 cleanup / 状态复位 / 可再 start）、requestRefresh、
+			 *     reconcile（无 setting / 容器断开 / 总开关关闭 / 社区插件页 / 外观页 / 其它页 / 无 activeTab 回退 / Tab 切换重置
+			 *     scannedRootEl / finally 解锁 isReconciling）、scheduleOrphanedCleanup（插件+CSS 双路签名去重、含孤儿写盘、无孤儿不写、
+			 *     installedIds/listSnippets 抛错 warn + 签名重置）、ensureSnippetsScanned（同 root 防自激 / 成功 finally 排帧 /
+			 *     失败 warn+置空重试 / 旧 generation 丢弃）、scheduleReconcile + cancelScheduledReconcile + getView（独立窗口 rAF 择路）、
+			 *     patchLifecycleMethods（非函数跳过 / wrapper 正确 this + 同步排帧 / 返回 Promise 再排帧 / own property 与原型链精确恢复 /
+			 *     外部改写则跳过还原）、MutationObserver（view 构造器优先 + 全局回退 / container 空早返 / 需重建与过滤两类 mutation）、
+			 *     shouldReconcileMutation 全分支（isReconciling 锁 / owned 内忽略 / 文本节点取 parentElement / 仅 filtered-out class
+			 *     变化不重建 / 其它 class 变化重建 / removed owned 立即重建 / added 全 owned 忽略 / 混入非 owned 重建 / 其它类型重建）、
+			 *     onlyFilterVisibilityChanged（oldValue null 空串比较）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -424,9 +442,9 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 85,
-				statements: 85,
-				functions: 82,
+				lines: 86,
+				statements: 86,
+				functions: 83,
 				branches: 86,
 			},
 		},
