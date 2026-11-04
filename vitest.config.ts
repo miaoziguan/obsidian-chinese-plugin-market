@@ -296,6 +296,15 @@ export default defineConfig({
 			 *     全维度叠加计数、clearOneFilter（clear + updateFacetVisibility + scheduleRender(true)）、
 			 *     clearAllFilters（清空 + 统一收尾一次）、activeFilterSignature（\u0001 连接、顺序稳定、空态空串）。
 			 *
+			 * 第 59 版（续啃 ui 层：view-ai-search 语义搜索编排）：全局 85.19% / 81.61% / 85.54%
+			 *   → 维持第 58 版拧紧后的阈值 84 / 81 / 85（lines 实测 85.19 ≥ 84、functions 81.61 ≥ 81、
+			 *     branches 85.54 ≥ 85，均过线；但上调 1 仍需 新阈值+0.5：functions 81.61<82.5、branches 85.54<86.5，故不拧紧）。
+			 *     ui 层整体 91.8%（函数 88.1% / 分支 86.4%）。view-ai-search.ts 85.8%→96.6%（259/268，+15 例）：
+			 *     早退守卫（pending/空查询/AI 未开启/鉴权不可用/无数据且加载失败）、AI 成功（写回 aiSearchResult/缓存 +
+			 *     badge done + saveVectorIndex + 重绘）、rankFallback 降级提示、keyword 模式不落盘、本地模式成功（badge「本地」）、
+			 *     本地无索引提示、embedding=local 且缺索引先 buildLocalIndex、异常捕获（boom / NO_API_KEY）→ badge ready +
+			 *     aiSearchResult 置空、finally 清理 loading 态、本地模型进度条（挂载 <progress> + 轮询更新百分比）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
