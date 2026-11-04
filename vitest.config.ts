@@ -403,6 +403,17 @@ export default defineConfig({
 			 *     group 假值回退 OTHER / remark 非字符串回退空串）、setMeta（仅 patch group 保留 remark、仅 patch remark 保留 group、二者同补、
 			 *     不可变返回新对象）、pruneOrphanedMeta（validIds 为 Set 剔除孤儿 / 为可迭代数组同样生效 / 无孤儿返回原引用跳过写盘）。
 			 *
+			 * 第 69 版（续啃 domain/ 层：trending 趋势引擎）：全局 86.42% / 82.96% / 86.55%
+			 *   → 维持第 68 版拧紧后的阈值 85 / 82 / 86（lines 86.42 < 86.5、functions 82.96 < 83.5、branches 86.55 < 87.5，
+			 *     三项均够不着下一档「+0.5 才许拧紧」下限，故本轮不收紧）。分支 100% 为单文件满贯。
+			 *     domain/recommend/trending.ts 80.4%→100%（240/240，函数/分支全 100%，+23 例；仅 spy Date.now 固定采样时间轴，
+			 *     无模块 mock）：构造函数（默认配置 / 部分覆盖）、updateWithStats（空 stats 不新增 / 新插件首次采样 / 间隔内仅跟进更大下载量
+			 *     不新增点 / 超出间隔追加 / 自定义 intervalMs / maxSnapshots 裁剪 shift 最旧）、trendingScore（无历史或不足 2 点默认分 /
+			 *     时距低于 MIN_SPAN 默认分 / 窗口外旧点剔除后不足 2 点默认分 / 正常增速 log10 压缩 / 下载量下降增速封底 0 / 极高增速封顶 1 /
+			 *     defaultScore 可配置）、batchTrendingScores（空列表 / 单插件 stddev=0 统一 0.5 / 增速差异 sigmoid 归一化低增速更低）、
+			 *     serialize/load 往返 + 非法数据（非对象/null/非数组/字段非法）静默跳过 + load 按 maxSnapshots 截断、
+			 *     lastSampleStats 返回最新下载量、prune（删过期点 / 全过期删整条 / 无过期不改）、reset 清空、isEmpty/getSnapshots。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
