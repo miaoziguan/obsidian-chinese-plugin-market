@@ -287,6 +287,15 @@ export default defineConfig({
 			 *     冻结态 is-on、未知项回退名且不点详情、已知项点击开详情、更新按钮（成功重绘 / 失败仍重绘 / pt-spin 守卫）、
 			 *     冻结与取消跟踪按钮。
 			 *
+			 * 第 58 版（续啃 ui 层：active-filters 筛选维度单一事实来源）：全局 85.12% / 81.56% / 85.51%
+			 *   → 本轮可拧紧：functions 实测 81.56 ≥ 81.5（80→81）、branches 实测 85.51 ≥ 85.5（84→85）；
+			 *     lines 实测 85.12 < 85.5 仍维持 84。ui 层整体 91.6%（函数 88.0% / 分支 86.3%）。
+			 *     active-filters.ts 84.8%→100%（276/276，+17 例）：11 类维度各自自检与 clear 副作用（source/install/
+			 *     recommended/favorite/author/selectedCategories（多项）/chineseEco/series bamboo·yulin/newWithinDays
+			 *     命中 NEW_LABELS 与兜底/updatedWithinDays 命中 UPD_LABEL 与兜底/tried·abandoned·verdict 兜底纳入）、
+			 *     全维度叠加计数、clearOneFilter（clear + updateFacetVisibility + scheduleRender(true)）、
+			 *     clearAllFilters（清空 + 统一收尾一次）、activeFilterSignature（\u0001 连接、顺序稳定、空态空串）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -297,8 +306,8 @@ export default defineConfig({
 			thresholds: {
 				lines: 84,
 				statements: 84,
-				functions: 80,
-				branches: 84,
+				functions: 81,
+				branches: 85,
 			},
 		},
 	},
