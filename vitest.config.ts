@@ -339,6 +339,15 @@ export default defineConfig({
 			 *     上线 toggle（newWithinDays 切换 + 持久化）、更新 toggle（updatedWithinDays 切换 + 持久化）、高级筛选折叠
 			 *     （pt-open + renderFeaturedSection + aria-expanded；动画 200ms 后 measureLayout/updateWindow 经 rAF 同步桩收敛）。
 			 *
+			 * 第 63 版（转战 app/ 层拉基线：beta-updater 直链 Beta 批量更新）：全局 85.62% / 81.9% / 85.81%
+			 *   → 维持第 58 版拧紧后的阈值 84 / 81 / 85（lines 85.62 < 86.0、functions 81.9 < 82.0、branches 85.81 < 86.0，
+			 *     三项均够不着「+0.5 才许拧紧」下限，故本轮不收紧）。
+			 *     app/beta-updater.ts 70.4%→100%（125/125，函数 100%、分支 91%，+8 例；仅 mock @app/direct-install 两依赖，
+			 *     Platform.isMobile 走 mock obsidian 的 Platform）：buildBetaEntry（默认 kind/release + name 回退 id）、updateBetaEntry
+			 *     （kind=plugin→updateBetaPlugin / kind=theme→updateBetaTheme + release 布尔回写）、updateAllBetaPlugins（移动端非静默
+			 *     弹提示空返回 / 移动端静默空返回 / 冻结跳过 / 更新成功 updated++ 带 version+release / 已最新计 skipped / 单条失败隔离
+			 *     failed++ 记 error 不妨碍其余 / 非静默走逐条+汇总提示分支 / 静默跳过全部 !silent 分支 / 空列表不弹汇总）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
