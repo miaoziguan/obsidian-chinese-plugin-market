@@ -382,6 +382,16 @@ export default defineConfig({
 			 *     描述差异双呈现 / author-version-tags-deps / downloads-updated / mainSignals 命令+设置页 / readme / description 缺失不呈现）、
 			 *     generateInsight（去首尾空白 / 空响应抛错）、gatherInsightSources（三路聚合 + readmeLimit 双向截断 / repo 空降级）。
 			 *
+			 * 第 67 版（续啃 domain/ 层：smart-signal 离线轻量推荐信号）：全局 86.25% / 82.64% / 86.44%
+			 *   → 维持第 66 版拧紧后的阈值 85 / 82 / 85（lines 86.25 < 86.5、functions 82.64 < 83.5、branches 86.44 < 86.5，
+			 *     三项均差一点够不着「+0.5 才许拧紧」下限，故本轮不收紧）。分支 73%→92% 是增量。
+			 *     domain/filter/smart-signal.ts 64.0%→100%（136/136，函数 100%、分支 92%，+13 例；纯函数无 mock，仅 spy Date.now
+			 *     固定时间窗）：computeSmartSignals（空列表直返 / 单插件 top1 / 200 插件分位边界 top1(<2)·top5(<10)·hot10(<20)·无(≥20) /
+			 *     10 天内更新→top1+recentActive+recentUpdate / 50 天内→+recentActive / 100 天前→仅分位 / 无 updated→仅分位、
+			 *     velocityRising 全分支：无 prevStats(null) / 空 Map / 增速明显高于均值(sigmoid>0.5) / 增速相同(stddev=0 置 0) /
+			 *     curr≤prev(不计 velocity) / 信号已满 3 被 length<3 守卫挡下）+ computeVelocityScores（prev 缺失或 curr≤prev 跳过 /
+			 *     velocities 空早返 / 均值-方差-Z-score-sigmoid 归一化）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
