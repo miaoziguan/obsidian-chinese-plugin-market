@@ -1,98 +1,108 @@
 import { describe, it, expect } from "vitest";
-import { sortPlugins, type SortBy, type SortablePlugin } from "@domain/filter/sort";
+import { sortPlugins } from "./sort";
+import type { SortablePlugin } from "./sort";
 
-/**
- * 结果排序切换（产品改进 #5 / 体验迭代 #4）单测。
- * 维度：relevance（默认，保持传入顺序）/ downloads / updated / name / popular / published。
- */
-describe("sortPlugins", () => {
-	const list: SortablePlugin[] = [
-		{ id: "a", name: "Zebra", displayName: "斑马", downloads: 100, updated: 1000 },
-		{ id: "b", name: "apple", displayName: "苹果", downloads: 5000, updated: 3000 },
-		{ id: "c", name: "Mango", displayName: "芒果", downloads: 300, updated: 2000 },
-		{ id: "d", name: "kiwi", displayName: "猕猴桃", updated: undefined },
-	];
+const mk = (o: Partial<SortablePlugin> & { id: string }): SortablePlugin =>
+	({ name: o.id, ...o } as SortablePlugin);
 
-	it("relevance：原样返回（稳定，不改顺序）", () => {
-		const out = sortPlugins(list, "relevance");
-		expect(out.map((p) => p.id)).toEqual(["a", "b", "c", "d"]);
-	});
-
-	it("downloads：按下载量降序，缺失视为 0 排最后", () => {
-		const out = sortPlugins(list, "downloads");
-		expect(out.map((p) => p.id)).toEqual(["b", "c", "a", "d"]);
-	});
-
-	it("updated：按更新时间降序，缺失排最后", () => {
-		const out = sortPlugins(list, "updated");
-		expect(out.map((p) => p.id)).toEqual(["b", "c", "a", "d"]);
-	});
-
-	it("published：按清单下标倒序（下标越大越新），缺失沉底", () => {
-		const publishedList: SortablePlugin[] = [
-			{ id: "a", name: "A", displayName: "甲", downloads: 100, updated: 1000, listIndex: 2 },
-			{ id: "b", name: "B", displayName: "乙", downloads: 5000, updated: 3000, listIndex: 0 },
-			{ id: "c", name: "C", displayName: "丙", downloads: 300, updated: 2000, listIndex: undefined },
-		];
-		// 最新（a 下标 2）在前，最旧（b 下标 0）次之，缺失（c）沉底
-		const out = sortPlugins(publishedList, "published");
-		expect(out.map((p) => p.id)).toEqual(["a", "b", "c"]);
-	});
-
-	it("published：全部缺失时保持原顺序", () => {
-		const out = sortPlugins(list, "published");
-		expect(out.map((p) => p.id)).toEqual(["a", "b", "c", "d"]);
-	});
-
-	it("name：按显示名（中文名优先）本地化升序", () => {
-		const out = sortPlugins(list, "name");
-		// 斑马/芒果/猕猴桃/苹果 —— 用 localeCompare，结果需稳定
-		const names = out.map((p) => p.displayName ?? p.name);
-		// 断言是升序（相邻两两 <=0）
-		for (let i = 1; i < names.length; i++) {
-			expect(names[i - 1].localeCompare(names[i], "zh") <= 0).toBe(true);
-		}
-	});
-
-	it("不修改原数组（返回新数组）", () => {
-		const copy = [...list];
-		sortPlugins(list, "downloads");
-		expect(list.map((p) => p.id)).toEqual(copy.map((p) => p.id));
-	});
-
-	it("空数组安全", () => {
+describe("sortPlugins 边界", () => {
+	it("空列表 → 空数组", () => {
 		expect(sortPlugins([], "downloads")).toEqual([]);
 	});
-
-	it("未知 sortBy 退化为 relevance", () => {
-		const out = sortPlugins(list, "unknown" as SortBy);
-		expect(out.map((p) => p.id)).toEqual(["a", "b", "c", "d"]);
+	it("不修改入参（返回新数组）", () => {
+		const list = [mk({ id: "a", downloads: 1 }), mk({ id: "b", downloads: 2 })];
+		const before = JSON.stringify(list);
+		sortPlugins(list, "downloads");
+		expect(JSON.stringify(list)).toBe(before);
 	});
+});
 
-	it("popular：未安装优先，已安装沉底，其次下载量降序", () => {
-		const installed = new Set(["c", "d"]); // c/d 已安装
-		const out = sortPlugins(list, "popular", { installedIds: installed });
-		// 未安装的 b(5000) a(100) 置顶按下载量降序；已安装的 c(300) d 沉底
-		expect(out.map((p) => p.id)).toEqual(["b", "a", "c", "d"]);
+const baseList = [
+	mk({ id: "a", downloads: 5, updated: 1, listIndex: 3, name: "c" }),
+	mk({ id: "b", downloads: 5, updated: 2, listIndex: 2, name: "a" }),
+	mk({ id: "c", downloads: 9, updated: 3, listIndex: 1, name: "b" }),
+];
+
+describe("sortPlugins 各维度正确性", () => {
+	it("downloads 降序（相等项保持原序）", () => {
+		expect(sortPlugins(baseList, "downloads").map((p) => p.id)).toEqual(["c", "a", "b"]);
 	});
-
-	it("popular：均未安装时退化为下载量降序", () => {
-		const out = sortPlugins(list, "popular", { installedIds: new Set() });
-		expect(out.map((p) => p.id)).toEqual(["b", "c", "a", "d"]);
+	it("updated 降序", () => {
+		expect(sortPlugins(baseList, "updated").map((p) => p.id)).toEqual(["c", "b", "a"]);
 	});
+	it("published 按下标降序", () => {
+		expect(sortPlugins(baseList, "published").map((p) => p.id)).toEqual(["a", "b", "c"]);
+	});
+	it("name 用 name 字段本地化升序", () => {
+		expect(sortPlugins(baseList, "name").map((p) => p.id)).toEqual(["b", "c", "a"]);
+	});
+	it("popular 无 installedIds → 下载量降序，下载相同再按更新时间降序", () => {
+		expect(sortPlugins(baseList, "popular").map((p) => p.id)).toEqual(["c", "b", "a"]);
+	});
+	it("trending 按评分降序", () => {
+		const opts = { trendingScores: new Map([["a", 0.1], ["b", 0.5], ["c", 0.9]]) };
+		expect(sortPlugins(baseList, "trending", opts).map((p) => p.id)).toEqual(["c", "b", "a"]);
+	});
+	it("recommended 按评分降序", () => {
+		const opts = { recommendScores: new Map([["a", 10], ["b", 50], ["c", 90]]) };
+		expect(sortPlugins(baseList, "recommended", opts).map((p) => p.id)).toEqual(["c", "b", "a"]);
+	});
+});
 
-	it("popular：下载量相同则按更新时间降序", () => {
-		const tie: SortablePlugin[] = [
-			{ id: "x", name: "X", displayName: "X", downloads: 100, updated: 100 },
-			{ id: "y", name: "Y", displayName: "Y", downloads: 100, updated: 200 },
+describe("sortPlugins 稳定排序（相等 key 保持原序）", () => {
+	it("downloads 全相等 → 原序", () => {
+		const list = [mk({ id: "a" }), mk({ id: "b" }), mk({ id: "c" })];
+		expect(sortPlugins(list, "downloads").map((p) => p.id)).toEqual(["a", "b", "c"]);
+	});
+});
+
+describe("sortPlugins(name) 三层显示名来源", () => {
+	it("displayNameOf 回调优先", () => {
+		const list = [mk({ id: "2", name: "x" }), mk({ id: "1", name: "y" }), mk({ id: "3", name: "z" })];
+		const out = sortPlugins(list, "name", { displayNameOf: (p) => p.id }).map((p) => p.id);
+		expect(out).toEqual(["1", "2", "3"]);
+	});
+	it("fallback 到 displayName 字段", () => {
+		const list = [mk({ id: "a", name: "x", displayName: "banana" }), mk({ id: "b", name: "y", displayName: "apple" })];
+		const out = sortPlugins(list, "name").map((p) => p.id);
+		expect(out).toEqual(["b", "a"]);
+	});
+	it("再 fallback 到 name", () => {
+		const list = [mk({ id: "a", name: "c" }), mk({ id: "b", name: "a" }), mk({ id: "c", name: "b" })];
+		const out = sortPlugins(list, "name").map((p) => p.id);
+		expect(out).toEqual(["b", "c", "a"]);
+	});
+});
+
+describe("sortPlugins(popular) 未安装优先 → 下载量 → 更新时间", () => {
+	it("完整决策链", () => {
+		const list = [
+			mk({ id: "a", downloads: 100, updated: 1 }), // 已安装
+			mk({ id: "b", downloads: 100, updated: 2 }), // 已安装，与 a 下载相同→更新时间更晚排前
+			mk({ id: "c", downloads: 200, updated: 1 }), // 未安装，下载最高
+			mk({ id: "d", downloads: 50, updated: 1 }), // 未安装
 		];
-		const out = sortPlugins(tie, "popular", { installedIds: new Set() });
-		expect(out.map((p) => p.id)).toEqual(["y", "x"]);
+		const out = sortPlugins(list, "popular", { installedIds: new Set(["a", "b"]) }).map((p) => p.id);
+		expect(out).toEqual(["c", "d", "b", "a"]);
 	});
+});
 
-	it("popular：不修改原数组", () => {
-		const copy = [...list];
-		sortPlugins(list, "popular", { installedIds: new Set(["c"]) });
-		expect(list.map((p) => p.id)).toEqual(copy.map((p) => p.id));
+describe("sortPlugins(trending/recommended) 缺评分表 → 全部 0 维持原序", () => {
+	it("trending 无 trendingScores → 原序", () => {
+		const list = [mk({ id: "a" }), mk({ id: "b" }), mk({ id: "c" })];
+		expect(sortPlugins(list, "trending").map((p) => p.id)).toEqual(["a", "b", "c"]);
+	});
+	it("recommended 无 recommendScores → 原序", () => {
+		const list = [mk({ id: "a" }), mk({ id: "b" }), mk({ id: "c" })];
+		expect(sortPlugins(list, "recommended").map((p) => p.id)).toEqual(["a", "b", "c"]);
+	});
+});
+
+describe("sortPlugins(relevance / default) 保持原序", () => {
+	it("relevance 返回副本（slice）", () => {
+		const list = [mk({ id: "a" }), mk({ id: "b" }), mk({ id: "c" })];
+		const out = sortPlugins(list, "relevance");
+		expect(out.map((p) => p.id)).toEqual(["a", "b", "c"]);
+		expect(out).not.toBe(list); // 新数组
 	});
 });
