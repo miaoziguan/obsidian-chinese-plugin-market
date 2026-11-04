@@ -370,6 +370,18 @@ export default defineConfig({
 			 *     （version 非空走严格 tag、仓库非法、version 空白、manifest 全 404、main 全 404）、fetchWithReleaseFallback
 			 *     （raw 200 直返 / raw404→release200 回退 / 可选全 404→null / 非可选全 404→抛 / 服务端 500 直抛 / 仓库非法→抛）。
 			 *
+			 * 第 66 版（转战 domain/ 层拉基线：plugin-insight 插件功能洞察）：全局 86.14% / 82.59% / 86.38%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，本轮**首次真正拧紧**：
+			 *     lines/statements 84→**85**（86.14 ≥ 85.5）、functions 81→**82**（82.59 ≥ 82.5）、branches 维持 85（86.38 < 86.5 不够）。
+			 *   （此前第 62-65 版实测虽多次逼近，但 lines/functions 总差 0.4~0.5 个百分点未能越线，本轮借 plugin-insight 100% 补足跨过。）
+			 *     domain/compare/plugin-insight.ts 35.1%→100%（262/262，函数 100%、分支 98%，+41 例；仅 mock @data/net/net 的 netRequest
+			 *     + @domain/catalog/mirror 的 resolveUrl/buildReadmeUrl 两依赖）：buildManifestUrl / buildMainJsUrl（repo 空、前后斜杠清理、
+			 *     非两段、main 缺省/空白回退 main.js）、fetchManifest（repo 空直返 / 200 字段整形 / 非 2xx / json 非对象 / 字段类型不符 /
+			 *     抛错兜底）、fetchReadmeText（repo 空 / 200 截断 5000 / 非 2xx / 抛错）、fetchMainSignals（repo 空 / 200 抽取 / 非 2xx / 抛错）、
+			 *     extractMainSignals（id/name 抽取、缺字段跳过、hasSettings 正则、命令数封顶 40）、buildInsightPrompt（基础字段 / manifest
+			 *     描述差异双呈现 / author-version-tags-deps / downloads-updated / mainSignals 命令+设置页 / readme / description 缺失不呈现）、
+			 *     generateInsight（去首尾空白 / 空响应抛错）、gatherInsightSources（三路聚合 + readmeLimit 双向截断 / repo 空降级）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -378,9 +390,9 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 84,
-				statements: 84,
-				functions: 81,
+				lines: 85,
+				statements: 85,
+				functions: 82,
 				branches: 85,
 			},
 		},
