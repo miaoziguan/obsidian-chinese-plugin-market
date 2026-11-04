@@ -358,6 +358,18 @@ export default defineConfig({
 			 *     与容错：逐级建目录、list 抛错视为空、vault 路径非文件回退 adapter.read、stat 抛错归 0）、obsidianPlatformCapability
 			 *     （缺字段全 false / 补 isDesktopApp+isMacOS 透传 / 布尔化防御）。
 			 *
+			 * 第 65 版（转战 app/ 层拉基线：plugin-updater 一键更新已安装插件）：全局 85.74% / 82.11% / 86.26%
+			 *   → 维持第 58 版拧紧后的阈值 84 / 81 / 85（lines 85.74 < 86.0、functions 82.11 < 82.5、branches 86.26 < 86.5，
+			 *     三项均差一点够不着「+0.5 才许拧紧」下限，故本轮不收紧）。分支 53%→88% 是最大增量。
+			 *     app/plugin-updater.ts 91.6%→98.9%（260/263，函数 100%、分支 88%，+30 例；mock requestUrl + Platform +
+			 *     requireApiVersion + asAppInternals + buildManifestUrl + resolveUrl + githubReleaseAssetUrls 共 7 依赖）：
+			 *     tagVariants（v 前缀变体 / 大写 V / 空白空数组）、updatePluginCore 守卫（移动端 / 无仓库）、跟随最新成功路径
+			 *     （manifest→main(raw)→css(可选404)→写盘重载 + manifest 非 2xx / buildManifestUrl 空 / id 不符 / minApp 不满足 /
+			 *     main 空）、writeAndReload 全分支（目录 !exists→mkdir、css 存在且新版无→删旧、css 不存在→不删、plugins 为 null、
+			 *     已启用→disable、缺 enablePluginAndSave→回退 enablePlugin、重载后未启用→抛 enableFailed）、固定版本 installPinnedVersion
+			 *     （version 非空走严格 tag、仓库非法、version 空白、manifest 全 404、main 全 404）、fetchWithReleaseFallback
+			 *     （raw 200 直返 / raw404→release200 回退 / 可选全 404→null / 非可选全 404→抛 / 服务端 500 直抛 / 仓库非法→抛）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
