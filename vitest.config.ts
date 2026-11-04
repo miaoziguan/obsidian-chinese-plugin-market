@@ -315,6 +315,18 @@ export default defineConfig({
 			 *     视图切换 onPick 改 updatesViewMode + 重绘、installed 空态、installed 四组互斥（可更新/固定/停用/最新）、
 			 *     固定行取消固定（pinPluginVersion(id,null) + 重绘）、状态行（名称+本地版本+标签）。
 			 *
+			 * 第 61 版（续啃 ui 层：view-cards 卡片列表渲染/交互）：全局 85.42% / 81.79% / 85.69%
+			 *   → 维持第 58 版拧紧后的阈值 84 / 81 / 85（lines 实测 85.42 < 85.5、functions 81.79 ≥ 81.5 但上调 1 需 ≥82.5、
+			 *     branches 85.69 ≥ 85.5 但上调 1 需 ≥86.5，均不收紧）。ui 层整体 92.4%（函数 88.5% / 分支 86.8%）。
+			 *     view-cards.ts 87.0%→94.9%（577/608，+40 例，mock @ui/dom/dom + similar + detail-drawer + confirm-modal
+			 *     + plugin-installer + plugin-insight 共 6 依赖）：toggleFavorite（收藏/取消/筛选分组归属/缓存失效）、flashAction、
+			 *     computeSimilarFor（无 tagService/空列表/懒建倒排）、handleInstall（已装/安装中守卫 + 成功清理重绘）、
+			 *     handleToggleEnabled（安装中守卫 + all/installed-not-enabled 仅刷新 + enabled 重建）、handleUninstall（安装中/
+			 *     取消/确认 + 重绘）、openDetailDrawer（复用抽屉/新建/退对比模式）、onCardClick 全操作分发（copy/compare 增删/
+			 *     详情/评测/洞察/toggle-enabled/uninstall/market/作者钻取/favorite/整卡点击/操作行空白带开关不跳详情）、
+			 *     onCardKeydown（Enter 开详情/方向键网格移动/输入框不拦截）、focusCardByIdx（无 layer 安全/滚入视口+聚焦）、
+			 *     openInsightModal（无 AI 降级 + 抓 manifest 生成）。局部 rAF 同步执行以确定性覆盖 fillSimilar/focus。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
