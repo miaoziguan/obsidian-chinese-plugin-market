@@ -305,6 +305,16 @@ export default defineConfig({
 			 *     本地无索引提示、embedding=local 且缺索引先 buildLocalIndex、异常捕获（boom / NO_API_KEY）→ badge ready +
 			 *     aiSearchResult 置空、finally 清理 loading 态、本地模型进度条（挂载 <progress> + 轮询更新百分比）。
 			 *
+			 * 第 60 版（续啃 ui 层：view-updates 更新页签列表渲染器）：全局 85.3% / 81.58% / 85.61%
+			 *   → 维持第 58 版拧紧后的阈值 84 / 81 / 85（lines 实测 85.3 < 85.5、functions 81.58 ≥ 81.5 但上调 1 需 ≥82.5、
+			 *     branches 85.61 ≥ 85.5 但上调 1 需 ≥86.5，均不收紧）。ui 层整体 92.1%（函数 88.0% / 分支 86.6%）。
+			 *     view-updates.ts 86.3%→99.2%（361/364，+19 例）：updatesListEl 缺失安全返回、pending 空态（标题/提示）
+			 *     + 固定组渲染、行列表（勾选/名称/版本差/固定/更新 按钮）、勾选变化回写 updateSelection + 计数同步、固定按钮
+			 *     → openVersionPicker、更新按钮（成功 pt-spin 复位 + 重绘 / 失败仍撤旋转态 / pt-spin 守卫连点一次）、全选/取消、
+			 *     更新所选（有选中→批量）/更新全部（有待更→批量、无待更→仅提示）、检查更新（refreshOutdated + 提示 + 复位）、
+			 *     视图切换 onPick 改 updatesViewMode + 重绘、installed 空态、installed 四组互斥（可更新/固定/停用/最新）、
+			 *     固定行取消固定（pinPluginVersion(id,null) + 重绘）、状态行（名称+本地版本+标签）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
