@@ -704,8 +704,8 @@ describe("Translator · 状态/配置/向量/对比 补齐", () => {
 
 	it("aiDict getter/setter：经 aiAssetStore 实时读写", () => {
 		const t = new Translator();
-		t.aiDict = { a: { key: "a", translation: "x" } };
-		expect(t.aiDict.a.translation).toBe("x");
+		t.aiDict = { a: { name: "x" } };
+		expect(t.aiDict.a.name).toBe("x");
 		expect(t.getAIDictSize()).toBe(1);
 	});
 
@@ -742,7 +742,7 @@ describe("Translator · 状态/配置/向量/对比 补齐", () => {
 		delete t.cache["x"];
 		t.tmApproved["x"] = { id: "x", name: "n", description: "d", source: "online", status: "approved", confidence: 0.5, created: 0, promoted: 0 };
 		expect(t.hasAnyTranslation("x", p as never)).toBe(true);
-		t.aiDict = { x: { key: "x", translation: "v" } };
+		t.aiDict = { x: { name: "v" } };
 		expect(t.hasAnyTranslation("x", p as never)).toBe(true);
 	});
 
@@ -763,7 +763,7 @@ describe("Translator · 状态/配置/向量/对比 补齐", () => {
 
 	it("clearAIDict / getAIDictSize", () => {
 		const t = new Translator();
-		t.aiDict = { a: { key: "a", translation: "x" } };
+		t.aiDict = { a: { name: "x" } };
 		expect(t.getAIDictSize()).toBe(1);
 		t.clearAIDict();
 		expect(t.getAIDictSize()).toBe(0);
@@ -858,7 +858,7 @@ describe("Translator · 状态/配置/向量/对比 补齐", () => {
 			.spyOn(AISearcher.prototype as never, "compare")
 			.mockResolvedValue("md");
 		const t = new Translator();
-		const items = [{ id: "a", name: "A", description: "" }];
+		const items = [{ id: "a", name: "A", description: "", tags: [], commands: [], dependencies: [] }];
 		expect(await t.aiCompare(items)).toBe("md");
 		expect(await t.aiCompare(items)).toBe("md");
 		expect(spy).toHaveBeenCalledTimes(1);
