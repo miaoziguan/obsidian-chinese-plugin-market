@@ -1,90 +1,75 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
+import { MemoryNoteStorage } from "./note-port";
 
-import { MemoryNoteStorage, type NoteStoragePort } from "@translation/memory/note-port";
-import {
-	writeTMNote,
-	removeTMNote,
-	parseTMNote,
-	tmNotePath,
-	normalizeTMPath,
-	TM_FOLDER,
-	type TMEntry,
-} from "@translation/memory/translation-memory";
+describe("MemoryNoteStorage.normalizePath", () => {
+	it("反斜杠 → 斜杠、连续斜杠折叠、首尾斜杠去除", async () => {
+		const s = new MemoryNoteStorage();
+		expect(s.normalizePath("a\\b\\c")).toBe("a/b/c");
+		expect(s.normalizePath("a//b///c")).toBe("a/b/c");
+		expect(s.normalizePath("/a/b/")).toBe("a/b");
+		expect(s.normalizePath("")).toBe("");
+		expect(s.normalizePath("plain.md")).toBe("plain.md");
+		// 归一化后的路径被其余方法共用
+		await s.writeNote("\\a//b.md\\", "x");
+		expect(s.notes.has("a/b.md")).toBe(true);
+	});
+});
 
-/**
- * 平台解耦验收：translation-memory 不再依赖 Obsidian 的 Vault/TFile/normalizePath，
- * 用 mock NoteStoragePort 即可覆盖建目录 / 写 / 覆写 / 删 全链路。
- */
-function entry(over: Partial<TMEntry> = {}): TMEntry {
-	return {
-		id: "git",
-		name: "Git 同步",
-		description: "用 Git 同步你的笔记",
-		source: "ai",
-		status: "approved",
-		confidence: 0.8,
-		created: 1700000000000,
-		...over,
-	};
-}
-
-describe("translation-memory · NoteStoragePort 端口注入", () => {
-	it("首次写入会先建 TM 文件夹，再落单条笔记", async () => {
-		const notes = new MemoryNoteStorage();
-		const spy = vi.spyOn(notes, "createFolder");
-		await writeTMNote(notes, entry());
-
-		expect(spy).toHaveBeenCalledWith(TM_FOLDER);
-		const content = notes.notes.get(`${TM_FOLDER}/git.md`);
-		expect(content).toBeDefined();
-		expect(parseTMNote(content!)?.name).toBe("Git 同步");
+describe("MemoryNoteStorage 八个能力", () => {
+	it("exists：笔记或文件夹命中", async () => {
+		const s = new MemoryNoteStorage();
+		expect(s.exists("a")).toBe(false);
+		await s.writeNote("a.md", "x");
+		expect(s.exists("a.md")).toBe(true);
+		await s.createFolder("dir");
+		expect(s.exists("dir")).toBe(true);
 	});
 
-	it("文件夹已存在时不重复创建（避免并发竞态噪声）", async () => {
-		const notes = new MemoryNoteStorage();
-		await notes.createFolder(TM_FOLDER);
-		const spy = vi.spyOn(notes, "createFolder");
-		await writeTMNote(notes, entry());
-		expect(spy).not.toHaveBeenCalled();
+	it("createFolder 归一化后入集合，重复创建幂等", async () => {
+		const s = new MemoryNoteStorage();
+		await s.createFolder("/a//b/");
+		await s.createFolder("a/b");
+		expect([...s.folders]).toEqual(["a/b"]);
 	});
 
-	it("createFolder 抛错被吞掉，不阻断写入（并发已存在容错）", async () => {
-		const notes: NoteStoragePort = {
-			normalizePath: (p) => p,
-			exists: () => false,
-			createFolder: () => Promise.reject(new Error("already exists")),
-			writeNote: vi.fn(() => Promise.resolve()),
-			deleteNote: () => Promise.resolve(),
-			listMarkdown: () => Promise.resolve([]),
-			readNote: () => Promise.resolve(""),
-			statMtime: () => Promise.resolve(0),
-		};
-		await expect(writeTMNote(notes, entry())).resolves.toBeUndefined();
-		expect(notes.writeNote).toHaveBeenCalledOnce();
+	it("writeNote 写入/覆盖；deleteNote 删除与不存在静默", async () => {
+		const s = new MemoryNoteStorage();
+		await s.writeNote("/a.md", "v1");
+		await s.writeNote("a.md", "v2");
+		expect(s.notes.get("a.md")).toBe("v2");
+		await s.deleteNote("/a.md");
+		expect(s.exists("a.md")).toBe(false);
+		await expect(s.deleteNote("missing.md")).resolves.toBeUndefined();
 	});
 
-	it("同 id 二次写入为覆写而非新增", async () => {
-		const notes = new MemoryNoteStorage();
-		await writeTMNote(notes, entry());
-		await writeTMNote(notes, entry({ name: "Git 版本控制" }));
-		expect(notes.notes.size).toBe(1);
-		expect(parseTMNote(notes.notes.get(`${TM_FOLDER}/git.md`)!)?.name).toBe("Git 版本控制");
+	it("listMarkdown：仅目录前缀 + 子目录下 .md，排除非 md 与目录外文件", async () => {
+		const s = new MemoryNoteStorage();
+		await s.writeNote("tm/a.md", "1");
+		await s.writeNote("tm/sub/b.md", "2");
+		await s.writeNote("tm/c.txt", "3");
+		await s.writeNote("tm.md", "4"); // 目录同名前缀但不是子路径
+		await s.writeNote("other/d.md", "5");
+		const out = await s.listMarkdown("/tm/");
+		expect(out.sort()).toEqual(["tm/a.md", "tm/sub/b.md"]);
 	});
 
-	it("removeTMNote 走端口删除；不存在时静默", async () => {
-		const notes = new MemoryNoteStorage();
-		await writeTMNote(notes, entry());
-		await removeTMNote(notes, "git");
-		expect(notes.notes.has(`${TM_FOLDER}/git.md`)).toBe(false);
-		await expect(removeTMNote(notes, "not-exist")).resolves.toBeUndefined();
+	it("listMarkdown 空目录 → 空数组", async () => {
+		expect(await new MemoryNoteStorage().listMarkdown("none")).toEqual([]);
 	});
 
-	it("含非法字符的插件 id 被转义为安全文件名", () => {
-		expect(tmNotePath("a/b:c#d")).toBe(`${TM_FOLDER}/a_b_c_d.md`);
+	it("readNote：命中返回原文，缺失返回空串", async () => {
+		const s = new MemoryNoteStorage();
+		await s.writeNote("a.md", "content");
+		expect(await s.readNote("/a.md")).toBe("content");
+		expect(await s.readNote("missing.md")).toBe("");
 	});
 
-	it("normalizeTMPath 对齐 Obsidian 语义：反斜杠/重复斜杠/首尾斜杠归一", () => {
-		expect(normalizeTMPath("a\\b//c/")).toBe("a/b/c");
-		expect(normalizeTMPath("/x/y")).toBe("x/y");
+	it("statMtime：存在返回 1，缺失返回 0（笔记与文件夹都算存在）", async () => {
+		const s = new MemoryNoteStorage();
+		expect(await s.statMtime("none")).toBe(0);
+		await s.writeNote("a.md", "x");
+		expect(await s.statMtime("a.md")).toBe(1);
+		await s.createFolder("dir");
+		expect(await s.statMtime("dir")).toBe(1);
 	});
 });
