@@ -537,10 +537,11 @@ export default defineConfig({
 			 *     callApi 错误分支（非 JSON / responseStatus≠200 / 非预期结构 / 空译文 / name+desc 双回显未变化）/
 			 *     LLMClient 的 updateConfig / httpStatusHint 各状态码与默认 / 非 2xx 错误详情 / forceJson=false 不带 response_format /
 			 *     TencentClient 未配置抛「未配置翻译 API」。
-			 *   注（测试暴露的潜在 bug，未改源码）：MyMemory/Google 的 isAllCaps 判定 `translated.toUpperCase() === translated` 对
-			 *     中文译文恒为 true（中文 toUpperCase 不变），会把正常中文译文误判为「全大写回显 = 未变化」而保留原文；用拉丁文
-			 *     用例覆盖 normal 分支绕过。另 LLMClient 非 2xx 时 `response.text` 回退分支为死代码（errJson 访问不抛错，永不进 catch），
-			 *     已据真实行为改断言（仅校验状态码 + httpStatusHint），未改源码。
+			 *   注（测试暴露的两个源码 bug 已修复，见后续 fix 提交）：① MyMemory 的 isAllCaps 判定 `translated.toUpperCase() === translated`
+			 *     对中文译文恒为 true（中文 toUpperCase 不变），会把正常中文译文误判为「全大写回显 = 未变化」而保留原文；改为仅当译文含
+			 *     拉丁字母且全大写、原文非全大写时才视为专有名词回显。② LLMClient 非 2xx 时 `response.text` 回退分支为死代码
+			 *     （response.json 已解析、访问 errJson.error.message 不抛错，永不进 catch）；改为直接 fallback 到 response.text 并截断 120。
+			 *     两处均补了回归用例。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
