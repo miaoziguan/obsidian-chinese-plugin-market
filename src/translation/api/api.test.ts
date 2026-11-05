@@ -334,6 +334,12 @@ describe("MyMemoryClient · 补充（状态恢复 / 单段 / 配额 / 错误分�
 		expect(await c.translateText("")).toEqual({ translatedName: "", translatedDesc: "", match: 0 });
 	});
 
+	it("translateText：中文译文不再被 isAllCaps 误判为 unchanged（bug 修复回归）", async () => {
+		req.mockResolvedValue({ status: 200, json: { responseStatus: 200, responseData: { translatedText: "你好" } } });
+		const c = mk();
+		expect(await c.translateText("Hello")).toEqual({ translatedName: "你好", translatedDesc: "", match: 0 });
+	});
+
 	it("translateText：blocked 时返回 null", async () => {
 		const c = mk();
 		c.restoreBlockedDate(todayStrLocal());
@@ -475,11 +481,11 @@ describe("LLMClient · 补充（updateConfig / httpStatusHint / 非 2xx / forceJ
 		await expect(llm.call("s", "u", 10)).rejects.toThrow(/not found/);
 	});
 
-	it("非 2xx：error.message 缺失时 detail 为空，仅状态码 + httpStatusHint", async () => {
-		req.mockResolvedValue({ status: 500, json: { foo: "bar" } });
+	it("非 2xx：error.message 缺失时回退到 response.text 截断（bug 修复回归）", async () => {
+		req.mockResolvedValue({ status: 500, json: { foo: "bar" }, text: "internal server error long text" });
 		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
 		await expect(llm.call("s", "u", 10)).rejects.toThrow(/500/);
-		await expect(llm.call("s", "u", 10)).rejects.toThrow(/服务端错误/);
+		await expect(llm.call("s", "u", 10)).rejects.toThrow(/internal server error/);
 	});
 
 	it("forceJson=false 时不带 response_format", async () => {

@@ -168,7 +168,9 @@ export class MyMemoryClient {
 			const translated = parsed.responseData.translatedText;
 			const isQuotaHint = QUOTA_HINTS.some((h) => translated.toUpperCase().includes(h));
 			const isUnchanged = translated.trim().toLowerCase() === text.trim().toLowerCase();
-			const isAllCaps = translated.toUpperCase() === translated && text.toUpperCase() !== text;
+			// 仅当译文含拉丁字母且全大写、原文非全大写时，才视为「专有名词全大写回显」而保留原文；
+			// 否则中文等无大小写语言会因 toUpperCase 不变而被误判为全大写回显（保留原文 bug）
+			const isAllCaps = /[A-Za-z]/.test(translated) && translated === translated.toUpperCase() && text !== text.toUpperCase();
 			if (isQuotaHint) {
 				throw new Error("MyMemory 未返回有效译文（配额提示）");
 			}
@@ -430,16 +432,13 @@ export class LLMClient {
 			);
 
 			if (response.status < 200 || response.status >= 300) {
-				let detail = "";
-				try {
-					const errJson = response.json as {
-						error?: { message?: string };
-						message?: string;
-					} | null;
-					detail = errJson?.error?.message || errJson?.message || "";
-				} catch {
-					detail = (response.text || "").slice(0, 120);
-				}
+				const errJson = response.json as {
+					error?: { message?: string };
+					message?: string;
+				} | null;
+				const respText = (response as { text?: string }).text;
+				// JSON 错误体缺 message 时回退到原始响应文本（避免死 catch 导致 detail 恒为空）；统一截断 120 字
+				const detail = (errJson?.error?.message || errJson?.message || (typeof respText === "string" ? respText : "") || "").slice(0, 120);
 				const hint = LLMClient.httpStatusHint(response.status);
 				throw new Error(
 					`HTTP ${response.status}${hint ? `（${hint}）` : ""}${detail ? `：${detail}` : ""}`
