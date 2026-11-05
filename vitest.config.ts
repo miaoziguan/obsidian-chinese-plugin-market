@@ -577,6 +577,24 @@ export default defineConfig({
  *   注：本轮同时修复 translator.test.ts 遗留 tsc 错误——DictEntry 实际字段 {name,description?,source?}
  *     而非 {key,translation}，CompareItem 需 tags/commands/dependencies；此前提交 git commit 不校验 tsc 致类型错误入库，已修正。
  *
+ * 第 81 版（data 平台安装层：plugin-installer）：全局 91% / 90.26% / 87.2%
+ *   → 经「新阈值 = floor(实测−0.5)」校验，lines 91.0 ≥ 90.5 → **89→90 拧紧**；
+ *     functions 90.26 ≥ 89.5 → **88→89 拧紧**；branches 87.2 < 87.5 → 维持 87。
+ *     data/platform/plugin-installer.ts 19.7%（函数 0%）→80.3%（函数 96%、分支 66%，+30 例；
+ *     **新建测试文件**，此前无同名测试）：用 vi.mock("@data/net/net") 把 netRequest 换成可控 vi.fn()
+ *     （按 url 区分 manifest.json→json / main.js·styles.css→text），并 fake ViewContext 与 app.plugins
+ *     （loadManifests / manifests / enablePluginAndSave / disablePluginAndSave / enabledPlugins.has·add·delete）
+ *     + vault.adapter（mkdir·write·read·rmdir）、vi.mock 桩 mirrorConfig 与 reportMissingDeps，覆盖：
+ *     isSafeInstallTarget（合法 id / 含 .. / 含 / / 点开头 / 非字符串 / manifest.id 不符 / main 穿越 / 空 main /
+ *     无 manifest）/ installCommunityPlugin（无 repo→跳转 / 非法 id / 已安装 / plugins 缺失 / manifest 下载失败 /
+ *     adapter 无 mkdir / 完整成功写盘 community-plugins.json+app.json / styles.css 200 一并写盘 /
+ *     recognized+enabledPlugins 不可写→manualEnable / 未识别→needReload 回退 / main.js 失败）/ uninstallCommunityPlugin
+ *     （成功 rmdir+同步清单+loadManifests / 无 rmdir / 非法 id / 未启用跳过 disable）/ togglePluginEnabled
+ *     （plugins 缺失→enabledIds / 启用→禁用双写 / 禁用→启用）/ applyProfileByIds（enable 新+disable 旧 排除 selfId /
+ *     plugins 缺失 0/0）/ applyEnabledProfile（委托+刷新）。未覆盖：nodeDownload（Node https 兜底，需 mock window.require）、
+ *     downloadFullManifest 部分异常分支。全局由此首次突破 91%。
+ *
+ *
 
   *
  *     对中文译文恒为 true（中文 toUpperCase 不变），会把正常中文译文误判为「全大写回显 = 未变化」而保留原文；改为仅当译文含
@@ -608,9 +626,9 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 89,
-				statements: 89,
-				functions: 88,
+				lines: 90,
+				statements: 90,
+				functions: 89,
 				branches: 87,
 			},
 		},
