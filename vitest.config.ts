@@ -480,6 +480,24 @@ export default defineConfig({
 			 *     trim + 去尾斜杠、未知 type 回退 LibreTranslate、新实例全部可用）。
 			 *   本轮事前已先确认是全新文件（无既有测试可被覆盖），规避了前两轮的误删。
 			 *
+			 * 第 74 版（设置页组件通道：settings-translator 原型补丁）：全局 88.24% / 86.09% / 87.14%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，functions 86.09 ≥ 85.5 → **84→85 拧紧**；
+			 *     lines 88.24 < 88.5、branches 87.14 < 87.5，两项维持。
+			 *     translation/settings/settings-translator.ts 48.8%→100%（426/426，函数 35%→100%、分支 79%→97%，
+			 *     +40 例；**扩展既有测试文件**，原 7 例完整保留 —— 第三次踩坑前先查了同名文件，改用 append 而非重写）：
+			 *     mock DOM 扫描通道（捕获 4 个回调）+ logger，给 obsidian mock 补 DropdownComponent.addOptions，
+			 *     再按真实 obsidian 类型给组件构造传 containerEl。覆盖：缓存（loadCache/exportCache/clearCache/
+			 *     CACHE_CAP=3000 淘汰最旧 / translateText 成功后 evict）、生命周期（originals 未初始化 restore 直返 /
+			 *     isPatched 状态机 / enable 幂等 / disable 恢复 6 个原型方法 / activeDisable 热重载卸载上一任 /
+			 *     disable 清 pending）、currentPluginId·domRoot·shouldSkip·domEligible 全分支（含 getter 抛错 catch）与
+			 *     DOM 通道四回调接线、translateText（free 双通道兜底 / baidu 单通道 / 回显不算成功 / 引擎失败 warn /
+			 *     inflight 去重 / finally 清理）、translateBatchTexts（全命中早返 / 整块请求写缓存 / 未译出交下一通道 /
+			 *     baidu 单轮 / 抛错 continue / results 长于入参跳过）、translateDescEl（空节点 / 全跳过 / uniq 去重 /
+			 *     失败保留原文 / 深层嵌套递归）、组件通道 6 个 patch（setName/setDesc/setButtonText/addOption/
+			 *     addOptions/setPlaceholder 的回写、shouldSkip 跳过、文案已被改写则不覆盖、option 找不到静默）。
+			 *   注：测试暴露一个边界 —— 若 translator 同步 throw（而非返回 rejected Promise），pending.delete 会早于
+			 *     pending.set 导致残留；真实 async 实现不会同步抛，已按真实形态写测试，未改源码。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -490,7 +508,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 87,
 				statements: 87,
-				functions: 84,
+				functions: 85,
 				branches: 86,
 			},
 		},
