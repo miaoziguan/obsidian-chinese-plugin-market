@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { Translator } from "@domain/catalog/translator";
 import type { TranslateResult } from "@domain/catalog/translator";
+import { logger } from "@shared/logger";
 import * as embedding from "@semantic/embedding";
 import { AISearcher } from "@domain/search/ai";
 import * as translateApi from "@translation/api/api";
@@ -628,5 +629,257 @@ describe("Translator · persistSystemTranslation 落库沉淀", () => {
 		expect(t.tmApproved["a"].promoted ?? 0).toBeGreaterThanOrEqual(oldPromoted);
 		// cache 同步更新为最新译文
 		expect(t.cache["a"]?.translatedName).toBe("新译文名");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────
+// 追加用例：补齐此前未覆盖的大批纯状态/配置/委托方法（setApiConfig/setBaiduConfig/
+// setUseMyMemory/setUseTransmart/setAIConfig/setSelfHostedTranslators/getAllPluginTags/
+// pluginsRev/getCategorySchemaVersion/aiDict/getter+setter/recordCoverage/getCoverageTrend/
+// hasAnyTranslation/getInsight/setInsight/clearCache/getCacheSize/clearAIDict/getAIDictSize/
+// enqueueOnlineTM/TM 采纳与脏/移除标记/getVectorIndex/setVectorIndex/hasAI/
+// getLastSearchTiming/getLastMatchDiagnostics/compareKey/getCompareInsight/setCompareInsight/
+// aiCompare/aiSearchLocal/logTencentError）。保留原全部用例。
+// ─────────────────────────────────────────────────────────────
+
+describe("Translator · 状态/配置/向量/对比 补齐", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("setApiConfig：trim secret 空白并同步 tencentClient；null 时清空", () => {
+		const t = new Translator();
+		t.setApiConfig({ secretId: " id ", secretKey: " key " });
+		expect(t.apiConfig?.secretId).toBe("id");
+		expect(t.apiConfig?.secretKey).toBe("key");
+		t.setApiConfig(null);
+		expect(t.apiConfig).toBeNull();
+	});
+
+	it("setBaiduConfig：trim 空白；null 时清空", () => {
+		const t = new Translator();
+		t.setBaiduConfig({ appId: " a ", key: " b " });
+		expect(t.baiduConfig?.appId).toBe("a");
+		expect(t.baiduConfig?.key).toBe("b");
+		t.setBaiduConfig(null);
+		expect(t.baiduConfig).toBeNull();
+	});
+
+	it("setUseMyMemory / setUseTransmart：透传到 translatorConfig", () => {
+		const t = new Translator();
+		t.setUseMyMemory(false);
+		expect(t.translatorConfig.useMyMemory).toBe(false);
+		t.setUseTransmart(false);
+		expect(t.translatorConfig.useTransmart).toBe(false);
+	});
+
+	it("setAIConfig：trim apiKey、兜底非空 baseURL/model；null 时清空", () => {
+		const t = new Translator();
+		t.setAIConfig({ baseURL: "  ", apiKey: " k ", model: "" });
+		expect(t.aiConfig?.apiKey).toBe("k");
+		expect(typeof t.aiConfig?.baseURL).toBe("string");
+		expect((t.aiConfig?.baseURL ?? "").length).toBeGreaterThan(0);
+		expect(typeof t.aiConfig?.model).toBe("string");
+		expect((t.aiConfig?.model ?? "").length).toBeGreaterThan(0);
+		t.setAIConfig(null);
+		expect(t.aiConfig).toBeNull();
+	});
+
+	it("setSelfHostedTranslators：undefined 清空；列表按序构建", () => {
+		const t = new Translator();
+		t.setSelfHostedTranslators([{ type: "deeplx", baseUrl: "http://x" }]);
+		expect(t.selfHosted).toHaveLength(1);
+		expect(JSON.stringify(t.selfHosted[0])).toContain("http://x");
+		t.setSelfHostedTranslators(undefined);
+		expect(t.selfHosted).toEqual([]);
+	});
+
+	it("getAllPluginTags / pluginsRev / getCategorySchemaVersion", () => {
+		const t = new Translator();
+		t.setPluginTags({ a: { category: "c", tags: [] } }, "v9");
+		expect(t.getAllPluginTags().a.category).toBe("c");
+		expect(t.pluginsRev()).toBeGreaterThanOrEqual(1);
+		expect(t.getCategorySchemaVersion()).toBe("v9");
+	});
+
+	it("aiDict getter/setter：经 aiAssetStore 实时读写", () => {
+		const t = new Translator();
+		t.aiDict = { a: { key: "a", translation: "x" } };
+		expect(t.aiDict.a.translation).toBe("x");
+		expect(t.getAIDictSize()).toBe(1);
+	});
+
+	it("recordCoverage：空 version 直接返回；新增；同版本更新；12 条上限", () => {
+		const t = new Translator();
+		t.recordCoverage({ coverage: 0.5, total: 10, covered: 5, bulkHits: 0, cacheHits: 0 }, "");
+		expect(t.getCoverageTrend()).toBeNull();
+		t.recordCoverage({ coverage: 0.5, total: 10, covered: 5, bulkHits: 0, cacheHits: 0 }, "1.0");
+		expect(t.getCoverageTrend()?.current.version).toBe("1.0");
+		t.recordCoverage({ coverage: 0.6, total: 10, covered: 6, bulkHits: 0, cacheHits: 0 }, "1.0");
+		expect(t.coverage.snapshot()).toHaveLength(1);
+		expect(t.coverage.snapshot()[0].coverage).toBe(0.6);
+		for (let i = 0; i < 15; i++) {
+			t.recordCoverage({ coverage: 0.1 * i, total: 10, covered: i, bulkHits: 0, cacheHits: 0 }, `v${i}`);
+		}
+		expect(t.coverage.snapshot()).toHaveLength(12);
+	});
+
+	it("getCoverageTrend：空→null；单条→deltaPct 0；两条→计算差值", () => {
+		const t = new Translator();
+		expect(t.getCoverageTrend()).toBeNull();
+		t.recordCoverage({ coverage: 0.5, total: 10, covered: 5, bulkHits: 0, cacheHits: 0 }, "1");
+		expect(t.getCoverageTrend()?.deltaPct).toBe(0);
+		t.recordCoverage({ coverage: 0.7, total: 10, covered: 7, bulkHits: 0, cacheHits: 0 }, "2");
+		expect(t.getCoverageTrend()?.deltaPct).toBeCloseTo(0.2);
+	});
+
+	it("hasAnyTranslation：cache 非 original / TM 已采纳 / AI 固化资产为真；均无假", () => {
+		const t = new Translator();
+		const p = { id: "x", name: "X", description: "", author: "" };
+		expect(t.hasAnyTranslation("x", p as never)).toBe(false);
+		t.cache["x"] = { translatedName: "n", translatedDesc: "d", source: "online" };
+		expect(t.hasAnyTranslation("x", p as never)).toBe(true);
+		delete t.cache["x"];
+		t.tmApproved["x"] = { id: "x", name: "n", description: "d", source: "online", status: "approved", confidence: 0.5, created: 0, promoted: 0 };
+		expect(t.hasAnyTranslation("x", p as never)).toBe(true);
+		t.aiDict = { x: { key: "x", translation: "v" } };
+		expect(t.hasAnyTranslation("x", p as never)).toBe(true);
+	});
+
+	it("getInsight / setInsight：写入后读回", () => {
+		const t = new Translator();
+		expect(t.getInsight("p")).toBeUndefined();
+		t.setInsight("p", "概述");
+		expect(t.getInsight("p")).toBe("概述");
+	});
+
+	it("clearCache / getCacheSize", () => {
+		const t = new Translator();
+		t.cache["a"] = { translatedName: "n", translatedDesc: "d", source: "online" };
+		expect(t.getCacheSize()).toBe(1);
+		t.clearCache();
+		expect(t.getCacheSize()).toBe(0);
+	});
+
+	it("clearAIDict / getAIDictSize", () => {
+		const t = new Translator();
+		t.aiDict = { a: { key: "a", translation: "x" } };
+		expect(t.getAIDictSize()).toBe(1);
+		t.clearAIDict();
+		expect(t.getAIDictSize()).toBe(0);
+	});
+
+	it("enqueueOnlineTM：online 缓存→落库 true；非 online→false；已采纳→false", () => {
+		const t = new Translator();
+		t.cache["a"] = { translatedName: "n", translatedDesc: "d", source: "online", provider: "tencent" };
+		expect(t.enqueueOnlineTM("a")).toBe(true);
+		expect(t.isTMApproved("a")).toBe(true);
+
+		const t2 = new Translator();
+		t2.cache["b"] = { translatedName: "n", translatedDesc: "d", source: "original" };
+		expect(t2.enqueueOnlineTM("b")).toBe(false);
+
+		const t3 = new Translator();
+		t3.tmApproved["c"] = { id: "c", name: "n", description: "d", source: "online", status: "approved", confidence: 0.5, created: 0, promoted: 0 };
+		t3.cache["c"] = { translatedName: "n", translatedDesc: "d", source: "online" };
+		expect(t3.enqueueOnlineTM("c")).toBe(false);
+	});
+
+	it("TM 采纳管理：removeTMApproved / getTMApprovedCount / isTMApproved", () => {
+		const t = new Translator();
+		t.tmApproved["a"] = { id: "a", name: "n", description: "d", source: "online", status: "approved", confidence: 0.5, created: 0, promoted: 0 };
+		expect(t.getTMApprovedCount()).toBe(1);
+		expect(t.isTMApproved("a")).toBe(true);
+		t.removeTMApproved("a");
+		expect(t.isTMApproved("a")).toBe(false);
+		expect(t.getTMApprovedCount()).toBe(0);
+	});
+
+	it("TM 脏标记：markTMDirty / peek / take / clear", () => {
+		const t = new Translator();
+		t.markTMDirty("a");
+		expect(t.peekTMDirty()).toEqual(["a"]);
+		expect(t.takeTMDirty()).toEqual(["a"]);
+		expect(t.peekTMDirty()).toEqual([]);
+		t.markTMDirty("b");
+		t.clearTMDirty("b");
+		expect(t.peekTMDirty()).toEqual([]);
+	});
+
+	it("TM 移除标记：经私有 tracker 触发 markRemoved → peek / take / clear", () => {
+		const t = new Translator();
+		const tr = (t as unknown as { tmDirtyTracker: { markRemoved: (id: string) => void } }).tmDirtyTracker;
+		tr.markRemoved("a");
+		expect(t.peekTMRemoved()).toEqual(["a"]);
+		expect(t.takeTMRemoved()).toEqual(["a"]);
+		expect(t.peekTMRemoved()).toEqual([]);
+		tr.markRemoved("b");
+		t.clearTMRemoved("b");
+		expect(t.peekTMRemoved()).toEqual([]);
+	});
+
+	it("getVectorIndex / setVectorIndex：委托 aiSearcher 存取", () => {
+		const t = new Translator();
+		const vi = { ids: [], vectors: [], hash: "h", model: "m" } as never;
+		t.setVectorIndex(vi);
+		expect(t.getVectorIndex()).toBe(vi);
+	});
+
+	it("hasAI：aiConfig 存在为 true，否则 false", () => {
+		const t = new Translator();
+		expect(t.hasAI()).toBe(false);
+		t.setAIConfig({ baseURL: "http://x", apiKey: "k", model: "m" });
+		expect(t.hasAI()).toBe(true);
+	});
+
+	it("getLastSearchTiming / getLastMatchDiagnostics：初始为 null（未搜索过）", () => {
+		const t = new Translator();
+		expect(t.getLastSearchTiming()).toBeNull();
+		expect(t.getLastMatchDiagnostics()).toBeNull();
+	});
+
+	it("compareKey：按 id 排序集合，{A,B} 与 {B,A} 同键", () => {
+		const t = new Translator();
+		const k1 = t.compareKey(["a", "b"]);
+		const k2 = t.compareKey(["b", "a"]);
+		expect(k1).toBe(k2);
+		expect(typeof k1).toBe("string");
+	});
+
+	it("getCompareInsight / setCompareInsight：写入后读回", () => {
+		const t = new Translator();
+		expect(t.getCompareInsight(["a"])).toBeUndefined();
+		t.setCompareInsight(["a", "b"], "对比概述");
+		expect(t.getCompareInsight(["a", "b"])).toBe("对比概述");
+	});
+
+	it("aiCompare：首次调用 aiSearcher.compare，命中缓存后不再调用", async () => {
+		const spy = vi
+			.spyOn(AISearcher.prototype as never, "compare")
+			.mockResolvedValue("md");
+		const t = new Translator();
+		const items = [{ id: "a", name: "A", description: "" }];
+		expect(await t.aiCompare(items)).toBe("md");
+		expect(await t.aiCompare(items)).toBe("md");
+		expect(spy).toHaveBeenCalledTimes(1);
+		spy.mockRestore();
+	});
+
+	it("aiSearchLocal：委托 aiSearcher.localSearch", async () => {
+		const spy = vi
+			.spyOn(AISearcher.prototype as never, "localSearch")
+			.mockResolvedValue({ rankedIds: ["a"], scores: {}, diagnostics: null, timing: null });
+		const t = new Translator();
+		const res = await t.aiSearchLocal("q", [{ id: "a", name: "A", description: "" }]);
+		expect(res.rankedIds).toEqual(["a"]);
+		spy.mockRestore();
+	});
+
+	it("logTencentError（私有）：记录 warn 日志不抛", () => {
+		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		const t = new Translator();
+		const fn = (t as unknown as { logTencentError: (id: string, e: unknown) => void }).logTencentError;
+		expect(() => fn.call(t, "p", new Error("boom"))).not.toThrow();
+		expect(warn).toHaveBeenCalled();
 	});
 });
