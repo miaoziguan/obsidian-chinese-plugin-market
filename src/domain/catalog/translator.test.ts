@@ -883,3 +883,138 @@ describe("Translator · 状态/配置/向量/对比 补齐", () => {
 		expect(warn).toHaveBeenCalled();
 	});
 });
+
+// ─────────────────────────────────────────────────────────────
+// 追加用例：补齐翻译管线核心方法（translateTextSegment / translateTextSegments /
+// translateBatch / translateBatchIncremental / solidifyAI）。用 spyOn 驱动各客户端实例方法，
+// 不引入整模块 mock；聚焦编排逻辑（缓存/TM/AI 资产命中、needOnline 分发、降级、固化）。保留原全部用例。
+// ─────────────────────────────────────────────────────────────
+
+describe("Translator · 翻译管线补全", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("translateTextSegment：tencent-transmart 可用 → 返回译文", async () => {
+		const t = new Translator();
+		vi.spyOn(t.transmartClient, "isAvailable").mockReturnValue(true);
+		vi.spyOn(t.transmartClient, "translateSegment").mockResolvedValue("译文段");
+		expect(await t.translateTextSegment("hello", "tencent-transmart")).toBe("译文段");
+	});
+
+	it("translateTextSegment：tencent-transmart 不可用 → null", async () => {
+		const t = new Translator();
+		vi.spyOn(t.transmartClient, "isAvailable").mockReturnValue(false);
+		expect(await t.translateTextSegment("hello", "tencent-transmart")).toBeNull();
+	});
+
+	it("translateTextSegment：tencent-transmart 抛错 → catch 返回 null", async () => {
+		const t = new Translator();
+		vi.spyOn(t.transmartClient, "isAvailable").mockReturnValue(true);
+		vi.spyOn(t.transmartClient, "translateSegment").mockRejectedValue(new Error("boom"));
+		expect(await t.translateTextSegment("hello", "tencent-transmart")).toBeNull();
+	});
+
+	it("translateTextSegment：baidu 配置齐备且可用 → 返回译文", async () => {
+		const t = new Translator();
+		t.baiduConfig = { appId: "a", key: "k" };
+		vi.spyOn(t.baiduClient, "isAvailable").mockReturnValue(true);
+		vi.spyOn(t.baiduClient, "translate").mockResolvedValue("百度译");
+		expect(await t.translateTextSegment("hello", "baidu")).toBe("百度译");
+	});
+
+	it("translateTextSegment：baidu 缺配置 → null", async () => {
+		const t = new Translator();
+		t.baiduConfig = null;
+		expect(await t.translateTextSegment("hello", "baidu")).toBeNull();
+	});
+
+	it("translateTextSegment：tencent 默认通道（apiConfig 齐备）→ 返回译文", async () => {
+		const t = new Translator();
+		t.apiConfig = { secretId: "id", secretKey: "key" } as never;
+		vi.spyOn(t.tencentClient, "translate").mockResolvedValue("腾讯云译");
+		expect(await t.translateTextSegment("hello", "tencent")).toBe("腾讯云译");
+	});
+
+	it("translateTextSegment：tencent 默认通道缺密钥 → null", async () => {
+		const t = new Translator();
+		t.apiConfig = null;
+		expect(await t.translateTextSegment("hello", "tencent")).toBeNull();
+	});
+
+	it("translateTextSegments：空数组 → []", async () => {
+		const t = new Translator();
+		expect(await t.translateTextSegments([], "tencent-transmart")).toEqual([]);
+	});
+
+	it("translateTextSegments：tencent-transmart 批量命中 → 直接返回整块", async () => {
+		const t = new Translator();
+		vi.spyOn(t.transmartClient, "isAvailable").mockReturnValue(true);
+		vi.spyOn(t.transmartClient, "translateSegments").mockResolvedValue(["a", "b"]);
+		expect(await t.translateTextSegments(["x", "y"], "tencent-transmart")).toEqual(["a", "b"]);
+	});
+
+	it("translateTextSegments：tencent-transmart 不可用 → 降级逐条（均 null）", async () => {
+		const t = new Translator();
+		vi.spyOn(t.transmartClient, "isAvailable").mockReturnValue(false);
+		vi.spyOn(t, "translateTextSegment" as never).mockResolvedValue(null);
+		expect(await t.translateTextSegments(["x", "y"], "tencent-transmart")).toEqual([null, null]);
+	});
+
+	it("translateBatch：全部命中缓存（source≠original）→ 直接产出 + onProgress 计满", async () => {
+		const t = new Translator();
+		t.cache["a"] = { translatedName: "n", translatedDesc: "d", source: "online" };
+		t.cache["b"] = { translatedName: "n2", translatedDesc: "d2", source: "online" };
+		const seen: number[] = [];
+		const r = await t.translateBatch([{ id: "a" }, { id: "b" }] as never, (done) => seen.push(done));
+		expect(r.a.source).toBe("online");
+		expect(r.b.source).toBe("online");
+		expect(seen).toEqual([1, 2]);
+	});
+
+	it("translateBatch：TM 命中（lookupTMApproved）→ 计入结果", async () => {
+		const t = new Translator();
+		vi.spyOn(t as never, "lookupTMApproved" as never).mockReturnValue({ translatedName: "tmN", translatedDesc: "tmD", source: "tm" });
+		const r = await t.translateBatch([{ id: "a" }] as never);
+		expect(r.a.source).toBe("tm");
+	});
+
+	it("translateBatch：AI 资产命中（aiAssetStore.get）→ source=ai", async () => {
+		const t = new Translator();
+		vi.spyOn(t.aiAssetStore, "get").mockReturnValue({ name: "aiN", description: "aiD", source: "ai" });
+		const r = await t.translateBatch([{ id: "a", name: "X", description: "D" }] as never);
+		expect(r.a.source).toBe("ai");
+		expect(r.a.translatedName).toBe("aiN");
+	});
+
+	it("translateBatch：全未命中 → 走 needOnline，调 translatePlugin 产出", async () => {
+		const t = new Translator();
+		const plugin = { id: "a", name: "X", description: "D" } as never;
+		vi.spyOn(t as never, "translatePlugin" as never).mockResolvedValue({ translatedName: "On", translatedDesc: "Od", source: "online" });
+		const r = await t.translateBatch([plugin]);
+		expect(r.a.source).toBe("online");
+		expect(r.a.translatedName).toBe("On");
+	});
+
+	it("translateBatchIncremental：缓存命中直接返回；未命中经 translateBatch 在线补译", async () => {
+		const t = new Translator();
+		t.cache["hit"] = { translatedName: "hN", translatedDesc: "hD", source: "online" };
+		const onlinePlugin = { id: "miss", name: "M", description: "D" } as never;
+		vi.spyOn(t as never, "translateBatch" as never).mockResolvedValue({ miss: { translatedName: "mN", translatedDesc: "mD", source: "online" } });
+		const r = await t.translateBatchIncremental([{ id: "hit" } as never, onlinePlugin]);
+		expect(r.hit.source).toBe("online");
+		expect(r.miss.source).toBe("online");
+	});
+
+	it("solidifyAI（私有）：写入 aiAssetStore + tmApproved + 标记脏", () => {
+		const t = new Translator();
+		const markSpy = vi.spyOn(t.tmDirtyTracker, "markDirty");
+		(t as unknown as { solidifyAI: (id: string, r: unknown) => void }).solidifyAI("p", {
+			translatedName: "N",
+			translatedDesc: "D",
+		});
+		expect(t.aiAssetStore.get("p")).toEqual({ name: "N", description: "D", source: "ai" });
+		expect(t.tmApproved["p"]?.status).toBe("approved");
+		expect(markSpy).toHaveBeenCalledWith("p");
+	});
+});
