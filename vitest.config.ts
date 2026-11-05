@@ -461,6 +461,11 @@ export default defineConfig({
 			 *     64 位 hex Signature、不同密钥签名不同、自定义 region 透传）、故障必须与成功区分（HTTP<200 / >=300 的
 			 *     401·429·5xx / status 非数值跳过检查 / json null 或非对象 / Response.Error 抛 Code: Message /
 			 *     TargetText 缺失·空串·非字符串抛空译文，绝不兜回原文）。
+			 *   补记：整文件改写 note-port.test.ts 时发现它原先承载的并非 MemoryNoteStorage 自身测试，而是 translation-memory
+			 *   的 7 个「NoteStoragePort 端口注入」集成用例（首次写入先建文件夹 / 已存在不重建成 / createFolder 抛错被吞 /
+			 *   同 id 覆写 / removeTMNote 静默 / 非法字符转义 / normalizeTMPath 归一）。已原样迁到独立文件
+			 *   tm-note-port.integration.test.ts 恢复，translation-memory.ts 95.8%→98.3%（函数 83%→100%）。
+			 *   教训（第二次踩）：整文件重写前必须先读旧内容，覆盖率 100% 不等于断言等价。
 			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
