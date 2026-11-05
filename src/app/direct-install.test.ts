@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as obsidian from "obsidian";
-// 覆盖 obsidian 默认「未 mock 即抛错」的 requestUrl 为可控 vi.fn()，以便驱动网络函数
-// eslint-disable-next-line import/first
-vi.mock("obsidian", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("obsidian")>();
-	return { ...actual, requestUrl: vi.fn() };
-});
 import {
 	resolveInstallRoot,
 	parseSourceSpec,
@@ -26,6 +20,12 @@ import {
 	type SourceSpec,
 	type BetaPluginEntry,
 } from "@app/direct-install";
+// 覆盖 obsidian 默认「未 mock 即抛错」的 requestUrl 为可控 vi.fn()，以便驱动网络函数
+// （vi.mock 在 import 之后声明；vitest 会将其 hoist 到顶部，运行时 obsidian 引用已被 mock）
+vi.mock("obsidian", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("obsidian")>();
+	return { ...actual, requestUrl: vi.fn() };
+});
 
 describe("parseSourceSpec — 钉选分支/标签/commit（P1）", () => {
 	it("简写 owner/repo → raw HEAD，非 release", () => {
