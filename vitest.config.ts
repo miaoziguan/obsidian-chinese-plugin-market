@@ -498,6 +498,19 @@ export default defineConfig({
 			 *   注：测试暴露一个边界 —— 若 translator 同步 throw（而非返回 rejected Promise），pending.delete 会早于
 			 *     pending.set 导致残留；真实 async 实现不会同步抛，已按真实形态写测试，未改源码。
 			 *
+			 * 第 75 版（续 settings 通道之后：transmart 腾讯翻译免费层）：全局 88.31% / 86.19% / 87.34%
+			 *   → 维持第 74 版拧紧后的阈值 87 / 85 / 86（lines 88.31 < 88.5、functions 86.19 < 86.5、branches 87.34 < 87.5，
+			 *     三项均差一点够不着「+0.5 才许拧紧」下限，故本轮不收紧）。分支 93% 单项满。
+			 *     translation/api/transmart.ts 89.6%→100%（279/279，函数 83%→100%、分支 93%，+29 例；**扩展既有测试文件**，
+			 *     原 7 例完整保留 —— 吸取 trending/note-port 误删教训，先查同名文件再 append 而非重写）：沿用原 setHttpClient 注入
+			 *     桩、补 generateClientKey（空 UA/普通 UA/超长截 100）、setEnabled/isAvailable/不可用短路（translate 不请求直接 null /
+			 *     translateSegment 抛错 / translateSegments 不可用+空数组）、translate 中文源 zh 早返、detectLanguage 边界（空→en/
+			 *     非 JSON catch→en/大写保留/中文源）、translateText（空串 unchanged/超 500 截断到 500/正常段 recordSuccess）、
+			 *     translateSegment（正常译出/空白原样/中文源保留原文）、callApi 错误全分支（非 JSON/ret_code error/Unsupported-Language
+			 *     透传/busy 限流重试 2 次后作 API 错误，用 fake timers 推进且 advance 前先挂 rejection handler 避免 unhandled）、
+			 *     translateSegments 批量全分支（成功按行对齐/含空白/含换行/超 2000/整块回显/行数不符/空行/Unsupported 不计熔断/
+			 *     其它错误 recordFailure）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
