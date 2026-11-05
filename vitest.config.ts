@@ -526,6 +526,22 @@ export default defineConfig({
 			 *   注：分支 76% 低于语句 98.6%，源于新增代码里大量 `?? 默认值` 的 else 边（如 loadCredentials 11 个字段
 			 *     `?? ""`、loadTranslatorCache 9 个 `?? {}`）在「完整对象」用例下未被触发；属安全兜底分支，未逐一造缺失键触发。
 			 *
+			 * 第 77 版（翻译 API 客户端集合：api.ts）：全局 88.8% / 87.15% / 87.54%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，branches 87.54 ≥ 87.5 → **86→87 拧紧**；
+			 *     lines 88.8 < 89.5、functions 87.15 < 87.5，两项维持。
+			 *     translation/api/api.ts 84.8%→97.5%（514/514，函数 79%→100%、分支 62%→86%，+33 例；
+			 *     **扩展既有测试文件**，原 13 例完整保留）：补齐 callAITranslate 整函数（熔断器开路/null / 成功 JSON→source=ai /
+			 *     name 空 / name+desc 双回显未翻译 / 仅 name 变+desc 回显 / llm.call 抛错 / 非 JSON）与 MyMemory·Google·Tencent·LLM
+			 *     各客户端此前未覆盖的 restoreBlockedDate（跨天自动解除 + 当天恢复 blocked）/ isBlocked·getBlockedDate / isEnabled /
+			 *     translateText（成功 + 空串）/ 配额分支（QUOTA_HINTS 触发 MyMemory blocked、含 429 字样的 Google 配额错误）/
+			 *     callApi 错误分支（非 JSON / responseStatus≠200 / 非预期结构 / 空译文 / name+desc 双回显未变化）/
+			 *     LLMClient 的 updateConfig / httpStatusHint 各状态码与默认 / 非 2xx 错误详情 / forceJson=false 不带 response_format /
+			 *     TencentClient 未配置抛「未配置翻译 API」。
+			 *   注（测试暴露的潜在 bug，未改源码）：MyMemory/Google 的 isAllCaps 判定 `translated.toUpperCase() === translated` 对
+			 *     中文译文恒为 true（中文 toUpperCase 不变），会把正常中文译文误判为「全大写回显 = 未变化」而保留原文；用拉丁文
+			 *     用例覆盖 normal 分支绕过。另 LLMClient 非 2xx 时 `response.text` 回退分支为死代码（errJson 访问不抛错，永不进 catch），
+			 *     已据真实行为改断言（仅校验状态码 + httpStatusHint），未改源码。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -537,7 +553,7 @@ export default defineConfig({
 				lines: 88,
 				statements: 88,
 				functions: 86,
-				branches: 86,
+				branches: 87,
 			},
 		},
 	},
