@@ -467,6 +467,19 @@ export default defineConfig({
 			 *   tm-note-port.integration.test.ts 恢复，translation-memory.ts 95.8%→98.3%（函数 83%→100%）。
 			 *   教训（第二次踩）：整文件重写前必须先读旧内容，覆盖率 100% 不等于断言等价。
 			 *
+			 * 第 73 版（翻译在线源：self-hosted 自托管翻译）：全局 87.73% / 85.24% / 86.93%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，lines/statements 87.73 ≥ 87.5 → **86→87 拧紧**；
+			 *     functions 85.24 < 85.5、branches 86.93 < 87.5，两项维持。
+			 *     translation/api/self-hosted.ts 41.1%→100%（202/202，函数 10%→100%、分支 33%→98%，+24 例；
+			 *     仅 vi.mock netRequest + logger.warn，guard.ts 的 withTimeout/CircuitBreaker 保真、spy Date.now 控制冷却）：
+			 *     isUnchanged 大小写/空白归一、DeepLXClient 与 LibreTranslateClient 两客户端全分支（constructor 去尾斜杠 +
+			 *     key/provider/isAvailable、callApi 请求构造 + 500 字截断、HTTP 非 2xx 抛错且正文截断 120 / text 缺失回退空串、
+			 *     非预期结构多种形态、正常返回、translate 双译出 / 双未变化返回 null / 单侧未变化保留原文、
+			 *     失败 warn + 返回 null、连续两次失败熔断开路后不再发请求、HTTP 成功复位计数、冷却结束半开可试探）、
+			 *     buildSelfHostedTranslators（undefined/空数组、过滤空与纯空白 baseUrl、质量序 DeepLX>LibreTranslate、
+			 *     trim + 去尾斜杠、未知 type 回退 LibreTranslate、新实例全部可用）。
+			 *   本轮事前已先确认是全新文件（无既有测试可被覆盖），规避了前两轮的误删。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -475,8 +488,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 86,
-				statements: 86,
+				lines: 87,
+				statements: 87,
 				functions: 84,
 				branches: 86,
 			},
