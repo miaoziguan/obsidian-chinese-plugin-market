@@ -594,6 +594,15 @@ export default defineConfig({
  *     plugins 缺失 0/0）/ applyEnabledProfile（委托+刷新）。未覆盖：nodeDownload（Node https 兜底，需 mock window.require）、
  *     downloadFullManifest 部分异常分支。全局由此首次突破 91%。
  *
+ * 第 82 版（plugin-installer 分支补全）：全局 91.04% / 90.26% / 87.27%（较第 81 版基本持平）
+ *   → 经「新阈值 = floor(实测−0.5)」校验，lines 91.04 ≥ 90.5 → 维持 90；
+ *     functions 90.26 ≥ 89.5 → 维持 89；branches 87.27 < 87.5 → 维持 87。本轮未触发新拧紧。
+ *     data/platform/plugin-installer.ts 80.3%（分支 66%）→82.1%（函数 96%、分支 70%，+5 例；
+ *     **扩展既有测试文件**）：补 installCommunityPlugin 写盘失败分支（mkdir 抛错 / 写 manifest 抛错 / 写 main.js 抛错）、
+ *     netRequest 抛错的 downloadFullManifest 异常分支、tryEnable/tryDisable 的 enabledPlugins array 形态
+ *     （push/splice，经 applyProfileByIds 触发）。plugin-installer 局部分支提升，但全局已高位、边际收益递减。
+ *
+ *
  *
 
   *
