@@ -559,6 +559,25 @@ export default defineConfig({
  *     solidifyAI 部分分支、aiSearch 复杂分支），需 mock 多个翻译客户端/embedding，成本高，留待后续；本轮已把该文件从「接近 80%」
  *     提到 87.6%（函数 94%），是本轮性价比最高的单文件提升。
  *
+ * 第 80 版（app 安装层：direct-install）：全局 89.61% / 89.28% / 87.63%
+ *   → 经「新阈值 = floor(实测−0.5)」校验，lines 89.61 ≥ 89.5 → **88→89 拧紧**；
+ *     functions 89.28 < 89.5、branches 87.63 < 88.5，两项维持。
+ *     app/direct-install.ts 64.3%→78.8%（779/779，函数 54%→80%、分支 86%→80%，+18 例；
+ *     **扩展既有测试文件**，原 40 例完整保留）：用 vi.mock("obsidian") 把默认「未 mock 即抛错」的
+ *     requestUrl 换成可控 vi.fn()，补齐安装/网络全链路——isFloatingGithubRef（raw+HEAD 判定）/
+ *     FetchMissingError（file/status + instanceof）/fetchFromUrls（200 直接 / 404→200 换源 /
+ *     全 404 且 optional→null 否则抛 FetchMissingError / 非 404-410 立即抛错）/fetchFileText（拼接 root+name /
+ *     optional 缺失→null）/fetchLatestReleaseManifest（版本化→返回、非版本/异常/缺失→null）/
+ *     resolveRemoteManifest（无 gh→源码树 release=false / gh+钉选 ref→release=false /
+ *     gh+floating+Release 更高→release=true / release 模式→直接 fetchManifest）/
+ *     installFromUrl（三件套写盘+重载启用、目录已存在走 remove 分支）/installThemeFromUrl（无 manifest→仓库名作目录名、版本留空）/
+ *     updateBetaPlugin（版本相同→updated=false / 版本不同→重写盘 / 远程 id 不符→抛 idMismatch）/
+ *     updateBetaTheme（无 manifest→重拉 theme.css）/rebuildUpdateSpec（还原 release 开关 + 钉选 tag）。
+ *     DirectInstallModal（UI）未覆盖。
+ *   注：本轮同时修复 translator.test.ts 遗留 tsc 错误——DictEntry 实际字段 {name,description?,source?}
+ *     而非 {key,translation}，CompareItem 需 tags/commands/dependencies；此前提交 git commit 不校验 tsc 致类型错误入库，已修正。
+ *
+
   *
  *     对中文译文恒为 true（中文 toUpperCase 不变），会把正常中文译文误判为「全大写回显 = 未变化」而保留原文；改为仅当译文含
 			 *     拉丁字母且全大写、原文非全大写时才视为专有名词回显。② LLMClient 非 2xx 时 `response.text` 回退分支为死代码
@@ -589,8 +608,8 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 88,
-				statements: 88,
+				lines: 89,
+				statements: 89,
 				functions: 88,
 				branches: 87,
 			},
