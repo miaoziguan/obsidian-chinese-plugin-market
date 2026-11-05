@@ -12,8 +12,10 @@ import {
 	TencentClient,
 	GoogleClient,
 	LLMClient,
+	callAITranslate,
 } from "@translation/api/api";
 import { CircuitOpenError, TimeoutError } from "@translation/api/guard";
+import type { PluginInfo } from "@domain/catalog/translator";
 
 // 依赖倒置后：api 层统一走 netRequest → 注入的 HttpClient，单测直接注入 mock，无需 mock "obsidian"
 const req = vi.fn();
@@ -242,5 +244,256 @@ describe("GoogleClient · 零配置免费翻译", () => {
 		expect(r!.translatedName).toBe("Agent MCP");
 		expect(r!.translatedDesc).toBe("MCP 代理：连接大模型与外部工具");
 		expect(r!.provider).toBe("google");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────
+// 追加用例：补齐 callAITranslate（完全未测）、各客户端 restoreBlockedDate /
+// translateText / isBlocked·getBlockedDate / isEnabled / updateConfig /
+// httpStatusHint / 配额分支 / callApi 错误分支 / 未配置分支。保留原 13 例。
+// ─────────────────────────────────────────────────────────────
+
+const todayStrLocal = (): string => {
+	const d = new Date();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${d.getFullYear()}-${m}-${day}`;
+};
+
+describe("callAITranslate · 完全未测函数补齐", () => {
+	const llmOk = (content: string) =>
+		req.mockResolvedValue({ status: 200, json: { choices: [{ message: { content } }] } });
+
+	it("熔断器开路（isAvailable=false）直接返回 null，不发请求", async () => {
+		const llm = { isAvailable: () => false, call: vi.fn() } as unknown as LLMClient;
+		expect(await callAITranslate(llm, { id: "x", name: "Sync", description: "keep", author: "t" })).toBeNull();
+		expect(req).not.toHaveBeenCalled();
+	});
+
+	it("成功解析 JSON → source=ai 结果", async () => {
+		llmOk('{"name":"同步","description":"保持笔记同步"}');
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		const r = await callAITranslate(llm, { id: "x", name: "Sync", description: "keep notes in sync", author: "t" });
+		expect(r).toEqual({ translatedName: "同步", translatedDesc: "保持笔记同步", source: "ai" });
+	});
+
+	it("name 解析为空 → 返回 null", async () => {
+		llmOk('{"name":"","description":"保持笔记同步"}');
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		expect(await callAITranslate(llm, { id: "x", name: "Sync", description: "keep", author: "t" })).toBeNull();
+	});
+
+	it("name+desc 都回显（未翻译）→ 返回 null（防污染 vault）", async () => {
+		llmOk('{"name":"Sync","description":"keep notes in sync"}');
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		expect(await callAITranslate(llm, { id: "x", name: "Sync", description: "keep notes in sync", author: "t" })).toBeNull();
+	});
+
+	it("仅 name 变化、desc 回显 → 采用译文名 + 回退原 desc", async () => {
+		llmOk('{"name":"同步","description":"keep notes in sync"}');
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		const r = await callAITranslate(llm, { id: "x", name: "Sync", description: "keep notes in sync", author: "t" });
+		expect(r).toEqual({ translatedName: "同步", translatedDesc: "keep notes in sync", source: "ai" });
+	});
+
+	it("llm.call 抛错（网络/熔断）→ catch 返回 null", async () => {
+		req.mockRejectedValue(new Error("net"));
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		expect(await callAITranslate(llm, { id: "x", name: "Sync", description: "keep", author: "t" })).toBeNull();
+	});
+
+	it("返回非 JSON → parseJSON 失败 catch 返回 null", async () => {
+		llmOk("这不是 JSON");
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		expect(await callAITranslate(llm, { id: "x", name: "Sync", description: "keep", author: "t" })).toBeNull();
+	});
+});
+
+describe("MyMemoryClient · 补充（状态恢复 / 单段 / 配额 / 错误分支）", () => {
+	const mk = () => { const c = new MyMemoryClient(); c.setEnabled(true); return c; };
+	const plugin = (o: Partial<PluginInfo> = {}): PluginInfo => ({ id: "x", name: "Sync", description: "keep notes", author: "t", ...o });
+
+	it("restoreBlockedDate：跨天自动解除（不恢复 blocked）", () => {
+		const c = mk();
+		c.restoreBlockedDate("2099-01-01");
+		expect(c.isBlocked()).toBe(false);
+	});
+
+	it("restoreBlockedDate：当天日期 → 恢复 blocked 且记录日期", () => {
+		const c = mk();
+		const t = todayStrLocal();
+		c.restoreBlockedDate(t);
+		expect(c.isBlocked()).toBe(true);
+		expect(c.getBlockedDate()).toBe(t);
+	});
+
+	it("translateText：成功返回译文（拉丁文避免 isAllCaps 误判）；空串返回空 MyMemoryResult（非 null）", async () => {
+		req.mockResolvedValue({ status: 200, json: { responseStatus: 200, responseData: { translatedText: "Bonjour" } } });
+		const c = mk();
+		expect(await c.translateText("Sync")).toEqual({ translatedName: "Bonjour", translatedDesc: "", match: 0 });
+		expect(await c.translateText("")).toEqual({ translatedName: "", translatedDesc: "", match: 0 });
+	});
+
+	it("translateText：blocked 时返回 null", async () => {
+		const c = mk();
+		c.restoreBlockedDate(todayStrLocal());
+		expect(await c.translateText("Sync")).toBeNull();
+	});
+
+	it("translate：配额提示（QUOTA_HINTS）→ blocked=true 且返回 null", async () => {
+		req.mockResolvedValue({ status: 200, json: { responseStatus: 200, responseData: { translatedText: "PLEASE SELECT" } } });
+		const c = mk();
+		expect(await c.translate(plugin())).toBeNull();
+		expect(c.isBlocked()).toBe(true);
+	});
+
+	it("translate：name+desc 都回显（unchanged）→ 降级 null、不记熔断", async () => {
+		req.mockImplementation((opts: any) => {
+			const m = /[?&]q=([^&]*)/.exec(opts.url);
+			const q = m ? decodeURIComponent(m[1]) : "x";
+			return Promise.resolve({ status: 200, json: { responseStatus: 200, responseData: { translatedText: q } } });
+		});
+		const c = mk();
+		expect(await c.translate(plugin())).toBeNull();
+		expect(c.isBlocked()).toBe(false);
+	});
+
+	it("translate：返回非 JSON 响应 → 失败降级 null（不计 blocked）", async () => {
+		req.mockResolvedValue({ status: 200, json: "plain" });
+		const c = mk();
+		expect(await c.translate(plugin())).toBeNull();
+		expect(c.isBlocked()).toBe(false);
+	});
+
+	it("translate：responseStatus≠200 → API 错误降级 null", async () => {
+		req.mockResolvedValue({ status: 200, json: { responseStatus: 402, responseDetails: "err" } });
+		const c = mk();
+		expect(await c.translate(plugin())).toBeNull();
+		expect(c.isBlocked()).toBe(false);
+	});
+
+	it("translate：未启用 → 直接返回 null", async () => {
+		const c = new MyMemoryClient();
+		c.setEnabled(false);
+		expect(await c.translate(plugin())).toBeNull();
+		expect(req).not.toHaveBeenCalled();
+	});
+});
+
+describe("GoogleClient · 补充（状态恢复 / 单段 / 配额 / 错误分支）", () => {
+	const mk = () => { const c = new GoogleClient(); c.setEnabled(true); return c; };
+	const plugin = (o: Partial<PluginInfo> = {}): PluginInfo => ({ id: "x", name: "Sync", description: "keep notes", author: "t", ...o });
+	const gResp = (text: string) =>
+		req.mockResolvedValue({ status: 200, json: [[[text, null, "q", null, 1]], null, "en", "zh-CN", null, null, 1, []] });
+	const gEcho = () =>
+		req.mockImplementation((opts: any) => {
+			const m = /[?&]q=([^&]*)/.exec(opts.url);
+			const q = m ? decodeURIComponent(m[1]) : "x";
+			return Promise.resolve({ status: 200, json: [[[q, null, q, null, 1]], null, "en", "zh-CN", null, null, 1, []] });
+		});
+
+	it("isEnabled / isBlocked / getBlockedDate 基础读", () => {
+		const c = mk();
+		expect(c.isEnabled()).toBe(true);
+		expect(c.isBlocked()).toBe(false);
+		expect(c.getBlockedDate()).toBeNull();
+	});
+
+	it("restoreBlockedDate：当天 → blocked；跨天 → 不恢复", () => {
+		const c = mk();
+		c.restoreBlockedDate(todayStrLocal());
+		expect(c.isBlocked()).toBe(true);
+		const c2 = mk();
+		c2.restoreBlockedDate("2099-01-01");
+		expect(c2.isBlocked()).toBe(false);
+	});
+
+	it("translateText：成功返回译文；空串返回 null", async () => {
+		gResp("同步");
+		const c = mk();
+		expect(await c.translateText("Sync")).toBe("同步");
+		expect(await c.translateText("")).toBe("");
+	});
+
+	it("translateText：blocked 返回 null", async () => {
+		const c = mk();
+		c.restoreBlockedDate(todayStrLocal());
+		expect(await c.translateText("Sync")).toBeNull();
+	});
+
+	it("translate：配额错误（含 429 字样）→ blocked=true 且返回 null", async () => {
+		req.mockRejectedValue(new Error("HTTP 429 rate limit"));
+		const c = mk();
+		expect(await c.translate(plugin())).toBeNull();
+		expect(c.isBlocked()).toBe(true);
+	});
+
+	it("translate：返回非预期结构 → 降级 null", async () => {
+		req.mockResolvedValue({ status: 200, json: { foo: "bar" } });
+		const c = mk();
+		expect(await c.translate(plugin())).toBeNull();
+	});
+
+	it("translate：空译文 → 降级 null", async () => {
+		gResp("");
+		const c = mk();
+		expect(await c.translate(plugin())).toBeNull();
+	});
+
+	it("translate：name+desc 都回显（未变化）→ 降级 null 走兜底", async () => {
+		gEcho();
+		const c = mk();
+		expect(await c.translate(plugin())).toBeNull();
+	});
+});
+
+describe("LLMClient · 补充（updateConfig / httpStatusHint / 非 2xx / forceJson）", () => {
+	it("updateConfig 运行时切换 model", async () => {
+		const llm = new LLMClient({ baseURL: "http://a", apiKey: "k", model: "m" });
+		llm.updateConfig({ model: "newmodel" });
+		req.mockResolvedValue({ status: 200, json: { choices: [{ message: { content: "你好" } }] } });
+		await llm.call("s", "u", 10);
+		const body = JSON.parse((req.mock.calls[0][0] as { body: string }).body);
+		expect(body.model).toBe("newmodel");
+	});
+
+	it("httpStatusHint 覆盖各状态码与默认", () => {
+		expect(LLMClient.httpStatusHint(401)).toContain("API Key");
+		expect(LLMClient.httpStatusHint(403)).toContain("无权限");
+		expect(LLMClient.httpStatusHint(404)).toContain("接口地址");
+		expect(LLMClient.httpStatusHint(429)).toContain("额度");
+		expect(LLMClient.httpStatusHint(500)).toContain("服务端");
+		expect(LLMClient.httpStatusHint(502)).toContain("服务端");
+		expect(LLMClient.httpStatusHint(503)).toContain("服务端");
+		expect(LLMClient.httpStatusHint(418)).toBe("");
+	});
+
+	it("非 2xx：带 error.message 抛出含状态码与详情", async () => {
+		req.mockResolvedValue({ status: 404, json: { error: { message: "not found" } } });
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		await expect(llm.call("s", "u", 10)).rejects.toThrow(/404/);
+		await expect(llm.call("s", "u", 10)).rejects.toThrow(/not found/);
+	});
+
+	it("非 2xx：error.message 缺失时 detail 为空，仅状态码 + httpStatusHint", async () => {
+		req.mockResolvedValue({ status: 500, json: { foo: "bar" } });
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		await expect(llm.call("s", "u", 10)).rejects.toThrow(/500/);
+		await expect(llm.call("s", "u", 10)).rejects.toThrow(/服务端错误/);
+	});
+
+	it("forceJson=false 时不带 response_format", async () => {
+		req.mockResolvedValue({ status: 200, json: { choices: [{ message: { content: "你好" } }] } });
+		const llm = new LLMClient({ baseURL: "http://x", apiKey: "k", model: "m" });
+		await llm.call("s", "u", 10, false);
+		const body = JSON.parse((req.mock.calls[0][0] as { body: string }).body);
+		expect(body).not.toHaveProperty("response_format");
+	});
+});
+
+describe("TencentClient · 补充", () => {
+	it("未配置 config → translate 抛「未配置翻译 API」", async () => {
+		const c = new TencentClient();
+		await expect(c.translate("Sync")).rejects.toThrow("未配置翻译 API");
 	});
 });
