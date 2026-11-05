@@ -543,6 +543,22 @@ export default defineConfig({
 			 *     （response.json 已解析、访问 errJson.error.message 不抛错，永不进 catch）；改为直接 fallback 到 response.text 并截断 120。
 			 *     两处均补了回归用例。
 			 *
+			 * 第 78 版（语义 worker 主线程侧：worker-backend）：全局 89.13% / 87.59% / 87.62%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，functions 87.59 ≥ 87.5 → **86→87 拧紧**；
+			 *     lines 89.13 < 89.5、branches 87.62 < 88.5，两项维持。
+			 *     semantic/workers/worker-backend.ts 60.1%→93.6%（392/419，函数 →96%、分支 83%，+16 例；
+			 *     **扩展既有测试文件**，原 3 例完整保留 —— 仍沿用先查同名文件再 append 的纪律）：
+			 *     该文件是**主线程侧**模块（源码注释「主线程侧：通过 Web Worker 运行本地 embedding」，
+			 *     Worker 由它 new Worker() 实例化），本身在主线程执行、覆盖率可收集，区别于 embedding-worker.ts
+			 *     （Worker 线程源码，Blob URL 实例化，vitest 不执行，属采集盲区已剔除）。用 FakeWorker 桩 +
+			 *     URL.createObjectURL/revokeObjectURL 桩驱动，覆盖：模块装配函数（setWorkerFetchBridge /
+			 *     isWorkerFetchBridgeInstalled / setModelProgressReporter / reportModelProgress / disposeAllShared）、
+			 *     embed（空数组直接返回 / 正常 ready+result → 向量数组 / failed 抛「已禁用」/ init 失败 loader 抛错）、
+			 *     warmup（failed 直接返回 / loader 抛错静默）、handleMessage（log→warn / progress 上报 / ready 置位 /
+			 *     init-error 上报+实例移除 / result 命中缺失 id 静默 / fetch 桥接未注入回 error / 注入回 status+buffer）、
+			 *     dispose（terminate worker + 拒绝在途 embed）。未触发分支为看门狗 240s 超时与桥接 30s 心跳回调体
+			 *     （真实计时不会跑，属安全兜底，未逐一造超时）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -553,7 +569,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 88,
 				statements: 88,
-				functions: 86,
+				functions: 87,
 				branches: 87,
 			},
 		},
