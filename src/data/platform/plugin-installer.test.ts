@@ -138,7 +138,7 @@ describe("plugin-installer", () => {
 		});
 		it("plugins 内部 API 缺失 → 回退", async () => {
 			const { ctx } = makeCtx();
-			(ctx.app as Record<string, unknown>).plugins = undefined;
+			(ctx.app as unknown as { plugins?: unknown }).plugins = undefined;
 			const r = await installCommunityPlugin(ctx as never, plugin());
 			expect(r.ok).toBe(false);
 		});
@@ -149,8 +149,8 @@ describe("plugin-installer", () => {
 			expect(r.ok).toBe(false);
 		});
 		it("adapter 无 mkdir → 回退", async () => {
-			const { ctx } = makeCtx();
-			(ctx.app as Record<string, unknown>).vault.adapter.mkdir = undefined;
+			const { ctx, adapter } = makeCtx();
+			(adapter as unknown as { mkdir?: unknown }).mkdir = undefined;
 			req.mockResolvedValue({ status: 200, json: { id: "x", name: "X", version: "1.0", main: "main.js" }, text: "" });
 			const r = await installCommunityPlugin(ctx as never, plugin());
 			expect(r.ok).toBe(false);
@@ -172,16 +172,16 @@ describe("plugin-installer", () => {
 			expect(written.some((p) => p.endsWith("styles.css"))).toBe(true);
 		});
 		it("recognized + enabledPlugins 不可写 → manualEnable 路径仍 ok:true", async () => {
-			const { ctx } = makeCtx();
-			(ctx.app as Record<string, unknown>).plugins.enabledPlugins = {}; // 无 has/add/delete
-			(ctx.app as Record<string, unknown>).plugins.manifests = { x: {} };
+			const { ctx, plugins } = makeCtx();
+			(plugins as unknown as { enabledPlugins?: unknown }).enabledPlugins = {}; // 无 has/add/delete
+			(plugins as unknown as { manifests: Record<string, unknown> }).manifests = { x: {} };
 			mockNetwork(404);
 			const r = await installCommunityPlugin(ctx as never, plugin());
 			expect(r.ok).toBe(true);
 		});
 		it("未识别（manifests 无此 id）→ needReload 回退 ok:false（fileWritten）", async () => {
-			const { ctx } = makeCtx();
-			(ctx.app as Record<string, unknown>).plugins.manifests = {};
+			const { ctx, plugins } = makeCtx();
+			(plugins as unknown as { manifests: Record<string, unknown> }).manifests = {};
 			mockNetwork(404);
 			const r = await installCommunityPlugin(ctx as never, plugin());
 			expect(r.ok).toBe(false);
@@ -211,8 +211,8 @@ describe("plugin-installer", () => {
 			expect((ctx.app as Record<string, { loadManifests: ReturnType<typeof vi.fn> }>).plugins.loadManifests).toHaveBeenCalled();
 		});
 		it("adapter 无 rmdir → false", async () => {
-			const { ctx } = makeCtx();
-			(ctx.app as Record<string, unknown>).vault.adapter.rmdir = undefined;
+			const { ctx, adapter } = makeCtx();
+			(adapter as unknown as { rmdir?: unknown }).rmdir = undefined;
 			const r = await uninstallCommunityPlugin(ctx as never, plugin());
 			expect(r).toBe(false);
 		});
@@ -232,7 +232,7 @@ describe("plugin-installer", () => {
 	describe("togglePluginEnabled", () => {
 		it("plugins 缺失 → 返回 enabledIds 判断", async () => {
 			const { ctx } = makeCtx();
-			(ctx.app as Record<string, unknown>).plugins = undefined;
+			(ctx.app as unknown as { plugins?: unknown }).plugins = undefined;
 			(ctx.enabledIds as Set<string>).add("x");
 			const r = await togglePluginEnabled(ctx as never, plugin());
 			expect(r).toBe(true);
@@ -246,7 +246,7 @@ describe("plugin-installer", () => {
 		});
 		it("当前禁用 → tryEnable → 启用 → true", async () => {
 			const { ctx, plugins } = makeCtx({ enabledHas: false });
-			(plugins as Record<string, { manifests: Record<string, unknown> }>).manifests = { x: {} };
+			(plugins as unknown as { manifests: Record<string, unknown> }).manifests = { x: {} };
 			const r = await togglePluginEnabled(ctx as never, plugin());
 			expect(r).toBe(true);
 			expect(plugins.enablePluginAndSave).toHaveBeenCalledWith("x");
@@ -256,7 +256,7 @@ describe("plugin-installer", () => {
 	describe("applyProfileByIds / applyEnabledProfile", () => {
 		it("applyProfileByIds：enable 新 + disable 旧（排除 selfId）", async () => {
 			const { plugins } = makeCtx();
-			plugins.manifests = { a: {} };
+			(plugins as unknown as { manifests: Record<string, unknown> }).manifests = { a: {} };
 			const app = {
 				plugins,
 				vault: { adapter: { read: vi.fn().mockResolvedValue("[]"), write: vi.fn() } },
@@ -272,11 +272,56 @@ describe("plugin-installer", () => {
 		it("applyEnabledProfile：委托 applyProfileByIds + 刷新卡片", async () => {
 			const { ctx, plugins } = makeCtx();
 			(ctx.enabledIds as Set<string>).add("b");
-			(plugins as Record<string, { manifests: Record<string, unknown> }>).manifests = { a: {} };
+			(plugins as unknown as { manifests: Record<string, unknown> }).manifests = { a: {} };
 			const r = await applyEnabledProfile(ctx as never, new Set(["a"]), "self");
 			expect(r.enabled).toBe(1);
 			expect((ctx.snapshotInstalled as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
 			expect((ctx.invalidateAndRender as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+		});
+	});
+
+	describe("plugin-installer · 分支补全（写盘失败 / 网络异常 / enabledPlugins 形态）", () => {
+		it("installCommunityPlugin：mkdir 抛错 → 回退", async () => {
+			const { ctx, adapter } = makeCtx();
+			(adapter as unknown as { mkdir?: unknown }).mkdir = vi.fn().mockRejectedValue(new Error("e"));
+			req.mockResolvedValue({ status: 200, json: { id: "x", name: "X", version: "1.0", main: "main.js" }, text: "" });
+			const r = await installCommunityPlugin(ctx as never, plugin());
+			expect(r.ok).toBe(false);
+		});
+		it("installCommunityPlugin：写 manifest.json 抛错 → 回退", async () => {
+			const { ctx, adapter } = makeCtx();
+			(adapter as unknown as { write?: unknown }).write = vi.fn().mockRejectedValueOnce(new Error("e"));
+			mockNetwork(404);
+			const r = await installCommunityPlugin(ctx as never, plugin());
+			expect(r.ok).toBe(false);
+		});
+		it("installCommunityPlugin：写 main.js 抛错 → 回退", async () => {
+			const { ctx } = makeCtx();
+			const writes = (ctx.app as unknown as { vault: { adapter: { write: ReturnType<typeof vi.fn> } } }).vault.adapter.write as ReturnType<typeof vi.fn>;
+			writes.mockImplementation((p: string) =>
+				p.endsWith("manifest.json") ? Promise.resolve(undefined) : Promise.reject(new Error("e")),
+			);
+			mockNetwork(404);
+			const r = await installCommunityPlugin(ctx as never, plugin());
+			expect(r.ok).toBe(false);
+		});
+		it("installCommunityPlugin：netRequest 抛错（downloadFullManifest 异常分支）→ 回退", async () => {
+			const { ctx } = makeCtx();
+			req.mockRejectedValue(new Error("net"));
+			const r = await installCommunityPlugin(ctx as never, plugin());
+			expect(r.ok).toBe(false);
+		});
+		it("applyProfileByIds：enabledPlugins 为 array 形态（push/splice 分支）→ enable+disable 各计 1", async () => {
+			const { plugins } = makeCtx();
+			(plugins as unknown as { manifests: Record<string, unknown> }).manifests = { a: {} };
+			(plugins as unknown as { enabledPlugins: string[] }).enabledPlugins = ["b"]; // array 形态：含 b，触发 splice；不含 a，触发 push
+			const app = {
+				plugins,
+				vault: { adapter: { read: vi.fn().mockResolvedValue("[]"), write: vi.fn() } },
+			};
+			const r = await applyProfileByIds(app as never, new Set(["b"]), new Set(["a"]), "self");
+			expect(r.enabled).toBe(1);
+			expect(r.disabled).toBe(1);
 		});
 	});
 });
