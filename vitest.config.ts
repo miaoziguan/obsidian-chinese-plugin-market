@@ -448,6 +448,20 @@ export default defineConfig({
 			 *     load 缺字段不清空 / 空对象字段清空该侧、get/setInsight、compareKey 排序且不修改入参、{A,B} 与 {B,A} 命中同一缓存、
 			 *     toJSON 两套导出 + load 往返一致。
 			 *
+			 * 第 72 版（翻译管线小件：note-port + tencent-signer）：全局 87.45% / 84.7% / 86.82%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，functions 84.7 ≥ 84.5 → **83→84 拧紧**；
+			 *     lines 87.45 < 87.5（仅差 0.05）、branches 86.82 < 87.5，两项维持。
+			 *     translation/memory/note-port.ts 83.3%→100%（66/66，函数 67%→100%、分支 100%，+7 例；纯类无 mock）：
+			 *     normalizePath（反斜杠/连续斜杠/首尾斜杠/空串 + 归一化被其余方法共用）、exists（笔记/文件夹）、
+			 *     createFolder 归一化+幂等、writeNote 覆盖、deleteNote 不存在静默、listMarkdown（目录前缀+子目录 .md、
+			 *     排除非 md 与同名前缀目录外文件、空目录）、readNote 缺失返回空串、statMtime 存在 1 / 缺失 0。
+			 *     translation/api/tencent-signer.ts 21.6%→100%（190/190，函数/分支全 100%，+10 例；vi.mock netRequest +
+			 *     vi.stubGlobal 注入 Node 真实 webcrypto/TextEncoder，让 TC3 签名链路真实执行 + spy Date.now 固定时间戳）：
+			 *     成功路径（TargetText 返回、url/method/X-TC-* 头/body payload/Authorization 的 Credential·SignedHeaders·
+			 *     64 位 hex Signature、不同密钥签名不同、自定义 region 透传）、故障必须与成功区分（HTTP<200 / >=300 的
+			 *     401·429·5xx / status 非数值跳过检查 / json null 或非对象 / Response.Error 抛 Code: Message /
+			 *     TargetText 缺失·空串·非字符串抛空译文，绝不兜回原文）。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -458,7 +472,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 86,
 				statements: 86,
-				functions: 83,
+				functions: 84,
 				branches: 86,
 			},
 		},
