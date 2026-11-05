@@ -538,7 +538,29 @@ export default defineConfig({
 			 *     LLMClient 的 updateConfig / httpStatusHint 各状态码与默认 / 非 2xx 错误详情 / forceJson=false 不带 response_format /
 			 *     TencentClient 未配置抛「未配置翻译 API」。
 			 *   注（测试暴露的两个源码 bug 已修复，见后续 fix 提交）：① MyMemory 的 isAllCaps 判定 `translated.toUpperCase() === translated`
-			 *     对中文译文恒为 true（中文 toUpperCase 不变），会把正常中文译文误判为「全大写回显 = 未变化」而保留原文；改为仅当译文含
+ *   ② LLMClient 非 2xx 时 `response.text` 回退分支为死代码（response.json 已解析、访问 errJson.error.message 不抛错，永不进 catch）；改为直接 fallback 到 response.text 并截断 120。
+ *     两处均补了回归用例。
+ *
+ * 第 79 版（domain god-object：translator）：全局 89.34% / 88.81% / 87.7%
+ *   → 经「新阈值 = floor(实测−0.5)」校验，functions 88.81 ≥ 88.5 → **87→88 拧紧**；
+ *     lines 89.34 < 89.5、branches 87.7 < 88.5，两项维持。
+ *     domain/catalog/translator.ts 80.1%→87.6%（函数 59%→94%、分支 72%→80%，+26 例；
+ *     **扩展既有测试文件**，原 633 行 / 30 例完整保留 —— 仍沿用先查同名文件再 append 的纪律）：用解析 coverage-final.json
+ *     精准定位 62 个函数中 40 个未覆盖，聚焦纯状态/配置/委托 getter-setter 补齐，覆盖 setApiConfig（trim）/setBaiduConfig（trim）/
+ *     setUseMyMemory/setUseTransmart/setAIConfig（normalize 兜底）/setSelfHostedTranslators/getAllPluginTags/pluginsRev/
+ *     getCategorySchemaVersion/aiDict getter+setter/recordCoverage（空 version 返回+新增+同版本更新+12 上限）/
+ *     getCoverageTrend（空/单/双）/hasAnyTranslation（cache 非 original+TM+AI 资产+无）/getInsight/setInsight/clearCache/
+ *     getCacheSize/clearAIDict/getAIDictSize/enqueueOnlineTM（online 落库 true/非 online false/已采纳 false）/TM 采纳管理
+ *     （removeTMApproved/getTMApprovedCount/isTMApproved）/TM 脏标记（mark/peek/take/clear）/TM 移除标记（经私有 tracker 触发
+ *     markRemoved 后 peek/take/clear）/getVectorIndex/setVectorIndex/hasAI/getLastSearchTiming/getLastMatchDiagnostics/
+ *     compareKey/getCompareInsight/setCompareInsight/aiCompare（首调 aiSearcher.compare+缓存命中）/aiSearchLocal（委托 localSearch）/
+ *     logTencentError（私有，直接调用断言 warn 日志）。
+ *   注：剩余未覆盖多为翻译管线方法（translateTextSegment/translateTextSegments/translateBatch/translateBatchIncremental/
+ *     solidifyAI 部分分支、aiSearch 复杂分支），需 mock 多个翻译客户端/embedding，成本高，留待后续；本轮已把该文件从「接近 80%」
+ *     提到 87.6%（函数 94%），是本轮性价比最高的单文件提升。
+ *
+  *
+ *     对中文译文恒为 true（中文 toUpperCase 不变），会把正常中文译文误判为「全大写回显 = 未变化」而保留原文；改为仅当译文含
 			 *     拉丁字母且全大写、原文非全大写时才视为专有名词回显。② LLMClient 非 2xx 时 `response.text` 回退分支为死代码
 			 *     （response.json 已解析、访问 errJson.error.message 不抛错，永不进 catch）；改为直接 fallback 到 response.text 并截断 120。
 			 *     两处均补了回归用例。
@@ -569,7 +591,7 @@ export default defineConfig({
 			thresholds: {
 				lines: 88,
 				statements: 88,
-				functions: 87,
+				functions: 88,
 				branches: 87,
 			},
 		},
