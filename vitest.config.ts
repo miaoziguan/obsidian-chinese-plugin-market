@@ -511,6 +511,21 @@ export default defineConfig({
 			 *     translateSegments 批量全分支（成功按行对齐/含空白/含换行/超 2000/整块回显/行数不符/空行/Unsupported 不计熔断/
 			 *     其它错误 recordFailure）。
 			 *
+			 * 第 76 版（数据持久层：plugin-storage）：全局 88.64% / 86.83% / 87.18%
+			 *   → 经「新阈值 = floor(实测−0.5)」校验，lines 88.64 ≥ 88.5 → **87→88 拧紧**；
+			 *     functions 86.83 ≥ 86.5 → **85→86 拧紧**；branches 87.18 < 87.5，维持。
+			 *     data/storage/plugin-storage.ts 66%→98.6%（426/432，函数 57%→100%，分支 83%→76%，+26 例；
+			 *     **扩展既有测试文件**，原 13 例完整保留 —— 仍沿用先查同名文件再 append 的纪律）：用 MemoryStoragePort
+			 *     内存实现驱动，补齐此前全缺的保存/读取全分支：saveInstallHistory（成功往返/失败静默）、loadTranslatorCache
+			 *     整函数（成功读全字段/缺失/旧版 vault 根回退/损坏非对象）、loadSeededTranslatorCache（成功/缺失/损坏/非对象，
+			 *     且 seed 版本不含 firstSeenIds 键、调用方用 ?? {} 兜底）、save&loadFavorites（成功往返/缺失/损坏/
+			 *     旧版 vault 根回退/favorites 非数组回退 legacyData 内嵌键/仅 legacyData）、save&loadCredentials
+			 *     （成功且字段完整/缺失/旧版 vault 根回退/损坏非对象）+ CREDENTIAL_KEYS 含百度密钥（明文泄露修复回归）、
+			 *     stats/列表/趋势读取边角（savedAt 非 number/parsed 非 object/坏 JSON/列表空数组回退 legacyData/
+			 *     坏 JSON catch/savePluginListCache 成功回读/趋势 parsed 为数组非对象）。
+			 *   注：分支 76% 低于语句 98.6%，源于新增代码里大量 `?? 默认值` 的 else 边（如 loadCredentials 11 个字段
+			 *     `?? ""`、loadTranslatorCache 9 个 `?? {}`）在「完整对象」用例下未被触发；属安全兜底分支，未逐一造缺失键触发。
+			 *
 			 * 语义：只许上升、不许下降。新提交只要让任一项跌破阈值，CI 即红。
 			 * 切忌把阈值直接写成理想值（第 1 版曾误设为 63，高于当时的实测 61.59%，
 			 * 会导致接入当天 CI 永久失败 —— 团队学到的第一件事就是关掉它，这是装置自杀）。
@@ -519,9 +534,9 @@ export default defineConfig({
 			 * 定位下一个目标：看 coverage 报告里 ui/ 与 app/ 层低于 20% 的文件。
 			 */
 			thresholds: {
-				lines: 87,
-				statements: 87,
-				functions: 85,
+				lines: 88,
+				statements: 88,
+				functions: 86,
 				branches: 86,
 			},
 		},
