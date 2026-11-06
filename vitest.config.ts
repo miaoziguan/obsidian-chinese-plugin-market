@@ -630,6 +630,19 @@ export default defineConfig({
  *     故**不加入 coverage.exclude**——即第 83 版「沿用排除约定」仅适用于函数覆盖极低的 UI 文件，
  *     对 detail-drawer 不适用。全局维持 90/90/89/87。
  *
+ * 第 85 版（direct-install 攻坚 DirectInstallModal）：全局 91.48% / 91.32% / 87.12%（较第 84 版基本持平）
+ *   → 经「新阈值 = floor(实测−0.5)」校验，lines 91.48 ≥ 90.5 → 维持 90；
+ *     functions 91.32 ≥ 89.5 → 维持 89；branches 87.12 < 87.5 → 维持 87。本轮未触发新拧紧。
+ *     app/direct-install.ts 78.8%（函数 80%）→85%（函数 91%、分支 79%，+7 例；**新建独立测试文件**
+ *     direct-install-modal.test.ts，避免覆盖既有 59 例纯函数测试、且与既有 vi.mock obsidian 全 mock 不冲突）：
+ *     DirectInstallModal 的 constructor/record/onClose/run 可独立调用（stub Modal + 部分 mock 网络函数），
+ *     覆盖 constructor 默认值、record（回调触发 / 无回调不崩）、onClose（contentEl 清空）、run（进入安装流程
+ *     异常被吞 + busy 复位、theme 分支、busy 守卫不重复安装）。onOpen（完整 Obsidian Setting 渲染）未覆盖。
+ *     注：run 成功路径依赖模块内部绑定的 installFromUrlResolved（ESM 局部绑定不可在测试中 mock），
+ *     故成功回调走 record 单独验证，run 用例仅验证异常吞掉与 finally 复位。UI 块（translator-view/detail-drawer/
+ *     DirectInstallModal）专项测试均不纳入全局棘轮门槛收紧，仅守护回归。全局维持 90/90/89/87。
+ *
+ *
  *
  *
 
