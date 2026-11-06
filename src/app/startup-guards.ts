@@ -54,7 +54,9 @@ export function armTmApprovedSafetyValve(deps: TmApprovedValveDeps): void {
 		settled = true;
 		deps.originalResolve();
 	});
-	const timer = deps.timer ?? ((this: void, fn: () => void, ms: number) => window.setTimeout(fn, ms));
+	const timer = deps.timer ?? function (this: void, fn: () => void, ms: number): number {
+		return window.setTimeout(fn, ms);
+	};
 	timer(
 		() => {
 			if (settled) return; // 回灌已正常完成，不误报
