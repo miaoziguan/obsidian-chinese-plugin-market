@@ -813,7 +813,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		// （若数据尚未加载，先懒加载再渲染，避免首次直接 Enter 出现空结果）
 		searchInput.addEventListener("keydown", (e) => {
 			// 输入法确认 Enter/Escape 由输入法消费，不能提交或清空搜索。
-			if (composing || e.isComposing || e.keyCode === 229) return;
+			if (composing || e.isComposing) return;
 			void (async () => {
 				// Esc 清空搜索框（符合输入控件直觉）
 				if (e.key === "Escape") {
