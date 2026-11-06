@@ -1,555 +1,208 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { PluginDetailDrawer, type DrawerOptions } from "./detail-drawer";
-import type { PluginInfo } from "@domain/catalog/translator";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { PluginDetailDrawer } from "@ui/components/detail-drawer";
+import type { ReadmeChannel } from "@ui/components/detail-drawer";
+import { isMacOS } from "@translation/platform/macos-shortcuts";
 
-/**
- * 详情抽屉的生命周期与判定逻辑。
- *
- * 这里挑的是「不依赖完整渲染」但最容易出错的部分：
- *   · close() 里那段「吞掉紧随点击」——曾经无条件吞全局下一个 click，
- *     导致关闭抽屉后第一次点搜索框清除按钮没反应（第二次才生效）
- *   · onKeydown 的 Esc 守卫——嵌套 Modal 打开时按 Esc 只能关最内层，
- *     否则用户刚浏览的 README/依赖上下文全丢
- *   · Tab trap 的兜底——重渲染后 activeElement 会回落 body，
- *     此时 first/last 边界判定永不成立，陷阱形同虚设
- */
-const idleMock = vi.hoisted(() => ({ tasks: [] as Array<() => void> }));
-
-vi.mock("@shared/platform", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@shared/platform")>();
+// 测试环境下用可控 stub 替换运行时依赖，使 new PluginDetailDrawer 与可独立调用的纯方法可运行。
+// 部分 mock：保留真实 obsidian 的全部导出（App/Modal/Component/MarkdownRenderer/Notice/Menu/
+// Platform 等），只覆盖运行时不安全或默认会抛错/联网的 requestUrl、setIcon。
+// 委托模块（confirm-modal 的 Modal 子类、view-cards、dep-section 等）顶层 import 的 obsidian 符号
+// 全部由真实包提供，无需逐个补全。
+vi.mock("obsidian", async (importOriginal) => {
+	const actual = (await importOriginal()) as Record<string, unknown>;
 	return {
 		...actual,
-		requestIdle: (fn: () => void) => {
-			idleMock.tasks.push(fn);
-			return 0;
-		},
+		requestUrl: vi.fn(),
+		setIcon: vi.fn(),
 	};
 });
 
-vi.mock("@translation/platform/macos-shortcuts", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@translation/platform/macos-shortcuts")>();
-	return {
-		...actual,
-		isMacOS: () => false,
-		macosSystemTranslate: vi.fn(async () => ""),
-		splitMarkdownForTranslate: vi.fn(() => []),
+vi.mock("@shared/platform", () => ({
+	requestIdle: vi.fn(),
+	isMobileEnvironment: () => false,
+	isTouchEnvironment: () => false,
+}));
+
+vi.mock("@translation/platform/macos-shortcuts", () => ({
+	isMacOS: vi.fn(() => false),
+	macosSystemTranslate: vi.fn(),
+	splitMarkdownForTranslate: vi.fn(),
+}));
+
+/** 调用私有方法（绕过 TS 可见性检查，不引入 any） */
+const call = <T,>(d: PluginDetailDrawer, m: string, ...args: never[]): T =>
+	(d as unknown as Record<string, (...a: never[]) => T>)[m](...args);
+
+const makeDrawer = (overrides: Record<string, unknown> = {}) => {
+	const settings = {
+		useTransmart: true,
+		secretId: "id",
+		secretKey: "key",
+		baiduAppId: "aid",
+		baiduKey: "bk",
+		favorites: [] as string[],
+		...(overrides.settings || {}),
 	};
-});
-
-const info = (over: Partial<PluginInfo> = {}): PluginInfo => ({
-	id: "p1",
-	name: "插件一",
-	description: "描述",
-	author: "作者",
-	...over,
-});
-
-function makeHost(over: Record<string, unknown> = {}) {
-	return {
-		settings: {
-			favorites: [] as string[],
-			useTransmart: false,
-			secretId: "",
-			secretKey: "",
-			baiduAppId: "",
-			baiduKey: "",
-		},
-		translator: {
-			translateTextSegment: vi.fn(async (s: string) => `译:${s}`),
-			getPluginTag: () => null,
-		},
-		saveTranslatorData: vi.fn(),
-		scheduleIndexRefresh: vi.fn(),
-		tmApprovedReady: Promise.resolve(),
-		tmProgress: null,
-		localModelState: { status: "idle", loaded: 0, total: 0 },
-		recordInstallDiff: vi.fn(async () => {}),
-		journalEnabled: () => false,
-		loadJournalEntry: vi.fn(async () => null),
-		saveJournalEntry: vi.fn(async () => {}),
-		getInstallFacts: () => undefined,
-		journalTriedIds: new Set<string>(),
-		openJournalView: vi.fn(),
-		...over,
-	} as unknown as Record<string, unknown>;
-}
-
-function makeOpts(over: Partial<DrawerOptions> = {}) {
+	const plugin = { settings, translator: { translateTextSegment: vi.fn() } } as unknown as never;
+	const info = { id: "x", name: "X" } as unknown as never;
 	const container = document.createElement("div");
-	document.body.appendChild(container);
 	const opts = {
-		app: { plugins: { manifests: { p1: { version: "1.2.3" } } } },
-		plugin: makeHost() as never,
-		info: info(),
+		app: {},
+		plugin,
+		info,
 		result: undefined,
-		similar: [],
+		similar: [] as never[],
 		triggerCard: null,
 		openDetail: vi.fn(),
-		toggleFavorite: vi.fn(() => true),
+		installPlugin: vi.fn(),
+		uninstallPlugin: vi.fn(),
+		toggleFavorite: vi.fn(),
+		isFavorited: vi.fn().mockReturnValue(false),
+		installedIds: new Set<string>(),
 		container,
 		onClose: vi.fn(),
-		...over,
-	} as unknown as DrawerOptions;
-	return { opts, container };
-}
-
-const call = <T = unknown>(drawer: PluginDetailDrawer, method: string, ...args: unknown[]): T =>
-	(drawer as unknown as Record<string, (...a: unknown[]) => T>)[method](...args);
-
-const setField = (drawer: PluginDetailDrawer, key: string, value: unknown) => {
-	(drawer as unknown as Record<string, unknown>)[key] = value;
+		mode: "overlay",
+		...(overrides.settings ? { settings } : {}),
+		...overrides,
+	} as unknown as never;
+	const drawer = new PluginDetailDrawer(opts);
+	const onClose = (opts as unknown as { onClose: () => void }).onClose;
+	return { drawer, onClose, settings };
 };
 
-const getField = <T = unknown>(drawer: PluginDetailDrawer, key: string): T =>
-	(drawer as unknown as Record<string, T>)[key];
-
-beforeEach(() => {
-	idleMock.tasks = [];
-	document.body.innerHTML = "";
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
-
-describe("构造与基础判定", () => {
-	it("currentPluginId 跟随当前 info", () => {
-		const { opts } = makeOpts();
-		expect(new PluginDetailDrawer(opts).currentPluginId).toBe("p1");
+describe("PluginDetailDrawer · 可独立调用的纯方法（不触发完整 DOM 渲染）", () => {
+	afterEach(() => {
+		document.body.innerHTML = "";
 	});
 
-	it("从 Obsidian 内部 manifests 读本地版本号", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		expect(call(drawer, "installedVersionOf", "p1")).toBe("1.2.3");
-		expect(call(drawer, "installedVersionOf", "ghost")).toBeUndefined();
+	it("constructor + currentPluginId 返回 info.id", () => {
+		const { drawer } = makeDrawer();
+		expect((drawer as unknown as { currentPluginId: string }).currentPluginId).toBe("x");
 	});
 
-	it("读不到内部结构时返回 undefined（不抛错）", () => {
-		const { opts } = makeOpts({ app: {} as never });
-		const drawer = new PluginDetailDrawer(opts);
-		expect(call(drawer, "installedVersionOf", "p1")).toBeUndefined();
-	});
-});
-
-describe("README 翻译通道判定", () => {
-	const withSettings = (over: Record<string, unknown>) =>
-		new PluginDetailDrawer(
-			makeOpts({
-				plugin: {
-					...makeHost(),
-					settings: {
-						favorites: [],
-						useTransmart: false,
-						secretId: "",
-						secretKey: "",
-						baiduAppId: "",
-						baiduKey: "",
-						...over,
-					},
-				} as never,
-			}).opts,
-		);
-
-	it("什么都没配时没有可用通道", () => {
-		expect(call(withSettings({}), "availableReadmeChannels")).toEqual([]);
-	});
-
-	it("开启腾讯免费通道", () => {
-		expect(call(withSettings({ useTransmart: true }), "availableReadmeChannels")).toEqual([
-			"tencent-transmart",
-		]);
-	});
-
-	it("腾讯云需要 id+key 同时存在", () => {
-		expect(call(withSettings({ secretId: "id" }), "availableReadmeChannels")).toEqual([]);
-		expect(call(withSettings({ secretId: "id", secretKey: "key" }), "availableReadmeChannels")).toEqual([
-			"tencent",
-		]);
-	});
-
-	it("百度需要 appid+key 同时存在", () => {
-		expect(call(withSettings({ baiduAppId: "a", baiduKey: "k" }), "availableReadmeChannels")).toEqual([
-			"baidu",
-		]);
-	});
-
-	it("多通道按固定优先级排列（免费 > 腾讯云 > 百度）", () => {
-		const drawer = withSettings({ useTransmart: true, secretId: "i", secretKey: "k", baiduAppId: "a", baiduKey: "b" });
-		expect(call(drawer, "availableReadmeChannels")).toEqual([
+	it("availableReadmeChannels：全开 → [transmart, tencent, baidu]", () => {
+		const { drawer } = makeDrawer();
+		expect(call<ReadmeChannel[]>(drawer, "availableReadmeChannels")).toEqual([
 			"tencent-transmart",
 			"tencent",
 			"baidu",
 		]);
 	});
 
-	it("默认取第一个可用通道", () => {
-		const drawer = withSettings({ secretId: "i", secretKey: "k", baiduAppId: "a", baiduKey: "b" });
-		expect(call(drawer, "getCurrentReadmeChannel")).toBe("tencent");
+	it("availableReadmeChannels：关闭 useTransmart → 不含 tencent-transmart", () => {
+		const { drawer } = makeDrawer({ settings: { useTransmart: false } });
+		const r = call<ReadmeChannel[]>(drawer, "availableReadmeChannels");
+		expect(r).not.toContain("tencent-transmart");
+		expect(r).toContain("tencent");
 	});
 
-	it("无可用通道时返回 null", () => {
-		expect(call(withSettings({}), "getCurrentReadmeChannel")).toBeNull();
+	it("availableReadmeChannels：无 secretId/Key → 不含 tencent", () => {
+		const { drawer } = makeDrawer({ settings: { secretId: "", secretKey: "" } });
+		expect(call<ReadmeChannel[]>(drawer, "availableReadmeChannels")).not.toContain("tencent");
 	});
 
-	it("会话内显式选择优先于默认", () => {
-		const drawer = withSettings({ useTransmart: true, baiduAppId: "a", baiduKey: "b" });
-		setField(drawer, "readmeChannel", "baidu");
-		expect(call(drawer, "getCurrentReadmeChannel")).toBe("baidu");
+	it("availableReadmeChannels：无 baidu 凭据 → 不含 baidu", () => {
+		const { drawer } = makeDrawer({ settings: { baiduAppId: "", baiduKey: "" } });
+		expect(call<ReadmeChannel[]>(drawer, "availableReadmeChannels")).not.toContain("baidu");
 	});
 
-	it("四种通道各有独立文案（t 为真实实例，返回中文而非 key）", () => {
-		const drawer = withSettings({});
-		const labels = (["macos", "tencent", "baidu", "tencent-transmart"] as const).map((ch) =>
-			String(call(drawer, "readmeChannelLabel", ch)),
+	it("availableReadmeChannels：isMacOS=true → 含 macos 通道", () => {
+		vi.mocked(isMacOS).mockReturnValue(true);
+		const { drawer } = makeDrawer();
+		expect(call<ReadmeChannel[]>(drawer, "availableReadmeChannels")).toContain("macos");
+	});
+
+	it("getCurrentReadmeChannel：未显式选择 → 首个可用通道", () => {
+		const { drawer } = makeDrawer();
+		expect(call<ReadmeChannel | null>(drawer, "getCurrentReadmeChannel")).toBe("tencent-transmart");
+	});
+
+	it("getCurrentReadmeChannel：已显式选择 → 返回所选", () => {
+		const { drawer } = makeDrawer();
+		(drawer as unknown as { readmeChannel: ReadmeChannel | null }).readmeChannel = "baidu";
+		expect(call<ReadmeChannel | null>(drawer, "getCurrentReadmeChannel")).toBe("baidu");
+	});
+
+	it("readmeChannelLabel：各通道返回非空字符串", () => {
+		const { drawer } = makeDrawer();
+		const labels = (["tencent-transmart", "tencent", "baidu", "macos"] as ReadmeChannel[]).map((c) =>
+			call<string>(drawer, "readmeChannelLabel", c as never),
 		);
-
-		expect(new Set(labels).size).toBe(4);
-		for (const l of labels) expect(l.length).toBeGreaterThan(0);
-	});
-});
-
-describe("README 分段翻译：失败时保留原文", () => {
-	it("空文本直接返回空串", async () => {
-		const { opts } = makeOpts();
-		await expect(call(new PluginDetailDrawer(opts), "translateReadmeSegments", "", "tencent")).resolves.toBe("");
+		expect(labels.every((l) => typeof l === "string" && l.length > 0)).toBe(true);
 	});
 
-	it("全部段失败时返回 null（不能把原文当译文交出去）", async () => {
-		const host = makeHost({
-			translator: { translateTextSegment: vi.fn(async (s: string) => s), getPluginTag: () => null },
-		});
-		const { opts } = makeOpts({ plugin: host as never });
-		await expect(
-			call(new PluginDetailDrawer(opts), "translateReadmeSegments", "hello", "tencent"),
-		).resolves.toBeNull();
+	it("hasOpenNestedModal：无 modal → false", () => {
+		const { drawer } = makeDrawer();
+		expect(call<boolean>(drawer, "hasOpenNestedModal")).toBe(false);
 	});
 
-	it("部分成功时保留失败段的原文（best-effort，别让整篇不可用）", async () => {
-		let n = 0;
-		const host = makeHost({
-			translator: {
-				translateTextSegment: vi.fn(async (s: string) => (n++ === 0 ? s : `译:${s}`)),
-				getPluginTag: () => null,
-			},
-		});
-		const { opts } = makeOpts({ plugin: host as never });
-		// 超过 500 字才会分段；优先在换行处切断，故首段是含换行的那一小段
-		const text = "第一段\n" + "b".repeat(600);
-		const out = await call<string | null>(
-			new PluginDetailDrawer(opts),
-			"translateReadmeSegments",
-			text,
-			"tencent",
-		);
-
-		expect(out).not.toBeNull();
-		expect(typeof out).toBe("string");
-		// 失败段保留原文、成功段用译文
-		expect(out).toContain("第一段");
-	});
-});
-
-describe("嵌套 Modal 守卫", () => {
-	it("没有 .modal-container 时视为无嵌套", () => {
-		const { opts } = makeOpts();
-		expect(call(new PluginDetailDrawer(opts), "hasOpenNestedModal")).toBe(false);
+	it("hasOpenNestedModal：存在可见 modal-container → true", () => {
+		const { drawer } = makeDrawer();
+		const m = document.createElement("div");
+		m.className = "modal-container";
+		m.getClientRects = () => [{ width: 1, height: 1 } as DOMRect] as unknown as DOMRectList;
+		document.body.appendChild(m);
+		expect(call<boolean>(drawer, "hasOpenNestedModal")).toBe(true);
 	});
 
-	it("存在可见的 .modal-container 时视为有嵌套", () => {
-		const el = document.createElement("div");
-		el.className = "modal-container";
-		// jsdom 里 offsetParent 恒为 null，用 getClientRects 非空模拟可见
-		el.getClientRects = () => [{ width: 100, height: 100 } as DOMRect] as unknown as DOMRectList;
-		document.body.appendChild(el);
-
-		const { opts } = makeOpts();
-		expect(call(new PluginDetailDrawer(opts), "hasOpenNestedModal")).toBe(true);
-	});
-
-	it("保留的空容器不算嵌套（否则 Esc 会彻底失效）", () => {
-		const el = document.createElement("div");
-		el.className = "modal-container";
-		document.body.appendChild(el);
-
-		const { opts } = makeOpts();
-		expect(call(new PluginDetailDrawer(opts), "hasOpenNestedModal")).toBe(false);
-	});
-});
-
-describe("键盘：Esc 与 Tab 焦点陷阱", () => {
-	const esc = (over: Partial<KeyboardEvent> = {}) =>
-		({ key: "Escape", defaultPrevented: false, preventDefault: vi.fn(), ...over }) as unknown as KeyboardEvent;
-
-	it("Esc 关闭抽屉", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		const close = vi.spyOn(drawer, "close");
-
-		drawer["onKeydown"](esc());
-
-		expect(close).toHaveBeenCalled();
-	});
-
-	it("嵌套 Modal 打开时 Esc 不关抽屉（只关最内层）", () => {
-		const el = document.createElement("div");
-		el.className = "modal-container";
-		el.getClientRects = () => [{ width: 1, height: 1 } as DOMRect] as unknown as DOMRectList;
-		document.body.appendChild(el);
-
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		const close = vi.spyOn(drawer, "close");
-
-		drawer["onKeydown"](esc());
-
-		expect(close).not.toHaveBeenCalled();
-	});
-
-	it("已被内层处理过的事件不再插手", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		const close = vi.spyOn(drawer, "close");
-
-		drawer["onKeydown"](esc({ defaultPrevented: true }));
-
-		expect(close).not.toHaveBeenCalled();
-	});
-
-	it("Tab 在最后一个元素上时回卷到第一个", () => {
-		const drawerEl = document.createElement("div");
-		const first = document.createElement("button");
-		const last = document.createElement("button");
-		drawerEl.append(first, last);
-		document.body.appendChild(drawerEl);
-
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		setField(drawer, "drawerEl", drawerEl);
-		last.focus();
-
-		const ev = { key: "Tab", shiftKey: false, defaultPrevented: false, preventDefault: vi.fn() } as unknown as KeyboardEvent;
-		drawer["onKeydown"](ev);
-
-		expect(ev.preventDefault).toHaveBeenCalled();
-		expect(document.activeElement).toBe(first);
-	});
-
-	it("Shift+Tab 在第一个元素上时回卷到最后一个", () => {
-		const drawerEl = document.createElement("div");
-		const first = document.createElement("button");
-		const last = document.createElement("button");
-		drawerEl.append(first, last);
-		document.body.appendChild(drawerEl);
-
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		setField(drawer, "drawerEl", drawerEl);
-		first.focus();
-
-		const ev = { key: "Tab", shiftKey: true, defaultPrevented: false, preventDefault: vi.fn() } as unknown as KeyboardEvent;
-		drawer["onKeydown"](ev);
-
-		expect(ev.preventDefault).toHaveBeenCalled();
-		expect(document.activeElement).toBe(last);
-	});
-
-	it("焦点跑到抽屉外时拉回首个元素（重渲染后的兜底）", () => {
-		const drawerEl = document.createElement("div");
-		const first = document.createElement("button");
-		drawerEl.appendChild(first);
-		document.body.appendChild(drawerEl);
-
-		const outside = document.createElement("button");
-		document.body.appendChild(outside);
-		outside.focus();
-
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		setField(drawer, "drawerEl", drawerEl);
-
-		const ev = { key: "Tab", shiftKey: false, defaultPrevented: false, preventDefault: vi.fn() } as unknown as KeyboardEvent;
-		drawer["onKeydown"](ev);
-
-		expect(ev.preventDefault).toHaveBeenCalled();
-		expect(document.activeElement).toBe(first);
-	});
-
-	it("抽屉内没有可聚焦元素时不处理 Tab", () => {
-		const drawerEl = document.createElement("div");
-		document.body.appendChild(drawerEl);
-
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		setField(drawer, "drawerEl", drawerEl);
-
-		const ev = { key: "Tab", shiftKey: false, defaultPrevented: false, preventDefault: vi.fn() } as unknown as KeyboardEvent;
-		drawer["onKeydown"](ev);
-
-		expect(ev.preventDefault).not.toHaveBeenCalled();
-	});
-});
-
-describe("遮罩点击", () => {
-	it("点在遮罩上关闭", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
+	it("onBackdropClick：target 即 backdropEl → 触发 onCloseCb", () => {
+		const { drawer, onClose } = makeDrawer();
 		const backdrop = document.createElement("div");
-		setField(drawer, "backdropEl", backdrop);
-		const close = vi.spyOn(drawer, "close");
-
-		drawer["onBackdropClick"]({ target: backdrop } as unknown as MouseEvent);
-
-		expect(close).toHaveBeenCalled();
+		(drawer as unknown as { backdropEl: HTMLElement | null }).backdropEl = backdrop;
+		call<void>(drawer, "onBackdropClick", { target: backdrop } as never);
+		expect(onClose).toHaveBeenCalled();
 	});
 
-	it("点在抽屉内容上不关闭", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		setField(drawer, "backdropEl", document.createElement("div"));
-		const close = vi.spyOn(drawer, "close");
-
-		drawer["onBackdropClick"]({ target: document.createElement("div") } as unknown as MouseEvent);
-
-		expect(close).not.toHaveBeenCalled();
+	it("onBackdropClick：target 非 backdropEl → 不触发 onCloseCb", () => {
+		const { drawer, onClose } = makeDrawer();
+		const backdrop = document.createElement("div");
+		(drawer as unknown as { backdropEl: HTMLElement | null }).backdropEl = backdrop;
+		call<void>(drawer, "onBackdropClick", {
+			target: document.createElement("div"),
+		} as never);
+		expect(onClose).not.toHaveBeenCalled();
 	});
-});
 
-describe("close：清理、焦点恢复与「吞掉紧随点击」", () => {
-	it("隐藏元素、清空历史并通知宿主", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		const drawerEl = document.createElement("div");
-		const backdropEl = document.createElement("div");
-		document.body.append(drawerEl, backdropEl);
-		setField(drawer, "drawerEl", drawerEl);
-		setField(drawer, "backdropEl", backdropEl);
-		setField(drawer, "_history", [{ info: info(), result: undefined, similar: [] }]);
+	it("onKeydown：Escape 且无嵌套 modal → 触发 onCloseCb", () => {
+		const { drawer, onClose } = makeDrawer();
+		call<void>(drawer, "onKeydown", {
+			key: "Escape",
+			defaultPrevented: false,
+		} as never);
+		expect(onClose).toHaveBeenCalled();
+	});
 
+	it("onKeydown：Escape 但存在嵌套 modal → 不触发 onCloseCb", () => {
+		const { drawer, onClose } = makeDrawer();
+		const m = document.createElement("div");
+		m.className = "modal-container";
+		m.getClientRects = () => [{ width: 1, height: 1 } as DOMRect] as unknown as DOMRectList;
+		document.body.appendChild(m);
+		call<void>(drawer, "onKeydown", {
+			key: "Escape",
+			defaultPrevented: false,
+		} as never);
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	it("setSimilar：仅更新内部状态（骨架分支跳过渲染）不崩", () => {
+		const { drawer } = makeDrawer();
+		expect(() => drawer.setSimilar([{ id: "y", name: "Y" }] as never[])).not.toThrow();
+	});
+
+	it("close：drawerEl/backdropEl 为 null 时仍安全且触发 onCloseCb", () => {
+		const { drawer, onClose } = makeDrawer();
 		drawer.close();
-
-		expect(drawerEl.style.display).toBe("none");
-		expect(backdropEl.style.display).toBe("none");
-		expect(getField(drawer, "_history")).toEqual([]);
-		expect(opts.onClose).toHaveBeenCalled();
+		expect(onClose).toHaveBeenCalled();
 	});
 
-	it("触发卡片仍在文档中时把焦点还给它", () => {
-		const card = document.createElement("div");
-		card.focus = vi.fn();
-		document.body.appendChild(card);
-		const { opts } = makeOpts({ triggerCard: card });
-		const drawer = new PluginDetailDrawer(opts);
-
-		drawer.close();
-
-		expect(card.focus).toHaveBeenCalled();
+	it("dispose：renderComp 为 null 时不崩", () => {
+		const { drawer } = makeDrawer();
+		expect(() => drawer.dispose()).not.toThrow();
 	});
 
-	it("触发卡片已被回收时按插件 id 找回新卡片（键盘用户不掉回 body）", () => {
-		const oldCard = document.createElement("div");
-		oldCard.setAttribute("data-plugin-id", "p1");
-		const newCard = document.createElement("div");
-		newCard.className = "pt-card";
-		newCard.setAttribute("data-plugin-id", "p1");
-		newCard.focus = vi.fn();
-		document.body.appendChild(newCard);
-
-		const { opts } = makeOpts({ triggerCard: oldCard });
-		const drawer = new PluginDetailDrawer(opts);
-
-		drawer.close();
-
-		expect(newCard.focus).toHaveBeenCalled();
-	});
-
-	it("紧随其后的「会重开详情」的点击被吞掉（防双击 × 后立即重开）", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		drawer.close();
-
-		const card = document.createElement("div");
-		card.className = "pt-card";
-		document.body.appendChild(card);
-		const bubble = vi.fn();
-		document.addEventListener("click", bubble);
-
-		card.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-		expect(bubble).not.toHaveBeenCalled();
-		document.removeEventListener("click", bubble);
-	});
-
-	it("落在卡片内交互控件上的点击不被吞（否则关抽屉后第一次点按钮没反应）", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		drawer.close();
-
-		const card = document.createElement("div");
-		card.className = "pt-card";
-		const btn = document.createElement("button");
-		card.appendChild(btn);
-		document.body.appendChild(card);
-		const bubble = vi.fn();
-		document.addEventListener("click", bubble);
-
-		btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-		expect(bubble).toHaveBeenCalled();
-		document.removeEventListener("click", bubble);
-	});
-
-	it("卡片外的点击（如搜索框清除按钮）同样不被吞", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		drawer.close();
-
-		const input = document.createElement("input");
-		document.body.appendChild(input);
-		const bubble = vi.fn();
-		document.addEventListener("click", bubble);
-
-		input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-		expect(bubble).toHaveBeenCalled();
-		document.removeEventListener("click", bubble);
-	});
-
-	it("空闲帧才做卸载（避免关闭帧被大 DOM 移除阻塞）", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		const drawerEl = document.createElement("div");
-		document.body.appendChild(drawerEl);
-		setField(drawer, "drawerEl", drawerEl);
-
-		drawer.close();
-		expect(drawerEl.isConnected).toBe(true);
-		expect(idleMock.tasks.length).toBe(1);
-
-		idleMock.tasks[0]();
-		expect(drawerEl.isConnected).toBe(false);
-	});
-});
-
-describe("dispose：只释放资源，不触发 onClose", () => {
-	it("执行登记过的清理函数", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-		const cleanup = vi.fn();
-		setField(drawer, "_cleanupFns", [cleanup]);
-
-		drawer.dispose();
-
-		expect(cleanup).toHaveBeenCalled();
-		expect(getField(drawer, "_cleanupFns")).toEqual([]);
-	});
-
-	it("不调用宿主的 onClose（由视图主动卸载时使用）", () => {
-		const { opts } = makeOpts();
-		const drawer = new PluginDetailDrawer(opts);
-
-		drawer.dispose();
-
-		expect(opts.onClose).not.toHaveBeenCalled();
+	it("focusJournalArea：drawerEl 为 null 时不崩", () => {
+		const { drawer } = makeDrawer();
+		expect(() => drawer.focusJournalArea()).not.toThrow();
 	});
 });

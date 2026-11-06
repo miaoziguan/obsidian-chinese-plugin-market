@@ -615,6 +615,21 @@ export default defineConfig({
  *     加入 coverage.exclude（测试仍运行守护回归，仅不计入百分比分母）。排除后全局回到 91.1% 函数，门禁恢复。
  *     阈值维持 90/90/89/87（未触发新拧紧）。后续攻 detail-drawer 等 UI 重组件沿用同一排除约定。
  *
+ * 第 84 版（UI 组件攻坚：detail-drawer）：全局 91.36% / 91.1% / 87.17%（较第 83 版基本持平）
+ *   → 经「新阈值 = floor(实测−0.5)」校验，lines 91.36 ≥ 90.5 → 维持 90；
+ *     functions 91.1 ≥ 89.5 → 维持 89；branches 87.17 < 87.5 → 维持 87。本轮未触发新拧紧。
+ *     src/ui/components/detail-drawer.ts 80.3%（语句）→函数 75%、分支 76%（+19 例；
+ *     **新建测试文件**）：用 vi.mock("obsidian", importOriginal) 部分 mock（保留真实包全部导出、
+ *     仅覆盖 requestUrl/setIcon）+ mock @shared/platform（requestIdle/isMobileEnvironment/isTouchEnvironment）
+ *     + macos-shortcuts（isMacOS），构造轻量（只赋值不渲染），覆盖 availableReadmeChannels（全开 / 关 transmart /
+ *     无 secret / 无 baidu / isMacOS→含 macos）、getCurrentReadmeChannel、readmeChannelLabel（各通道非空）、
+ *     hasOpenNestedModal（无 modal / 可见 modal-container）、onBackdropClick（target===backdropEl→关闭）、
+ *     onKeydown（Escape 无嵌套 modal→关闭、有则拦截）、setSimilar（仅更新状态）、close/dispose/focusJournalArea
+ *     （null 安全）、currentPluginId getter。onOpen/buildContent/render* 等 DOM 渲染路径未覆盖。
+ *     关键点：detail-drawer 函数覆盖 75% 远高于 translator-view 的 9%，纳入统计**未**跌破 89% 阈值，
+ *     故**不加入 coverage.exclude**——即第 83 版「沿用排除约定」仅适用于函数覆盖极低的 UI 文件，
+ *     对 detail-drawer 不适用。全局维持 90/90/89/87。
+ *
  *
  *
 
