@@ -35,7 +35,7 @@ export interface TmApprovedValveDeps {
 	setResolve(fn: () => void): void;
 	warn(message: string): void;
 	timeoutMs?: number;
-	timer?(fn: () => void, ms: number): unknown;
+	timer?(this: void, fn: () => void, ms: number): unknown;
 }
 
 /**
