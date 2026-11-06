@@ -10,6 +10,8 @@
 import { Notice } from "obsidian";
 import { logger } from "@shared/logger";
 import { isAISearchUsable } from "@shared/utils";
+import { prepareSearchPlugins } from "@domain/search/search-plugins";
+import { beginAISearch, isCurrentSearch, captureSearchData, cacheAISearch, finishAISearch } from "@ui/view/view-search-state";
 import { reportQuerySample } from "@domain/search/query-sampling";
 import type { ViewContext } from "@ui/view/view-context";
 
@@ -25,11 +27,11 @@ export async function runAISearch(
 	searchInput: HTMLInputElement,
 	aiBadge: HTMLElement
 ) {
-	if (ctx.aiSearchPending) return;
-	const query = ctx.searchQuery.trim();
+	if (ctx.disposed) return;
+	const query = ctx.searchQuery.trim().toLowerCase();
 	if (!query) return;
 
-	const settings = ctx.settings;
+	const settings = { ...ctx.settings };
 	const isLocal = ctx.searchMode === "local";
 	const tStart = Date.now();
 
@@ -44,18 +46,9 @@ export async function runAISearch(
 			return;
 		}
 	}
-	// 产品定位：搜索也走懒加载——首次触发时先拉数据+翻译。
-	if (ctx.plugins.length === 0) {
-		const ok = await ctx.ensureDataLoaded();
-		if (!ok) {
-			new Notice(ctx.t("notice.ai.loadFail"));
-			return;
-		}
-	}
-	logger.debug(`[Chinese Plugin Market] 搜索耗时：数据就绪检查+加载=${Date.now() - tStart}ms（plugins=${ctx.plugins.length}）`);
-
-	ctx.aiSearchPending = true;
-	ctx.aiSearchQueryCache = query;
+	const request = beginAISearch(ctx);
+	if (!request) return;
+	const cats = ctx.selectedCategories.length ? [...ctx.selectedCategories] : undefined;
 	// 确保 badge 在搜索进行中可见（本地模式默认 badge 常驻，但此处兜底重置 display，
 	// 避免任何路径下 loading 态被隐藏导致「看似无反应」）
 	aiBadge.setCssStyles({ display: "" });
@@ -68,25 +61,32 @@ export async function runAISearch(
 	// 首次本地语义搜索的模型下载进度条（与设置页同款）。声明在 try 外，供 finally 清理。
 	let modelBar: { el: HTMLElement } | null = null;
 	let modelBarTimer = 0;
+	request.cleanup = (cancelled) => {
+		if (modelBarTimer) window.clearInterval(modelBarTimer);
+		modelBar?.el.remove();
+		searchInput.removeClass("ai-loading");
+		searchInput.closest?.(".pt-search")?.removeClass("pt-search--ai-loading");
+		if (cancelled && !ctx.disposed) {
+			aiBadge.className = "pt-ai-badge pt-ai-ready";
+			aiBadge.setText(isLocal ? "本地" : "AI");
+			aiBadge.setAttribute("title", "按 Enter 重新检索");
+		}
+	};
 
 	try {
-		const pluginArgs = ctx.plugins.map((p) => {
-			// 双语索引：把已缓存的中文译文一并送入向量索引（中文 query 的主对齐面）；
-			// original 兜底译文不算（等于没有译文）。译文后续更新会经指纹触发增量重 embed。
-			const tr = ctx.translator.cache?.[p.id];
-			const hasTr = tr && tr.source !== "original";
-			return {
-				id: p.id,
-				name: p.name,
-				description: p.description,
-				nameZh: hasTr ? tr.translatedName : undefined,
-				descZh: hasTr ? tr.translatedDesc : undefined,
-				// 质量因子数据源（补丁 B）：stats 的 downloads/updated 透传给融合排序
-				//（此前只在卡片 UI 展示，排序不消费；缺失时排序侧按中性 1.0 处理）
-				downloads: p.downloads,
-				updated: p.updated,
-			};
-		});
+		// pending 在首个 await 前登记，首次加载期间重复 Enter 也只执行一次。
+		if (ctx.plugins.length === 0) {
+			const ok = await ctx.ensureDataLoaded();
+			if (!isCurrentSearch(ctx, request)) return;
+			if (!ok) {
+				new Notice(ctx.t("notice.ai.loadFail"));
+				return;
+			}
+		}
+		if (!isCurrentSearch(ctx, request)) return;
+		logger.debug(`[Chinese Plugin Market] 搜索耗时：数据就绪检查+加载=${Date.now() - tStart}ms（plugins=${ctx.plugins.length}）`);
+		const pluginArgs = prepareSearchPlugins(ctx.plugins, ctx.translator.cache);
+		captureSearchData(ctx, request, pluginArgs);
 		const config = {
 			baseURL: settings.aiSearchBaseURL,
 			apiKey: settings.aiSearchApiKey,
@@ -101,7 +101,6 @@ export async function runAISearch(
 				localRemoteHost: settings.embeddingRemoteHost,
 			},
 		};
-		const cats = ctx.selectedCategories.length ? ctx.selectedCategories : undefined;
 
 		// 本地语义：若索引尚未构建，先提示（首次会后台下载量化模型权重（e5-small q8 ~118MB，可配镜像加速）+ 建索引，可能耗时）
 		if (isLocal && !ctx.translator.getVectorIndex()) {
@@ -116,7 +115,9 @@ export async function runAISearch(
 			? mountLocalModelProgressBar(searchInput)
 			: null;
 		modelBarTimer = modelBar
-			? window.setInterval(() => updateLocalModelProgressBar(modelBar!, ctx.plugin.localModelState, aiBadge), 150)
+			? window.setInterval(() => {
+				if (isCurrentSearch(ctx, request)) updateLocalModelProgressBar(modelBar!, ctx.plugin.localModelState, aiBadge);
+			}, 150)
 			: 0;
 
 		// 本地索引统一由插件级构建任务维护。没有任何索引时先等待首个完整构建，
@@ -131,6 +132,7 @@ export async function runAISearch(
 			await ctx.buildLocalIndex(false);
 		}
 
+		if (!isCurrentSearch(ctx, request, true)) return;
 		const tSearch = Date.now();
 		const aiResult = isLocal
 			? await ctx.translator.aiSearchLocal(query, pluginArgs, config, cats)
@@ -140,14 +142,15 @@ export async function runAISearch(
 					config,
 					settings.aiSearchShowReason,
 					(phase: string, detail: string) => {
-						aiBadge.setAttribute("title", `AI ${phase}：${detail}`);
+						if (isCurrentSearch(ctx, request)) aiBadge.setAttribute("title", `AI ${phase}：${detail}`);
 					},
 					cats
 			  );
 		logger.debug(`[Chinese Plugin Market] 搜索耗时：语义搜索=${Date.now() - tSearch}ms · 总=${Date.now() - tStart}ms · 结果=${aiResult.rankedIds.length}`);
 
+		if (!isCurrentSearch(ctx, request, true)) return;
 		ctx.aiSearchResult = aiResult;
-		ctx.aiSearchQueryCache = ctx.searchQuery.trim();
+		ctx.aiSearchQueryCache = query;
 		// P1.1：只发送脱敏后的查询形状与排序指标；reportQuerySample 默认关闭，
 		// 且内部不会接收 allPlugins，因此不会把插件全文或 ID 带出客户端。
 		void reportQuerySample(
@@ -164,8 +167,7 @@ export async function runAISearch(
 			},
 		);
 		// 3a: 记录最近一次结果，供切回语义模式时复用
-		ctx.lastAiSearchResult = aiResult;
-		ctx.lastAiSearchQuery = ctx.aiSearchQueryCache;
+		cacheAISearch(ctx, request, aiResult);
 		aiBadge.className = "pt-ai-badge pt-ai-done";
 		aiBadge.setText(isLocal ? "本地" : "AI");
 
@@ -200,6 +202,7 @@ export async function runAISearch(
 			void ctx.saveVectorIndex();
 		}
 	} catch (err: unknown) {
+		if (!isCurrentSearch(ctx, request, true)) return;
 		ctx.aiSearchResult = null;
 		aiBadge.className = "pt-ai-badge pt-ai-ready";
 		const errMsg = err instanceof Error ? err.message : String(err);
@@ -220,13 +223,7 @@ export async function runAISearch(
 		}
 		new Notice(detail, 9000);
 	} finally {
-		ctx.aiSearchPending = false;
-		searchInput.removeClass("ai-loading");
-		searchInput.closest?.(".pt-search")?.removeClass("pt-search--ai-loading");
-		// 清理模型下载进度条轮询（若挂载过）
-		if (modelBarTimer) window.clearInterval(modelBarTimer);
-		if (modelBar) modelBar.el.remove();
-		ctx.renderPluginList();
+		if (finishAISearch(ctx, request)) ctx.renderPluginList();
 	}
 }
 

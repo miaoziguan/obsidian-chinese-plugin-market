@@ -205,7 +205,8 @@ export function buildBm25Index(
 export function bm25RecallScores(
 	query: string,
 	index: Bm25Index,
-	topK = Number.MAX_SAFE_INTEGER
+	topK = Number.MAX_SAFE_INTEGER,
+	allowedIds?: ReadonlySet<string>,
 ): Map<string, number> {
 	// 同义词扩展：中文口语 → 英文别名（如"思维导图"→"mind map"），再 t2s 统一简体
 	const expanded = expandQuery(query.trim());
@@ -228,6 +229,7 @@ export function bm25RecallScores(
 		const pTf = pl.tf;
 		for (let k = 0; k < pIdx.length; k++) {
 			const d = pIdx[k];
+			if (allowedIds && !allowedIds.has(ids[d])) continue;
 			acc.set(d, (acc.get(d) ?? 0) + w * bm25TermWeight(pTf[k], docLenNorm[d]));
 		}
 	}
@@ -474,6 +476,14 @@ export class AISearcher {
 		return this.bm25Cache;
 	}
 
+	/** 分类只收窄候选，BM25/向量索引的身份仍是全库，切分类不触发重建。 */
+	private categoryScope(allPlugins: SearchPlugin[], filterCategories?: string[]) {
+		if (!filterCategories?.length) return { recallPlugins: allPlugins, allowedIds: undefined };
+		const categories = new Set(filterCategories);
+		const recallPlugins = allPlugins.filter((p) => categories.has(this.pluginTags[p.id]?.category ?? ""));
+		return { recallPlugins, allowedIds: new Set(recallPlugins.map((p) => p.id)) };
+	}
+
 	// ════════════════════════════════════════════
 	// 公开 API
 	// ════════════════════════════════════════════
@@ -501,6 +511,7 @@ export class AISearcher {
 			// ── 召回：混合召回链（向量语义 RRF 融合 本地关键词 → LLM 兜底）──
 			let merged: AISearchCandidate[] = [];
 			const intent = parseQueryIntent(query);
+			const { recallPlugins, allowedIds } = this.categoryScope(allPlugins, filterCategories);
 			// 纯否定 query 没有正向召回词：跳过向量/BM25/标题路，改用中性质量分
 			// 形成候选池，并硬排除命中否定词的插件，避免「不要导出」反而召回导出插件。
 			const recallQuery = intent.isPureNegative ? "" : intent.recallQuery || query;
@@ -516,7 +527,7 @@ export class AISearcher {
 
 			// 向量召回（带分数，供 RRF 融合）
 			let vectorScores: Map<string, number> | null = null;
-			if (useVector && recallQuery) {
+			if (useVector && recallQuery && recallPlugins.length > 0) {
 				try {
 					// 不要在这里再包一层 measure：vectorRecallScores 内部已用 measure 记
 					// 「向量索引」「query 编码+余弦」。外层再包一层会让 localPhaseMs 把整段
@@ -540,21 +551,21 @@ export class AISearcher {
 			onPhase?.("本地召回", "正在本地粗筛候选…");
 			const localScores = await timing.measure(PHASE.keyword, () =>
 				recallQuery
-					? bm25RecallScores(recallQuery, this.getBm25Index(allPlugins, fingerprints.bm25), RECALL_PATH_CAP)
+					? bm25RecallScores(recallQuery, this.getBm25Index(allPlugins, fingerprints.bm25), RECALL_PATH_CAP, allowedIds)
 					: new Map<string, number>()
 			);
 
 			// 标题模糊匹配（第三路）：兜住「用户只记得名字大概」的场景
 			// 用 t2sForEmbed(query) 与召回路同 token 空间（繁体 query 也能命中简体标题）
 			const fuzzyScores = await timing.measure(PHASE.fuzzy, () =>
-				recallQuery ? fuzzyTitleScores(t2sForEmbed(recallQuery), allPlugins) : new Map<string, number>()
+				recallQuery ? fuzzyTitleScores(t2sForEmbed(recallQuery), recallPlugins) : new Map<string, number>()
 			);
 
 			// RRF 融合：向量 + 关键词 + 标题模糊 三路名次融合（异构分数量纲不同，RRF 只看名次，
 			// 比「并集取前 N」更稳；多路都命中的候选自然靠前，减少 LLM 精排负担）。
 			const fusedIds = await timing.measure(PHASE.rrf, () => {
 				const baseFused = intent.isPureNegative
-					? new Map(pureNegativeCandidateIds(intent, allPlugins).map((id) => [id, 1]))
+					? new Map(pureNegativeCandidateIds(intent, recallPlugins).map((id) => [id, 1]))
 					: vectorScores && vectorScores.size > 0
 						? rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5])
 						: rrfFuse([localScores, fuzzyScores], [1.0, 0.5]);
@@ -591,9 +602,9 @@ export class AISearcher {
 			timing.count("标题命中", fuzzyScores.size);
 
 			// LLM 兜底召回
-			if (merged.length === 0 && !intent.isPureNegative) {
+			if (merged.length === 0 && !intent.isPureNegative && recallPlugins.length > 0) {
 				merged = await timing.measure(PHASE.llmFallback, () =>
-					this.recallAllBatches(query, allPlugins, onPhase)
+					this.recallAllBatches(query, recallPlugins, onPhase)
 				);
 			}
 			timing.count("候选池", merged.length);
@@ -667,6 +678,7 @@ export class AISearcher {
 			const embCfg = this.aiConfig.embedding;
 			const useVector = embCfg && embCfg.source !== "keyword";
 			const intent = parseQueryIntent(query);
+			const { recallPlugins, allowedIds } = this.categoryScope(allPlugins, filterCategories);
 			const recallQuery = intent.isPureNegative ? "" : intent.recallQuery || query;
 			let matchDiagnostics: Record<string, SearchMatchDiagnostics> = {};
 
@@ -675,7 +687,7 @@ export class AISearcher {
 
 			// 向量召回（带分数）
 			let vectorScores: Map<string, number> | null = null;
-			if (useVector && recallQuery) {
+			if (useVector && recallQuery && recallPlugins.length > 0) {
 				try {
 					// 同 search()：不在此再包一层 measure，避免向量耗时被 localPhaseMs 双计
 					vectorScores = await this.vectorRecallScores(
@@ -696,17 +708,17 @@ export class AISearcher {
 			// 关键词召回（CJK 三元组 BM25，替代简单重叠）+ 标题模糊
 			const localScores = await timing.measure(PHASE.keyword, () =>
 				recallQuery
-					? bm25RecallScores(recallQuery, this.getBm25Index(allPlugins, fingerprints.bm25), RECALL_PATH_CAP)
+					? bm25RecallScores(recallQuery, this.getBm25Index(allPlugins, fingerprints.bm25), RECALL_PATH_CAP, allowedIds)
 					: new Map<string, number>()
 			);
 			const fuzzyScores = await timing.measure(PHASE.fuzzy, () =>
-				recallQuery ? fuzzyTitleScores(t2sForEmbed(recallQuery), allPlugins) : new Map<string, number>()
+				recallQuery ? fuzzyTitleScores(t2sForEmbed(recallQuery), recallPlugins) : new Map<string, number>()
 			);
 
 			// RRF 融合（与 AI 模式召回一致；向量不可用时退化为关键词+标题）
 			const fusedIds = await timing.measure(PHASE.rrf, () => {
 				const rrf = intent.isPureNegative
-					? new Map(pureNegativeCandidateIds(intent, allPlugins).map((id) => [id, 1]))
+					? new Map(pureNegativeCandidateIds(intent, recallPlugins).map((id) => [id, 1]))
 					: vectorScores && vectorScores.size > 0
 						? rrfFuse([vectorScores, localScores, fuzzyScores], [1.0, 1.0, 0.5])
 						: rrfFuse([localScores, fuzzyScores], [1.0, 0.5]);

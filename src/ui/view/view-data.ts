@@ -11,7 +11,9 @@ import { type PluginInfo, type TranslateResult } from "@domain/catalog/translato
 import { resolveUrl, classifyNetworkError, type MirrorConfig } from "@domain/catalog/mirror";
 import { fetchPluginStats, PLUGIN_STATS_URL } from "@domain/catalog/stats";
 import { formatRelativeTime, type I18nKey } from "@shared/i18n";
-import { requestIdle } from "@shared/platform";
+import { requestIdle, cancelIdle } from "@shared/platform";
+import { prepareSearchPlugins } from "@domain/search/search-plugins";
+import { invalidateAISearch } from "@ui/view/view-search-state";
 import { compareVersion } from "@shared/version";
 import { computeCoverage } from "@translation/lexicon/dictionary";
 import { createStrong, q, toHTMLElement } from "@ui/dom/dom";
@@ -24,24 +26,28 @@ import { setListState } from "@ui/dom/list-state";
  * 预热 BM25 关键词召回索引：数据就绪后在空闲时段后台构建（让出当前渲染帧，不阻塞首屏绘制）。
  * 使首次语义搜索直接命中缓存，不再出现「本地检索阶段偏慢（关键词召回 600ms+）」告警。
  *
- * BM25 索引指纹只依赖 id/name/description，与分类标签无关，故可在插件列表落定后立即预热，
- * 无需等待 setPluginTags。构建为一次性成本；已构建时 getBm25Index 直接返回缓存实例（零重建）。
+ * 在离线译文合并后调度，与正式搜索共用双语条目；同帧多次变更只预热最新快照。
  * 预热失败不致命：首次搜索会照常惰性构建，仅是回退到旧行为。
  */
-function scheduleBm25Warmup(ctx: ViewContext): void {
-	const plugins = ctx.plugins;
-	if (!plugins || plugins.length === 0) return;
+const warmups = new WeakMap<ViewContext, number>();
+export function scheduleBm25Warmup(ctx: ViewContext): void {
+	const previous = warmups.get(ctx);
+	if (previous !== undefined) cancelIdle(previous);
+	warmups.delete(ctx);
+	if (ctx.disposed || !ctx.plugins?.length) return;
 	// 空闲期再构建：BM25 构建是纯 CPU 同步任务（实测约 600ms），原先用 setTimeout(0)
 	// 会在数据就绪后立刻抢占主线程——插件刚更新完再打开视图时正好撞上，表现为卡顿。
 	// requestIdle 带 timeout 兜底（不会无限拖延），且在缺少 requestIdleCallback 的
 	// 移动端 WebView 上自动降级为 setTimeout。
-	requestIdle(() => {
+	warmups.set(ctx, requestIdle(() => {
+		warmups.delete(ctx);
+		if (ctx.disposed) return;
 		try {
-			ctx.translator.aiSearcher.getBm25Index(plugins);
+			ctx.translator.aiSearcher.getBm25Index(prepareSearchPlugins(ctx.plugins, ctx.translator.cache));
 		} catch {
 			// 预热失败不致命：首次搜索照常惰性构建
 		}
-	}, 300);
+	}, 300));
 }
 import { isAIMode } from "@domain/search/search-mode";
 
@@ -68,6 +74,9 @@ function getPluginMap(ctx: ViewContext): Map<string, PluginInfo> {
  * 下次打开新视图设置 ctx.plugins 时会自动重建。
  */
 export function disposeViewDataCache(ctx: ViewContext): void {
+	const warmup = warmups.get(ctx);
+	if (warmup !== undefined) cancelIdle(warmup);
+	warmups.delete(ctx);
 	ctx.pluginMap = null;
 	ctx.pluginMapSrc = null;
 }
@@ -85,6 +94,7 @@ export function applySearchInput(ctx: ViewContext) {
 			clearBtn.setCssStyles({ display: input.value.length > 0 ? "" : "none" });
 		}
 		const value = input.value.trim().toLowerCase();
+		if (value !== ctx.searchQuery) invalidateAISearch(ctx);
 		ctx.searchQuery = value;
 		if (!value) {
 			ctx.aiSearchResult = null;
@@ -97,8 +107,7 @@ export function applySearchInput(ctx: ViewContext) {
 			ctx.aiSearchResult = null;
 			ctx.aiSearchQueryCache = "";
 		} else {
-			// AI 语义模式：输入过程中保留上一次检索结果（不再每次按键清空列表），
-			// 仅提示「按 Enter 重新检索」，使两种模式的输入体验不再割裂。
+			// 查询改变时旧语义状态已失效；输入过程中仅提示按 Enter 重新检索。
 			ctx.showAIPendingHint();
 			return;
 		}
@@ -183,8 +192,6 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 		void ctx.savePluginListCache(data);
 		ctx.plugins = data;
 		ctx.buildAuthorFacet();
-		// BM25 关键词召回索引预热（后台，首次搜索命中缓存、不再首搜 600ms 构建）
-		scheduleBm25Warmup(ctx);
 		// 动态向量索引：列表更新后防抖触发后台增量重建（只 embed 新增/变化条目）
 		ctx.plugin.scheduleIndexRefresh("列表更新");
 		// 拉取成功：更新列表拉取时间戳（用于 TTL 判断）。
@@ -322,8 +329,6 @@ export async function ensureDataLoaded(ctx: ViewContext) : Promise<boolean> {
 			if (cachedData && cachedData.length > 0) {
 				ctx.plugins = cachedData;
 				ctx.buildAuthorFacet();
-				// BM25 关键词召回索引预热（后台，离线缓存恢复路径同样覆盖）
-				scheduleBm25Warmup(ctx);
 			ctx.applyAIConfig();
 			if (progressHint) progressHint.textContent = "（使用本地缓存）";
 			logger.warn("[Chinese Plugin Market] 网络不可用，已从本地缓存恢复插件列表（%d 个）。", cachedData.length);
@@ -451,8 +456,6 @@ export async function refreshData(ctx: ViewContext) : Promise<void> {
 			const data = await ctx.fetchPlugins();
 			ctx.plugins = data;
 			ctx.buildAuthorFacet();
-			// BM25 关键词召回索引预热（后台，手动刷新路径同样覆盖）
-			scheduleBm25Warmup(ctx);
 			// 动态向量索引：手动刷新列表后同样防抖触发增量重建
 			ctx.plugin.scheduleIndexRefresh("手动刷新列表");
 	
@@ -654,6 +657,7 @@ export function snapshotInstalled(ctx: ViewContext) {
 			}
 
 export function buildSearchIndex(ctx: ViewContext, ids?: Set<string>) {
+		scheduleBm25Warmup(ctx);
 
 		// 增量模式：仅更新「本次译出」的条目（ids 非空时），避免每次落盘都全量重建 5617 条 blob。
 		if (ids && ids.size > 0) {

@@ -17,6 +17,7 @@ import { q, toHTMLElement } from "@ui/dom/dom";
 import { handleToggleEnabled } from "@ui/view/view-cards";
 import { activeFilters, activeFilterSignature, clearAllFilters } from "@ui/view/active-filters";
 import type { ViewContext } from "@ui/view/view-context";
+import { validateAISearchResult } from "@ui/view/view-search-state";
 import { LAYOUT } from "@shared/constants";
 import { requestIdle } from "@shared/platform";
 
@@ -147,6 +148,7 @@ export function recomputeSmartSignalsIfNeeded(ctx: ViewContext) {
 	}
 
 export function runFilterPipeline(ctx: ViewContext, query: string) : PluginInfo[] {
+		validateAISearchResult(ctx);
 
 		const filterResult = filterAndSortPlugins({
 			plugins: ctx.plugins,

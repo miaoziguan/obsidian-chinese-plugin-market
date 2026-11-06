@@ -138,8 +138,8 @@ describe("runAISearch：AI 模式成功/分支", () => {
 		const b = badge();
 		await runAISearch(c, input(), b);
 		expect(c.aiSearchResult.rankedIds.length).toBe(3);
-		expect(c.lastAiSearchResult).toBeDefined();
-		expect(c.lastAiSearchQuery).toBe("hello");
+		// #77：最近结果改用 cacheAISearch 写回（aiSearchResult + aiSearchQueryCache），不再保留 lastAiSearch* 字段
+		expect(c.aiSearchQueryCache).toBe("hello");
 		expect(b.className).toBe("pt-ai-badge pt-ai-done");
 		expect(b.textContent).toBe("AI");
 		expect(c.saveVectorIndex).toHaveBeenCalled();

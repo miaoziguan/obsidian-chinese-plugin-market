@@ -14,7 +14,15 @@ import {
 	updateAiTranslateButton,
 	toggleAuthorFilter,
 	renderAuthorFacet,
+	scheduleBm25Warmup,
+	disposeViewDataCache,
 } from "./view-data";
+import { AISearcher } from "@domain/search/ai";
+import { prepareSearchPlugins } from "@domain/search/search-plugins";
+import { LLMClient } from "@translation/api/api";
+import { PluginTagService } from "@domain/catalog/plugin-tags";
+import type { Translator } from "@domain/catalog/translator";
+import { makeMockContext } from "@shared/test-utils";
 
 /**
  * 视图数据管线的「纯逻辑」部分。
@@ -441,7 +449,7 @@ describe("applySearchInput：输入框 → 查询状态", () => {
 		expect(order).toEqual(["load", "render"]);
 	});
 
-	it("AI 模式：输入过程中保留上次结果，只提示按 Enter 检索", () => {
+	it("AI 模式：输入变化使旧结果失效，仅提示按 Enter 检索", () => {
 		const ensureDataLoaded = vi.fn(async () => true);
 		const showAIPendingHint = vi.fn();
 		const { ctx } = withInput("语义查询", {
@@ -450,12 +458,14 @@ describe("applySearchInput：输入框 → 查询状态", () => {
 			showAIPendingHint,
 			aiSearchResult: { hits: [1] },
 		});
+		// 模拟此前已有不同搜索词，本次输入与之不同 → 旧结果应失效（#77 修复：避免旧结果误显示）
+		ctx.searchQuery = "旧查询";
 
 		applySearchInput(ctx);
 
 		expect(showAIPendingHint).toHaveBeenCalled();
 		expect(ensureDataLoaded).not.toHaveBeenCalled();
-		expect(ctx.aiSearchResult).not.toBeNull();
+		expect(ctx.aiSearchResult).toBeNull();
 	});
 
 	it("清除按钮可见性跟随内容（有值显示、无值隐藏）", () => {
@@ -890,5 +900,50 @@ describe("ensureDataLoaded：加载决策与状态机", () => {
 
 		expect(loadStatsCache).toHaveBeenCalled();
 		expect(ctx.mergeStatsFromCache).toHaveBeenCalled();
-	});
+		});
+
+		// ─────────────────────────────────────────────────────────────
+		// 融合 PR #77 的「双语 BM25 预热」搜索回归（scheduleBm25Warmup /
+		// disposeViewDataCache / buildSearchIndex 的预热共享索引与卸载取消）。
+		// 生产实现由 #77 在 view-data.ts 引入，本块仅补充回归断言。
+		// ─────────────────────────────────────────────────────────────
+		describe("双语 BM25 预热", () => {
+		beforeEach(() => { vi.useFakeTimers(); });
+		afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); });
+		function setup() {
+			const config = { baseURL: "http://localhost", apiKey: "", model: "mock", embedding: { source: "keyword" as const } };
+			const searcher = new AISearcher(config, new LLMClient(config), new PluginTagService());
+			const translator = { aiSearcher: searcher, cache: { a: { source: "custom" as const, translatedName: "日历", translatedDesc: "管理每日笔记" } } } as unknown as Translator;
+			const ctx = makeMockContext({ translator, plugins: [{ id: "a", name: "Calendar", description: "Daily notes", author: "x" }], searchIndex: new Map() });
+			return { ctx, searcher };
+		}
+
+		it("译文合并后的预热与第一次本地搜索共享同一个索引", async () => {
+			const { ctx, searcher } = setup();
+			ctx.translatedResults = {};
+			const build = vi.spyOn(searcher, "getBm25Index");
+			buildSearchIndex(ctx);
+			vi.advanceTimersByTime(60);
+			const warmed = build.mock.results[0].value;
+			const args = prepareSearchPlugins(ctx.plugins, ctx.translator.cache);
+			const result = await searcher.localSearch("日历", args);
+			expect(result.rankedIds).toContain("a");
+			expect(searcher.getBm25Index(args)).toBe(warmed);
+		});
+
+		it("合并多次预热，只使用执行时的最新译文；卸载取消任务", () => {
+			const { ctx, searcher } = setup();
+			const build = vi.spyOn(searcher, "getBm25Index");
+			scheduleBm25Warmup(ctx);
+			ctx.translator.cache.a.translatedName = "最新日历";
+			scheduleBm25Warmup(ctx);
+			vi.advanceTimersByTime(60);
+			expect(build).toHaveBeenCalledTimes(1);
+			expect(build.mock.calls[0][0][0]).toMatchObject({ nameZh: "最新日历" });
+			scheduleBm25Warmup(ctx);
+			disposeViewDataCache(ctx);
+			vi.advanceTimersByTime(60);
+			expect(build).toHaveBeenCalledTimes(1);
+		});
+		});
 });

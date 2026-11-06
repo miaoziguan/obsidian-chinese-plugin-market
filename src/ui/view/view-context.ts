@@ -176,8 +176,6 @@ export interface ViewContext {
 	aiSearchResult: AISearchResult | null;
 	aiSearchPending: boolean;
 	aiSearchQueryCache: string;
-	lastAiSearchResult: AISearchResult | null;
-	lastAiSearchQuery: string;
 	aiTranslateRunning: boolean;
 	/**
 	 * 本次会话（插件打开期间）用户主动触发的翻译计数。
@@ -586,10 +584,6 @@ export function createViewContext(view: ChinesePluginMarketView): ViewContext {
 		set aiSearchPending(v) { view.aiSearchPending = v; },
 		get aiSearchQueryCache() { return view.aiSearchQueryCache; },
 		set aiSearchQueryCache(v) { view.aiSearchQueryCache = v; },
-		get lastAiSearchResult() { return view.lastAiSearchResult; },
-		set lastAiSearchResult(v) { view.lastAiSearchResult = v; },
-		get lastAiSearchQuery() { return view.lastAiSearchQuery; },
-		set lastAiSearchQuery(v) { view.lastAiSearchQuery = v; },
 		get aiTranslateRunning() { return view.aiTranslateRunning; },
 		set aiTranslateRunning(v) { view.aiTranslateRunning = v; },
 		get translatedThisSession() { return view.translatedThisSession; },

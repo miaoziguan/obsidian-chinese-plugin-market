@@ -272,6 +272,7 @@ export function getDefaultSettings(): ChinesePluginMarketSettings {
 import { loadAndRender, updateGuidance, updateFacetVisibility, showSearchGuide, showAIPendingHint, showAIConfigGuide, showLoadingState, updateStats, applyAIConfig, announceStatus, updateScrollButtons, updateScrollPosBadge } from "@ui/view/view-chrome";
 import { ensureDataLoaded, fetchPlugins, refreshData, updateRefreshTooltip, relativeTime, reportNewPluginDelta, mirrorConfig, fetchStatsAndMerge, mergeStatsIntoPlugins, mergeStatsFromCache, snapshotInstalled, refreshOutdated, buildSearchIndex, buildAuthorFacet, renderAuthorFacet, toggleAuthorFilter, applySearchInput, aiTranslateAllPending, setAIProgressDone, refreshCardTranslation, updateAiTranslateButton, disposeViewDataCache } from "@ui/view/view-data";
 import { runAISearch } from "@ui/view/view-ai-search";
+import { disposeAISearch } from "@ui/view/view-search-state";
 import { renderPluginList, recomputeSmartSignalsIfNeeded, runFilterPipeline, updateListChrome, invalidateAndRender, postRenderSync, refreshCardState, measureLayout, measureLayoutIfNeeded, scheduleRender, renderWindow, fillVisibleWindow, updateWindow, disposeRenderTimers } from "@ui/view/view-render";
 import { startInstalledWatch } from "@ui/view/installed-watch";
 import { onCardClick, handleInstall, handleToggleEnabled, toggleFavorite, onCardKeydown, focusCardByIdx, flashAction, computeSimilarFor, openDetailDrawer as _openDetailDrawer } from "@ui/view/view-cards";
@@ -324,9 +325,6 @@ export class ChinesePluginMarketView extends ItemView {
 	public aiSearchResult: AISearchResult | null = null;
 	public aiSearchPending = false;
 	public aiSearchQueryCache = "";
-	/** 最近一次 AI 搜索结果缓存（3a：跨模式切换复用，避免切回 AI 模式即丢失需重新 Enter） */
-	public lastAiSearchResult: AISearchResult | null = null;
-	public lastAiSearchQuery = "";
 
 	/** 当前搜索模式 */
 	public searchMode: SearchMode = "keyword";
@@ -841,6 +839,7 @@ export class ChinesePluginMarketView extends ItemView {
 	async onClose() {
 		// 标记视图已卸载：所有后续异步路径（翻译、落盘定时器）据此尽早退出，避免幽灵写盘
 		this.disposed = true;
+		disposeAISearch(this._ctx);
 		// 清理后台更新检测轮询定时器（防止关闭视图后向已销毁 ctx 写盘/轮询）
 		if (this.updatePollTimer != null) {
 			window.clearInterval(this.updatePollTimer);
