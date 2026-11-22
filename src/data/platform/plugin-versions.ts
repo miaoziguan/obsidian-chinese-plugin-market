@@ -13,6 +13,8 @@
 
 import { netRequest } from "@data/net/net";
 import { logger } from "@shared/logger";
+import { compareVersion } from "@shared/version";
+import { pickLang } from "@shared/i18n";
 
 /** 单个可选版本 */
 export interface PluginVersion {
@@ -30,10 +32,12 @@ export interface PluginVersion {
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
 const cache = new Map<string, { at: number; versions: PluginVersion[] }>();
+const inFlight = new Map<string, Promise<PluginVersion[]>>();
 
 /** 仅测试用：清空内存缓存 */
 export function clearPluginVersionsCache(): void {
 	cache.clear();
+	inFlight.clear();
 }
 
 /** owner/name 反解 */
@@ -60,7 +64,7 @@ function safeParse(text: string): unknown {
 }
 
 function asArray(json: unknown): Record<string, unknown>[] {
-	return Array.isArray(json) ? (json as Record<string, unknown>[]) : [];
+	return Array.isArray(json) ? json.filter((item): item is Record<string, unknown> => !!item && typeof item === "object") : [];
 }
 
 function str(v: unknown): string {
@@ -113,32 +117,70 @@ function dedupe(list: PluginVersion[]): PluginVersion[] {
 async function fetchUncached(parsed: { owner: string; repo: string }): Promise<PluginVersion[]> {
 	const base = `https://api.github.com/repos/${parsed.owner}/${parsed.repo}`;
 	const headers = { Accept: "application/vnd.github+json" };
+	let failed = false;
+	let rateLimited = false;
 
 	try {
 		const r = await netRequest({ url: `${base}/releases?per_page=100`, headers });
 		if (r.status >= 200 && r.status < 300) {
-			const list = parseReleaseEntries(r.json ?? safeParse(r.text));
+			const json: unknown = r.json ?? safeParse(r.text);
+			failed ||= !Array.isArray(json);
+			const list = parseReleaseEntries(json);
 			if (list.length > 0) return list;
 		}
+		failed ||= r.status !== 404 && (r.status < 200 || r.status >= 300);
+		rateLimited ||= r.status === 403 || r.status === 429;
 	} catch (e: unknown) {
+		failed = true;
 		logger.warn("[Chinese Plugin Market] 拉取插件 Releases 失败：", e);
 	}
 
 	try {
 		const r = await netRequest({ url: `${base}/tags?per_page=100`, headers });
 		if (r.status >= 200 && r.status < 300) {
-			return parseTagEntries(r.json ?? safeParse(r.text));
+			const json: unknown = r.json ?? safeParse(r.text);
+			failed ||= !Array.isArray(json);
+			const list = parseTagEntries(json);
+			if (list.length > 0) return list;
 		}
+		failed ||= r.status !== 404 && (r.status < 200 || r.status >= 300);
+		rateLimited ||= r.status === 403 || r.status === 429;
 	} catch (e: unknown) {
+		failed = true;
 		logger.warn("[Chinese Plugin Market] 拉取插件 Tags 失败：", e);
 	}
 
+	// Obsidian 插件随仓库维护版本兼容表，不受 GitHub API 的匿名请求配额限制。
+	// 保留真实版本键作为 ref；安装器已有 v 前缀兜底，不猜测不存在的发布 tag。
+	const repo = `${parsed.owner}/${parsed.repo}`;
+	for (const url of [
+		`https://raw.githubusercontent.com/${repo}/HEAD/versions.json`,
+		`https://cdn.jsdelivr.net/gh/${repo}@latest/versions.json`,
+	]) {
+		try {
+			const r = await netRequest({ url });
+			if (r.status >= 200 && r.status < 300) {
+				const json: unknown = r.json ?? safeParse(r.text);
+				if (json && typeof json === "object" && !Array.isArray(json)) {
+					const list = Object.entries(json)
+						.filter(([tag, appVersion]) => /^v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$/i.test(tag) && typeof appVersion === "string")
+						.map(([tag]) => ({ tag, version: normalizeVersionLabel(tag) }))
+						.sort((a, b) => compareVersion(b.version, a.version));
+					if (list.length > 0) return list;
+				} else failed = true;
+			} else if (r.status !== 404) failed = true;
+		} catch {
+			failed = true;
+		}
+	}
+	if (rateLimited) throw new Error(pickLang("version.rateLimited"));
+	if (failed) throw new Error(pickLang("version.networkError"));
 	return [];
 }
 
 /**
  * 拉取插件仓库的可选版本列表（新 → 旧）。
- * 网络不可用 / 仓库无 Release 与 Tag 时返回空数组，由调用方给出空态文案。
+ * 仓库确实无版本时返回空数组；网络/限流且备用源失败时抛错，供调用方展示原因与重试。
  */
 export async function fetchPluginVersions(repo: string, force = false): Promise<PluginVersion[]> {
 	const parsed = parseRepo(repo);
@@ -148,8 +190,16 @@ export async function fetchPluginVersions(repo: string, force = false): Promise<
 	const hit = cache.get(key);
 	if (!force && hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.versions;
 
-	const versions = await fetchUncached(parsed);
-	// 空结果不写缓存：多半是限流/断网导致，下次打开应重试
-	if (versions.length > 0) cache.set(key, { at: Date.now(), versions });
-	return versions;
+	const pending = inFlight.get(key);
+	if (pending) return pending;
+	const request = fetchUncached(parsed).then((versions) => {
+		if (versions.length > 0) cache.set(key, { at: Date.now(), versions });
+		return versions;
+	});
+	inFlight.set(key, request);
+	try {
+		return await request;
+	} finally {
+		if (inFlight.get(key) === request) inFlight.delete(key);
+	}
 }

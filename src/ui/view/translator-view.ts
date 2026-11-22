@@ -62,6 +62,8 @@ import { cancelIdle } from "@shared/platform";
 const UPDATE_POLL_MS = 6 * 60 * 60 * 1000;
 
 export interface ChinesePluginMarketSettings {
+	/** 已在足迹页查看过的评测；再次编辑后会重新标记为未读。 */
+	journalSeenIds: string[];
 	useMyMemory: boolean;
 	/** 腾讯翻译（免费）通道（transmart.qq.com/api/imt，零配置） */
 	useTransmart: boolean;
@@ -180,6 +182,7 @@ export interface PluginProfile {
 }
 
 export const DEFAULT_SETTINGS: ChinesePluginMarketSettings = {
+	journalSeenIds: [],
 	useMyMemory: true,
 	useTransmart: true,
 	secretId: "",
@@ -572,6 +575,7 @@ export class ChinesePluginMarketView extends ItemView {
 
 	/** 拉取仓库可选版本列表（BRAT 式版本选择弹窗用） */
 	public listPluginVersions = (repo: string, force = false) => fetchPluginVersions(repo, force);
+	public refreshJournalBadge = () => this._ctx.refreshJournalBadge?.();
 
 	/**
 	 * 固定插件到指定版本，或改回「保持最新」。

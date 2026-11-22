@@ -1267,7 +1267,8 @@ button.pt-profile-dropdown:active { transform: scale(0.94); }
 	background: var(--pt-surface-hover, var(--background-modifier-hover));
 	color: var(--pt-text);
 }
-.pt-ai-icon-btn:disabled {
+.pt-ai-icon-btn:disabled,
+.pt-ai-icon-btn[aria-disabled="true"] {
 	color: var(--pt-text-faint, var(--text-faint));
 	cursor: not-allowed;
 }
@@ -1788,45 +1789,25 @@ button.pt-facet-letter-btn.is-active {
 	flex-shrink: 0;
 }
 
-/* ── 搜索框（组合输入：左段=模式选择器｜右段=内容输入 + AI badge） ──
-   第二行独占整行，宽度自动撑满 header，不被工具按钮挤压。
-   去掉底纹、圆角与外框，让搜索区与 header 表面融为一体，仅保留极淡下划线作为控件边界。 */
-.pt-search {
+/* 组合搜索控件：模式、输入和计数共享清晰外框，与收藏/CSS 搜索框一致。 */
+.pt-view .pt-search {
 	position: relative;
 	display: flex;
-	align-items: stretch;
+	align-items: center;
 	width: 100%;
-	background: transparent;
-	border: none;
-	border-bottom: 1px solid var(--pt-border);
-	border-radius: 0;
+	min-height: 40px;
+	box-sizing: border-box;
+	background: var(--pt-surface);
+	border: 1px solid var(--pt-border-strong);
+	border-radius: var(--pt-radius, 8px);
 	transition: border-color var(--pt-duration-normal) var(--pt-ease);
 }
-.pt-search:hover { border-bottom-color: var(--pt-border-strong); }
-/* 焦点表现：下划线改为强调色，无实心环、无光晕框，保持扁平。 */
-.pt-search:focus-within {
-	border-bottom-color: var(--pt-accent);
-	box-shadow: none;
+.pt-view .pt-search:hover { border-color: var(--pt-text-muted); }
+.pt-view .pt-search:focus-within {
+	border-color: var(--pt-accent);
+	box-shadow: 0 0 0 1px var(--pt-accent);
 }
-/* 暗色主题强制与亮色统一：不允许主题/UA 给搜索框加回背景、实线边框或圆角。
-   用 .theme-dark .pt-view .pt-search 把 specificity 提到 (0,3,0)，覆盖常见主题对 input/select 的全局样式。 */
-.theme-dark .pt-view .pt-search,
-.theme-dark .pt-view .pt-search:hover,
-.theme-dark .pt-view .pt-search:focus-within {
-	background: transparent;
-	border: none;
-	border-bottom: 1px solid var(--pt-border);
-	border-radius: 0;
-	box-shadow: none;
-}
-.theme-dark .pt-view .pt-search:hover { border-bottom-color: var(--pt-border-strong); }
-.theme-dark .pt-view .pt-search:focus-within { border-bottom-color: var(--pt-accent); }
-.theme-dark .pt-view .pt-search.pt-search--ai-loading {
-	border-color: transparent;
-	border-bottom-color: var(--pt-accent);
-	background: transparent;
-	box-shadow: none;
-}
+.pt-view .pt-search.pt-search--ai-loading { border-color: var(--pt-accent); }
 .theme-dark .pt-view .pt-search-input {
 	background: transparent;
 	border: 0;
@@ -1897,7 +1878,7 @@ button.pt-facet-letter-btn.is-active {
 	border-radius: 0;
 	outline: none;
 }
-.pt-search-input::placeholder { color: var(--pt-text-faint); }
+.pt-view .pt-search-input::placeholder { color: var(--pt-text-muted); opacity: 1; }
 
 /* 一键清除按钮（搜索框内右侧，有内容时由 JS 显示） */
 .pt-search-clear {
@@ -6472,19 +6453,7 @@ button.pt-card-install-btn--installed {
 .pt-mobile {
 	--pt-side-pad: 16px;
 }
-/* 搜索区在移动端保持与桌面同一套扁平形态：不允许 Obsidian 移动端 / 主题把表单灰底与圆角
-   加回输入框。根因：移动端对 <input> 的全局表单样式特异性高于 .pt-search-input(0,1,0)，
-   而亮色主题下没有暗色分支那条兜底（1489 一带）、宽屏平板上 @container ≤520 的兜底
-   （6248 一带）也不生效 → 漏出 rgb(233,233,234) 的圆角灰块（桌面端不出现，两端不一致）。
-   此处与那两处同源同策，只把触发条件从「暗色」/「容器窄」改为「移动端设备」。 */
-/* 容器只清底色/圆角/投影，绝不动 border —— 下划线是本控件唯一的边界表达。
-   注意：pt-view 与 pt-mobile 加在「同一个元素」上，故用复合类 .pt-view.pt-mobile（非后代 .pt-mobile .pt-view）。 */
-.pt-view.pt-mobile .pt-search {
-	background: transparent;
-	background-color: transparent;
-	border-radius: 0;
-	box-shadow: none;
-}
+/* 移动端沿用组合搜索外框，内部输入保持透明，避免主题叠加第二层灰底与边框。 */
 .pt-view.pt-mobile .pt-search-field {
 	background: transparent;
 	background-color: transparent;
@@ -7629,6 +7598,7 @@ button.pt-card-install-btn--installed {
 .pt-fav-group-head {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 8px;
 	padding: 6px 2px;
 	border-bottom: 1px solid var(--pt-border);
@@ -7644,19 +7614,30 @@ button.pt-card-install-btn--installed {
 	color: var(--pt-text-muted);
 	font-variant-numeric: tabular-nums;
 }
-.pt-fav-group-btn {
-	font-size: var(--pt-text-xs);
-	color: var(--pt-text-muted);
-	border: none;
-	background: transparent;
+.pt-fav-group-actions {
+	display: flex;
+	gap: 8px;
+	margin-left: auto;
+}
+.pt-view .pt-fav-group-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 30px;
+	font-size: var(--pt-text-sm);
+	color: var(--pt-text);
+	border: 1px solid var(--pt-border-strong);
+	background: var(--pt-surface);
 	cursor: pointer;
 	padding: 2px 6px;
 	border-radius: var(--pt-radius);
 }
-.pt-fav-group-btn:hover {
+.pt-view .pt-fav-group-btn:hover {
 	color: var(--pt-text);
 	background: var(--background-secondary);
 }
+.pt-fav-group-btn svg { width: 14px; height: 14px; }
+.pt-view .pt-fav-group-delete:hover { color: var(--text-error); }
 /* 收藏页卡片包装 */
 .pt-fav-card-wrap {
 	position: relative;

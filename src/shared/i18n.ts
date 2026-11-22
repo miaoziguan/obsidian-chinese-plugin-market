@@ -99,6 +99,8 @@ export const STRINGS = {
 	"version.loading": { zh: "正在获取版本列表…" },
 	"version.empty": { zh: "未获取到可用版本" },
 	"version.empty.hint": { zh: "该仓库可能没有发布 Release 或 Tag" },
+	"version.rateLimited": { zh: "GitHub 请求已限流，备用版本源也未能获取。请稍后刷新重试" },
+	"version.networkError": { zh: "无法连接版本源，请检查网络或代理后刷新重试" },
 	"version.fail": { zh: "获取版本列表失败：{msg}" },
 	"version.pinned": { zh: "已固定 v{version}" },
 	"version.unpin.failed": { zh: "取消固定失败：{msg}" },
@@ -294,6 +296,7 @@ export const STRINGS = {
 	"settings.review.folder": { zh: "评测台账笔记目录" },
 	// 评测台账（阶段5）：独立标签页「我的插件足迹」视图
 	"journal.footprint": { zh: "我的插件足迹" },
+	"journal.footprint.count": { zh: "共 {total} 条评测 · {unread} 条未读" },
 	"journal.openCmd": { zh: "打开我的插件足迹" },
 	"journal.empty": { zh: "还没有评测记录。打开任意插件详情，点头部的「评测」按钮写下你的使用体验，它就会出现在足迹里。" },
 	"journal.emptyHintTitle": { zh: "还没有评测记录" },
@@ -724,12 +727,18 @@ export const STRINGS = {
 	// 直链安装（ribbon 菜单「从直链安装插件」）
 	"directInstall.title": { zh: "从直链安装插件" },
 	"directInstall.desc": {
-		zh: "粘贴插件目录地址（如 https://example.com/myplugin/），一键安装未上架或测试版。仅支持 https；请确保来源可信，因为安装即运行代码。",
+		zh: "粘贴插件网址或桌面端本地插件目录，一键安装未上架或测试版。本地安装会复制文件并保留源目录；请确保来源可信，因为安装即运行代码。",
 	},
 	"directInstall.urlLabel": { zh: "插件地址" },
 	"directInstall.urlDesc": {
-		zh: "支持：① 目录 URL ② 指向 manifest.json 的完整链接（自动取父目录）③ GitHub 仓库 URL（如 https://github.com/owner/repo，含 /tree/<branch>）④ GitHub 简写 owner/repo，可用 @分支 / @标签 / @commit 钉版本，@release 从 Release 安装",
+		zh: "支持：① https 目录或 manifest.json 链接 ② GitHub 仓库 URL 或 owner/repo，可用 @分支 / @标签 / @commit 钉版本，@release 从 Release 安装 ③ 桌面端本地目录或 manifest.json 路径（含 file://），目录须包含 manifest.json 和 main.js；保留当前插件的 data.json",
 	},
+	"directInstall.placeholder": { zh: "owner/repo 或本地插件目录路径" },
+	"directInstall.local.desktop": { zh: "本地目录安装仅支持桌面端的本地仓库" },
+	"directInstall.local.path": { zh: "请填写本地插件目录的绝对路径" },
+	"directInstall.local.overlap": { zh: "源目录与目标插件目录不能互相包含" },
+	"directInstall.local.symlink": { zh: "插件目录包含符号链接，请使用普通文件目录安装" },
+	"directInstall.local.self": { zh: "请通过社区插件更新功能更新当前运行的中文插件市场" },
 	"directInstall.install": { zh: "安装" },
 	"directInstall.installing": { zh: "安装中…" },
 	"directInstall.badUrl": { zh: "地址格式不对，要填完整的网址" },

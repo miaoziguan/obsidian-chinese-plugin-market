@@ -418,6 +418,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 			if (ctx.aiSearchPending) {
 				layer.empty();
 				ctx.cardById.clear(); // 清层后持久化索引失效，整体清空
+				ctx.pendingCards.clear();
 				ctx.windowStart = -1; ctx.windowEnd = -1; // 清层后窗口守卫失效，防下次误跳过
 				const loading = layer.createDiv({ cls: "pt-empty pt-ai-loading-state" });
 				loading.createDiv({ cls: "pt-empty-icon" });
@@ -429,6 +430,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 			}
 			layer.empty();
 			ctx.cardById.clear(); // 清层后持久化索引失效，整体清空
+			ctx.pendingCards.clear();
 			ctx.windowStart = -1; ctx.windowEnd = -1; // 清层后窗口守卫失效，防下次误跳过
 			const empty = layer.createDiv({ cls: "pt-empty" });
 			empty.createDiv({ cls: "pt-empty-icon" });
@@ -496,25 +498,18 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 		// 卡片池（cardPool）+ 持久化索引（cardById）+ 懒填充（pendingCards）全部复用，
 		// 滚动仅做增量换入换出（见 updateWindow），避免频繁 create/destroy。
 		ctx.measureLayoutIfNeeded();
-
-		// 全量重渲路径（列表身份变化）：回收旧卡片、清空索引，再重建窗口
-		for (const [, card] of ctx.cardById) {
-			ctx.cardPool.push(card);
+		// 引导/错误等界面也会清掉卡片索引，丢弃其遗留待填任务，避免空闲回调持续重排。
+		for (const card of ctx.pendingCards) {
+			if (ctx.cardById.get(card.getAttribute("data-plugin-id") ?? "") !== card) ctx.pendingCards.delete(card);
 		}
-		ctx.cardById.clear();
-		ctx.pendingCards.clear();
-		// 清掉遗留的非卡片节点（空态 / 引导占位 / spacer）
-		layer.empty();
 
 		const renderCtx = makeCardRenderCtx(ctx);
 		// 首次渲染标记（用于入场动画，仅加一次）
 		const firstPaint = !layer.classList.contains("pt-list-in");
 
 		// 构造上/下 spacer（grid 跨所有列，撑出总高让窗口卡落在正确滚动位置）
-		const spacerTop = createDiv({ cls: "pt-list-spacer pt-list-spacer-top" });
-		const spacerBottom = createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" });
-		layer.appendChild(spacerTop);
-		layer.appendChild(spacerBottom);
+		const spacerTop = ctx.spacerTop ?? createDiv({ cls: "pt-list-spacer pt-list-spacer-top" });
+		const spacerBottom = ctx.spacerBottom ?? createDiv({ cls: "pt-list-spacer pt-list-spacer-bottom" });
 		// 缓存引用，供 updateWindowImpl 每滚动帧复用（避免对 5600+ 节点 layer 反复 querySelector）
 		ctx.spacerTop = spacerTop;
 		ctx.spacerBottom = spacerBottom;
@@ -526,7 +521,7 @@ export function renderWindow(ctx: ViewContext, _opts?: { measure?: boolean }) {
 		ctx.windowEnd = -1;
 
 		// 填充窗口（结构 + 内容骨架），并补完内容填充
-		updateWindowImpl(ctx, renderCtx);
+		updateWindowImpl(ctx, renderCtx, true);
 
 		if (firstPaint) layer.classList.add("pt-list-in");
 
@@ -557,7 +552,7 @@ export function updateWindow(ctx: ViewContext): void {
  * 更新上/下 spacer 高度，最后以 [spacerTop, ...窗口卡, spacerBottom] 顺序重写 layer 子节点。
  * 纯结构操作（不触发 applyCardState），内容填充交给 fillVisibleWindow 的帧预算分片。
  */
-function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void {
+function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext, refreshExisting = false): void {
 	const layer = ctx.scrollCardLayer;
 	const vp = ctx.scrollViewport;
 	if (!layer || !vp || ctx.visibleList.length === 0) return;
@@ -569,9 +564,11 @@ function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void 
 	ctx.windowEnd = win.end;
 
 	// ── 1. 回收窗口外卡片（脱离 DOM + 回收入池 + 清理索引/pending）──
+	const wantedIds = new Set(ctx.visibleList.slice(win.start, win.end).map((p) => p.id));
 	for (const [id, card] of ctx.cardById) {
 		if (card === undefined) continue;
-		if (!isInWindow(card, win.start, win.end)) {
+		if (!wantedIds.has(id)) {
+			card.remove();
 			ctx.cardPool.push(card);
 			ctx.pendingCards.delete(card);
 			ctx.cardById.delete(id);
@@ -579,12 +576,10 @@ function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void 
 	}
 
 	// ── 2. 确保窗口内卡片在场（池化复用 + 标记 pending 懒填充）──
-	const seen = new Set<string>();
 	for (let i = win.start; i < win.end; i++) {
 		const plugin = ctx.visibleList[i];
 		if (!plugin) continue;
 		const id = plugin.id;
-		seen.add(id);
 		let card = ctx.cardById.get(id);
 		if (!card) {
 			// 从池取（节点可能残留旧插件内容，必填 pending 待 fillVisibleWindow 覆盖）或新建
@@ -593,6 +588,9 @@ function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void 
 			card.setAttribute("data-fill-pending", "1");
 			ctx.cardById.set(id, card);
 			ctx.pendingCards.add(card);
+		} else if (refreshExisting && !ctx.pendingCards.has(card)) {
+			// 排序后仍在窗口内的插件保留节点和已填内容，不退回加载骨架。
+			applyCardState(card, plugin, ctx.translatedResults[id], renderCtx);
 		}
 		card.setAttribute("data-idx", String(i));
 		// role=list/listitem 已在注释里承诺「用 posinset/setsize 告知读屏器这是长列表的第 x/n 项」，
@@ -618,20 +616,24 @@ function updateWindowImpl(ctx: ViewContext, renderCtx: CardRenderContext): void 
 
 	// ── 4. 按索引顺序重写 layer 子节点：[spacerTop, ...窗口卡, spacerBottom] ──
 	// 复用同一批节点引用（不重建），仅调整其在 DOM 中的顺序与数量，避免闪烁/重排抖动。
-	const fragment = createFragment();
+	const ordered: HTMLElement[] = [spacerTop];
 	for (let i = win.start; i < win.end; i++) {
 		const id = ctx.visibleList[i]?.id;
 		if (!id) continue;
 		const card = ctx.cardById.get(id);
-		if (card) fragment.appendChild(card);
+		if (card) ordered.push(card);
 	}
-	layer.replaceChildren(spacerTop, fragment, spacerBottom);
-}
-
-/** 卡片的 data-idx 是否落在窗口 [start,end) 内 */
-function isInWindow(card: HTMLElement, start: number, end: number): boolean {
-	const di = parseInt(card.getAttribute("data-idx") || "-1", 10);
-	return di >= start && di < end;
+	ordered.push(spacerBottom);
+	let cursor: ChildNode | null = layer.firstChild;
+	for (const node of ordered) {
+		if (node === cursor) cursor = cursor.nextSibling;
+		else layer.insertBefore(node, cursor);
+	}
+	while (cursor) {
+		const next = cursor.nextSibling;
+		cursor.remove();
+		cursor = next;
+	}
 }
 
 /** 构造卡片渲染上下文（renderWindow 与 fillVisibleWindow 共用，避免重复） */

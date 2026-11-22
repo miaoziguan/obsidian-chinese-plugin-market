@@ -334,3 +334,27 @@ describe("alignFacetLabels", () => {
 		expect(a.style.flex).toBe("0 0 80px");
 	});
 });
+
+describe("足迹未读数与翻译提示", () => {
+	it("徽标刷新使用实时未读数，读完清除，新增后重新出现", () => {
+		const { ctx } = makeCtx({ journalEntryIds: new Set(["a", "b"]) });
+		const unread = vi.fn(() => 2);
+		ctx.plugin.getJournalUnreadCount = unread;
+		buildToolbar(ctx, { suppressResizeMeasure: false, advancedAnimTimer: 0 });
+		expect(ctx.contentEl.querySelector(".pt-header-footprint-badge")?.textContent).toBe("2");
+		unread.mockReturnValue(0);
+		ctx.refreshJournalBadge!();
+		expect(ctx.contentEl.querySelector(".pt-header-footprint-badge")).toBeNull();
+		unread.mockReturnValue(1);
+		ctx.refreshJournalBadge!();
+		expect(ctx.contentEl.querySelector(".pt-header-footprint-badge")?.textContent).toBe("1");
+	});
+
+	it("翻译完成后按钮仍可聚焦获取提示，点击不会触发翻译", () => {
+		const { ctx } = makeCtx();
+		buildToolbar(ctx, { suppressResizeMeasure: false, advancedAnimTimer: 0 });
+		ctx.aiTranslateBtnEl!.setAttribute("aria-disabled", "true");
+		click(ctx.aiTranslateBtnEl!);
+		expect(ctx.aiTranslateAllPending).not.toHaveBeenCalled();
+	});
+});

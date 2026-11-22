@@ -85,3 +85,59 @@ describe("saveJournalEntry：两条分支都刷新已打开视图的卡片（269
 		expect((plugin as AnyPlugin).refreshJournalStats).toHaveBeenCalled();
 	});
 });
+
+describe("评测未读状态", () => {
+	it("查看后归零，新增/编辑立即未读，清空评测立即移除", async () => {
+		const view = new ChinesePluginMarketView({} as never, {} as never);
+		const refreshJournalBadge = vi.fn();
+		Object.assign(view, { refreshJournalBadge });
+		const saveSettings = vi.fn();
+		const plugin = makePlugin({ workspace: { getLeavesOfType: () => [{ view }] } }, {
+			settings: { journalSeenIds: [] }, saveSettings,
+		});
+		const internal = plugin as AnyPlugin;
+		await plugin.saveJournalEntry({ id: "a", note: "A" } as never);
+		expect(plugin.getJournalUnreadCount()).toBe(1);
+		internal.markJournalRead(["a"]);
+		expect(plugin.getJournalUnreadCount()).toBe(0);
+		expect(internal.settings.journalSeenIds).toEqual(["a"]);
+		await plugin.saveJournalEntry({ id: "b", note: "B" } as never);
+		expect(plugin.getJournalUnreadCount()).toBe(1);
+		await plugin.saveJournalEntry({ id: "a", note: "A edited" } as never);
+		expect(plugin.getJournalUnreadCount()).toBe(2);
+		await plugin.saveJournalEntry({ id: "b" } as never);
+		expect(plugin.getJournalUnreadCount()).toBe(1);
+		expect(refreshJournalBadge).toHaveBeenCalled();
+		expect(saveSettings).toHaveBeenCalled();
+	});
+
+	it("旧设置无已读字段时兼容，重复查看不重复保存设置", () => {
+		const saveSettings = vi.fn();
+		const plugin = makePlugin({ workspace: { getLeavesOfType: () => [] } }, {
+			settings: {}, saveSettings, journalEntryIds: new Set(["a"]),
+		});
+		expect(plugin.getJournalUnreadCount()).toBe(1);
+		(plugin as AnyPlugin).markJournalRead(["a"]);
+		(plugin as AnyPlugin).markJournalRead(["a"]);
+		expect(saveSettings).toHaveBeenCalledTimes(1);
+	});
+});
+
+it("后发扫描先完成时，旧扫描不会覆盖最新评测集合", async () => {
+	const plugin = makePlugin({ workspace: { getLeavesOfType: () => [] } }, { settings: {} });
+	const internal = plugin as AnyPlugin;
+	const pending: Array<(files: string[]) => void> = [];
+	internal.noteStorage.listMarkdown = () => new Promise(resolve => pending.push(resolve));
+	internal.noteStorage.readNote = async (p: string) => `---\nid: ${p.slice(0, -3)}\nname: Test\nstatus: using\n---\n评测`;
+	// 使用生产方法，而非 makePlugin 为既有保存测试提供的刷新 stub。
+	const refresh = (Object.getPrototypeOf(plugin) as AnyPlugin).refreshJournalStats.bind(plugin);
+	const first = refresh();
+	const second = refresh();
+	pending[1](["new.md"]);
+	await second;
+	const latest = plugin.journalEntryIds;
+	expect([...latest]).toEqual(["new"]);
+	pending[0]([]);
+	await first;
+	expect(plugin.journalEntryIds).toBe(latest);
+});

@@ -201,12 +201,15 @@ function renderGroupSection(ctx: ViewContext, group: string, members: string[]):
 
 	// 有名组提供重命名 / 删除（未分组区不提供）
 	if (group) {
+		const actions = createDiv({ cls: "pt-fav-group-actions" });
+		head.appendChild(actions);
 		const renameBtn = createEl("button", {
-			cls: "pt-fav-group-btn clickable-icon",
-			text: ctx.t("fav.group.rename"),
+			cls: "pt-fav-group-btn",
 			attr: { type: "button", "aria-label": ctx.t("fav.group.rename") },
 		});
-		head.appendChild(renameBtn);
+		setIcon(renameBtn.createSpan(), "pencil");
+		renameBtn.createSpan({ text: ctx.t("fav.group.rename") });
+		actions.appendChild(renameBtn);
 		renameBtn.addEventListener("click", () => {
 			new PromptModal(
 				ctx.app,
@@ -223,11 +226,12 @@ function renderGroupSection(ctx: ViewContext, group: string, members: string[]):
 		});
 
 		const delBtn = createEl("button", {
-			cls: "pt-fav-group-btn clickable-icon",
-			text: ctx.t("fav.group.delete"),
+			cls: "pt-fav-group-btn pt-fav-group-delete",
 			attr: { type: "button", "aria-label": ctx.t("fav.group.delete") },
 		});
-		head.appendChild(delBtn);
+		setIcon(delBtn.createSpan(), "trash-2");
+		delBtn.createSpan({ text: ctx.t("fav.group.delete") });
+		actions.appendChild(delBtn);
 		delBtn.addEventListener("click", () => {
 			const modal = new Modal(ctx.app);
 			const tip = createDiv({ text: ctx.t("fav.group.delete.confirm", { name: group }) });
@@ -333,6 +337,7 @@ async function renameGroup(ctx: ViewContext, from: string, to: string): Promise<
 	// 目标名已存在（且非自身）：静默忽略，避免产生重复组名导致合并/渲染重复区块
 	if (listGroups(ctx).some((g) => g !== from && g === to)) return;
 	ctx.settings.favoriteGroupNames = ctx.settings.favoriteGroupNames.map((g) => (g === from ? to : g));
+	if (ctx.favoriteGroupFilter === from) ctx.favoriteGroupFilter = to;
 	const map = ctx.settings.favoriteGroupOf;
 	for (const [id, g] of Object.entries(map)) {
 		if (g === from) map[id] = to;
@@ -343,6 +348,7 @@ async function renameGroup(ctx: ViewContext, from: string, to: string): Promise<
 /** 删除组：从清单移除，该组所有成员回到未分组（删除映射键） */
 async function deleteGroup(ctx: ViewContext, group: string): Promise<void> {
 	ctx.settings.favoriteGroupNames = ctx.settings.favoriteGroupNames.filter((g) => g !== group);
+	if (ctx.favoriteGroupFilter === group) ctx.favoriteGroupFilter = FAV_GROUP_ALL;
 	const map = { ...ctx.settings.favoriteGroupOf };
 	for (const [id, g] of Object.entries(map)) {
 		if (g === group) delete map[id];
