@@ -20,6 +20,7 @@ export const CONTRIBUTORS: Contributor[] = [
 	{ name: "vran", github: "vran-dev" },
 	{ name: "AlbusGuo", github: "AlbusGuo" },
 	{ name: "eve1329", github: "eve1329" },
+	{ name: "lnn3199", github: "lnn3199" },
 ];
 
 /** 拼接贡献者的 GitHub 主页 URL（仅用户名，避免拼接外部任意 URL 的安全风险）。 */
