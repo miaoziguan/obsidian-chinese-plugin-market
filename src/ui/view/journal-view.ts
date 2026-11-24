@@ -21,6 +21,7 @@ export interface JournalViewHost {
 	officialNames: () => Promise<Map<string, string>>;
 	/** 点击表格某行：跳回主视图对应插件 */
 	openPlugin: (id: string) => void;
+	onRead?: (ids: string[]) => void;
 	t: (k: I18nKey) => string;
 }
 
@@ -73,6 +74,7 @@ export class JournalView extends ItemView {
 		if (!result) return;
 		const [history, entries, official] = result;
 		loading.remove();
+		this.host.onRead?.(entries.map((e) => e.id));
 
 		// 还没写过任何评测：展示引导（B），并附「装过」记录数供参考
 		if (entries.length === 0) {

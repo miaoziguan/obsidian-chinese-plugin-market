@@ -107,14 +107,56 @@ describe("fetchPluginVersions", () => {
 		expect(list.map((v) => v.tag)).toEqual(["1.0.0"]);
 	});
 
-	it("网络异常时返回空数组而不抛错", async () => {
+	it("网络异常时报告失败，下次打开允许重试", async () => {
 		req.mockRejectedValue(new Error("network down"));
-		await expect(fetchPluginVersions("o/r")).resolves.toEqual([]);
+		await expect(fetchPluginVersions("o/r")).rejects.toThrow("无法连接版本源");
+		req.mockResolvedValue(res(200, [{ tag_name: "1.0.0" }]));
+		await expect(fetchPluginVersions("o/r")).resolves.toMatchObject([{ tag: "1.0.0", version: "1.0.0" }]);
 	});
 
 	it("repo 非法直接返回空数组（不发请求）", async () => {
 		await expect(fetchPluginVersions("")).resolves.toEqual([]);
 		await expect(fetchPluginVersions("only-one")).resolves.toEqual([]);
 		expect(req).not.toHaveBeenCalled();
+	});
+});
+
+
+describe("版本来源回退与并发", () => {
+	beforeEach(() => {
+		req.mockReset();
+		clearPluginVersionsCache();
+		setHttpClient({ request: req });
+	});
+	afterEach(() => resetHttpClient());
+
+	it("API 限流后从版本兼容表读取真实 tag 并按版本降序排列", async () => {
+		req.mockImplementation(async ({ url }: { url: string }) => url.includes("api.github.com")
+			? res(403, { message: "rate limited" })
+			: res(200, { "1.9.0": "1.0", "v2.0.0": "1.0", "1.10.0": "1.0", "../bad": "1.0", "5.0": null }));
+		expect((await fetchPluginVersions("o/r")).map(v => v.tag)).toEqual(["v2.0.0", "1.10.0", "1.9.0"]);
+	});
+
+	it("raw 不可达时尝试 CDN，保留原始版本键用于安装", async () => {
+		req.mockImplementation(async ({ url }: { url: string }) => url.includes("cdn.jsdelivr.net")
+			? res(200, { "V3.0.0": "1.0" }) : res(429, null));
+		expect(await fetchPluginVersions("o/r")).toEqual([{ tag: "V3.0.0", version: "3.0.0" }]);
+	});
+
+	it("所有来源都失败时区分限流和无版本", async () => {
+		req.mockResolvedValue(res(403, {}));
+		await expect(fetchPluginVersions("o/r")).rejects.toThrow("限流");
+		req.mockResolvedValue(res(404, null));
+		await expect(fetchPluginVersions("o/r")).resolves.toEqual([]);
+	});
+
+	it("同仓库同时打开选择器只发起一组请求", async () => {
+		let resolve!: (v: ReturnType<typeof res>) => void;
+		req.mockImplementation(() => new Promise(r => { resolve = r; }));
+		const first = fetchPluginVersions("o/r");
+		const second = fetchPluginVersions("o/r");
+		resolve(res(200, [{ tag_name: "1.0.0" }]));
+		expect(await first).toEqual(await second);
+		expect(req).toHaveBeenCalledTimes(1);
 	});
 });

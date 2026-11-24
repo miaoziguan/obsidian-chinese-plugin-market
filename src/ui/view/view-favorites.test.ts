@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Menu } from "obsidian";
+import { Menu, Modal } from "obsidian";
 import { renderFavoritesList, FAV_GROUP_ALL, FAV_GROUP_NONE } from "./view-favorites";
 import type { ViewContext } from "./view-context";
 
@@ -197,8 +197,9 @@ describe("view-favorites 渲染器", () => {
 		expect(ctx.settings.favoriteGroupOf["alpha"]).toBeUndefined();
 	});
 
-	it("重命名分组：清单与成员映射同步替换", () => {
+	it("重命名分组：清单、成员映射与当前筛选同步替换", () => {
 		const ctx = makeCtx();
+		ctx.favoriteGroupFilter = "AI 工具";
 		renderFavoritesList(ctx);
 		const head = ctx.favoritesListEl!.querySelector<HTMLElement>(".pt-fav-group-head")!;
 		const renameBtn = head.querySelector<HTMLButtonElement>(".pt-fav-group-btn")!;
@@ -207,6 +208,7 @@ describe("view-favorites 渲染器", () => {
 		promptSubmit.current!("智能助手");
 		expect(ctx.settings.favoriteGroupNames).toContain("智能助手");
 		expect(ctx.settings.favoriteGroupOf["alpha"]).toBe("智能助手");
+		expect(ctx.favoriteGroupFilter).toBe("智能助手");
 	});
 
 	it("空收藏且无分组显示空态文案", () => {
@@ -276,4 +278,22 @@ describe("view-favorites 渲染器", () => {
 		promptSubmit.current!("写作");
 		expect(ctx.settings.favoriteGroupNames.filter((g) => g === "AI 工具").length).toBe(1);
 	});
+});
+
+
+it("删除当前分组后回到全部筛选，收藏仍保留并移到未分组", async () => {
+	const ctx = makeCtx();
+	ctx.favoriteGroupFilter = "AI 工具";
+	const open = vi.spyOn(Modal.prototype, "open").mockImplementation(function (this: Modal) {
+		this.contentEl.querySelector<HTMLButtonElement>(".mod-cta")!.click();
+	});
+	renderFavoritesList(ctx);
+	ctx.favoritesListEl!.querySelector<HTMLButtonElement>(".pt-fav-group-delete")!.click();
+	await Promise.resolve();
+	await Promise.resolve();
+	expect(ctx.settings.favoriteGroupNames).not.toContain("AI 工具");
+	expect(ctx.settings.favoriteGroupOf.alpha).toBeUndefined();
+	expect(ctx.favoriteGroupFilter).toBe(FAV_GROUP_ALL);
+	expect(ctx.favoritesSet.has("alpha")).toBe(true);
+	open.mockRestore();
 });

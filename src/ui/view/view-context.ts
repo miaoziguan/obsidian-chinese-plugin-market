@@ -304,6 +304,7 @@ export interface ViewContext {
 	renderBetaList: () => void;
 	/** 刷新页签栏「更新」数量徽标（由工具栏构建时挂上，检测更新后调用） */
 	refreshViewTabsBadge?: () => void;
+	refreshJournalBadge?: () => void;
 	/** 正在一键安装中的插件 id 集合（安装中按钮显示「安装中…」并防重点） */
 	installingIds: Set<string>;
 	/** 正在一键更新的插件 id 集合（更新中按钮显示「更新中…」并防重点） */

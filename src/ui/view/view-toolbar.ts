@@ -400,19 +400,15 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 			attr: { type: "button", "aria-label": ctx.t("journal.footprint") },
 		});
 		setIcon(footprintBtn, "list-ordered");
-		// 数量反映「已写评测笔记」条数（与足迹视图一致）；永远可点，不做置灰禁用
-		const reviewCount = ctx.journalEntryIds?.size ?? 0;
-		// 用 aria-label 携带完整提示（Obsidian tooltip），避免 title 叠加出双气泡
-		footprintBtn.setAttribute(
-			"aria-label",
-			`${ctx.t("journal.footprint")} · 共 ${reviewCount} 条评测`,
-		);
-		if (reviewCount > 0) {
-			footprintBtn.createSpan({
-				cls: "pt-header-footprint-badge",
-				text: String(reviewCount),
-			});
-		}
+		ctx.refreshJournalBadge = () => {
+			const reviewCount = ctx.journalEntryIds?.size ?? 0;
+			const unread = ctx.plugin.getJournalUnreadCount?.() ?? reviewCount;
+			const hint = ctx.t("journal.footprint.count", { total: String(reviewCount), unread: String(unread) });
+			footprintBtn.setAttribute("aria-label", `${ctx.t("journal.footprint")} · ${hint}`);
+			footprintBtn.querySelector(".pt-header-footprint-badge")?.remove();
+			if (unread > 0) footprintBtn.createSpan({ cls: "pt-header-footprint-badge", text: String(unread) });
+		};
+		ctx.refreshJournalBadge();
 		footprintBtn.addEventListener("click", () => void ctx.plugin.openJournalView());
 
 		/** 判断某 profile 的启用集是否与当前实际启用集一致（用于标注「当前生效」） */
@@ -554,7 +550,7 @@ export function buildToolbar(ctx: ViewContext, state: ToolbarState): { searchInp
 		ctx.aiProgressEl.setCssStyles({ display: "none" });
 		// 抽取为命名处理器：移动端溢出菜单与图标按钮共用同一动作
 		const onAiTranslate = () => {
-			if (ctx.aiTranslateRunning) return;
+			if (ctx.aiTranslateRunning || ctx.aiTranslateBtnEl?.getAttribute("aria-disabled") === "true") return;
 			ctx.track("action:ai_translate");
 			// 无论当前是否已在「未翻译」筛选，点击都应立即反应：
 			// 若未切到 original 筛选，先切过去（让用户看到待翻译项），并**同时**触发翻译，

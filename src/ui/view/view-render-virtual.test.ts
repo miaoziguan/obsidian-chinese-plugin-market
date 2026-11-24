@@ -508,3 +508,65 @@ describe("fillVisibleWindow：懒填充与单帧预算", () => {
 		expect(ctx.pendingCards.size).toBe(0);
 	});
 });
+
+// 回归用户排序视频：仍在窗口内的卡片不能被回收、换绑成另一插件或重新进入骨架态。
+describe("排序重渲保留已显示卡片", () => {
+	it("相同顺序不拆卸 DOM，已填卡片保留内容和身份", () => {
+		const ctx = makeCtx({ visibleList: [plugin("a"), plugin("b")] });
+		renderWindow(ctx);
+		ctx.pendingCards.clear();
+		const before = Array.from(ctx.scrollCardLayer!.children);
+		const insert = vi.spyOn(ctx.scrollCardLayer!, "insertBefore");
+		const replace = vi.spyOn(ctx.scrollCardLayer!, "replaceChildren");
+		renderWindow(ctx);
+		expect(Array.from(ctx.scrollCardLayer!.children)).toEqual(before);
+		expect(ctx.cardById.get("a")).toBe(before[1]);
+		expect(ctx.cardById.get("b")).toBe(before[2]);
+		expect(insert).not.toHaveBeenCalled();
+		expect(replace).not.toHaveBeenCalled();
+		expect(ctx.pendingCards.size).toBe(0);
+	});
+
+	it("调换顺序保留各自节点，并刷新状态及无障碍序号", () => {
+		const ctx = makeCtx({ visibleList: [plugin("a"), plugin("b")] });
+		renderWindow(ctx);
+		ctx.pendingCards.clear();
+		const a = ctx.cardById.get("a")!;
+		const b = ctx.cardById.get("b")!;
+		vi.mocked(applyCardState).mockClear();
+		ctx.visibleList = [plugin("b"), plugin("a")];
+		renderWindow(ctx);
+		expect(Array.from(ctx.scrollCardLayer!.children)).toEqual([ctx.spacerTop, b, a, ctx.spacerBottom]);
+		expect(a.getAttribute("aria-posinset")).toBe("2");
+		expect(b.getAttribute("aria-posinset")).toBe("1");
+		expect(ctx.pendingCards.size).toBe(0);
+		expect(applyCardState).toHaveBeenCalledWith(a, ctx.visibleList[1], undefined, expect.anything());
+	});
+
+	it("部分窗口成员变化时，只回收离开的卡片", () => {
+		const ctx = makeCtx({ visibleList: [plugin("a"), plugin("b"), plugin("c")] });
+		renderWindow(ctx);
+		ctx.pendingCards.clear();
+		const b = ctx.cardById.get("b")!;
+		ctx.visibleList = [plugin("b"), plugin("c"), plugin("a")];
+		renderWindow(ctx);
+		expect(ctx.cardById.get("b")).toBe(b);
+		expect([...ctx.cardById.keys()].sort()).toEqual(["b", "c"]);
+		expect(b.getAttribute("data-fill-pending")).toBeNull();
+	});
+});
+
+it("空态及引导清层后的旧 pending 不残留在下一轮填充", () => {
+	const ctx = makeCtx({ visibleList: [plugin("a"), plugin("b")] });
+	renderWindow(ctx);
+	const stale = document.createElement("div");
+	stale.setAttribute("data-plugin-id", "gone");
+	ctx.pendingCards.add(stale);
+	ctx.visibleList = [];
+	renderWindow(ctx);
+	expect(ctx.pendingCards.size).toBe(0);
+	ctx.pendingCards.add(stale);
+	ctx.visibleList = [plugin("a"), plugin("b")];
+	renderWindow(ctx);
+	expect(ctx.pendingCards.has(stale)).toBe(false);
+});

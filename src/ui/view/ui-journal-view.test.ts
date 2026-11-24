@@ -149,3 +149,23 @@ describe("onOpen（journal-view.ts 47-117）", () => {
 		expect(() => view.onClose()).not.toThrow();
 	});
 });
+
+describe("足迹加载和已读确认", () => {
+	it("仅在成功加载后将实际展示的评测标记已读", async () => {
+		const onRead = vi.fn();
+		let resolve!: (rows: { id: string; name: string }[]) => void;
+		const { view } = makeView({ onRead, listEntries: () => new Promise(r => { resolve = r; }) });
+		const opening = view.onOpen();
+		expect(onRead).not.toHaveBeenCalled();
+		resolve([{ id: "new", name: "New" }]);
+		await opening;
+		expect(onRead).toHaveBeenCalledWith(["new"]);
+	});
+
+	it("加载失败时保留未读，不误标为已读", async () => {
+		const onRead = vi.fn();
+		const { view } = makeView({ onRead, listEntries: async () => { throw new Error("offline"); } });
+		await view.onOpen();
+		expect(onRead).not.toHaveBeenCalled();
+	});
+});

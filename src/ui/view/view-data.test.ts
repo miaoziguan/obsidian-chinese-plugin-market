@@ -517,7 +517,7 @@ describe("updateAiTranslateButton：按钮四态", () => {
 		updateAiTranslateButton(ctx);
 
 		expect(btn.classList.contains("pt-ai-icon-btn--ready")).toBe(true);
-		expect(String(btn.title)).toContain("ai.translate.hint");
+		expect(btn.getAttribute("aria-label")).toContain("ai.translate.hint");
 		expect(btn.disabled).toBe(false);
 	});
 
@@ -533,8 +533,9 @@ describe("updateAiTranslateButton：按钮四态", () => {
 
 		updateAiTranslateButton(ctx);
 
-		expect(btn.disabled).toBe(true);
-		expect(btn.title).toBe("ai.translate.none");
+		expect(btn.disabled).toBe(false);
+		expect(btn.getAttribute("aria-disabled")).toBe("true");
+		expect(btn.getAttribute("aria-label")).toContain("ai.translate.none");
 	});
 
 	it("「未翻译」筛选态下作为重跑入口：运行中禁用", () => {
@@ -550,8 +551,9 @@ describe("updateAiTranslateButton：按钮四态", () => {
 
 		updateAiTranslateButton(ctx);
 
-		expect(btn.disabled).toBe(true);
-		expect(btn.title).toBe("ai.translate.running");
+		expect(btn.disabled).toBe(false);
+		expect(btn.getAttribute("aria-disabled")).toBe("true");
+		expect(btn.getAttribute("aria-label")).toContain("ai.translate.running");
 	});
 
 	it("「未翻译」筛选态 + 有 AI Key → 提示重跑", () => {
@@ -567,7 +569,7 @@ describe("updateAiTranslateButton：按钮四态", () => {
 		updateAiTranslateButton(ctx);
 
 		expect(btn.disabled).toBe(false);
-		expect(btn.title).toBe("ai.translate.rerun");
+		expect(btn.getAttribute("aria-label")).toContain("ai.translate.rerun");
 	});
 
 	it("「未翻译」筛选态 + 无 Key → 提示降级到免费引擎（仍可点）", () => {
@@ -583,7 +585,7 @@ describe("updateAiTranslateButton：按钮四态", () => {
 		updateAiTranslateButton(ctx);
 
 		expect(btn.disabled).toBe(false);
-		expect(btn.title).toBe("ai.translate.free");
+		expect(btn.getAttribute("aria-label")).toContain("ai.translate.free");
 	});
 });
 

@@ -138,6 +138,7 @@ export interface DrawerHostPlugin {
 	journalTriedIds: Set<string>;
 	/** 已写评测笔记的 id 集合（供详情页「我的评测」按钮高亮判定） */
 	journalEntryIds?: Set<string>;
+	getJournalUnreadCount?: () => number;
 	/** 打开「我的插件足迹」独立视图 */
 	openJournalView: () => void | Promise<void>;
 }

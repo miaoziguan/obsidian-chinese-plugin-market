@@ -99,6 +99,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	journalAbandonedIds: Set<string> = new Set();
 	/** 已写评测笔记的插件 id 集合（供卡片「评测」图标高亮；由 refreshJournalStats 扫描填充，零额外 IO） */
 	journalEntryIds: Set<string> = new Set();
+	private journalStatsRevision = 0;
 	/** 全局评测统计（弃用率 / 踩坑 Top 等，onload 后台扫描聚合，供「踩坑洞察」面板） */
 	journalStats: JournalStats | null = null;
 	/** 弃用原因 → 插件 id 集合索引（来自评测笔记 verdict，供踩坑 Top 点击联动筛选） */
@@ -237,6 +238,27 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		return true;
 	}
 
+	getJournalUnreadCount = (): number => {
+		const seen = new Set(this.settings?.journalSeenIds ?? []);
+		return [...this.journalEntryIds].filter((id) => !seen.has(id)).length;
+	};
+
+	private markJournalRead(ids: string[]): void {
+		const seen = new Set(this.settings.journalSeenIds ?? []);
+		const unread = ids.filter((id) => !seen.has(id));
+		if (unread.length === 0) return;
+		this.settings.journalSeenIds = [...seen, ...unread];
+		void this.saveSettings();
+		this.refreshJournalBadges();
+	}
+
+	private refreshJournalBadges(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			const view = leaf.view;
+			if (view instanceof ChinesePluginMarketView) view.refreshJournalBadge?.();
+		}
+	}
+
 	/** 评测笔记目录：默认 .obsidian 私有目录下的 reviews/，设置可切 vault 路径 */
 	private journalFolder(): string {
 		const v = this.settings.reviewFolder?.trim();
@@ -267,6 +289,8 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 	 * （v2.48.0 的 ENOENT 事故即源于此处漏 await，新功能务必复用已修逻辑）。
 	 */
 	async saveJournalEntry(e: JournalEntry): Promise<void> {
+		// 保存开始即让旧扫描失效，避免旧目录快照把刚新增的评测和徽标覆盖回去。
+		this.journalStatsRevision++;
 		// 无实质内容（未选状态/评分/弃用原因，且备注为空）视为「未评测」：
 		// 删除目录里可能残留的 .md（用户清空了之前的评测），维护高亮集合后直接返回，不落盘。
 		const hasContent = !!(
@@ -286,6 +310,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				// 忽略删除失败（笔记本就不存在时 exists 即返回 false）
 			}
 			this.journalEntryIds.delete(e.id);
+			this.refreshJournalBadges();
 			this.journalAbandonedIds.delete(e.id);
 			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 				const view = leaf.view;
@@ -308,6 +333,11 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 			// 增量维护「已写评测」集合：避免后续 refreshJournalStats 走 adapter.list
 			// 时被 .obsidian/ 路径下的缓存滞后漏掉新文件，导致刚写的评测图标不变色。
 			this.journalEntryIds.add(e.id);
+			if (this.settings?.journalSeenIds?.includes(e.id)) {
+				this.settings.journalSeenIds = this.settings.journalSeenIds.filter((id) => id !== e.id);
+				void this.saveSettings();
+			}
+			this.refreshJournalBadges();
 			// 立即对已打开视图的目标卡片刷新评测高亮（单卡局部刷新，不依赖
 			// refreshJournalStats 的异步全量重扫，用户保存瞬间即可看到图标变金）
 			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
@@ -325,6 +355,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 
 	/** 后台刷新全局评测统计 + 已弃用集合：扫描笔记目录，聚合「踩坑洞察」数据后通知视图重渲染 */
 	private async refreshJournalStats(): Promise<void> {
+		const revision = ++this.journalStatsRevision;
 		try {
 			const dir = this.journalFolder();
 			const files = await this.noteStorage.listMarkdown(dir);
@@ -337,11 +368,13 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 				if (entry.status === "abandoned") ids.add(entry.id);
 				entries.push(entry);
 			}
+			if (revision !== this.journalStatsRevision) return;
 			this.journalAbandonedIds = ids;
 			// 已写「有效」评测笔记的 id 集合：仅采纳 parseJournalNote 成功解析的 entry.id，
 			// 避免评测目录里残留的 .md（空文件 / 损坏笔记 / 用户别处放进来的笔记等）文件名
 			// 误命中 plugin id 导致卡片莫名高亮。
 			this.journalEntryIds = new Set(entries.map((e) => e.id));
+			this.refreshJournalBadges();
 			this.journalStats = computeJournalStats(entries);
 			this.journalVerdictIds = buildVerdictIndex(entries);
 			// 注入已打开视图并触发重渲染（视图未创建时其 onOpen 会自然读到集合/统计）
@@ -629,6 +662,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 					}
 				},
 				openPlugin: (id) => void this.openJournalTarget(id),
+				onRead: (ids) => this.markJournalRead(ids),
 				t: (k) => t(k),
 			}),
 		);
@@ -1137,6 +1171,7 @@ export default class ChinesePluginMarketPlugin extends Plugin {
 		const existing = this.app.workspace.getLeavesOfType(JOURNAL_VIEW_TYPE);
 		if (existing.length > 0) {
 			this.app.workspace.setActiveLeaf(existing[0], { focus: true });
+			if (existing[0].view instanceof JournalView) await existing[0].view.onOpen();
 			return;
 		}
 		const leaf = this.app.workspace.getLeaf("tab");

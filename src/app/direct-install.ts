@@ -15,6 +15,7 @@ import { Modal, Notice, Setting, type App, requestUrl, requireApiVersion } from 
 import { makeT } from "@shared/i18n";
 import { compareVersion } from "@shared/version";
 import { asAppInternals } from "@data/platform/obsidian-internals";
+import { installLocalPlugin, isLocalPluginPath } from "@app/local-plugin-install";
 
 const t = makeT();
 
@@ -477,6 +478,10 @@ export async function installFromUrlResolved(
 	app: App,
 	url: string,
 ): Promise<{ man: Manifest; release: boolean }> {
+	if (isLocalPluginPath(url)) {
+		const { man } = await installLocalPlugin(app, url);
+		return { man, release: false };
+	}
 	const spec = parseSourceSpec(url);
 	const { man, release } = await resolveRemoteManifest(spec);
 	spec.release = release;
@@ -648,6 +653,10 @@ export async function updateBetaPlugin(
 	app: App,
 	entry: BetaPluginEntry,
 ): Promise<{ updated: boolean; manifest: Manifest; release: boolean }> {
+	if (isLocalPluginPath(entry.rootUrl)) {
+		const { man, updated } = await installLocalPlugin(app, entry.rootUrl, entry.id, entry.installedVersion);
+		return { updated, manifest: man, release: false };
+	}
 	const spec = rebuildUpdateSpec(entry);
 	const { man, release } = await resolveRemoteManifest(spec);
 	if (man.id !== entry.id) {
@@ -704,7 +713,7 @@ export class DirectInstallModal extends Modal {
 			.setName(t("directInstall.urlLabel"))
 			.setDesc(isTheme ? t("beta.desc.theme") : t("directInstall.urlDesc"))
 			.addText((text) => {
-				text.setPlaceholder("owner/repo")
+				text.setPlaceholder(isTheme ? "owner/repo" : t("directInstall.placeholder"))
 					.setValue(this.url)
 					.onChange((v) => (this.url = v));
 				text.inputEl.setCssStyles({ width: "100%" });
@@ -725,8 +734,12 @@ export class DirectInstallModal extends Modal {
 		btn.setDisabled(true);
 		try {
 			// 先解析来源：rootUrl/release 既要用于安装，也要原样记进跟踪表
-			const spec = parseSourceSpec(this.url);
-			if (this.kind === "theme") {
+			if (this.kind === "plugin" && isLocalPluginPath(this.url)) {
+				const { man: m, sourceUrl } = await installLocalPlugin(this.app, this.url);
+				this.record({ id: m.id, name: m.name ?? m.id, version: m.version, rootUrl: sourceUrl, kind: "plugin", release: false });
+				new Notice(t("directInstall.done", { name: m.name || m.id, version: m.version }), 6000);
+			} else if (this.kind === "theme") {
+				const spec = parseSourceSpec(this.url);
 				const info = await installThemeFromUrl(this.app, this.url);
 				this.record({
 					id: info.id,
@@ -739,6 +752,7 @@ export class DirectInstallModal extends Modal {
 				});
 				new Notice(t("beta.installed.theme", { name: info.name }), 6000);
 			} else {
+				const spec = parseSourceSpec(this.url);
 				// release 从「实际使用的来源模式」来：源码树版本落后时会自动改道 Release，
 				// 跟踪表必须记下改道结果，否则下次更新又从源码树读回旧版本号
 				const { man: m, release } = await installFromUrlResolved(this.app, this.url);
@@ -751,7 +765,7 @@ export class DirectInstallModal extends Modal {
 					release,
 					releaseTag: release ? spec.releaseTag : undefined,
 				});
-				new Notice(t("directInstall.done", { name: m.name || m.id, v: m.version }), 6000);
+				new Notice(t("directInstall.done", { name: m.name || m.id, version: m.version }), 6000);
 			}
 			this.close();
 		} catch (e) {

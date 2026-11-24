@@ -836,35 +836,21 @@ export function toggleAuthorFilter(ctx: ViewContext, author: string) {
 			if (!ctx.isTranslated(p)) untranslatedCount++;
 		}
 
-		// 重置「有待翻译」的高亮态，后续按当前情形重新判定
-		btn.classList.remove("pt-ai-icon-btn--ready");
-
-		if (ctx.sourceFilter === "original") {
-			// 已处于「未翻译」筛选态：按钮作为该态的重跑入口（常态化显示 + 高亮态）
-			btn.setCssStyles({ display: "", opacity: "1" });
-			btn.classList.add("pt-ai-icon-btn--ready");
-			if (ctx.aiTranslateRunning) {
-				btn.disabled = true;
-				btn.title = ctx.t("ai.translate.running");
-				return;
-			}
-			const s = ctx.settings;
-			const hasKey = s.aiSearchEnabled && !!s.aiSearchApiKey;
-			// 无论是否配置 AI Key 都启用：有 Key 优先用 AI，无 Key 自动降级到免费引擎混合翻译。
-			btn.disabled = false;
-			btn.title = hasKey ? ctx.t("ai.translate.rerun") : ctx.t("ai.translate.free");
-		} else if (untranslatedCount > 0) {
-			// 有待翻译：按钮常态化显示 + 染主题色，暗示「有事可做」
-			btn.setCssStyles({ display: "", opacity: "1" });
-			btn.classList.add("pt-ai-icon-btn--ready");
-			btn.disabled = false;
-			btn.title = ctx.t("ai.translate.hint", { n: String(untranslatedCount) });
-		} else {
-			// 全部已翻译：按钮仍常驻显示，但置灰禁用，避免有效插件消失带来的定位困扰
-			btn.setCssStyles({ display: "", opacity: "1" });
-			btn.disabled = true;
-			btn.title = ctx.t("ai.translate.none");
-		}
+		const running = ctx.aiTranslateRunning;
+		const available = !running && (ctx.sourceFilter === "original" || untranslatedCount > 0);
+		const hasKey = ctx.settings.aiSearchEnabled && !!ctx.settings.aiSearchApiKey;
+		const hint = running ? ctx.t("ai.translate.running")
+			: ctx.sourceFilter === "original" ? ctx.t(hasKey ? "ai.translate.rerun" : "ai.translate.free")
+			: untranslatedCount > 0 ? ctx.t("ai.translate.hint", { n: String(untranslatedCount) })
+			: ctx.t("ai.translate.none");
+		// 原生 disabled 按钮在部分主题下不接收 hover，导致翻译完成后提示消失。
+		// 保持可聚焦，使用 aria-disabled 表达状态，点击入口负责阻止无效操作。
+		btn.disabled = false;
+		btn.setAttribute("aria-disabled", String(!available));
+		btn.setAttribute("aria-label", `${ctx.t("action.aiTranslate")} · ${hint}`);
+		btn.removeAttribute("title");
+		btn.classList.toggle("pt-ai-icon-btn--ready", available);
+		btn.setCssStyles({ display: "", opacity: "1" });
 
 }
 

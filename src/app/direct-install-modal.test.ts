@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DirectInstallModal } from "@app/direct-install";
 import * as DI from "@app/direct-install";
 import * as OB from "obsidian";
+import { installLocalPlugin } from "./local-plugin-install";
+
+vi.mock("./local-plugin-install", async (original) => ({
+	...await original<typeof import("./local-plugin-install")>(),
+	installLocalPlugin: vi.fn(),
+}));
 
 // 部分 mock：保留真实 obsidian 全部导出（Setting/Notice/App 等），但 Modal 在 node/jsdom 下构造会依赖
 // Obsidian 运行时（contentEl.empty 等非标准方法），故以可控 stub 替换；requestUrl/setIcon 覆盖为 noop。
@@ -106,4 +112,17 @@ describe("DirectInstallModal · 可独立调用的纯方法（不触发完整 DO
 		expect(DI.installFromUrlResolved).not.toHaveBeenCalled();
 		expect(installed).toHaveLength(0);
 	});
+});
+
+
+it("本地目录从弹窗安装并记录 file URL 来源，不经过网址解析", async () => {
+	const record = vi.fn();
+	vi.mocked(installLocalPlugin).mockResolvedValue({ man: { id: "local", name: "Local", version: "1.0" }, sourceUrl: "file:///tmp/local/", updated: true });
+	const m = new DirectInstallModal({} as never, "plugin", record);
+	(m as unknown as { url: string }).url = "/tmp/local";
+	const btn = { buttonEl: document.createElement("button"), setButtonText: vi.fn(), setDisabled: vi.fn() };
+	await call<Promise<void>>(m, "run", btn as never);
+	expect(installLocalPlugin).toHaveBeenCalledWith(m.app, "/tmp/local");
+	expect(record).toHaveBeenCalledWith(expect.objectContaining({ id: "local", rootUrl: "file:///tmp/local/", release: false }));
+	expect(btn.setDisabled).toHaveBeenLastCalledWith(false);
 });
